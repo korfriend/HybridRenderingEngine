@@ -1,0 +1,273 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="DVR_Common.cpp" />
+    <ClCompile Include="SR_Common.cpp" />
+    <ClCompile Include="SR_Plane.cpp" />
+    <ClCompile Include="VS-GPUDX11VxControl.cpp" />
+    <ClCompile Include="VXDX11Helper.cpp" />
+    <ClCompile Include="VXDX11Interface.cpp" />
+    <ClCompile Include="VXDX11VObjectGenerator.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="RendererHeader.h" />
+    <ClInclude Include="resource.h" />
+    <ClInclude Include="VS-GPUDX11VxControl.h" />
+    <ClInclude Include="VXDX11Helper.h" />
+    <ClInclude Include="VXDX11Interface.h" />
+    <ClInclude Include="VXDX11VObjectGenerator.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="VS-GPUDX11VxRenderer.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="DVR_BLOCK_IND_SHOW_cs_4_0" />
+    <None Include="DVR_BRICK_GEN_SHADOW_cs_4_0" />
+    <None Include="DVR_BRICK_GEN_SURFACE_SHADOW_cs_4_0" />
+    <None Include="DVR_BRICK_IND_CCF_SURFACEEFFECT_cs_4_0" />
+    <None Include="DVR_BRICK_IND_DEFAULT_cs_4_0" />
+    <None Include="DVR_BRICK_IND_SHADOW_cs_4_0" />
+    <None Include="DVR_BRICK_IND_SURFACEEFFECT_cs_4_0" />
+    <None Include="DVR_BRICK_IND_SURFACEEFFECT_SHADOW_cs_4_0" />
+    <None Include="DVR_BRICK_MIX_DEFAULT_cs_4_0" />
+    <None Include="DVR_BRICK_MIX_SHADOW_cs_4_0" />
+    <None Include="DVR_VOLUME_GEN_MASK_SHADOW_cs_4_0" />
+    <None Include="DVR_VOLUME_GEN_MASK_SURFACE_SHADOW_cs_4_0" />
+    <None Include="DVR_VOLUME_GEN_SHADOW_cs_4_0" />
+    <None Include="DVR_VOLUME_GEN_SURFACE_SHADOW_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_CCF_SURFACEEFFECT_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_CLIPSEMIOPAQUE_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_DEFAULT_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_DEFAULT_HOMOGENEOUS_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_DEFAULT_SCULPTMASK_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_MASK_CLIPSEMIOPAQUE_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_MASK_DEFAULT_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_MASK_MODULATION_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_MASK_RAYMAX_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_MASK_RAYMIN_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_MASK_RAYSUM_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_MASK_SHADOW_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_MASK_SURFACECURVATURE_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_MASK_SURFACEEFFECT_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_MASK_SURFACEEFFECT_MARKERSONSURFACE_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_MASK_SURFACEEFFECT_MARKERSONSURFACE_SHADOW_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_MASK_SURFACEEFFECT_SHADOW_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_MODULATION_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_RAYMAX_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_RAYMIN_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_RAYSUM_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_SHADOW_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_SURFACECURVATURE_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_SURFACEEFFECT_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_SURFACEEFFECT_MARKERSONSURFACE_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_SURFACEEFFECT_SHADOW_cs_4_0" />
+    <None Include="DVR_VOLUME_IND_SURFACEEFFECT_SHADOW_MARKERSONSURFACE_cs_4_0" />
+    <None Include="DVR_VOLUME_MIX_CLIPSEMIOPAQUE_cs_4_0" />
+    <None Include="DVR_VOLUME_MIX_DEFAULT_cs_4_0" />
+    <None Include="DVR_VOLUME_MIX_DEFAULT_HOMOGENEOUS_cs_4_0" />
+    <None Include="DVR_VOLUME_MIX_DEFAULT_SCULPTMASK_cs_4_0" />
+    <None Include="DVR_VOLUME_MIX_MASK_CLIPSEMIOPAQUE_cs_4_0" />
+    <None Include="DVR_VOLUME_MIX_MASK_DEFAULT_cs_4_0" />
+    <None Include="DVR_VOLUME_MIX_MASK_MODULATION_cs_4_0" />
+    <None Include="DVR_VOLUME_MIX_MASK_SHADOW_cs_4_0" />
+    <None Include="DVR_VOLUME_MIX_MODULATION_cs_4_0" />
+    <None Include="DVR_VOLUME_MIX_SHADOW_cs_4_0" />
+    <None Include="DVR_VOLUME_MIX_SIMULTANEOUS_cs_4_0" />
+    <None Include="DVR_VOLUME_MIX_SIMULTANEOUS_THREE_cs_4_0" />
+    <None Include="EXPCompile.bat" />
+    <None Include="EXP_ShaderCompile.bat" />
+    <None Include="EXP_ShaderCompile2.bat" />
+    <None Include="MERGE_LAYEROUT_TO_RENDEROUT_cs_4_0" />
+    <None Include="MERGE_SROUT_AND_LAYEROUT_TO_LAYEROUT_cs_4_0" />
+    <None Include="PS_MERGE_LAYEROUT_TO_RENDEROUT_ps_4_0" />
+    <None Include="PS_MERGE_SROUT_AND_LAYEROUT_TO_LAYEROUT_ps_4_0" />
+    <None Include="PS_MERGE_SROUT_LOD2X_AND_LAYEROUT_TO_LAYEROUT_ps_4_0" />
+    <None Include="ShaderCommonHeader.hlsl" />
+    <None Include="ShaderCompile.bat" />
+    <None Include="SRShader_Common.hlsl" />
+    <None Include="SR_AIRWAYANALYSIS_ps_4_0" />
+    <None Include="SR_CMM_LINE_ps_4_0" />
+    <None Include="SR_CMM_MULTI_TEXTS_ps_4_0" />
+    <None Include="SR_CMM_TEXT_ps_4_0" />
+    <None Include="SR_IMAGESTACK_MAP_ps_4_0" />
+    <None Include="SR_MAPPING_TEX1_ps_4_0" />
+    <None Include="SR_PHONG_GLOBALCOLOR_MARKERSONSURFACE_ps_4_0" />
+    <None Include="SR_PHONG_GLOBALCOLOR_MAXSHADING_MARKERSONSURFACE_ps_4_0" />
+    <None Include="SR_PHONG_GLOBALCOLOR_MAXSHADING_ps_4_0" />
+    <None Include="SR_PHONG_GLOBALCOLOR_ps_4_0" />
+    <None Include="SR_PHONG_TEX1COLOR_ps_4_0" />
+    <None Include="SR_PROJ_PNT_DEV_MVB_vs_4_0" />
+    <None Include="SR_PROJ_PNT_DEV_vs_4_0" />
+    <None Include="SR_PROJ_PNT_MVB_vs_4_0" />
+    <None Include="SR_PROJ_PNT_vs_4_0" />
+    <None Include="SR_PROJ_PN_MVB_vs_4_0" />
+    <None Include="SR_PROJ_PN_vs_4_0" />
+    <None Include="SR_PROJ_PROXY_vs_4_0" />
+    <None Include="SR_PROJ_PTTT_vs_4_0" />
+    <None Include="SR_PROJ_PT_MVB_vs_4_0" />
+    <None Include="SR_PROJ_PT_vs_4_0" />
+    <None Include="SR_PROJ_P_MVB_vs_4_0" />
+    <None Include="SR_PROJ_P_vs_4_0" />
+    <None Include="SR_VOLUME_DEVIATION_ps_4_0" />
+    <None Include="SR_VOLUME_SUPERIMPOSE_ps_4_0" />
+    <None Include="MergeAndSuperimpose.hlsl" />
+    <None Include="VRShader_Common.hlsl" />
+    <None Include="VRShader_Shadow.hlsl" />
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{BD108E48-5831-4F89-8E39-5662EBDB276A}</ProjectGuid>
+    <RootNamespace>VRGPUDX11Simple_Dojo</RootNamespace>
+    <SccProjectName>Svn</SccProjectName>
+    <SccLocalPath>Svn</SccLocalPath>
+    <SccProvider>SubversionScc</SccProvider>
+    <SccAuxPath>Svn</SccAuxPath>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v120</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v120</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v120</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v120</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <OutDir>..\..\bin\Debug\</OutDir>
+    <LibraryPath>C:\Program Files %28x86%29\Microsoft DirectX SDK %28June 2010%29\Lib\x86;..\..\bin\Debug;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(IncludePath);../../Engine Interface/VXGPUManager;../../Engine Interface/VXEngineGlobalUnit;C:\Program Files %28x86%29\Microsoft DirectX SDK %28June 2010%29\Include</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <OutDir>..\..\bin\X64_Debug\</OutDir>
+    <LibraryPath>C:\Program Files %28x86%29\Microsoft DirectX SDK %28June 2010%29\Lib\x64;..\..\bin\X64_Debug;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(IncludePath);../../Engine Interface/VXGPUManager;../../Engine Interface/VXEngineGlobalUnit;$(NVSDKCOMPUTE_ROOT)/C/common/inc;$(CUDA_INC_PATH);C:\Program Files %28x86%29\Microsoft DirectX SDK %28June 2010%29\Include</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <OutDir>..\..\bin\Release\</OutDir>
+    <LibraryPath>C:\Program Files %28x86%29\Microsoft DirectX SDK %28June 2010%29\Lib\x86;..\..\bin\Release;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(IncludePath);../../Engine Interface/VXGPUManager;../../Engine Interface/VXEngineGlobalUnit;C:\Program Files %28x86%29\Microsoft DirectX SDK %28June 2010%29\Include</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <OutDir>..\..\bin\X64_Release\</OutDir>
+    <LibraryPath>C:\Program Files %28x86%29\Microsoft DirectX SDK %28June 2010%29\Lib\x64;..\..\bin\X64_Release;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(IncludePath);../../Engine Interface/VXGPUManager;../../Engine Interface/VXEngineGlobalUnit;$(NVSDKCOMPUTE_ROOT)/C/common/inc;$(CUDA_INC_PATH);C:\Program Files %28x86%29\Microsoft DirectX SDK %28June 2010%29\Include</IncludePath>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>VXGPUManager.lib;VXEngineGlobalUnit.lib;D3dx9.lib;d3dx11.lib;d3d11.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <PreBuildEvent>
+      <Command>
+      </Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>VXGPUManager.lib;VXEngineGlobalUnit.lib;D3dx9d.lib;d3dx11d.lib;d3d11.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <PreBuildEvent>
+      <Command>
+      </Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>VXGPUManager.lib;VXEngineGlobalUnit.lib;D3dx9.lib;d3dx11.lib;d3d11.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <PreBuildEvent>
+      <Command>
+      </Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>VXGPUManager.lib;VXEngineGlobalUnit.lib;D3dx9.lib;d3dx11.lib;d3d11.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <PreBuildEvent>
+      <Command>
+      </Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

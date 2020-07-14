@@ -1,0 +1,395 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="DVR_Common_CS_legacy.cpp" />
+    <ClCompile Include="gpures_helper.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="gpures_helper_old.cpp" />
+    <ClCompile Include="gpures_interface.cpp" />
+    <ClCompile Include="RendererHeader.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="RendererHeader_legacy.cpp" />
+    <ClCompile Include="SR_Common_CS_legacy.cpp" />
+    <ClCompile Include="SR_OIT.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="SR_Plane_legacy.cpp" />
+    <ClCompile Include="vismtv_inbuilt_renderergpudx.cpp" />
+    <ClCompile Include="VR_DLS.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="gpures_helper.h">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+    </ClInclude>
+    <ClInclude Include="gpures_helper_old.h" />
+    <ClInclude Include="gpures_interface.h" />
+    <ClInclude Include="gpu_common_res.h" />
+    <ClInclude Include="RendererHeader.h">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+    </ClInclude>
+    <ClInclude Include="RendererHeader_legacy.h" />
+    <ClInclude Include="resource.h" />
+    <ClInclude Include="Sampler.h" />
+    <ClInclude Include="vismtv_inbuilt_renderergpudx.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="vismtv_inbuilt_renderergpudx.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="CS_DVR_BASIC_CLIPSEMIOPAQUE_cs_5_0" />
+    <None Include="CS_DVR_BASIC_DEFAULT_cs_5_0" />
+    <None Include="CS_DVR_BASIC_DEFAULT_OTFMASK_cs_5_0" />
+    <None Include="CS_DVR_BASIC_DEFAULT_OTFMASK_SHADOW_cs_5_0" />
+    <None Include="CS_DVR_BASIC_DEFAULT_SHADOWMAP_cs_5_0" />
+    <None Include="CS_DVR_BASIC_DEFAULT_SHADOW_cs_5_0" />
+    <None Include="CS_DVR_BASIC_MODULATION_cs_5_0" />
+    <None Include="CS_DVR_BASIC_MODULATION_OTFMASK_cs_5_0" />
+    <None Include="CS_DVR_BASIC_OTFMASK_SHADOWMAP_cs_5_0" />
+    <None Include="CS_DVR_BASIC_SCULPTMASK_cs_5_0" />
+    <None Include="CS_DVR_LAYERS_ADV_CLIPSEMIOPAQUE_cs_5_0" />
+    <None Include="CS_DVR_LAYERS_ADV_DEFAULT_cs_5_0" />
+    <None Include="CS_DVR_LAYERS_ADV_DEFAULT_OTFMASK_cs_5_0" />
+    <None Include="CS_DVR_LAYERS_ADV_DEFAULT_OTFMASK_SHADOW_cs_5_0" />
+    <None Include="CS_DVR_LAYERS_ADV_DEFAULT_SHADOW_cs_5_0" />
+    <None Include="CS_DVR_LAYERS_ADV_MODULATION_cs_5_0" />
+    <None Include="CS_DVR_LAYERS_ADV_MODULATION_OTFMASK_cs_5_0" />
+    <None Include="CS_DVR_LAYERS_ADV_SCULPTMASK_cs_5_0" />
+    <None Include="CS_DVR_LAYERS_CLIPSEMIOPAQUE_cs_5_0" />
+    <None Include="CS_DVR_LAYERS_DEFAULT_cs_5_0" />
+    <None Include="CS_DVR_LAYERS_DEFAULT_OTFMASK_cs_5_0" />
+    <None Include="CS_DVR_LAYERS_DEFAULT_OTFMASK_SHADOW_cs_5_0" />
+    <None Include="CS_DVR_LAYERS_DEFAULT_SHADOW_cs_5_0" />
+    <None Include="CS_DVR_LAYERS_MODULATION_cs_5_0" />
+    <None Include="CS_DVR_LAYERS_MODULATION_OTFMASK_cs_5_0" />
+    <None Include="CS_DVR_LAYERS_SCULPTMASK_cs_5_0" />
+    <None Include="CS_DVR_SURFACE_CCF_cs_5_0" />
+    <None Include="CS_DVR_SURFACE_CURVATURE_cs_5_0" />
+    <None Include="CS_DVR_SURFACE_DEFAULT_cs_5_0" />
+    <None Include="CS_DVR_SURFACE_DEFAULT_OTFMASK_cs_5_0" />
+    <None Include="CS_DVR_SURFACE_DEFAULT_OTFMASK_SHADOW_cs_5_0" />
+    <None Include="CS_DVR_SURFACE_DEFAULT_SHADOW_cs_5_0" />
+    <None Include="CS_DVR_SURFACE_MARKER_cs_5_0" />
+    <None Include="CS_DVR_TEST_cs_5_0" />
+    <None Include="CS_MERGE_ADV_SROUT_AND_LAYEROUT_TO_LAYEROUT_cs_5_0" />
+    <None Include="CS_MERGE_LAYEROUT_TO_RENDEROUT_cs_5_0" />
+    <None Include="CS_MERGE_SROUT_AND_LAYEROUT_TO_LAYEROUT_cs_5_0" />
+    <None Include="CS_OUTLINE_RENDEROUT_cs_5_0" />
+    <None Include="CS_XRAY_MAX_cs_5_0" />
+    <None Include="CS_XRAY_MAX_OTFMASK_cs_5_0" />
+    <None Include="CS_XRAY_MIN_cs_5_0" />
+    <None Include="CS_XRAY_MIN_OTFMASK_cs_5_0" />
+    <None Include="CS_XRAY_SUM_cs_5_0" />
+    <None Include="CS_XRAY_SUM_OTFMASK_cs_5_0" />
+    <None Include="EXPCompile.bat" />
+    <None Include="EXP_ShaderCompile.bat" />
+    <None Include="EXP_ShaderCompile2.bat" />
+    <None Include="GS_ThickLines_gs_4_0" />
+    <None Include="GS_ThickPoints_gs_4_0" />
+    <None Include="GS_WireLines_gs_4_0" />
+    <None Include="MBOITCode\ComplexAlgebra.hlsli">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="MBOITCode\MomentMath.hlsli">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="MBOITCode\MomentOIT.hlsli">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="MBOITCode\TrigonometricMomentMath.hlsli">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="ShaderCompile.bat" />
+    <None Include="SR_AIRWAYANALYSIS_ps_4_0" />
+    <None Include="SR_CMM_LINE_ps_4_0" />
+    <None Include="SR_CMM_MULTI_TEXTS_ps_4_0" />
+    <None Include="SR_CMM_TEXT_ps_4_0" />
+    <None Include="SR_IMAGESTACK_MAP_ps_4_0" />
+    <None Include="SR_MAPPING_TEX1_ps_4_0" />
+    <None Include="SR_PHONG_GLOBALCOLOR_MARKERSONSURFACE_ps_4_0" />
+    <None Include="SR_PHONG_GLOBALCOLOR_MAXSHADING_MARKERSONSURFACE_ps_4_0" />
+    <None Include="SR_PHONG_GLOBALCOLOR_MAXSHADING_ps_4_0" />
+    <None Include="SR_PHONG_GLOBALCOLOR_ps_4_0" />
+    <None Include="SR_PHONG_TEX1COLOR_ps_4_0" />
+    <None Include="SR_PROJ_PNT_DEV_FBIASZ_vs_4_0" />
+    <None Include="SR_PROJ_PNT_DEV_MVB_vs_4_0" />
+    <None Include="SR_PROJ_PNT_DEV_vs_4_0" />
+    <None Include="SR_PROJ_PNT_FBIASZ_vs_4_0" />
+    <None Include="SR_PROJ_PNT_MVB_vs_4_0" />
+    <None Include="SR_PROJ_PNT_vs_4_0" />
+    <None Include="SR_PROJ_PN_FBIASZ_vs_4_0" />
+    <None Include="SR_PROJ_PN_MVB_vs_4_0" />
+    <None Include="SR_PROJ_PN_vs_4_0" />
+    <None Include="SR_PROJ_PROXY_vs_4_0" />
+    <None Include="SR_PROJ_PTTT_vs_4_0" />
+    <None Include="SR_PROJ_PT_FBIASZ_vs_4_0" />
+    <None Include="SR_PROJ_PT_MVB_vs_4_0" />
+    <None Include="SR_PROJ_PT_vs_4_0" />
+    <None Include="SR_PROJ_P_FBIASZ_vs_4_0" />
+    <None Include="SR_PROJ_P_MVB_vs_4_0" />
+    <None Include="SR_PROJ_P_vs_4_0" />
+    <None Include="SR_VOLUME_DEVIATION_ps_4_0" />
+    <None Include="SR_VOLUME_SUPERIMPOSE_ps_4_0" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="MergeMultipleLayers.hlsl">
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="ShaderCommonHeader.hlsl">
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="SRShader_Common.hlsl">
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="VRShader_Common.hlsl">
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="VRShader_Shadow.hlsl">
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="OitSr.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">4.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">4.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4.0</ShaderModel>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <FileType>Document</FileType>
+    </None>
+    <None Include="OitArrange.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <FileType>Document</FileType>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="CommonShader.hlsl">
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="DvrCS.hlsl">
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="DxPerPixelLL.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">4.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">4.0</ShaderModel>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="DxPerPixelLL_Sort.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="macros.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="Sr_Common.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="SSAO.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{BD108E48-5831-4F89-8E39-5662EBDB276A}</ProjectGuid>
+    <RootNamespace>VRGPUDX11Simple_Dojo</RootNamespace>
+    <SccProjectName>Svn</SccProjectName>
+    <SccLocalPath>Svn</SccLocalPath>
+    <SccProvider>SubversionScc</SccProvider>
+    <SccAuxPath>Svn</SccAuxPath>
+    <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
+    <ProjectName>vismtv_inbuilt_renderergpudx</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v141</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v141</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v141</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v141</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <OutDir>..\..\bin\Debug\</OutDir>
+    <LibraryPath>C:\Program Files %28x86%29\Microsoft DirectX SDK %28June 2010%29\Lib\x86;..\..\bin\Debug;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(IncludePath);../../Engine Interface/VXGPUManager;../../Engine Interface/VXEngineGlobalUnit;C:\Program Files %28x86%29\Microsoft DirectX SDK %28June 2010%29\Include</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <OutDir>..\..\bin\X64_Debug\</OutDir>
+    <LibraryPath>..\..\bin\X64_Debug;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(IncludePath);$(NVSDKCOMPUTE_ROOT)/C/common/inc;$(CUDA_INC_PATH)</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <OutDir>..\..\bin\Release\</OutDir>
+    <LibraryPath>C:\Program Files %28x86%29\Microsoft DirectX SDK %28June 2010%29\Lib\x86;..\..\bin\Release;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(IncludePath);../../Engine Interface/VXGPUManager;../../Engine Interface/VXEngineGlobalUnit;C:\Program Files %28x86%29\Microsoft DirectX SDK %28June 2010%29\Include</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <OutDir>..\..\bin\X64_Release\</OutDir>
+    <LibraryPath>..\..\bin\X64_Release;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(IncludePath);$(NVSDKCOMPUTE_ROOT)/C/common/inc;$(CUDA_INC_PATH)</IncludePath>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>VXGPUManager.lib;VXEngineGlobalUnit.lib;D3dx9.lib;d3dx11.lib;d3d11.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <PreBuildEvent>
+      <Command>
+      </Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>E:\Projects\Libraries;$(OPENCV_DIR_VS2017)\Include;</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>USE_DX11_3;_WINDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>d3dcompiler.lib;d3d11.lib;opencv_highgui420d.lib;opencv_core420d.lib;opencv_imgcodecs420d.lib;opencv_imgproc420d.lib;GpuManager.lib;CommonUnits.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <DelayLoadDLLs>
+      </DelayLoadDLLs>
+      <AdditionalLibraryDirectories>$(OPENCV_4)\x64\vc15\lib;</AdditionalLibraryDirectories>
+    </Link>
+    <PreBuildEvent>
+      <Command>
+      </Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>VXGPUManager.lib;VXEngineGlobalUnit.lib;D3dx9.lib;d3dx11.lib;d3d11.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <PreBuildEvent>
+      <Command>
+      </Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <AdditionalIncludeDirectories>E:\Projects\Libraries;</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>USE_DX11_3;_WINDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>d3dcompiler.lib;d3d11.lib;GpuManager.lib;CommonUnits.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <PreBuildEvent>
+      <Command>
+      </Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
