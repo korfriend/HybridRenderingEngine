@@ -1,5 +1,5 @@
 #pragma once
-#include "../../EngineCores/CommonUnits/VimCommon.h"
+#include "CommonUnits/VimCommon.h"
 
 inline vmint3 __MultInt3(const vmint3* pi3_0, const vmint3* pi3_1)
 {

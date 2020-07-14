@@ -125,12 +125,12 @@ void OIT_ARRAGNGE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	float merging_beta = asfloat(g_cbCamState.iSrCamDummy__0);
 
 	float4 fmix_vis = (float4) 0;
-	uint cnt_sorted_ztsurf = 0;
+	uint cnt_sorted_ztsurf = 0, i = 0;
 #if ZF_HANDLING == 1
     // merge self-overlapping surfaces to thickness surfaces
 //#define USE_RS
     [loop]	
-    for (uint i = 0; i < valid_frag_cnt; i++)
+    for (i = 0; i < valid_frag_cnt; i++)
     {
         uint idx_ith = idx_array[i];
 #ifdef USE_RS

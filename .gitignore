@@ -10,7 +10,7 @@
 *.jpg
 branch_Optimization/
 OIT/
-shader compiled objs/
+shader_compiled_objs/
 bks/
 
 # User-specific files (MonoDevelop/Xamarin Studio)

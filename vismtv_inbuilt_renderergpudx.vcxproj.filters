@@ -2,35 +2,35 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClCompile Include="vismtv_inbuilt_renderergpudx.cpp" />
-    <ClCompile Include="gpures_interface.cpp">
+    <ClCompile Include="renderer\RendererHeader.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="renderer\SR_OIT.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="renderer\VR_DLS.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="renderer\DVR_Common_CS_legacy.cpp">
+      <Filter>renderer\legacy</Filter>
+    </ClCompile>
+    <ClCompile Include="renderer\RendererHeader_legacy.cpp">
+      <Filter>renderer\legacy</Filter>
+    </ClCompile>
+    <ClCompile Include="renderer\SR_Common_CS_legacy.cpp">
+      <Filter>renderer\legacy</Filter>
+    </ClCompile>
+    <ClCompile Include="renderer\SR_Plane_legacy.cpp">
+      <Filter>renderer\legacy</Filter>
+    </ClCompile>
+    <ClCompile Include="gpu manager\gpures_helper.cpp">
       <Filter>gpu manager</Filter>
     </ClCompile>
-    <ClCompile Include="gpures_helper_old.cpp">
+    <ClCompile Include="gpu manager\gpures_interface.cpp">
+      <Filter>gpu manager</Filter>
+    </ClCompile>
+    <ClCompile Include="gpu manager\gpures_helper_old.cpp">
       <Filter>gpu manager\legacy</Filter>
-    </ClCompile>
-    <ClCompile Include="gpures_helper.cpp">
-      <Filter>gpu manager</Filter>
-    </ClCompile>
-    <ClCompile Include="RendererHeader_legacy.cpp">
-      <Filter>renderer\legacy</Filter>
-    </ClCompile>
-    <ClCompile Include="DVR_Common_CS_legacy.cpp">
-      <Filter>renderer\legacy</Filter>
-    </ClCompile>
-    <ClCompile Include="SR_Common_CS_legacy.cpp">
-      <Filter>renderer\legacy</Filter>
-    </ClCompile>
-    <ClCompile Include="SR_Plane_legacy.cpp">
-      <Filter>renderer\legacy</Filter>
-    </ClCompile>
-    <ClCompile Include="SR_OIT.cpp">
-      <Filter>renderer</Filter>
-    </ClCompile>
-    <ClCompile Include="RendererHeader.cpp">
-      <Filter>renderer</Filter>
-    </ClCompile>
-    <ClCompile Include="VR_DLS.cpp">
-      <Filter>renderer</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -38,308 +38,47 @@
       <Filter>resources</Filter>
     </ClInclude>
     <ClInclude Include="vismtv_inbuilt_renderergpudx.h" />
-    <ClInclude Include="Sampler.h">
-      <Filter>gpu manager legacy</Filter>
-    </ClInclude>
-    <ClInclude Include="gpures_interface.h">
-      <Filter>gpu manager</Filter>
-    </ClInclude>
-    <ClInclude Include="gpu_common_res.h">
-      <Filter>gpu manager</Filter>
-    </ClInclude>
-    <ClInclude Include="gpures_helper_old.h">
-      <Filter>gpu manager\legacy</Filter>
-    </ClInclude>
-    <ClInclude Include="gpures_helper.h">
-      <Filter>gpu manager</Filter>
-    </ClInclude>
-    <ClInclude Include="RendererHeader_legacy.h">
-      <Filter>renderer\legacy</Filter>
-    </ClInclude>
-    <ClInclude Include="RendererHeader.h">
+    <ClInclude Include="renderer\RendererHeader.h">
       <Filter>renderer</Filter>
     </ClInclude>
+    <ClInclude Include="renderer\Sampler.h">
+      <Filter>renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="renderer\RendererHeader_legacy.h">
+      <Filter>renderer\legacy</Filter>
+    </ClInclude>
+    <ClInclude Include="gpu manager\gpures_helper.h">
+      <Filter>gpu manager</Filter>
+    </ClInclude>
+    <ClInclude Include="gpu manager\gpures_interface.h">
+      <Filter>gpu manager</Filter>
+    </ClInclude>
+    <ClInclude Include="gpu manager\gpures_helper_old.h">
+      <Filter>gpu manager\legacy</Filter>
+    </ClInclude>
+    <ClInclude Include="gpu_common_res.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="EXPCompile.bat" />
-    <None Include="EXP_ShaderCompile.bat" />
-    <None Include="EXP_ShaderCompile2.bat" />
-    <None Include="ShaderCompile.bat" />
-    <None Include="CS_DVR_BASIC_CLIPSEMIOPAQUE_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_BASIC_DEFAULT_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_BASIC_DEFAULT_OTFMASK_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_BASIC_DEFAULT_OTFMASK_SHADOW_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_BASIC_DEFAULT_SHADOW_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_BASIC_DEFAULT_SHADOWMAP_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_BASIC_MODULATION_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_BASIC_MODULATION_OTFMASK_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_BASIC_OTFMASK_SHADOWMAP_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_BASIC_SCULPTMASK_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_LAYERS_ADV_CLIPSEMIOPAQUE_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_LAYERS_ADV_DEFAULT_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_LAYERS_ADV_DEFAULT_OTFMASK_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_LAYERS_ADV_DEFAULT_OTFMASK_SHADOW_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_LAYERS_ADV_DEFAULT_SHADOW_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_LAYERS_ADV_MODULATION_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_LAYERS_ADV_MODULATION_OTFMASK_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_LAYERS_ADV_SCULPTMASK_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_LAYERS_CLIPSEMIOPAQUE_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_LAYERS_DEFAULT_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_LAYERS_DEFAULT_OTFMASK_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_LAYERS_DEFAULT_OTFMASK_SHADOW_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_LAYERS_DEFAULT_SHADOW_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_LAYERS_MODULATION_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_LAYERS_MODULATION_OTFMASK_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_LAYERS_SCULPTMASK_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_SURFACE_CCF_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_SURFACE_CURVATURE_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_SURFACE_DEFAULT_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_SURFACE_DEFAULT_OTFMASK_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_SURFACE_DEFAULT_OTFMASK_SHADOW_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_SURFACE_DEFAULT_SHADOW_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_SURFACE_MARKER_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_DVR_TEST_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_MERGE_ADV_SROUT_AND_LAYEROUT_TO_LAYEROUT_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_MERGE_LAYEROUT_TO_RENDEROUT_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_MERGE_SROUT_AND_LAYEROUT_TO_LAYEROUT_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_XRAY_MAX_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_XRAY_MAX_OTFMASK_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_XRAY_MIN_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_XRAY_MIN_OTFMASK_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_XRAY_SUM_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_XRAY_SUM_OTFMASK_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="GS_ThickLines_gs_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="GS_ThickPoints_gs_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_AIRWAYANALYSIS_ps_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_CMM_LINE_ps_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_CMM_MULTI_TEXTS_ps_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_CMM_TEXT_ps_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_IMAGESTACK_MAP_ps_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_MAPPING_TEX1_ps_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_PHONG_GLOBALCOLOR_MARKERSONSURFACE_ps_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_PHONG_GLOBALCOLOR_MAXSHADING_MARKERSONSURFACE_ps_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_PHONG_GLOBALCOLOR_MAXSHADING_ps_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_PHONG_GLOBALCOLOR_ps_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_PHONG_TEX1COLOR_ps_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_PROJ_P_FBIASZ_vs_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_PROJ_P_MVB_vs_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_PROJ_P_vs_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_PROJ_PN_FBIASZ_vs_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_PROJ_PN_MVB_vs_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_PROJ_PN_vs_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_PROJ_PNT_DEV_FBIASZ_vs_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_PROJ_PNT_DEV_MVB_vs_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_PROJ_PNT_DEV_vs_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_PROJ_PNT_FBIASZ_vs_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_PROJ_PNT_MVB_vs_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_PROJ_PNT_vs_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_PROJ_PROXY_vs_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_PROJ_PT_FBIASZ_vs_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_PROJ_PT_MVB_vs_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_PROJ_PT_vs_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_PROJ_PTTT_vs_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_VOLUME_DEVIATION_ps_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="SR_VOLUME_SUPERIMPOSE_ps_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="GS_WireLines_gs_4_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="CS_OUTLINE_RENDEROUT_cs_5_0">
-      <Filter>shader objs</Filter>
-    </None>
-    <None Include="MergeMultipleLayers.hlsl">
-      <Filter>hlsl source code\legacy</Filter>
-    </None>
-    <None Include="ShaderCommonHeader.hlsl">
-      <Filter>hlsl source code\legacy</Filter>
-    </None>
-    <None Include="SRShader_Common.hlsl">
-      <Filter>hlsl source code\legacy</Filter>
-    </None>
-    <None Include="VRShader_Common.hlsl">
-      <Filter>hlsl source code\legacy</Filter>
-    </None>
-    <None Include="VRShader_Shadow.hlsl">
-      <Filter>hlsl source code\legacy</Filter>
-    </None>
-    <None Include="OitSr.hlsl">
-      <Filter>hlsl source code</Filter>
-    </None>
-    <None Include="CommonShader.hlsl">
-      <Filter>hlsl source code</Filter>
-    </None>
-    <None Include="DvrCS.hlsl">
-      <Filter>hlsl source code</Filter>
-    </None>
-    <None Include="OitArrange.hlsl">
-      <Filter>hlsl source code</Filter>
-    </None>
-    <None Include="MBOITCode\ComplexAlgebra.hlsli">
+    <None Include="hlsl\moment\TrigonometricMomentMath.hlsli">
       <Filter>hlsl source code\Moment</Filter>
     </None>
-    <None Include="MBOITCode\MomentMath.hlsli">
+    <None Include="hlsl\moment\ComplexAlgebra.hlsli">
       <Filter>hlsl source code\Moment</Filter>
     </None>
-    <None Include="MBOITCode\MomentOIT.hlsli">
+    <None Include="hlsl\moment\MomentMath.hlsli">
       <Filter>hlsl source code\Moment</Filter>
     </None>
-    <None Include="MBOITCode\TrigonometricMomentMath.hlsli">
+    <None Include="hlsl\moment\MomentOIT.hlsli">
       <Filter>hlsl source code\Moment</Filter>
+    </None>
+    <None Include="EXP_ShaderCompile.bat">
+      <Filter>bat</Filter>
+    </None>
+    <None Include="ShaderCompile.bat">
+      <Filter>bat</Filter>
     </None>
   </ItemGroup>
   <ItemGroup>
-    <Filter Include="shader objs">
-      <UniqueIdentifier>{fa4d0cf2-8d72-4c79-80fa-20b7b42d7c72}</UniqueIdentifier>
-    </Filter>
     <Filter Include="hlsl source code">
       <UniqueIdentifier>{e1d70379-9e94-4e4e-8bb4-34d60a3bbf22}</UniqueIdentifier>
     </Filter>
@@ -348,12 +87,6 @@
     </Filter>
     <Filter Include="renderer">
       <UniqueIdentifier>{16745e58-ebed-4795-9352-63f81aa6aec6}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="new hlsl objs">
-      <UniqueIdentifier>{1ac10b54-d905-4d85-9889-a049e026f06a}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="gpu manager legacy">
-      <UniqueIdentifier>{93efeb94-a05f-42bd-8047-729f3007c639}</UniqueIdentifier>
     </Filter>
     <Filter Include="gpu manager">
       <UniqueIdentifier>{3027d6e8-88c4-411c-a3dc-83750d779504}</UniqueIdentifier>
@@ -373,6 +106,12 @@
     <Filter Include="hlsl source code\Moment">
       <UniqueIdentifier>{3d60a282-de0d-4f81-971e-a82270d4889c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="hlsl source code\k buf">
+      <UniqueIdentifier>{6b7e8c65-0712-4e0a-aa2c-33139f24a953}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="bat">
+      <UniqueIdentifier>{a59a4be1-fce7-4f35-96fc-ee08cd7491d0}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="vismtv_inbuilt_renderergpudx.rc">
@@ -380,20 +119,47 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="macros.hlsl">
-      <Filter>hlsl source code</Filter>
-    </FxCompile>
-    <FxCompile Include="Sr_Common.hlsl">
-      <Filter>hlsl source code</Filter>
-    </FxCompile>
-    <FxCompile Include="DxPerPixelLL_Sort.hlsl">
+    <FxCompile Include="hlsl\dx_abuf\DxPerPixelLL_Sort.hlsl">
       <Filter>hlsl source code\DxPerPixelLL</Filter>
     </FxCompile>
-    <FxCompile Include="DxPerPixelLL.hlsl">
+    <FxCompile Include="hlsl\dx_abuf\DxPerPixelLL.hlsl">
       <Filter>hlsl source code\DxPerPixelLL</Filter>
     </FxCompile>
-    <FxCompile Include="SSAO.hlsl">
-      <Filter>hlsl source code</Filter>
+    <FxCompile Include="hlsl\legacy\VRShader_Common.hlsl">
+      <Filter>hlsl source code\legacy</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\legacy\VRShader_Shadow.hlsl">
+      <Filter>hlsl source code\legacy</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\legacy\MergeMultipleLayers.hlsl">
+      <Filter>hlsl source code\legacy</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\legacy\SRShader_Common.hlsl">
+      <Filter>hlsl source code\legacy</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\kbuf\OitSr.hlsl">
+      <Filter>hlsl source code\k buf</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\kbuf\Sr_Common.hlsl">
+      <Filter>hlsl source code\k buf</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\kbuf\SSAO.hlsl">
+      <Filter>hlsl source code\k buf</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\kbuf\CommonShader.hlsl">
+      <Filter>hlsl source code\k buf</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\kbuf\macros.hlsl">
+      <Filter>hlsl source code\k buf</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\kbuf\OitArrange.hlsl">
+      <Filter>hlsl source code\k buf</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\kbuf\DvrCS.hlsl">
+      <Filter>hlsl source code\k buf</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\legacy\ShaderCommonHeader.hlsl">
+      <Filter>hlsl source code\legacy</Filter>
     </FxCompile>
   </ItemGroup>
 </Project>

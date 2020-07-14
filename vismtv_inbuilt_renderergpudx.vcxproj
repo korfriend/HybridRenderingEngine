@@ -19,228 +19,112 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="DVR_Common_CS_legacy.cpp" />
-    <ClCompile Include="gpures_helper.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="gpures_helper_old.cpp" />
-    <ClCompile Include="gpures_interface.cpp" />
-    <ClCompile Include="RendererHeader.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="RendererHeader_legacy.cpp" />
-    <ClCompile Include="SR_Common_CS_legacy.cpp" />
-    <ClCompile Include="SR_OIT.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="SR_Plane_legacy.cpp" />
+    <ClCompile Include="gpu manager\gpures_helper.cpp" />
+    <ClCompile Include="gpu manager\gpures_helper_old.cpp" />
+    <ClCompile Include="gpu manager\gpures_interface.cpp" />
+    <ClCompile Include="renderer\DVR_Common_CS_legacy.cpp" />
+    <ClCompile Include="renderer\RendererHeader.cpp" />
+    <ClCompile Include="renderer\RendererHeader_legacy.cpp" />
+    <ClCompile Include="renderer\SR_Common_CS_legacy.cpp" />
+    <ClCompile Include="renderer\SR_OIT.cpp" />
+    <ClCompile Include="renderer\SR_Plane_legacy.cpp" />
+    <ClCompile Include="renderer\VR_DLS.cpp" />
     <ClCompile Include="vismtv_inbuilt_renderergpudx.cpp" />
-    <ClCompile Include="VR_DLS.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="gpures_helper.h">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
-    </ClInclude>
-    <ClInclude Include="gpures_helper_old.h" />
-    <ClInclude Include="gpures_interface.h" />
+    <ClInclude Include="gpu manager\gpures_helper.h" />
+    <ClInclude Include="gpu manager\gpures_helper_old.h" />
+    <ClInclude Include="gpu manager\gpures_interface.h" />
     <ClInclude Include="gpu_common_res.h" />
-    <ClInclude Include="RendererHeader.h">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
-    </ClInclude>
-    <ClInclude Include="RendererHeader_legacy.h" />
+    <ClInclude Include="renderer\RendererHeader.h" />
+    <ClInclude Include="renderer\RendererHeader_legacy.h" />
+    <ClInclude Include="renderer\Sampler.h" />
     <ClInclude Include="resource.h" />
-    <ClInclude Include="Sampler.h" />
     <ClInclude Include="vismtv_inbuilt_renderergpudx.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="vismtv_inbuilt_renderergpudx.rc" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="CS_DVR_BASIC_CLIPSEMIOPAQUE_cs_5_0" />
-    <None Include="CS_DVR_BASIC_DEFAULT_cs_5_0" />
-    <None Include="CS_DVR_BASIC_DEFAULT_OTFMASK_cs_5_0" />
-    <None Include="CS_DVR_BASIC_DEFAULT_OTFMASK_SHADOW_cs_5_0" />
-    <None Include="CS_DVR_BASIC_DEFAULT_SHADOWMAP_cs_5_0" />
-    <None Include="CS_DVR_BASIC_DEFAULT_SHADOW_cs_5_0" />
-    <None Include="CS_DVR_BASIC_MODULATION_cs_5_0" />
-    <None Include="CS_DVR_BASIC_MODULATION_OTFMASK_cs_5_0" />
-    <None Include="CS_DVR_BASIC_OTFMASK_SHADOWMAP_cs_5_0" />
-    <None Include="CS_DVR_BASIC_SCULPTMASK_cs_5_0" />
-    <None Include="CS_DVR_LAYERS_ADV_CLIPSEMIOPAQUE_cs_5_0" />
-    <None Include="CS_DVR_LAYERS_ADV_DEFAULT_cs_5_0" />
-    <None Include="CS_DVR_LAYERS_ADV_DEFAULT_OTFMASK_cs_5_0" />
-    <None Include="CS_DVR_LAYERS_ADV_DEFAULT_OTFMASK_SHADOW_cs_5_0" />
-    <None Include="CS_DVR_LAYERS_ADV_DEFAULT_SHADOW_cs_5_0" />
-    <None Include="CS_DVR_LAYERS_ADV_MODULATION_cs_5_0" />
-    <None Include="CS_DVR_LAYERS_ADV_MODULATION_OTFMASK_cs_5_0" />
-    <None Include="CS_DVR_LAYERS_ADV_SCULPTMASK_cs_5_0" />
-    <None Include="CS_DVR_LAYERS_CLIPSEMIOPAQUE_cs_5_0" />
-    <None Include="CS_DVR_LAYERS_DEFAULT_cs_5_0" />
-    <None Include="CS_DVR_LAYERS_DEFAULT_OTFMASK_cs_5_0" />
-    <None Include="CS_DVR_LAYERS_DEFAULT_OTFMASK_SHADOW_cs_5_0" />
-    <None Include="CS_DVR_LAYERS_DEFAULT_SHADOW_cs_5_0" />
-    <None Include="CS_DVR_LAYERS_MODULATION_cs_5_0" />
-    <None Include="CS_DVR_LAYERS_MODULATION_OTFMASK_cs_5_0" />
-    <None Include="CS_DVR_LAYERS_SCULPTMASK_cs_5_0" />
-    <None Include="CS_DVR_SURFACE_CCF_cs_5_0" />
-    <None Include="CS_DVR_SURFACE_CURVATURE_cs_5_0" />
-    <None Include="CS_DVR_SURFACE_DEFAULT_cs_5_0" />
-    <None Include="CS_DVR_SURFACE_DEFAULT_OTFMASK_cs_5_0" />
-    <None Include="CS_DVR_SURFACE_DEFAULT_OTFMASK_SHADOW_cs_5_0" />
-    <None Include="CS_DVR_SURFACE_DEFAULT_SHADOW_cs_5_0" />
-    <None Include="CS_DVR_SURFACE_MARKER_cs_5_0" />
-    <None Include="CS_DVR_TEST_cs_5_0" />
-    <None Include="CS_MERGE_ADV_SROUT_AND_LAYEROUT_TO_LAYEROUT_cs_5_0" />
-    <None Include="CS_MERGE_LAYEROUT_TO_RENDEROUT_cs_5_0" />
-    <None Include="CS_MERGE_SROUT_AND_LAYEROUT_TO_LAYEROUT_cs_5_0" />
-    <None Include="CS_OUTLINE_RENDEROUT_cs_5_0" />
-    <None Include="CS_XRAY_MAX_cs_5_0" />
-    <None Include="CS_XRAY_MAX_OTFMASK_cs_5_0" />
-    <None Include="CS_XRAY_MIN_cs_5_0" />
-    <None Include="CS_XRAY_MIN_OTFMASK_cs_5_0" />
-    <None Include="CS_XRAY_SUM_cs_5_0" />
-    <None Include="CS_XRAY_SUM_OTFMASK_cs_5_0" />
-    <None Include="EXPCompile.bat" />
-    <None Include="EXP_ShaderCompile.bat" />
-    <None Include="EXP_ShaderCompile2.bat" />
-    <None Include="GS_ThickLines_gs_4_0" />
-    <None Include="GS_ThickPoints_gs_4_0" />
-    <None Include="GS_WireLines_gs_4_0" />
-    <None Include="MBOITCode\ComplexAlgebra.hlsli">
+    <None Include="EXP_ShaderCompile.bat">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </None>
-    <None Include="MBOITCode\MomentMath.hlsli">
+    <None Include="hlsl\moment\ComplexAlgebra.hlsli">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </None>
-    <None Include="MBOITCode\MomentOIT.hlsli">
+    <None Include="hlsl\moment\MomentMath.hlsli">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </None>
-    <None Include="MBOITCode\TrigonometricMomentMath.hlsli">
+    <None Include="hlsl\moment\MomentOIT.hlsli">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </None>
-    <None Include="ShaderCompile.bat" />
-    <None Include="SR_AIRWAYANALYSIS_ps_4_0" />
-    <None Include="SR_CMM_LINE_ps_4_0" />
-    <None Include="SR_CMM_MULTI_TEXTS_ps_4_0" />
-    <None Include="SR_CMM_TEXT_ps_4_0" />
-    <None Include="SR_IMAGESTACK_MAP_ps_4_0" />
-    <None Include="SR_MAPPING_TEX1_ps_4_0" />
-    <None Include="SR_PHONG_GLOBALCOLOR_MARKERSONSURFACE_ps_4_0" />
-    <None Include="SR_PHONG_GLOBALCOLOR_MAXSHADING_MARKERSONSURFACE_ps_4_0" />
-    <None Include="SR_PHONG_GLOBALCOLOR_MAXSHADING_ps_4_0" />
-    <None Include="SR_PHONG_GLOBALCOLOR_ps_4_0" />
-    <None Include="SR_PHONG_TEX1COLOR_ps_4_0" />
-    <None Include="SR_PROJ_PNT_DEV_FBIASZ_vs_4_0" />
-    <None Include="SR_PROJ_PNT_DEV_MVB_vs_4_0" />
-    <None Include="SR_PROJ_PNT_DEV_vs_4_0" />
-    <None Include="SR_PROJ_PNT_FBIASZ_vs_4_0" />
-    <None Include="SR_PROJ_PNT_MVB_vs_4_0" />
-    <None Include="SR_PROJ_PNT_vs_4_0" />
-    <None Include="SR_PROJ_PN_FBIASZ_vs_4_0" />
-    <None Include="SR_PROJ_PN_MVB_vs_4_0" />
-    <None Include="SR_PROJ_PN_vs_4_0" />
-    <None Include="SR_PROJ_PROXY_vs_4_0" />
-    <None Include="SR_PROJ_PTTT_vs_4_0" />
-    <None Include="SR_PROJ_PT_FBIASZ_vs_4_0" />
-    <None Include="SR_PROJ_PT_MVB_vs_4_0" />
-    <None Include="SR_PROJ_PT_vs_4_0" />
-    <None Include="SR_PROJ_P_FBIASZ_vs_4_0" />
-    <None Include="SR_PROJ_P_MVB_vs_4_0" />
-    <None Include="SR_PROJ_P_vs_4_0" />
-    <None Include="SR_VOLUME_DEVIATION_ps_4_0" />
-    <None Include="SR_VOLUME_SUPERIMPOSE_ps_4_0" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="MergeMultipleLayers.hlsl">
-      <FileType>Document</FileType>
+    <None Include="hlsl\moment\TrigonometricMomentMath.hlsli">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </None>
-    <None Include="ShaderCommonHeader.hlsl">
-      <FileType>Document</FileType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </None>
-    <None Include="SRShader_Common.hlsl">
-      <FileType>Document</FileType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </None>
-    <None Include="VRShader_Common.hlsl">
-      <FileType>Document</FileType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </None>
-    <None Include="VRShader_Shadow.hlsl">
-      <FileType>Document</FileType>
+    <None Include="ShaderCompile.bat">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </None>
   </ItemGroup>
   <ItemGroup>
-    <None Include="OitSr.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">4.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">4.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4.0</ShaderModel>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-      <FileType>Document</FileType>
-    </None>
-    <None Include="OitArrange.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-      <FileType>Document</FileType>
-    </None>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="CommonShader.hlsl">
-      <FileType>Document</FileType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-    </None>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="DvrCS.hlsl">
-      <FileType>Document</FileType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-    </None>
-  </ItemGroup>
-  <ItemGroup>
-    <FxCompile Include="DxPerPixelLL.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">4.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">4.0</ShaderModel>
+    <FxCompile Include="hlsl\dx_abuf\DxPerPixelLL.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
-    <FxCompile Include="DxPerPixelLL_Sort.hlsl">
+    <FxCompile Include="hlsl\dx_abuf\DxPerPixelLL_Sort.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
-    <FxCompile Include="macros.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    <FxCompile Include="hlsl\kbuf\CommonShader.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="Sr_Common.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
     </FxCompile>
-    <FxCompile Include="SSAO.hlsl">
+    <FxCompile Include="hlsl\kbuf\DvrCS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="hlsl\kbuf\macros.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="hlsl\kbuf\OitArrange.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="hlsl\kbuf\OitSr.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="hlsl\kbuf\Sr_Common.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="hlsl\kbuf\SSAO.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="hlsl\legacy\MergeMultipleLayers.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="hlsl\legacy\ShaderCommonHeader.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="hlsl\legacy\SRShader_Common.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="hlsl\legacy\VRShader_Common.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="hlsl\legacy\VRShader_Shadow.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
@@ -336,7 +220,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>E:\Projects\Libraries;$(OPENCV_DIR_VS2017)\Include;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../EngineCores;./gpu manager;./renderer;E:\Projects\Libraries;$(OPENCV_DIR_VS2017)\Include;</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>USE_DX11_3;_WINDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
@@ -375,7 +259,7 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <AdditionalIncludeDirectories>E:\Projects\Libraries;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../EngineCores;./gpu manager;./renderer;E:\Projects\Libraries;</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>USE_DX11_3;_WINDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>

@@ -1,4 +1,4 @@
-#include "CommonShader.hlsl"
+#include "../kbuf/CommonShader.hlsl"
 
 RWByteAddressBuffer deep_LL_buf : register(u1);
 RWTexture2D<float4> fragment_blendout : register(u2);

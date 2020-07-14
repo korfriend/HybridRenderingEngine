@@ -1,4 +1,4 @@
-#include "Sr_Common.hlsl"
+#include "../kbuf/Sr_Common.hlsl"
 
 RWTexture2D<uint> fragment_counter : register(u2);
 RWByteAddressBuffer deep_LL_buf : register(u4);

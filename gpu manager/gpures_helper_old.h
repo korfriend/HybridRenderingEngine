@@ -1,6 +1,6 @@
 #pragma once
-#include "../../EngineCores/GpuManager/GpuManager.h"
-#include "gpu_common_res.h"
+#include "GpuManager/GpuManager.h"
+#include "../gpu_common_res.h"
 
 #include <atomic>
 #include <mutex>

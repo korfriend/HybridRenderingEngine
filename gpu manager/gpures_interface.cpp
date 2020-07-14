@@ -1,8 +1,9 @@
 #include "gpures_interface.h"
+#include "../gpu_common_res.h"
 
-#include <d3dx9math.h>	// For Math and Structure
+//#include <d3dx9math.h>	// For Math and Structure
 #include <d3d11_3.h>
-#include <d3dx11.h>
+//#include <d3dx11.h>
 //#define SDK_REDISTRIBUTE
 
 //#define _DEBUG
@@ -57,9 +58,11 @@ map<string, _gp_lobj_buffer> g_mapCustomParameters;
 
 static ID3D11Device* g_pdx11Device = NULL;
 static ID3D11DeviceContext* g_pdx11DeviceImmContext = NULL;
+#ifdef USE_DX11_3
 static ID3D11Device3* g_pdx11Device3= NULL;
 static ID3D11DeviceContext3* g_pdx11DeviceImmContext3 = NULL;
-static D3D_FEATURE_LEVEL g_eFeatureLevel;
+#endif
+static D3D_FEATURE_LEVEL g_eFeatureLevel = (D3D_FEATURE_LEVEL)0xb300;
 static DXGI_ADAPTER_DESC g_adapterDesc;
 static GPUResMap g_mapVmResources;
 
@@ -79,24 +82,38 @@ bool __InitializeDevice()
 #endif
 	try
 	{
-		D3D11CreateDevice(NULL, driverTypes, NULL, createDeviceFlags, NULL, 0, D3D11_SDK_VERSION,
+		D3D_FEATURE_LEVEL featureLevels[] =
+		{
+			D3D_FEATURE_LEVEL_12_1,
+			D3D_FEATURE_LEVEL_12_0,
+			D3D_FEATURE_LEVEL_11_1,
+			D3D_FEATURE_LEVEL_11_0,
+			//D3D_FEATURE_LEVEL_10_1,
+			//D3D_FEATURE_LEVEL_10_0,
+			//D3D_FEATURE_LEVEL_9_3,
+			//D3D_FEATURE_LEVEL_9_1
+		};
+
+		D3D11CreateDevice(NULL, driverTypes, NULL, createDeviceFlags, featureLevels, ARRAYSIZE(featureLevels), D3D11_SDK_VERSION, 
 			&g_pdx11Device, &g_eFeatureLevel, &g_pdx11DeviceImmContext);
+
+#ifdef USE_DX11_3
 		D3D11_FEATURE_DATA_D3D11_OPTIONS3 FeatureData = {};
-//		HRESULT hh = g_pdx11Device->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS3, &FeatureData, sizeof(D3D11_FEATURE_DATA_D3D11_OPTIONS3));
-//		HRESULT hr = g_pdx11Device->QueryInterface(IID_PPV_ARGS(&g_pdx11Device3));
-//		if (SUCCEEDED(hr) && g_pdx11Device3)
-//		{
-//			//GetDXUTState().SetD3D11Device3(pd3d11Device3);
-//
-//			hr = g_pdx11DeviceImmContext->QueryInterface(IID_PPV_ARGS(&g_pdx11DeviceImmContext3));
-//			if (SUCCEEDED(hr) && g_pdx11DeviceImmContext3)
-//			{
-//				//GetDXUTState().SetD3D11DeviceContext3(pd3dImmediateContext3);
-//			}
-//		}
+		HRESULT hh = g_pdx11Device->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS3, &FeatureData, sizeof(D3D11_FEATURE_DATA_D3D11_OPTIONS3));
+		HRESULT hr = g_pdx11Device->QueryInterface(IID_PPV_ARGS(&g_pdx11Device3));
+		if (SUCCEEDED(hr) && g_pdx11Device3)
+		{
+			//GetDXUTState().SetD3D11Device3(pd3d11Device3);
 
-
+			hr = g_pdx11DeviceImmContext->QueryInterface(IID_PPV_ARGS(&g_pdx11DeviceImmContext3));
+			if (SUCCEEDED(hr) && g_pdx11DeviceImmContext3)
+			{
+				//GetDXUTState().SetD3D11DeviceContext3(pd3dImmediateContext3);
+			}
+		}
+#endif
 	}
+
 	catch (std::exception&)
 	{
 		//::MessageBox(NULL, ("VX3D requires DirectX Driver!!"), NULL, MB_OK);
@@ -110,8 +127,10 @@ bool __InitializeDevice()
 
 	if (g_pdx11Device == NULL || g_pdx11DeviceImmContext == NULL || g_eFeatureLevel < 0x9300)
 	{
+#ifdef USE_DX11_3
 		VMSAFE_RELEASE(g_pdx11DeviceImmContext3);
 		VMSAFE_RELEASE(g_pdx11Device3);
+#endif
 		VMSAFE_RELEASE(g_pdx11DeviceImmContext);
 		VMSAFE_RELEASE(g_pdx11Device);
 		return false;
@@ -122,7 +141,7 @@ bool __InitializeDevice()
 #if (defined(_DEBUG) || defined(DEBUG)) && !defined(SDK_REDISTRIBUTE)
 	// Debug //
 	HRESULT hr = g_pdx11Device->QueryInterface(__uuidof(ID3D11Debug), (void**)(&debugDev));
-	debugDev->ReportLiveDeviceObjects(D3D11_RLDO_SUMMARY);
+	debugDev->ReportLiveDeviceObjects(D3D11_RLDO_IGNORE_INTERNAL );
 #endif
 
 	IDXGIDevice * pDXGIDevice;
@@ -157,13 +176,15 @@ bool __DeinitializeDevice()
 	__ReleaseAllGpuResources();
 	g_pdx11DeviceImmContext->Flush();
 	g_pdx11DeviceImmContext->ClearState();
+#ifdef USE_DX11_3
 	VMSAFE_RELEASE(g_pdx11DeviceImmContext3);
 	VMSAFE_RELEASE(g_pdx11Device3);
+#endif
 	VMSAFE_RELEASE(g_pdx11DeviceImmContext);
 	VMSAFE_RELEASE(g_pdx11Device);
 
 #if (defined(_DEBUG) || defined(DEBUG)) && !defined(SDK_REDISTRIBUTE)
-	debugDev->ReportLiveDeviceObjects(D3D11_RLDO_SUMMARY);
+	debugDev->ReportLiveDeviceObjects(D3D11_RLDO_IGNORE_INTERNAL );
 	VMSAFE_RELEASE(debugDev);
 #endif
 
@@ -192,6 +213,7 @@ bool __GetDeviceInformation(void* devInfo, const string& devSpecification)
 		void** ppvDev = (void**)devInfo;
 		*ppvDev = (void*)g_pdx11DeviceImmContext;
 	}
+#ifdef USE_DX11_3
 	else if (devSpecification.compare(("DEVICE_POINTER_3")) == 0)
 	{
 		void** ppvDev = (void**)devInfo;
@@ -202,6 +224,7 @@ bool __GetDeviceInformation(void* devInfo, const string& devSpecification)
 		void** ppvDev = (void**)devInfo;
 		*ppvDev = (void*)g_pdx11DeviceImmContext3;
 	}
+#endif
 	else if (devSpecification.compare(("DEVICE_ADAPTER_DESC")) == 0)
 	{
 		DXGI_ADAPTER_DESC* pdx11Adapter = (DXGI_ADAPTER_DESC*)devInfo;
@@ -223,7 +246,7 @@ ullong __GetUsedGpuMemorySizeBytes()
 	auto itrResDX11 = g_mapVmResources.begin();
 	for (; itrResDX11 != g_mapVmResources.end(); itrResDX11++)
 	{
-		if (itrResDX11->second.alloc_res_ptrs[BTYPE_RES] != NULL)
+		if (itrResDX11->second.alloc_res_ptrs[DTYPE_RES] != NULL)
 		{
 			auto it = itrResDX11->second.res_dvalues.find("RES_SIZE_BYTES");
 			if (it != itrResDX11->second.res_dvalues.end())
@@ -328,15 +351,21 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		desc_buf.StructureByteStride = stride_bytes;
 		desc_buf.MiscFlags = (DXGI_FORMAT)GetOption("FORMAT") == DXGI_FORMAT_UNKNOWN ? D3D11_RESOURCE_MISC_BUFFER_STRUCTURED : NULL;
 		ID3D11Buffer* pdx11Buffer = NULL;
+		if (GetOption("RAW_ACCESS") & 0x1)
+		{
+			// D3D11_BUFFEREX_SRV_FLAG_RAW not D3D11_BUFFER_SRV_FLAG_RAW
+			// https://docs.microsoft.com/en-us/windows/win32/direct3d11/overviews-direct3d-11-resources-intro
+			desc_buf.MiscFlags |= D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
+		}
 		//if (num_elements == 18 && stride_bytes == 36)
 		//	printf("LLLL\n");
 		if (g_pdx11Device->CreateBuffer(&desc_buf, NULL, &pdx11Buffer) != S_OK)
 		{
-			//printf("GG %d, %d, \n", num_elements, stride_bytes);
+			printf("GG %d, %d, \n", num_elements, stride_bytes);
 			return false;
 		}
 
-		gres.alloc_res_ptrs[BTYPE_RES] = (void*)pdx11Buffer;
+		gres.alloc_res_ptrs[DTYPE_RES] = (void*)pdx11Buffer;
 		gres.res_dvalues["RES_SIZE_BYTES"] = num_elements * stride_bytes;
 		break;
 	}
@@ -352,7 +381,7 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		ZeroMemory(&descTex2D, sizeof(D3D11_TEXTURE2D_DESC));
 		descTex2D.Width = (uint)GetParam("WIDTH");
 		descTex2D.Height = (uint)GetParam("HEIGHT");
-		descTex2D.MipLevels = 1;
+		descTex2D.MipLevels = gres.options["MIP_GEN"] == 1? 0 : 1;
 		descTex2D.ArraySize = max((uint)GetParam("DEPTH"), (uint)1);
 		descTex2D.Format = (DXGI_FORMAT)GetOption("FORMAT");
 		descTex2D.SampleDesc.Count = 1;
@@ -360,14 +389,16 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		descTex2D.Usage = (D3D11_USAGE)GetOption("USAGE");
 		descTex2D.BindFlags = GetOption("BIND_FLAG");
 		descTex2D.CPUAccessFlags = GetOption("CPU_ACCESS_FLAG");
-		descTex2D.MiscFlags = NULL;
+		descTex2D.MiscFlags = gres.options["MIP_GEN"] == 1 ? D3D11_RESOURCE_MISC_GENERATE_MIPS : NULL;
 
+		if (gres.options["MIP_GEN"] == 1)
+			int gg = 0;
 		ID3D11Texture2D* pdx11TX2D = NULL;
 		g_pdx11Device->CreateTexture2D(&descTex2D, NULL, &pdx11TX2D);
 		if (pdx11TX2D == NULL)
 			::MessageBoxA(NULL, "CreateTexture2D ==> ERROR!!", NULL, S_OK);
 
-		gres.alloc_res_ptrs[BTYPE_RES] = (void*)pdx11TX2D;
+		gres.alloc_res_ptrs[DTYPE_RES] = (void*)pdx11TX2D;
 		gres.res_dvalues["RES_SIZE_BYTES"] = descTex2D.Width * descTex2D.Height * GetSizeFormat(descTex2D.Format);
 		break;
 	}
@@ -388,7 +419,7 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		ID3D11Texture3D* pdx11TX3D = NULL;
 		g_pdx11Device->CreateTexture3D(&descTex3D, NULL, &pdx11TX3D);
 
-		gres.alloc_res_ptrs[BTYPE_RES] = (void*)pdx11TX3D;
+		gres.alloc_res_ptrs[DTYPE_RES] = (void*)pdx11TX3D;
 		gres.res_dvalues["RES_SIZE_BYTES"] = descTex3D.Width * descTex3D.Height * descTex3D.Depth * GetSizeFormat(descTex3D.Format);
 		break;
 	}
@@ -410,8 +441,8 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		descRTV.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
 		descRTV.Texture2D.MipSlice = 0;
 		ID3D11View* pdx11View = NULL;
-		g_pdx11Device->CreateRenderTargetView((ID3D11Resource*)gres.alloc_res_ptrs[BTYPE_RES], &descRTV, (ID3D11RenderTargetView**)&pdx11View);
-		gres.alloc_res_ptrs[BTYPE_RTV] = (void*)pdx11View;
+		g_pdx11Device->CreateRenderTargetView((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], &descRTV, (ID3D11RenderTargetView**)&pdx11View);
+		gres.alloc_res_ptrs[DTYPE_RTV] = (void*)pdx11View;
 	}
 	if (bind_flag & D3D11_BIND_DEPTH_STENCIL)
 	{
@@ -427,8 +458,8 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		descDSV.Flags = 0;
 		descDSV.Texture2D.MipSlice = 0;
 		ID3D11View* pdx11View = NULL;
-		g_pdx11Device->CreateDepthStencilView((ID3D11Resource*)gres.alloc_res_ptrs[BTYPE_RES], &descDSV, (ID3D11DepthStencilView**)&pdx11View);
-		gres.alloc_res_ptrs[BTYPE_DSV] = (void*)pdx11View;
+		g_pdx11Device->CreateDepthStencilView((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], &descDSV, (ID3D11DepthStencilView**)&pdx11View);
+		gres.alloc_res_ptrs[DTYPE_DSV] = (void*)pdx11View;
 	}
 	if (bind_flag & D3D11_BIND_SHADER_RESOURCE)
 	{
@@ -439,22 +470,32 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		switch (gres.rtype)
 		{
 		case RTYPE_BUFFER:
-			descSRV.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
-			descSRV.Buffer.FirstElement = 0;
-			descSRV.Buffer.NumElements = (uint)GetParam("NUM_ELEMENTS");
+			descSRV.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
+			descSRV.BufferEx.FirstElement = 0;
+			descSRV.BufferEx.NumElements = (uint)GetParam("NUM_ELEMENTS");
+			if (GetOption("RAW_ACCESS") & 0x1) descSRV.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
 			break;
 		case RTYPE_TEXTURE2D:
 			if ((uint)GetParam("DEPTH") > 1)
 			{
 				descSRV.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
-				descSRV.Texture2DArray.MipLevels = 1;
+				descSRV.Texture2DArray.MipLevels = gres.options["MIP_GEN"] == 1 ? -1 : 1;
 				descSRV.Texture2DArray.ArraySize = (uint)GetParam("DEPTH");
 			}
 			else
 			{
-				descSRV.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-				descSRV.Texture2D.MipLevels = 1;
-				descSRV.Texture2D.MostDetailedMip = 0;
+				if (gres.options["MIP_GEN"] == 1)
+				{
+					descSRV.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+					descSRV.Texture2D.MipLevels = -1;
+					descSRV.Texture2D.MostDetailedMip = 0;
+				}
+				else
+				{
+					descSRV.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+					descSRV.Texture2D.MipLevels = 1;
+					descSRV.Texture2D.MostDetailedMip = 0;
+				}
 			}
 			break;
 		case RTYPE_TEXTURE3D:
@@ -468,24 +509,24 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 
 		}
 		ID3D11View* pdx11View = NULL;
-		g_pdx11Device->CreateShaderResourceView((ID3D11Resource*)gres.alloc_res_ptrs[BTYPE_RES], &descSRV, (ID3D11ShaderResourceView**)&pdx11View);
+		g_pdx11Device->CreateShaderResourceView((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], &descSRV, (ID3D11ShaderResourceView**)&pdx11View);
 		if (pdx11View == NULL)
 			::MessageBoxA(NULL, "CreateShaderResourceView ==> ERROR!!", NULL, S_OK);
-		//gres.alloc_res_ptrs.insert(pair<BindType, void*>(BTYPE_SRV, pdx11View));
-		gres.alloc_res_ptrs[BTYPE_SRV] = (void*)pdx11View;
+		//gres.alloc_res_ptrs.insert(pair<BindType, void*>(DTYPE_SRV, pdx11View));
+		gres.alloc_res_ptrs[DTYPE_SRV] = (void*)pdx11View;
 	}
 	if (bind_flag & D3D11_BIND_UNORDERED_ACCESS)
 	{
 		D3D11_UNORDERED_ACCESS_VIEW_DESC descUAV;
 		ZeroMemory(&descUAV, sizeof(D3D11_UNORDERED_ACCESS_VIEW_DESC));
 		descUAV.Format = (DXGI_FORMAT)GetOption("FORMAT");
-
 		switch (gres.rtype)
 		{
 		case RTYPE_BUFFER:
 			descUAV.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
 			descUAV.Buffer.FirstElement = 0;
 			descUAV.Buffer.NumElements = (uint)GetParam("NUM_ELEMENTS");
+			if (GetOption("RAW_ACCESS") & 0x1) descUAV.Buffer.Flags = D3D11_BUFFER_UAV_FLAG_RAW;
 			break;
 		case RTYPE_TEXTURE2D:
 			descUAV.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
@@ -496,8 +537,8 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 			return false;
 		}
 		ID3D11View* pdx11View = NULL;
-		g_pdx11Device->CreateUnorderedAccessView((ID3D11Resource*)gres.alloc_res_ptrs[BTYPE_RES], &descUAV, (ID3D11UnorderedAccessView**)&pdx11View);
-		gres.alloc_res_ptrs[BTYPE_UAV] = (void*)pdx11View;
+		g_pdx11Device->CreateUnorderedAccessView((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], &descUAV, (ID3D11UnorderedAccessView**)&pdx11View);
+		gres.alloc_res_ptrs[DTYPE_UAV] = (void*)pdx11View;
 	}
 
 	g_mapVmResources[RES_INDICATOR(gres)] = gres;
@@ -513,21 +554,21 @@ bool __ReleaseGpuResource(GpuRes& gres, const bool call_clearstate)
 
 	g_pdx11DeviceImmContext->Flush();
 
-	std::map<BindType, void*>& alloc_res_ptrs = itrResDX11->second.alloc_res_ptrs;
+	std::map<DesType, void*>& alloc_res_ptrs = itrResDX11->second.alloc_res_ptrs;
 	for (auto it = alloc_res_ptrs.begin(); it != alloc_res_ptrs.end(); it++)
 	{
 		switch (it->first)
 		{
-		case BTYPE_RES:
+		case DTYPE_RES:
 		{
 			ID3D11Resource* pdx11Resource = (ID3D11Resource*)it->second;
 			VMSAFE_RELEASE(pdx11Resource);
 			break;
 		}
-		case BTYPE_RTV:
-		case BTYPE_DSV:
-		case BTYPE_SRV:
-		case BTYPE_UAV:
+		case DTYPE_RTV:
+		case DTYPE_DSV:
+		case DTYPE_SRV:
+		case DTYPE_UAV:
 		{
 			ID3D11View* pdx11View = (ID3D11View*)it->second;
 			VMSAFE_RELEASE(pdx11View);
@@ -593,7 +634,7 @@ bool __ReleaseAllGpuResources()
 	//VMSAFE_RELEASE(g_pdx11Device);
 
 #if (defined(_DEBUG) || defined(DEBUG)) && !defined(SDK_REDISTRIBUTE)
-	debugDev->ReportLiveDeviceObjects(D3D11_RLDO_SUMMARY);
+	debugDev->ReportLiveDeviceObjects(D3D11_RLDO_IGNORE_INTERNAL );
 	//VMSAFE_RELEASE(debugDev);
 #endif
 	//VmInitializeDevice();
