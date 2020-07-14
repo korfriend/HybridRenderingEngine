@@ -7,6 +7,11 @@
 *.userosscache
 *.sln.docstates
 
+branch_Optimization/
+OIT/
+shader compiled objs/
+bks/
+
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 
