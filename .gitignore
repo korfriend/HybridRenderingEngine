@@ -6,7 +6,8 @@
 *.user
 *.userosscache
 *.sln.docstates
-
+*.txt
+*.jpg
 branch_Optimization/
 OIT/
 shader compiled objs/
