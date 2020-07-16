@@ -996,13 +996,29 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 {
 	PrimitiveData* prim_data = ((VmVObjectPrimitive*)pobj)->GetPrimitiveData();
 
+	auto CheckReusability = [&pobj](GpuRes& gres, bool& update_data)
+	{
+		auto it = gres.res_dvalues.find("LASTEST_GENCALL_TIME");
+		unsigned long long _gpu_gen_timg = 0;
+		if (it != gres.res_dvalues.end())
+			_gpu_gen_timg = *(unsigned long long*)&it->second;
+		unsigned long long _cpu_gen_timg = pobj->GetContentsUpdateTime();
+		if (_gpu_gen_timg < _cpu_gen_timg)
+		{
+			// now, at least update
+			update_data = true;
+			bool is_reuse_memory = false;
+			pobj->GetCustomParameter("_bool_ReuseGpuMemory", data_type::dtype<bool>(), &is_reuse_memory);
+			gres.options["REUSE_MEMORY"] = (int)is_reuse_memory;
+		}
+	};
+
+	bool update_data = false;
+	pobj->GetCustomParameter("_bool_UpdateData", data_type::dtype<bool>(), &update_data);
 	// always
 	{
 		gres_vtx.vm_src_id = pobj->GetObjectID();
 		gres_vtx.res_name = string("PRIMITIVE_MODEL_VTX");
-
-		bool update_data = false;
-		pobj->GetCustomParameter("_bool_UpdateData", data_type::dtype<bool>(), &update_data);
 
 		if (!g_pCGpuManager->UpdateGpuResource(gres_vtx))
 		{
@@ -1016,8 +1032,13 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 			gres_vtx.res_dvalues["NUM_ELEMENTS"] = prim_data->num_vtx;
 			gres_vtx.res_dvalues["STRIDE_BYTES"] = stride_bytes;
 
-			g_pCGpuManager->GenerateGpuResource(gres_vtx);
 			update_data = true;
+			g_pCGpuManager->GenerateGpuResource(gres_vtx);
+		}
+		else
+		{
+			CheckReusability(gres_vtx, update_data);
+			g_pCGpuManager->GenerateGpuResource(gres_vtx);
 		}
 
 		if (update_data)
@@ -1091,6 +1112,21 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 
 			g_pCGpuManager->GenerateGpuResource(gres_idx);
 
+
+			//D3D11_MAPPED_SUBRESOURCE mappedRes;
+			//g_VmCommonParams.dx11DeviceImmContext->Map(pdx11bufidx, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedRes);
+			//uint* vidx_buf = (uint*)mappedRes.pData;
+			//memcpy(vidx_buf, prim_data->vidx_buffer, prim_data->num_vidx * sizeof(uint));
+			//g_VmCommonParams.dx11DeviceImmContext->Unmap(pdx11bufidx, NULL);
+		}
+		else
+		{
+			CheckReusability(gres_idx, update_data);
+			g_pCGpuManager->GenerateGpuResource(gres_idx);
+		}
+
+		if (update_data)
+		{
 			ID3D11Buffer* pdx11bufidx = (ID3D11Buffer*)gres_idx.alloc_res_ptrs[DTYPE_RES];
 			{
 				D3D11_SUBRESOURCE_DATA subres;
@@ -1101,12 +1137,6 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 				g_VmCommonParams.dx11DeviceImmContext->UpdateSubresource(pdx11bufidx, 0, NULL, subres.pSysMem, subres.SysMemPitch, 0);
 				VMSAFE_DELETEARRAY(subres.pSysMem);
 			}
-
-			//D3D11_MAPPED_SUBRESOURCE mappedRes;
-			//g_VmCommonParams.dx11DeviceImmContext->Map(pdx11bufidx, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedRes);
-			//uint* vidx_buf = (uint*)mappedRes.pData;
-			//memcpy(vidx_buf, prim_data->vidx_buffer, prim_data->num_vidx * sizeof(uint));
-			//g_VmCommonParams.dx11DeviceImmContext->Unmap(pdx11bufidx, NULL);
 		}
 	}
 
@@ -1214,9 +1244,7 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 				//	g_VmCommonParams.dx11DeviceImmContext->Unmap(pdx11tx2dres, NULL);
 				//};
 				
-
 				g_pCGpuManager->GenerateGpuResource(gres_tex);
-				upload_teximg(gres_tex, tex_res_size, byte_stride);
 
 				//if (prim_data->texture_res_info.size() == 1)
 				//{
@@ -1247,6 +1275,14 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 				//	g_pCGpuManager->ReleaseGpuResource(tmp_gres, false);
 				//}
 			}
+			else
+			{
+				CheckReusability(gres_tex, update_data);
+				g_pCGpuManager->GenerateGpuResource(gres_tex);
+			}
+
+			if (update_data)
+				upload_teximg(gres_tex, tex_res_size, byte_stride);
 
 			map_gres_texs["MAP_COLOR4"] = gres_tex;
 		}
@@ -1255,7 +1291,7 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 			double Ns;
 			pobj->GetCustomParameter("_double_Ns", data_type::dtype<double>(), &Ns);
 
-			auto update_tex_res = [&Ns](GpuRes& gres_tex, const string& mat_name, const vmint2& tex_res_size, const int byte_stride, const byte* texture_res)
+			auto update_tex_res = [&Ns, &CheckReusability, &update_data](GpuRes& gres_tex, const string& mat_name, const vmint2& tex_res_size, const int byte_stride, const byte* texture_res)
 			{
 				auto upload_single_teximg = [&tex_res_size, &byte_stride, &texture_res](GpuRes& gres_tex)
 				{
@@ -1306,8 +1342,15 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 					gres_tex.res_dvalues["HEIGHT"] = tex_res_size.y;
 
 					g_pCGpuManager->GenerateGpuResource(gres_tex);
-					upload_single_teximg(gres_tex);
 				}
+				else
+				{
+					CheckReusability(gres_tex, update_data);
+					g_pCGpuManager->GenerateGpuResource(gres_tex);
+				}
+
+				if (update_data)
+					upload_single_teximg(gres_tex);
 			};
 
 

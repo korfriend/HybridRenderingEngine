@@ -287,8 +287,6 @@ int __UpdateGpuResourcesBySrcID(const int src_id, vector<GpuRes>& gres_list)
 
 bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 {
-	__ReleaseGpuResource(gres, false);
-
 	auto GetOption = [&](const std::string& flag_name) -> uint
 	{
 		auto it = gres.options.find(flag_name);
@@ -306,6 +304,25 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		}
 		return it->second;
 	};
+
+	auto UpdateGenCallTime = [&]()
+	{
+		gres.res_dvalues["LASTEST_GENCALL_TIME"] = 0;
+		unsigned long long _time = vmhelpers::GetCurrentTimePack();
+		double d_time;
+		memcpy(&d_time, &_time, sizeof(double));
+		gres.res_dvalues["LASTEST_GENCALL_TIME"] = d_time;
+		gres.options["REUSE_MEMORY"] = 0;
+	};
+
+	if (GetOption("REUSE_MEMORY") == 1)
+	{
+		UpdateGenCallTime();
+		return true;
+	}
+
+	__ReleaseGpuResource(gres, false);
+
 
 	auto GetSizeFormat = [&](DXGI_FORMAT format) -> uint
 	{
@@ -542,6 +559,7 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 	}
 
 	g_mapVmResources[RES_INDICATOR(gres)] = gres;
+	UpdateGenCallTime();
 
 	return true;
 }
