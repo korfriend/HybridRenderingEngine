@@ -26,9 +26,9 @@
     <ClCompile Include="renderer\RendererHeader.cpp" />
     <ClCompile Include="renderer\RendererHeader_legacy.cpp" />
     <ClCompile Include="renderer\SR_Common_CS_legacy.cpp" />
-    <ClCompile Include="renderer\SR_OIT.cpp" />
+    <ClCompile Include="renderer\PrimitiveRenderer.cpp" />
     <ClCompile Include="renderer\SR_Plane_legacy.cpp" />
-    <ClCompile Include="renderer\VR_DLS.cpp" />
+    <ClCompile Include="renderer\VolumeRenderer.cpp" />
     <ClCompile Include="vismtv_inbuilt_renderergpudx.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -92,11 +92,11 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
-    <FxCompile Include="hlsl\kbuf\OitArrange.hlsl">
+    <FxCompile Include="hlsl\kbuf\KbufResolve.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
-    <FxCompile Include="hlsl\kbuf\OitSr.hlsl">
+    <FxCompile Include="hlsl\kbuf\Sr_Kbuf.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>

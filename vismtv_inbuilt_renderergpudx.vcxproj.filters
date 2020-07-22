@@ -5,12 +5,6 @@
     <ClCompile Include="renderer\RendererHeader.cpp">
       <Filter>renderer</Filter>
     </ClCompile>
-    <ClCompile Include="renderer\SR_OIT.cpp">
-      <Filter>renderer</Filter>
-    </ClCompile>
-    <ClCompile Include="renderer\VR_DLS.cpp">
-      <Filter>renderer</Filter>
-    </ClCompile>
     <ClCompile Include="renderer\DVR_Common_CS_legacy.cpp">
       <Filter>renderer\legacy</Filter>
     </ClCompile>
@@ -31,6 +25,12 @@
     </ClCompile>
     <ClCompile Include="gpu manager\gpures_helper_old.cpp">
       <Filter>gpu manager\legacy</Filter>
+    </ClCompile>
+    <ClCompile Include="renderer\PrimitiveRenderer.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="renderer\VolumeRenderer.cpp">
+      <Filter>renderer</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -137,9 +137,6 @@
     <FxCompile Include="hlsl\legacy\SRShader_Common.hlsl">
       <Filter>hlsl source code\legacy</Filter>
     </FxCompile>
-    <FxCompile Include="hlsl\kbuf\OitSr.hlsl">
-      <Filter>hlsl source code\k buf</Filter>
-    </FxCompile>
     <FxCompile Include="hlsl\kbuf\Sr_Common.hlsl">
       <Filter>hlsl source code\k buf</Filter>
     </FxCompile>
@@ -152,14 +149,17 @@
     <FxCompile Include="hlsl\kbuf\macros.hlsl">
       <Filter>hlsl source code\k buf</Filter>
     </FxCompile>
-    <FxCompile Include="hlsl\kbuf\OitArrange.hlsl">
-      <Filter>hlsl source code\k buf</Filter>
-    </FxCompile>
     <FxCompile Include="hlsl\kbuf\DvrCS.hlsl">
       <Filter>hlsl source code\k buf</Filter>
     </FxCompile>
     <FxCompile Include="hlsl\legacy\ShaderCommonHeader.hlsl">
       <Filter>hlsl source code\legacy</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\kbuf\Sr_Kbuf.hlsl">
+      <Filter>hlsl source code\k buf</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\kbuf\KbufResolve.hlsl">
+      <Filter>hlsl source code\k buf</Filter>
     </FxCompile>
   </ItemGroup>
 </Project>

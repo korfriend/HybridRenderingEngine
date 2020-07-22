@@ -744,7 +744,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	if (reload_hlsl_objs)
 	{
 		//string prefix_path = "..\\..\\VisNativeModules\\vismtv_inbuilt_renderergpudx\\OIT\\";
-		string prefix_path = "E:\\project_srcs\\VisMotive\\VisNativeModules\\vismtv_inbuilt_renderergpudx\\OIT\\";
+		//string prefix_path = "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
+		string prefix_path = "E:\\project_srcs\\VisMotive\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
 		cout << "RECOMPILE HLSL _ OIT renderer!!" << endl;
 
 		dx11CommonParams->dx11DeviceImmContext->VSSetShader(NULL, NULL, 0);

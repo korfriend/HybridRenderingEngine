@@ -75,7 +75,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	if (recompile_hlsl)
 	{
 		//string prefix_path = "..\\..\\VisNativeModules\\vismtv_inbuilt_renderergpudx\\OIT\\";
-		string prefix_path = "E:\\project_srcs\\VisMotive\\VisNativeModules\\vismtv_inbuilt_renderergpudx\\OIT\\";
+		//string prefix_path = "E:\\project_srcs\\VisMotive\\VisNativeModules\\vismtv_inbuilt_renderergpudx\\OIT\\";
+		//string prefix_path = "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
+		string prefix_path = "E:\\project_srcs\\VisMotive\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
 
 #define CS_NUM 7
 #define SET_CS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(COMPUTE_SHADER, NAME), dx11CShader, true)
@@ -345,6 +347,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	QueryPerformanceCounter(&lIntCntStart);
 	int count_call_render = 0;
 	iobj->GetCustomParameter("_int_NumCallRenders", __DTYPE(int), &count_call_render);
+	bool is_performed_ssao = false;
 
 	int num_main_vrs = (int)ordered_main_volume_ids.size();
 	for (int i = 0; i < num_main_vrs; i++)
@@ -711,6 +714,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 		if (i == num_main_vrs - 1 && cbEnvState.r_kernel_ao > 0)
 		{
+			is_performed_ssao = true;
 			dx11DeviceImmContext->Flush();
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 			ComputeSSAO(dx11DeviceImmContext, dx11CommonParams, num_grid_x, num_grid_y,
@@ -744,6 +748,38 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 #pragma endregion // Renderer
+	}
+
+	if (cbEnvState.r_kernel_ao > 0 && !is_performed_ssao)
+	{
+		ID3D11UnorderedAccessView* dx11UAVs[4] = {
+				  (ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV]
+				, (ID3D11UnorderedAccessView*)gres_fb_deep_k_buffer.alloc_res_ptrs[DTYPE_UAV]
+				, (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
+				, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
+		};
+		is_performed_ssao = true;
+		dx11DeviceImmContext->Flush();
+		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+		ComputeSSAO(dx11DeviceImmContext, dx11CommonParams, num_grid_x, num_grid_y,
+			gres_fb_counter, gres_fb_deep_k_buffer, gres_fb_rgba, blur_SSAO,
+			gres_fb_mip_z_halftexs, gres_fb_mip_a_halftexs, gres_fb_ao_texs, gres_fb_ao_blf_texs,
+			gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex, true);
+
+		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs, (UINT*)(&dx11UAVs));
+
+		if (blur_SSAO)
+		{
+			dx11DeviceImmContext->CSSetShaderResources(10, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_blf_texs[0].alloc_res_ptrs[DTYPE_SRV]);
+			dx11DeviceImmContext->CSSetShaderResources(11, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_blf_texs[1].alloc_res_ptrs[DTYPE_SRV]);
+			dx11DeviceImmContext->CSSetShaderResources(20, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_vr_blf_tex.alloc_res_ptrs[DTYPE_SRV]);
+		}
+		else
+		{
+			dx11DeviceImmContext->CSSetShaderResources(10, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_texs[0].alloc_res_ptrs[DTYPE_SRV]);
+			dx11DeviceImmContext->CSSetShaderResources(11, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_texs[1].alloc_res_ptrs[DTYPE_SRV]);
+			dx11DeviceImmContext->CSSetShaderResources(20, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_vr_tex.alloc_res_ptrs[DTYPE_SRV]);
+		}
 	}
 
 	dx11DeviceImmContext->Flush();
