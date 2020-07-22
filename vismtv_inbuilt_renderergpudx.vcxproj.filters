@@ -71,10 +71,13 @@
     <None Include="hlsl\moment\MomentOIT.hlsli">
       <Filter>hlsl source code\Moment</Filter>
     </None>
-    <None Include="EXP_ShaderCompile.bat">
+    <None Include="ShaderCompile_legacy.bat">
       <Filter>bat</Filter>
     </None>
     <None Include="ShaderCompile.bat">
+      <Filter>bat</Filter>
+    </None>
+    <None Include="ex_ShaderCompile.bat">
       <Filter>bat</Filter>
     </None>
   </ItemGroup>

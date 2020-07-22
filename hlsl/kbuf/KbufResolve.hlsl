@@ -20,10 +20,10 @@ RWTexture2D<float> fragment_zdepth : register(u3);
 //#define SET_FRAG(F_ADDR, K, F) {uint4 rb = uint4(F.i_vis, asuint(F.z), asuint(F.zthick), asuint(F.opacity_sum)); STORE4_KBUF(rb, F_ADDR, K);}
 
 //groupshared int idx_array[num_deep_layers * 2]; // ??
-//[numthreads(1, 1, 1)] // or 4x4 thread 도 생각해 보자...
+//[numthreads(1, 1, 1)] // or consider 4x4 thread either
 [numthreads(GRIDSIZE, GRIDSIZE, 1)]
 //[numthreads(1, 1, 1)]
-void OIT_ARRAGNGE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
+void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
 {
     if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
         return;
@@ -215,7 +215,7 @@ void OIT_ARRAGNGE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
     //fragment_blendout[DTid.xy] = fmix_vis;
     //return;
     
-	// SSAO 일 때 disable
+	// disable when SSAO is activated
 	if (g_cbEnv.r_kernel_ao > 0)
 	{
 		cnt_sorted_ztsurf = valid_frag_cnt;
