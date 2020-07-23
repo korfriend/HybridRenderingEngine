@@ -408,7 +408,10 @@ bool RenderSrCommonCS(VmFnContainer* _fncontainer,
 		// Register Valid Objects to Rendering List //
 		vmdouble4 d4Color(1.), d4ColorWire(1.);
 		prim_obj->GetCustomParameter("_double4_color", data_type::dtype<vmdouble4>(), &d4Color);
-		lobj->GetDstObjValue(prim_obj_id, "_double4_color", &d4Color);
+		bool use_original_obj_color = false;
+		prim_obj->GetCustomParameter("_bool_UseOriginalObjColor", data_type::dtype<bool>(), &use_original_obj_color);
+		if (!use_original_obj_color) lobj->GetDstObjValue(prim_obj_id, "_double4_color", &d4Color);
+		
 		bool bIsWireframe = false;
 		if (prim_data->ptype == PrimitiveTypeTRIANGLE)
 			prim_obj->GetPrimitiveWireframeVisibilityColor(&bIsWireframe, &d4ColorWire);

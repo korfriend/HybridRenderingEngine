@@ -1303,7 +1303,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		// Register Valid Objects to Rendering List //
 		vmdouble4 dColor(1.), dColorWire(1.);
 		pobj->GetCustomParameter("_double4_color", data_type::dtype<vmdouble4>(), &dColor);
-		lobj->GetDstObjValue(pobj_id, "_double4_color", &dColor);
+		bool use_original_obj_color = false;
+		pobj->GetCustomParameter("_bool_UseOriginalObjColor", data_type::dtype<bool>(), &use_original_obj_color);
+		if(!use_original_obj_color) lobj->GetDstObjValue(pobj_id, "_double4_color", &dColor);
 		//if (dColor.a == 0)
 		//	continue;
 		bool is_wire = false;
@@ -1315,6 +1317,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		vmfloat4 fColor(dColor), fColorWire(dColorWire);
 
 		bool is_foremost_surfaces = false;
+		pobj->GetCustomParameter("_bool_OnlyForemostSurfaces", data_type::dtype<bool>(), &is_foremost_surfaces);
 		lobj->GetDstObjValue(pobj_id, "_bool_OnlyForemostSurfaces", &is_foremost_surfaces);
 		//double pobj_vzthickness = -1.0;
 		//lobj->GetDstObjValue(pobj_id, "_double_VzThickness", &pobj_vzthickness);
