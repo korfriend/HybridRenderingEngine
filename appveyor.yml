@@ -4,3 +4,6 @@ build:
   
 only_commits:
   message: /\[build\]/
+
+build:
+  project: "rendering engine.sln"
