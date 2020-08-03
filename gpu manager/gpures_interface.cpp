@@ -111,6 +111,10 @@ bool __InitializeDevice()
 				//GetDXUTState().SetD3D11DeviceContext3(pd3dImmediateContext3);
 			}
 		}
+		if (g_pdx11Device3 == NULL || g_pdx11DeviceImmContext3 == NULL)
+		{
+			cout << "dx11 feature 3 failed!" << endl;
+		}
 #endif
 	}
 

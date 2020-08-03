@@ -4,6 +4,8 @@
 #include "RendererHeader_legacy.h"
 #include "RendererHeader.h"
 
+#include <iostream>
+
 //GPU Direct3D Renderer - (c)DongJoon Kim
 #define MODULEDEFINEDSPECIFIER "GPU Direct3D Renderer - (c)DongJoon Kim"
 //#define RELEASE_MODE 
@@ -50,6 +52,7 @@ bool InitModule(fncontainer::VmFnContainer& _fncontainer)
 #ifdef ENABLE_LEGACY
 	if (grd_helper_legacy::InitializePresettings(g_pCGpuManager, g_vmCommonParams_legacy) == -1)
 	{
+		std::cout << "failure legacy initializer!" << std::endl;
 		DeInitModule(fncontainer::VmFnContainer());
 		return false;
 	}
@@ -57,6 +60,7 @@ bool InitModule(fncontainer::VmFnContainer& _fncontainer)
 #ifdef ENABLE_NEWOIT
 	if (grd_helper::InitializePresettings(g_pCGpuManager, g_vmCommonParams) == -1)
 	{
+		std::cout << "failure new initializer!" << std::endl;
 		DeInitModule(fncontainer::VmFnContainer());
 		return false;
 	}

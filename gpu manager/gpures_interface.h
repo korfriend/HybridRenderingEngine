@@ -1,6 +1,6 @@
 #pragma once
 
-#include "GpuManager/GpuManager.h"
+#include "GpuManager.h"
 
 using namespace std;
 using namespace vmmath;

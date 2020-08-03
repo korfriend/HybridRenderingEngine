@@ -224,12 +224,12 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>../../EngineCores;./gpu manager;./renderer;E:\Projects\Libraries;$(OPENCV_DIR_VS2017)\Include;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.;./gpu manager;./renderer;</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>USE_DX11_3;_WINDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>d3dcompiler.lib;d3d11.lib;opencv_highgui420d.lib;opencv_core420d.lib;opencv_imgcodecs420d.lib;opencv_imgproc420d.lib;GpuManager.lib;CommonUnits.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3dcompiler.lib;d3d11.lib;GpuManagerd.lib;CommonUnitsd.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <DelayLoadDLLs>
       </DelayLoadDLLs>
       <AdditionalLibraryDirectories>$(OPENCV_4)\x64\vc15\lib;</AdditionalLibraryDirectories>
@@ -263,7 +263,7 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <AdditionalIncludeDirectories>../../EngineCores;./gpu manager;./renderer;E:\Projects\Libraries;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.;./gpu manager;./renderer;</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>USE_DX11_3;_WINDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>

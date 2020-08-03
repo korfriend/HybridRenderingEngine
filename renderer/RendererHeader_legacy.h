@@ -1,5 +1,5 @@
 #pragma once
-#include "CommonUnits/VimCommon.h"
+#include "VimCommon.h"
 //#include "VXDX11Helper.h"
 #include "gpures_helper_old.h"
 
