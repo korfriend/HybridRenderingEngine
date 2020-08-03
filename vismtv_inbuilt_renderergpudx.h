@@ -1,4 +1,4 @@
-#include "CommonUnits/VimCommon.h"
+#include "VimCommon.h"
 
 __vmstatic bool CheckModuleParameters(fncontainer::VmFnContainer& _fncontainer);
 __vmstatic bool InitModule(fncontainer::VmFnContainer& _fncontainer);
