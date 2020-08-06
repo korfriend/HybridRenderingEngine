@@ -115,6 +115,8 @@ bool __InitializeDevice()
 		{
 			cout << "dx11 feature 3 failed!" << endl;
 		}
+		else
+			cout << "dx11 feature 3 OK!!" << endl;
 #endif
 	}
 
