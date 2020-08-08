@@ -313,7 +313,7 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 
 	auto UpdateGenCallTime = [&]()
 	{
-		gres.res_dvalues["LASTEST_GENCALL_TIME"] = 0;
+		//gres.res_dvalues["LASTEST_GENCALL_TIME"] = 0;
 		unsigned long long _time = vmhelpers::GetCurrentTimePack();
 		double d_time;
 		memcpy(&d_time, &_time, sizeof(double));
@@ -321,14 +321,19 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		gres.options["REUSE_MEMORY"] = 0;
 	};
 
+	if(gres.vm_src_id)
+
 	if (GetOption("REUSE_MEMORY") == 1)
 	{
 		UpdateGenCallTime();
 		return true;
 	}
 
-	__ReleaseGpuResource(gres, false);
 
+	//if (gres.vm_src_id == 33554445)
+	//	cout << "------33554445-----> " << gres.res_name << (uint)GetParam("NUM_ELEMENTS") << endl;
+
+	__ReleaseGpuResource(gres, false);
 
 	auto GetSizeFormat = [&](DXGI_FORMAT format) -> uint
 	{

@@ -1004,7 +1004,8 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 {
 	PrimitiveData* prim_data = ((VmVObjectPrimitive*)pobj)->GetPrimitiveData();
 
-	auto CheckReusability = [&pobj](GpuRes& gres, bool& update_data)
+	auto CheckReusability = [&pobj](GpuRes& gres, bool& update_data,
+		const std::map<std::string, double>& res_new_dvalues)
 	{
 		auto it = gres.res_dvalues.find("LASTEST_GENCALL_TIME");
 		unsigned long long _gpu_gen_timg = 0;
@@ -1018,6 +1019,9 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 			bool is_reuse_memory = false;
 			pobj->GetCustomParameter("_bool_ReuseGpuMemory", data_type::dtype<bool>(), &is_reuse_memory);
 			gres.options["REUSE_MEMORY"] = (int)is_reuse_memory;
+			if(!is_reuse_memory)
+				for (auto it = res_new_dvalues.begin(); it != res_new_dvalues.end(); it++)
+					gres.res_dvalues[it->first] = it->second;
 		}
 	};
 
@@ -1045,7 +1049,9 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 		}
 		else
 		{
-			CheckReusability(gres_vtx, update_data);
+			std::map<std::string, double> res_new_dvalues;
+			res_new_dvalues["NUM_ELEMENTS"] = prim_data->num_vtx;
+			CheckReusability(gres_vtx, update_data, res_new_dvalues);
 			g_pCGpuManager->GenerateGpuResource(gres_vtx);
 		}
 
@@ -1068,6 +1074,9 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 				if (vtx_tex)
 					vtx_def_ptrs.push_back(vtx_tex);
 			}
+
+			//if (pobj->GetObjectID() == 33554445)
+			//	cout << "------33554445--------------------> " << prim_data->num_vtx << endl;
 
 			ID3D11Buffer* pdx11bufvtx = (ID3D11Buffer*)gres_vtx.alloc_res_ptrs[DTYPE_RES];
 			{
@@ -1129,7 +1138,9 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 		}
 		else
 		{
-			CheckReusability(gres_idx, update_data);
+			std::map<std::string, double> res_new_dvalues;
+			res_new_dvalues["NUM_ELEMENTS"] = prim_data->num_vidx;
+			CheckReusability(gres_idx, update_data, res_new_dvalues);
 			g_pCGpuManager->GenerateGpuResource(gres_idx);
 		}
 
@@ -1285,7 +1296,11 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 			}
 			else
 			{
-				CheckReusability(gres_tex, update_data);
+				std::map<std::string, double> res_new_dvalues;
+				res_new_dvalues["WIDTH"] = tex_res_size.x;
+				res_new_dvalues["HEIGHT"] = tex_res_size.y;
+				res_new_dvalues["DEPTH"] = (double)prim_data->texture_res_info.size();
+				CheckReusability(gres_tex, update_data, res_new_dvalues);
 				g_pCGpuManager->GenerateGpuResource(gres_tex);
 			}
 
@@ -1353,7 +1368,10 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 				}
 				else
 				{
-					CheckReusability(gres_tex, update_data);
+					std::map<std::string, double> res_new_dvalues;
+					res_new_dvalues["WIDTH"] = tex_res_size.x;
+					res_new_dvalues["HEIGHT"] = tex_res_size.y;
+					CheckReusability(gres_tex, update_data, res_new_dvalues);
 					g_pCGpuManager->GenerateGpuResource(gres_tex);
 				}
 
