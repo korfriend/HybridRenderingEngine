@@ -1624,7 +1624,7 @@ void grd_helper::SetCb_Env(CB_EnvState& cb_env, VmCObject* ccobj, VmFnContainer*
 	//}
 }
 
-void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vobj, VmLObject* lobj, VmFnContainer* _fncontainer, const bool high_samplerate, const vmint3& vol_size, const int iso_value, const float volblk_valuerange, const float sample_rate, const int sculpt_index)
+void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vobj, VmLObject* lobj, VmFnContainer* _fncontainer, const bool high_samplerate, const vmint3& vol_size, const int iso_value, const float volblk_valuerange, const int sculpt_index)
 {
 	VolumeData* vol_data = vobj->GetVolumeData();
 
@@ -1669,11 +1669,15 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 		cb_volume.value_range = 65535.f;
 	else GMERRORMESSAGE("UNSUPPORTED FORMAT : grd_helper::SetCb_VolumeObj");
 
+	float sample_rate = (float)_fncontainer->GetParamValue("_double_UserSampleRate", 0.0);
+	if (sample_rate <= 0) sample_rate = 1.0f;
+	bool apply_samplerate2gradient = _fncontainer->GetParamValue("_bool_ApplySampleRateToGradient", false);
+
 	float minDistSample = (float)min(min(vol_data->vox_pitch.x, vol_data->vox_pitch.y), vol_data->vox_pitch.z);
-	cb_volume.sample_dist = minDistSample;
-	fTransformVector((vmfloat3*)&cb_volume.vec_grad_x, &vmfloat3(cb_volume.sample_dist, 0, 0), (vmmat44f*)&cb_volume.mat_ws2ts);
-	fTransformVector((vmfloat3*)&cb_volume.vec_grad_y, &vmfloat3(0, cb_volume.sample_dist, 0), (vmmat44f*)&cb_volume.mat_ws2ts);
-	fTransformVector((vmfloat3*)&cb_volume.vec_grad_z, &vmfloat3(0, 0, cb_volume.sample_dist), (vmmat44f*)&cb_volume.mat_ws2ts);
+	float grad_offset_dist = apply_samplerate2gradient? minDistSample / sample_rate : minDistSample;
+	fTransformVector((vmfloat3*)&cb_volume.vec_grad_x, &vmfloat3(grad_offset_dist, 0, 0), (vmmat44f*)&cb_volume.mat_ws2ts);
+	fTransformVector((vmfloat3*)&cb_volume.vec_grad_y, &vmfloat3(0, grad_offset_dist, 0), (vmmat44f*)&cb_volume.mat_ws2ts);
+	fTransformVector((vmfloat3*)&cb_volume.vec_grad_z, &vmfloat3(0, 0, grad_offset_dist), (vmmat44f*)&cb_volume.mat_ws2ts);
 	cb_volume.opacity_correction = 1.f;
 	if (high_samplerate)
 	{
@@ -1684,10 +1688,7 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 		//cb_volume.f3VecGradientSampleY *= 2.f;
 		//cb_volume.f3VecGradientSampleZ *= 2.f;
 	}
-
-	if (sample_rate > 0) // test
-		cb_volume.sample_dist /= (float)sample_rate;
-
+	cb_volume.sample_dist = minDistSample / sample_rate;
 	cb_volume.vol_size = vmfloat3((float)vol_size.x, (float)vol_size.y, (float)vol_size.z);
 
 	// from pmapDValueVolume //

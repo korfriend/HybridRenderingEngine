@@ -545,7 +545,7 @@ namespace grd_helper
 	void SetCb_TMap(CB_TMAP& cb_tmap, VmTObject* tobj);
 	//bool SetCbVrShadowMap(CB_VrShadowMap* pCBVrShadowMap, CB_VrCameraState* pCBVrCamStateForShadowMap, vmfloat3 f3PosOverviewBoxMinWS, vmfloat3 f3PosOverviewBoxMaxWS, map<string, void*>* pmapCustomParameter);
 	void SetCb_ClipInfo(CB_ClipInfo& cb_clip, VmVObject* obj, VmLObject* lobj);
-	void SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vobj, VmLObject* lobj, VmFnContainer* _fncontainer, const bool high_samplerate, const vmint3& vol_size, const int iso_value, const float volblk_valuerange, const float sample_rate = 1.f, const int sculpt_index = -1);
+	void SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vobj, VmLObject* lobj, VmFnContainer* _fncontainer, const bool high_samplerate, const vmint3& vol_size, const int iso_value, const float volblk_valuerange, const int sculpt_index = -1);
 	void SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimitive* pobj, VmLObject* lobj,
 		const vmmat44f& matOS2WS, const vmmat44f& matWS2SS, const vmmat44f& matWS2PS,
 		const RenderObjInfo& rendering_obj_info, const double default_point_thickness, const double default_line_thickness);

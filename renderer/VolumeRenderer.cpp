@@ -39,7 +39,6 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	vmdouble4 global_light_factors = _fncontainer->GetParamValue("_double4_ShadingFactorsForGlobalPrimitives", vmdouble4(0.4, 0.6, 0.2, 30)); // Emission, Diffusion, Specular, Specular Power
 	bool force_to_update_otf = _fncontainer->GetParamValue("_bool_ForceToUpdateOtf", false);
 	bool show_block_test = _fncontainer->GetParamValue("_bool_IsShowBlock", false);
-	double user_sample_rate = _fncontainer->GetParamValue("_double_UserSampleRate", 0.0);
 	double v_thickness = _fncontainer->GetParamValue("_double_VZThickness", -1.0);
 	float merging_beta = (float)_fncontainer->GetParamValue("_double_MergingBeta", 0.5);
 	bool is_rgba = _fncontainer->GetParamValue("_bool_IsRGBA", false); // false means bgra
@@ -602,7 +601,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		vmint3 vol_sampled_size = vmint3(gres_main_vol.res_dvalues["WIDTH"], gres_main_vol.res_dvalues["HEIGHT"], gres_main_vol.res_dvalues["DEPTH"]);
 		
 		int iso_value = GET_LDVALUE("_int_Isovalue", main_tobj->GetTMapData()->valid_min_idx.x);
-		grd_helper::SetCb_VolumeObj(cbVolumeObj, main_vol_obj, lobj, _fncontainer, high_samplerate, vol_sampled_size, iso_value, gres_volblk_otf.options["FORMAT"] == DXGI_FORMAT_R16_UNORM ? 65535.f : 1.f, (float)user_sample_rate, sculpt_index);
+		grd_helper::SetCb_VolumeObj(cbVolumeObj, main_vol_obj, lobj, _fncontainer, high_samplerate, vol_sampled_size, iso_value, gres_volblk_otf.options["FORMAT"] == DXGI_FORMAT_R16_UNORM ? 65535.f : 1.f, sculpt_index);
 		cbVolumeObj.pb_shading_factor = global_light_factors;
 
 		D3D11_MAPPED_SUBRESOURCE mappedResVolObj;
