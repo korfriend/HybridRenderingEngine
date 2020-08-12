@@ -1776,7 +1776,7 @@ RENDERER_LOOP:
 		ID3D11Buffer* dx11IndiceTargetPrim = NULL;
 		uint stride_inputlayer = sizeof(vmfloat3)*(uint)prim_data->GetNumVertexDefinitions();
 		dx11DeviceImmContext->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&dx11BufferTargetPrim, &stride_inputlayer, &offset);
-		if (prim_data->vidx_buffer != NULL)
+		if (prim_data->vidx_buffer != NULL && prim_data->ptype != EvmPrimitiveType::PrimitiveTypePOINT)
 		{
 			auto itrMapBufferIdx = mapGpuRes_Idx.find(pobj_id);
 			dx11IndiceTargetPrim = (ID3D11Buffer*)itrMapBufferIdx->second.alloc_res_ptrs[DTYPE_RES];
