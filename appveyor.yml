@@ -5,3 +5,7 @@ build:
   
 only_commits:
   message: /\[build\]/
+
+configuration:
+  - Debug
+  - Release
