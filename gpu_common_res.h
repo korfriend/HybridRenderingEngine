@@ -1,5 +1,5 @@
 #pragma once
-
+#include "GpuManager.h"
 #include "resource.h"
 //#include <d3dx9math.h>	// For Math and Structure
 #include <DirectXMath.h>

@@ -1,5 +1,5 @@
-#include "gpures_interface.h"
 #include "../gpu_common_res.h"
+#include "gpures_interface.h"
 
 //#include <d3dx9math.h>	// For Math and Structure
 #include <d3d11_3.h>

@@ -1,5 +1,5 @@
 #pragma once
-#include "GpuManager.h"
+//#include "GpuManager.h"
 #include "../gpu_common_res.h"
 #include <functional>
 

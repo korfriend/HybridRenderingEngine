@@ -2,7 +2,7 @@
 #include "VimCommon.h"
 #include "gpures_helper.h"
 
-//#define PPL_USE
+#define PPL_USE
 
 #include <process.h>
 #include <ppl.h>

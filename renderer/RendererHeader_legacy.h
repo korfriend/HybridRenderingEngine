@@ -3,7 +3,7 @@
 //#include "VXDX11Helper.h"
 #include "gpures_helper_old.h"
 
-#define PPL_USE
+//#define PPL_USE
 
 #include <process.h>
 #include <ppl.h>

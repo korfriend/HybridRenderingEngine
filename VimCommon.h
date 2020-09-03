@@ -23,6 +23,7 @@
  */
  
 #pragma once
+#define _HAS_STD_BYTE 0
 
 #include <map>
 #include <vector>
@@ -32,6 +33,7 @@
 #include <math.h>
 #include <algorithm>
 #include <typeinfo>
+#include <any>
 
 #include "VimHelpers.h"
 
@@ -51,14 +53,17 @@
 // Copyright by DongJoon Kim. All rights reserved.
 //=====================================================================
 
-// ONLY FOR WINDOWS VERSION
+
+namespace vmd
+{
+	// ONLY FOR WINDOWS VERSION
 #define VMENGINEVERSION 0x29AD7‬	// 170711(allocating 20 bits) and  12 bits for modules and engine enhancement version
 #define VMSAFE_DELETE(p)	{ if(p) { delete (p); (p)=NULL; } }
 #define VMSAFE_DELETEARRAY(p)	{ if(p) { delete[] (p); (p)=NULL; } }
 #define VMSAFE_DELETE2DARRAY(pp, numPtrs)	{ if(pp){ for(int i = 0; i < numPtrs; i++){ VMSAFE_DELETEARRAY(pp[i]);} VMSAFE_DELETEARRAY(pp); } }
 
 #ifdef __WINDOWS
-typedef HMODULE VmHMODULE;
+	typedef HMODULE VmHMODULE;
 #define VMLOADLIBRARY(hModule, filename)     hModule = LoadLibraryA(filename)
 #define VMGETPROCADDRESS(pModule, pProcName)    GetProcAddress(pModule, pProcName)
 #define VMFREELIBRARY(pModule)    FreeLibrary(pModule)
@@ -73,80 +78,85 @@ typedef HMODULE VmHMODULE;
 #define VM_fPI    ((float)  3.141592654f)
 
 #ifndef ushort
-typedef unsigned short ushort;
+	typedef unsigned short ushort;
 #endif
 #ifndef uint
-typedef unsigned int uint;
+	typedef unsigned int uint;
 #endif
-#ifndef byte
-typedef unsigned char byte;
+#if !defined(byte)
+	//typedef unsigned char byte;
+	//#define byte unsigned char
 #endif
+	//typedef std::byte byte;
 #ifndef ullong
-typedef unsigned long long ullong;
+	typedef unsigned long long ullong;
 #endif
 #ifndef llong
-typedef long long llong;
+	typedef long long llong;
 #endif
 
-// temp typedefs
-// our proj math structures are based on glm::
+	// temp typedefs
+	// our proj math structures are based on glm::
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/transform.hpp>
 #include <glm/gtc/constants.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
-typedef struct color4 {
-	union { struct { byte r, g, b, a; }; struct { byte x, y, z, w; }; };
-	color4() { r = g = b = a = 0; };
-	color4(byte _r, byte _g, byte _b, byte _a) { r = _r; g = _g; b = _b; a = _a; };
-} vmbyte4;
-typedef struct color3 {
-	union { struct { byte r, g, b; }; struct { byte x, y, z; }; };
-	color3() { r = g = b = 0; };
-	color3(byte _r, byte _g, byte _b) { r = _r; g = _g; b = _b; };
-} vmbyte3;
-typedef struct char2 { 
-	char x, y; char2() { x = y = 0; }
-	char2(char _x, char _y) { x = _x; y = _y; }
-} vmchar2;
-typedef struct byte2 {
-	byte x, y; byte2() { x = y = 0; }
-	byte2(byte _x, byte _y) { x = _x; y = _y; }
-} vmbyte2;
-typedef struct short2 { 
-	short x, y; short2() { x = y = 0; }
-	short2(short _x, short _y) { x = _x; y = _y; }
-} vmshort2;
-typedef struct ushort2 { 
-	ushort x, y; ushort2() { x = y = 0; }
-	ushort2(ushort _x, ushort _y) { x = _x; y = _y; }
-} vmushort2;
-typedef struct short3 { 
-	short x, y, z; short3() { x = y = z = 0; }
-	short3(short _x, short _y, short _z) { x = _x; y = _y; z = _z;
-	}
-} vmshort3;
-typedef struct ushort3 {
-	ushort x, y, z; ushort3() { x = y = z = 0; } 
-	ushort3(ushort _x, ushort _y, ushort _z) { x = _x; y = _y; z = _z; }
-} vmushort3;
-typedef glm::ivec2 vmint2;
-typedef glm::ivec3 vmint3;
-typedef glm::ivec4 vmint4;
-typedef glm::uvec2 vmuint2;
-typedef glm::uvec3 vmuint3;
-typedef glm::uvec4 vmuint4;
-typedef glm::dvec2 vmdouble2;
-typedef glm::dvec3 vmdouble3;
-typedef glm::dvec4 vmdouble4;
-typedef glm::fvec2 vmfloat2;
-typedef glm::fvec3 vmfloat3;
-typedef glm::fvec4 vmfloat4;
-typedef glm::dmat4x4 vmmat44;
-typedef glm::fmat4x4 vmmat44f;
+	typedef struct color4 {
+		union { struct { byte r, g, b, a; }; struct { byte x, y, z, w; }; };
+		color4() { r = g = b = a = (byte)0; };
+		color4(byte _r, byte _g, byte _b, byte _a) { r = _r; g = _g; b = _b; a = _a; };
+	} vmbyte4;
+	typedef struct color3 {
+		union { struct { byte r, g, b; }; struct { byte x, y, z; }; };
+		color3() { r = g = b = (byte)0; };
+		color3(byte _r, byte _g, byte _b) { r = _r; g = _g; b = _b; };
+	} vmbyte3;
+	typedef struct char2 {
+		char x, y; char2() { x = y = 0; }
+		char2(char _x, char _y) { x = _x; y = _y; }
+	} vmchar2;
+	typedef struct byte2 {
+		byte x, y; byte2() { x = y = (byte)0; }
+		byte2(byte _x, byte _y) { x = _x; y = _y; }
+	} vmbyte2;
+	typedef struct short2 {
+		short x, y; short2() { x = y = 0; }
+		short2(short _x, short _y) { x = _x; y = _y; }
+	} vmshort2;
+	typedef struct ushort2 {
+		ushort x, y; ushort2() { x = y = 0; }
+		ushort2(ushort _x, ushort _y) { x = _x; y = _y; }
+	} vmushort2;
+	typedef struct short3 {
+		short x, y, z; short3() { x = y = z = 0; }
+		short3(short _x, short _y, short _z) {
+			x = _x; y = _y; z = _z;
+		}
+	} vmshort3;
+	typedef struct ushort3 {
+		ushort x, y, z; ushort3() { x = y = z = 0; }
+		ushort3(ushort _x, ushort _y, ushort _z) { x = _x; y = _y; z = _z; }
+	} vmushort3;
+	typedef glm::ivec2 vmint2;
+	typedef glm::ivec3 vmint3;
+	typedef glm::ivec4 vmint4;
+	typedef glm::uvec2 vmuint2;
+	typedef glm::uvec3 vmuint3;
+	typedef glm::uvec4 vmuint4;
+	typedef glm::dvec2 vmdouble2;
+	typedef glm::dvec3 vmdouble3;
+	typedef glm::dvec4 vmdouble4;
+	typedef glm::fvec2 vmfloat2;
+	typedef glm::fvec3 vmfloat3;
+	typedef glm::fvec4 vmfloat4;
+	typedef glm::dmat4x4 vmmat44;
+	typedef glm::fmat4x4 vmmat44f;
 
 #define __VMCVT3__(d, s, t3, tt) d=t3((tt)s.x, (tt)s.y, (tt)s.z)
 #define __OPS__(d, s, op) d=op(d, s)
+}
+using namespace vmd;
 
 //=====================================
 // Global Enumerations
@@ -1670,7 +1680,7 @@ namespace vmobjects
 		bool HasKDTree(int* num_updated = NULL);
 		void UpdateKDTree();
 		uint KDTSearchRadius(const vmfloat3& p_src, const float r_sq, const bool is_sorted, std::vector<std::pair<size_t, float>>& ret_matches);
-		uint KDTSearchKnn(const vmfloat3& p_src, const int k, size_t* out_ids, float* out_dists = NULL);
+		uint KDTSearchKnn(const vmfloat3& p_src, const int k, size_t* out_ids, float* out_dists);
 	};
 
 	struct LObjectArchive;

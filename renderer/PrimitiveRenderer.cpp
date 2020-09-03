@@ -2271,6 +2271,7 @@ RENDERER_LOOP_EXIT:
 #else
 			}
 #endif
+			DisplayTimes("3-C");
 			// TEST //
 			if (print_out_routine_objs && is_a_buffer)
 			{
@@ -2534,7 +2535,6 @@ RENDERER_LOOP_EXIT:
 			}
 
 
-			//DisplayTimes("3-C");
 			dx11DeviceImmContext->Unmap((ID3D11Texture2D*)gres_fb_sys_rgba.alloc_res_ptrs[DTYPE_RES], 0);
 			dx11DeviceImmContext->Unmap((ID3D11Texture2D*)gres_fb_sys_depthcs.alloc_res_ptrs[DTYPE_RES], 0);
 #pragma endregion
