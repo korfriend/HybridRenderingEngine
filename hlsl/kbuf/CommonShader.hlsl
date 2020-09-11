@@ -32,7 +32,7 @@ struct HxCB_CameraState // Hlsl dX Contant Buffer
 	uint rt_height;
 
 	float cam_vz_thickness;
-	uint num_deep_layers;
+	uint k_value;
 	// 1st bit : 0 (orthogonal), 1 : (perspective)
 	// 2nd bit : for RT to k-buffer : 0 (just RT), 1 : (after silhouette processing)
 	uint cam_flag;

@@ -19,18 +19,21 @@ fxc /E SINGLE_LAYER /T ps_5_0 ./hlsl/kbuf/Sr_Common.hlsl /Fo ./shader_compiled_o
 fxc /E OIT_PRESET /T cs_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_PRESET_cs_5_0 /D ZF_HANDLING=1 /D TAIL_HANDLING=1 /D MAX_LAYERS=8 /D SILHOUETTE_EDGE=1 /D PIXEL_SYNCH=0 /D USE_ROV=1
 
 
-fxc /E SortAndRenderCS /T cs_5_0 ./hlsl/dx_abuf/DxPerPixelLL_Sort.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_SORT2SENDER_cs_5_0 
-fxc /E OIT_A_BUFFER_CNF_FRAGS /T ps_5_0 ./hlsl/dx_abuf/DxPerPixelLL.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_FRAGCOUNTER_ps_5_0 
-fxc /E OIT_A_BUFFER_FILL /T ps_5_0 ./hlsl/dx_abuf/DxPerPixelLL.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_PHONGBLINN_ps_5_0 /D __RENDERING_MODE=0
-fxc /E OIT_A_BUFFER_FILL /T ps_5_0 ./hlsl/dx_abuf/DxPerPixelLL.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_DASHEDLINE_ps_5_0 /D __RENDERING_MODE=1
-fxc /E OIT_A_BUFFER_FILL /T ps_5_0 ./hlsl/dx_abuf/DxPerPixelLL.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_MULTITEXTMAPPING_ps_5_0 /D __RENDERING_MODE=2
-fxc /E OIT_A_BUFFER_FILL /T ps_5_0 ./hlsl/dx_abuf/DxPerPixelLL.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0 /D __RENDERING_MODE=3
-fxc /E OIT_A_BUFFER_FILL /T ps_5_0 ./hlsl/dx_abuf/DxPerPixelLL.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0 /D __RENDERING_MODE=4
+fxc /E SortAndRenderCS /T cs_5_0 ./hlsl/dx_abuf/DxPerPixelLL_Sort.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_SORT2SENDER_cs_5_0 /D DX_11_STYLE=0 /D DX_11_OIT=1
+fxc /E OIT_A_BUFFER_CNF_FRAGS /T ps_5_0 ./hlsl/dx_abuf/DxPerPixelLL.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_FRAGCOUNTER_ps_5_0 /D DX_11_STYLE=0 
+fxc /E OIT_A_BUFFER_CNF_FRAGS /T ps_5_0 ./hlsl/dx_abuf/DxPerPixelLL.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_FRAGCOUNTER_MTT_ps_5_0 /D DX_11_STYLE=0 /D __RENDERING_MODE=2
+fxc /E OIT_A_BUFFER_FILL /T ps_5_0 ./hlsl/dx_abuf/DxPerPixelLL.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_PHONGBLINN_ps_5_0 /D __RENDERING_MODE=0 /D DX_11_STYLE=0
+fxc /E OIT_A_BUFFER_FILL /T ps_5_0 ./hlsl/dx_abuf/DxPerPixelLL.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_DASHEDLINE_ps_5_0 /D __RENDERING_MODE=1 /D DX_11_STYLE=0
+fxc /E OIT_A_BUFFER_FILL /T ps_5_0 ./hlsl/dx_abuf/DxPerPixelLL.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_MULTITEXTMAPPING_ps_5_0 /D __RENDERING_MODE=2 /D DX_11_STYLE=0
+fxc /E OIT_A_BUFFER_FILL /T ps_5_0 ./hlsl/dx_abuf/DxPerPixelLL.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0 /D __RENDERING_MODE=3 /D DX_11_STYLE=0
+fxc /E OIT_A_BUFFER_FILL /T ps_5_0 ./hlsl/dx_abuf/DxPerPixelLL.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0 /D __RENDERING_MODE=4 /D DX_11_STYLE=0
 fxc /E CreatePrefixSum_Pass0_CS /T cs_5_0 ./hlsl/dx_abuf/DxPerPixelLL_Sort.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_PREFIX_0_cs_5_0 
 fxc /E CreatePrefixSum_Pass1_CS /T cs_5_0 ./hlsl/dx_abuf/DxPerPixelLL_Sort.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_PREFIX_1_cs_5_0  
+fxc /E CreateOffsetTable_CS /T cs_5_0 ./hlsl/dx_abuf/DxPerPixelLL_Sort.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_OffsetTable_cs_5_0
 
 
 fxc /E Moment_GeneratePass /T ps_5_0 ./hlsl/moment/MomentOIT.hlsli /Fo ./shader_compiled_objs/SR_MOMENT_GEN_ps_5_0 /D SINGLE_PRECISION=1 /D PIXEL_SYNCH=1 /D MOMENT_GENERATION=1 /D NUM_MOMENTS=4
+fxc /E Moment_GeneratePass /T ps_5_0 ./hlsl/moment/MomentOIT.hlsli /Fo ./shader_compiled_objs/SR_MOMENT_GEN_MTT_ps_5_0 /D SINGLE_PRECISION=1 /D PIXEL_SYNCH=1 /D MOMENT_GENERATION=1 /D NUM_MOMENTS=4 /D __RENDERING_MODE=2
 fxc /E Moment_ResolvePass /T ps_5_0 ./hlsl/moment/MomentOIT.hlsli /Fo ./shader_compiled_objs/SR_MOMENT_OIT_PHONGBLINN_ps_5_0 /D __RENDERING_MODE=0 /D SINGLE_PRECISION=1 /D PIXEL_SYNCH=1 /D NUM_MOMENTS=4
 fxc /E Moment_ResolvePass /T ps_5_0 ./hlsl/moment/MomentOIT.hlsli /Fo ./shader_compiled_objs/SR_MOMENT_OIT_DASHEDLINE_ps_5_0 /D __RENDERING_MODE=1 /D SINGLE_PRECISION=1 /D PIXEL_SYNCH=1 /D NUM_MOMENTS=4 
 fxc /E Moment_ResolvePass /T ps_5_0 ./hlsl/moment/MomentOIT.hlsli /Fo ./shader_compiled_objs/SR_MOMENT_OIT_MULTITEXTMAPPING_ps_5_0 /D __RENDERING_MODE=2 /D SINGLE_PRECISION=1 /D PIXEL_SYNCH=1 /D NUM_MOMENTS=4 

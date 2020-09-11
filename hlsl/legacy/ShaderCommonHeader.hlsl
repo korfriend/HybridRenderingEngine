@@ -739,7 +739,7 @@ struct VxCameraProjectionState
 	float3 f3VecViewWS;
 	uint uiScreenSizeY;
     
-    uint num_deep_layers;
+    uint k_value;
     uint iSrCamDummy__0;
     uint iSrCamDummy__1;
     uint iSrCamDummy__2;

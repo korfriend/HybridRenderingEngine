@@ -535,7 +535,7 @@ void DVR(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : 
     if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
         return;
 	
-	const uint num_deep_layers = MAX_LAYERS;// g_cbCamState.num_deep_layers;
+	const uint k_value = MAX_LAYERS;// g_cbCamState.k_value; // 각 pixel 마다 max k 가 다르다.
     uint addr_base = (DTid.y * g_cbCamState.rt_width + DTid.x) * MAX_LAYERS * 4;
 	uint frag_cnt = fragment_counter[DTid.xy];
 	uint vr_hit_enc = frag_cnt >> 24;
@@ -632,13 +632,13 @@ void DVR(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : 
     float3 pos_ray_start_ws = vbos_hit_start_pos + dir_sample_unit_ws * hits_t.x;
     // recompute the vis result    
 #if RAYMODE==1
-    RayMinMax(vis_out, depth_out, pos_ip_ws, pos_ray_start_ws, dir_sample_ws, num_ray_samples, 0, fs, addr_base, num_frags, num_deep_layers, merging_beta);
+    RayMinMax(vis_out, depth_out, pos_ip_ws, pos_ray_start_ws, dir_sample_ws, num_ray_samples, 0, fs, addr_base, num_frags, k_value, merging_beta);
 #elif RAYMODE==2
-    RayMinMax(vis_out, depth_out, pos_ip_ws, pos_ray_start_ws, dir_sample_ws, num_ray_samples, 1, fs, addr_base, num_frags, num_deep_layers, merging_beta);
+    RayMinMax(vis_out, depth_out, pos_ip_ws, pos_ray_start_ws, dir_sample_ws, num_ray_samples, 1, fs, addr_base, num_frags, k_value, merging_beta);
 #elif RAYMODE==3
-    RaySum(vis_out, depth_out, pos_ip_ws, pos_ray_start_ws, dir_sample_ws, num_ray_samples, fs, addr_base, num_frags, num_deep_layers, merging_beta);
+    RaySum(vis_out, depth_out, pos_ip_ws, pos_ray_start_ws, dir_sample_ws, num_ray_samples, fs, addr_base, num_frags, k_value, merging_beta);
 #else
-    RayCasting(vis_out, depth_out, pos_ip_ws, pos_ray_start_ws, dir_sample_ws, num_ray_samples, fs, ao_vr, addr_base, num_frags, vr_hit_enc, num_deep_layers, merging_beta);
+    RayCasting(vis_out, depth_out, pos_ip_ws, pos_ray_start_ws, dir_sample_ws, num_ray_samples, fs, ao_vr, addr_base, num_frags, vr_hit_enc, k_value, merging_beta);
 #endif
 	//vis_out = float4(ao_vr, ao_vr, ao_vr, 1);
 	//vis_out = float4(TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts), 1);

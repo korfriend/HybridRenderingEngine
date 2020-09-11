@@ -7,16 +7,20 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "vismtv_inbuilt_renderergpud
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
 		Debug|x64 = Debug|x64
 		Debug|x86 = Debug|x86
+		Release|Any CPU = Release|Any CPU
 		Release|x64 = Release|x64
 		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{BD108E48-5831-4F89-8E39-5662EBDB276A}.Debug|Any CPU.ActiveCfg = Debug|Win32
 		{BD108E48-5831-4F89-8E39-5662EBDB276A}.Debug|x64.ActiveCfg = Debug|x64
 		{BD108E48-5831-4F89-8E39-5662EBDB276A}.Debug|x64.Build.0 = Debug|x64
 		{BD108E48-5831-4F89-8E39-5662EBDB276A}.Debug|x86.ActiveCfg = Debug|Win32
 		{BD108E48-5831-4F89-8E39-5662EBDB276A}.Debug|x86.Build.0 = Debug|Win32
+		{BD108E48-5831-4F89-8E39-5662EBDB276A}.Release|Any CPU.ActiveCfg = Release|Win32
 		{BD108E48-5831-4F89-8E39-5662EBDB276A}.Release|x64.ActiveCfg = Release|x64
 		{BD108E48-5831-4F89-8E39-5662EBDB276A}.Release|x64.Build.0 = Release|x64
 		{BD108E48-5831-4F89-8E39-5662EBDB276A}.Release|x86.ActiveCfg = Release|Win32

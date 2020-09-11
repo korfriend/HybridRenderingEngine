@@ -43,7 +43,7 @@ int Fragment_OrderIndependentMerge(inout Fragment f_buf, const in Fragment f_in)
 TEX2D_COUNTER<uint> fragment_counter : register(u2);
 RWByteAddressBuffer deep_k_buf : register(u4);
 
-void Fill_kBuffer(const in int2 tex2d_xy, const in int num_deep_layers, const in float4 v_rgba, const in float z_depth, const in float z_thickness)
+void Fill_kBuffer(const in int2 tex2d_xy, const in int k_value, const in float4 v_rgba, const in float z_depth, const in float z_thickness)
 {
 	if (z_depth > FLT_LARGE || v_rgba.a == 0)
 		return;
@@ -163,7 +163,7 @@ RWTexture2D<uint> fragment_spinlock : register(u3);
 //RWBuffer<uint> deep_k_buf : register(u4);
 RWByteAddressBuffer deep_k_buf : register(u4);
 
-void Fill_kBuffer(const in int2 tex2d_xy, const in int num_deep_layers, const in float4 v_rgba, const in float z_depth, const in float z_thickness)
+void Fill_kBuffer(const in int2 tex2d_xy, const in int k_value, const in float4 v_rgba, const in float z_depth, const in float z_thickness)
 {
 	if (z_depth > FLT_LARGE || v_rgba.a == 0)
 	{
@@ -350,7 +350,7 @@ void OIT_PRESET(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
         return;
     
     float vz_thickness = g_cbPobj.vz_thickness;
-	Fill_kBuffer(tex2d_xy, g_cbCamState.num_deep_layers, v_rgba, depthcs, vz_thickness);
+	Fill_kBuffer(tex2d_xy, g_cbCamState.k_value, v_rgba, depthcs, vz_thickness);
 }
 
 #if __RENDERING_MODE == 2
@@ -359,7 +359,7 @@ void OIT_KDEPTH(VS_OUTPUT_TTT input)
 void OIT_KDEPTH(VS_OUTPUT input)
 #endif
 {
-    POBJ_PRE_CONTEXT(clip(-1))
+	POBJ_PRE_CONTEXT;
     
     if (g_cbPobj.alpha == 0 || z_depth < 0 || (input.f4PosSS.z / input.f4PosSS.w < 0) 
 		|| input.f4PosSS.x < 0 || input.f4PosSS.y < 0
@@ -547,5 +547,5 @@ void OIT_KDEPTH(VS_OUTPUT input)
     //vz_thickness = 0.00001;
 #endif
     
-	Fill_kBuffer(tex2d_xy, g_cbCamState.num_deep_layers, v_rgba, z_depth, vz_thickness);
+	Fill_kBuffer(tex2d_xy, g_cbCamState.k_value, v_rgba, z_depth, vz_thickness);
 }

@@ -140,18 +140,6 @@
     <FxCompile Include="hlsl\legacy\SRShader_Common.hlsl">
       <Filter>hlsl source code\legacy</Filter>
     </FxCompile>
-    <FxCompile Include="hlsl\kbuf\Sr_Common.hlsl">
-      <Filter>hlsl source code\k buf</Filter>
-    </FxCompile>
-    <FxCompile Include="hlsl\kbuf\SSAO.hlsl">
-      <Filter>hlsl source code\k buf</Filter>
-    </FxCompile>
-    <FxCompile Include="hlsl\kbuf\CommonShader.hlsl">
-      <Filter>hlsl source code\k buf</Filter>
-    </FxCompile>
-    <FxCompile Include="hlsl\kbuf\macros.hlsl">
-      <Filter>hlsl source code\k buf</Filter>
-    </FxCompile>
     <FxCompile Include="hlsl\kbuf\DvrCS.hlsl">
       <Filter>hlsl source code\k buf</Filter>
     </FxCompile>
@@ -162,6 +150,21 @@
       <Filter>hlsl source code\k buf</Filter>
     </FxCompile>
     <FxCompile Include="hlsl\kbuf\KbufResolve.hlsl">
+      <Filter>hlsl source code\k buf</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\kbuf\CommonShader.hlsl">
+      <Filter>hlsl source code</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\kbuf\SSAO.hlsl">
+      <Filter>hlsl source code</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\kbuf\Sr_Common.hlsl">
+      <Filter>hlsl source code</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\kbuf\macros.hlsl">
+      <Filter>hlsl source code</Filter>
+    </FxCompile>
+    <FxCompile Include="KplusB.hlsl">
       <Filter>hlsl source code\k buf</Filter>
     </FxCompile>
   </ItemGroup>

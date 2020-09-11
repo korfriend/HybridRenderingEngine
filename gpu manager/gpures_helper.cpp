@@ -96,6 +96,14 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 
 	g_VmCommonParams.Delete();
 	
+	D3D11_QUERY_DESC qr_desc;
+	qr_desc.MiscFlags = 0;
+	qr_desc.Query = D3D11_QUERY_TIMESTAMP_DISJOINT;
+	g_VmCommonParams.dx11Device->CreateQuery(&qr_desc, &g_VmCommonParams.dx11qr_disjoint);
+	qr_desc.Query = D3D11_QUERY_TIMESTAMP;
+	for (int i = 0; i < 10; i++)
+		g_VmCommonParams.dx11Device->CreateQuery(&qr_desc, &g_VmCommonParams.dx11qr_timestamps[i]);
+
 	HRESULT hr = S_OK;
 	// HLSL 에서 대체하는 방법 찾아 보기.
 	{
@@ -355,6 +363,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		//VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11016), "SR_OIT_KDEPTH_NPRGHOST_ps_5_0", "ps_5_0"));
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11020), "SR_OIT_ABUFFER_FRAGCOUNTER_ps_5_0", "ps_5_0"), SR_OIT_ABUFFER_FRAGCOUNTER_ps_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11026), "SR_OIT_ABUFFER_FRAGCOUNTER_MTT_ps_5_0", "ps_5_0"), SR_OIT_ABUFFER_FRAGCOUNTER_MTT_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11021), "SR_OIT_ABUFFER_PHONGBLINN_ps_5_0", "ps_5_0"), SR_OIT_ABUFFER_PHONGBLINN_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11022), "SR_OIT_ABUFFER_DASHEDLINE_ps_5_0", "ps_5_0"), SR_OIT_ABUFFER_DASHEDLINE_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11023), "SR_OIT_ABUFFER_MULTITEXTMAPPING_ps_5_0", "ps_5_0"), SR_OIT_ABUFFER_MULTITEXTMAPPING_ps_5_0);
@@ -363,10 +372,12 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA21002), "SR_OIT_ABUFFER_PREFIX_0_cs_5_0", "cs_5_0"), SR_OIT_ABUFFER_PREFIX_0_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA21003), "SR_OIT_ABUFFER_PREFIX_1_cs_5_0", "cs_5_0"), SR_OIT_ABUFFER_PREFIX_1_cs_5_0);
-		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA21004), "SR_OIT_ABUFFER_SORT2SENDER_cs_5_0", "cs_5_0"), SR_OIT_ABUFFER_SORT2SENDER_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA21004), "SR_OIT_ABUFFER_OffsetTable_cs_5_0", "cs_5_0"), SR_OIT_ABUFFER_OffsetTable_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA21005), "SR_OIT_ABUFFER_SORT2SENDER_cs_5_0", "cs_5_0"), SR_OIT_ABUFFER_SORT2SENDER_cs_5_0);
 
 		{
 			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11030), "SR_MOMENT_GEN_ps_5_0", "ps_5_0"), SR_MOMENT_GEN_ps_5_0);
+			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11036), "SR_MOMENT_GEN_MTT_ps_5_0", "ps_5_0"), SR_MOMENT_GEN_MTT_ps_5_0);
 			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11031), "SR_MOMENT_OIT_PHONGBLINN_ps_5_0", "ps_5_0"), SR_MOMENT_OIT_PHONGBLINN_ps_5_0);
 			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11032), "SR_MOMENT_OIT_DASHEDLINE_ps_5_0", "ps_5_0"), SR_MOMENT_OIT_DASHEDLINE_ps_5_0);
 			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11033), "SR_MOMENT_OIT_MULTITEXTMAPPING_ps_5_0", "ps_5_0"), SR_MOMENT_OIT_MULTITEXTMAPPING_ps_5_0);
@@ -1546,7 +1557,7 @@ bool grd_helper::CheckOtfAndVolBlobkUpdate(VmVObjectVolume* vobj, VmTObject* tob
 //#define *(vmfloat4*)&
 //#define *(XMMATRIX*)&
 
-void grd_helper::SetCb_Camera(CB_CameraState& cb_cam, vmmat44f& matWS2PS, vmmat44f& matWS2SS, vmmat44f& matSS2WS, VmCObject* ccobj, const vmint2& fb_size, const int num_deep_layers, const float vz_thickness)
+void grd_helper::SetCb_Camera(CB_CameraState& cb_cam, vmmat44f& matWS2PS, vmmat44f& matWS2SS, vmmat44f& matSS2WS, VmCObject* ccobj, const vmint2& fb_size, const int k_value, const float vz_thickness)
 {
 	vmmat44 dmatWS2CS, dmatCS2PS, dmatPS2SS;
 	vmmat44 dmatSS2PS, dmatPS2CS, dmatCS2WS;
@@ -1573,7 +1584,7 @@ void grd_helper::SetCb_Camera(CB_CameraState& cb_cam, vmmat44f& matWS2PS, vmmat4
 	cb_cam.rt_width = (uint)fb_size.x;
 	cb_cam.rt_height = (uint)fb_size.y;
 
-	cb_cam.num_deep_layers = num_deep_layers;
+	cb_cam.k_value = k_value;
 	cb_cam.cam_vz_thickness = vz_thickness;
 }
 

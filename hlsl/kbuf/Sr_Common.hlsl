@@ -132,25 +132,18 @@ VS_OUTPUT_TTT CommonVS_PTTT(VS_INPUT_PTTT input)
 #define __InterlockedExchange(A, B, C) A = B
 //#define __InterlockedExchange(A, B, C) InterlockedExchange(A, B, C)
 
-#define POBJ_PRE_CONTEXT(EXIT_OUT) \
+#define POBJ_PRE_CONTEXT \
     if (g_cbClipInfo.clip_flag & 0x1)\
-    {\
-        if (dot(g_cbClipInfo.vec_clipplane, input.f3PosWS - g_cbClipInfo.pos_clipplane) > 0)\
-            EXIT_OUT;\
-    }\
+        clip(dot(g_cbClipInfo.vec_clipplane, input.f3PosWS - g_cbClipInfo.pos_clipplane) > 0 ? -1 : 1);\
     if (g_cbClipInfo.clip_flag & 0x2)\
-    {\
-        if (!IsInsideClipBox(input.f3PosWS, g_cbClipInfo.pos_clipbox_max_bs, g_cbClipInfo.mat_clipbox_ws2bs))\
-            EXIT_OUT;\
-    }\
+        clip(!IsInsideClipBox(input.f3PosWS, g_cbClipInfo.pos_clipbox_max_bs, g_cbClipInfo.mat_clipbox_ws2bs) ? -1 : 1);\
 	clip(input.f4PosSS.z);\
 	clip(input.f4PosSS.z/input.f4PosSS.w);\
     float3 pos_ip_ss = float3(input.f4PosSS.xy, 0.0f);\
     float3 pos_ip_ws = TransformPoint(pos_ip_ss, g_cbCamState.mat_ss2ws);\
     float3 vec_pos_ip2frag = input.f3PosWS - pos_ip_ws;\
     float z_depth = length(vec_pos_ip2frag) /*- g_cbPobj.depth_forward_bias*/;\
-    if (dot(vec_pos_ip2frag, g_cbCamState.dir_view_ws) < 0)\
-        EXIT_OUT;\
+    clip(dot(vec_pos_ip2frag, g_cbCamState.dir_view_ws) < 0 ? -1 : 1);\
     float3 view_dir = g_cbCamState.dir_view_ws;\
     if (g_cbCamState.cam_flag & 0x1)\
         view_dir = pos_ip_ws - g_cbCamState.pos_cam_ws;\
@@ -393,7 +386,7 @@ PS_FILL_OUTPUT SINGLE_LAYER(VS_OUTPUT input)
     out_ps.ds_z = 1.f;
     out_ps.color = (float4)0;
     out_ps.depthcs = FLT_MAX;
-	POBJ_PRE_CONTEXT(return out_ps);
+	POBJ_PRE_CONTEXT;
 
 	float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
 	//if (g_cbPobj.alpha == 0) clip(-1);

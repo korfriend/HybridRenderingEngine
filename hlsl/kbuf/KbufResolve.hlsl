@@ -19,7 +19,7 @@ RWTexture2D<float> fragment_zdepth : register(u3);
 //#define GET_FRAG(F, F_ADDR, K) {uint4 rb; LOAD4_KBUF(rb, F_ADDR, K); F.i_vis = rb.x; F.z = asfloat(rb.y); F.zthick = asfloat(rb.z); F.opacity_sum = asfloat(rb.w);}
 //#define SET_FRAG(F_ADDR, K, F) {uint4 rb = uint4(F.i_vis, asuint(F.z), asuint(F.zthick), asuint(F.opacity_sum)); STORE4_KBUF(rb, F_ADDR, K);}
 
-//groupshared int idx_array[num_deep_layers * 2]; // ??
+//groupshared int idx_array[k_value * 2]; // ??
 //[numthreads(1, 1, 1)] // or consider 4x4 thread either
 [numthreads(GRIDSIZE, GRIDSIZE, 1)]
 //[numthreads(1, 1, 1)]

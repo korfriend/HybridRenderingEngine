@@ -320,7 +320,7 @@ void generateMoments(float depth, float transmittance, int2 sv_pos, float4 wrapp
 #else
 void generateMoments(float depth, float transmittance, int2 sv_pos, float4 wrapping_zone_parameters)
 {
-	int addr_base = (sv_pos.y * g_cbCamState.rt_width + sv_pos.x) * (g_cbCamState.num_deep_layers * 4);
+	int addr_base = (sv_pos.y * g_cbCamState.rt_width + sv_pos.x) * (g_cbCamState.k_value * 4);
 
 	//uint3 idx0 = uint3(sv_pos, 0);
 	//uint3 idx1 = idx0;
@@ -475,25 +475,18 @@ void Moment_GeneratePass(VS_OUTPUT input) // 그냥 이걸로 해도..
 #endif
 {
 	if (g_cbClipInfo.clip_flag & 0x1)
-	{
-		if (dot(g_cbClipInfo.vec_clipplane, input.f3PosWS - g_cbClipInfo.pos_clipplane) > 0)
-			return;
-	}
+		clip(dot(g_cbClipInfo.vec_clipplane, input.f3PosWS - g_cbClipInfo.pos_clipplane) > 0 ? -1 : 1);
 	if (g_cbClipInfo.clip_flag & 0x2)
-	{
-		if (!IsInsideClipBox(input.f3PosWS, g_cbClipInfo.pos_clipbox_max_bs, g_cbClipInfo.mat_clipbox_ws2bs))
-			return;
-	}
+		clip(!IsInsideClipBox(input.f3PosWS, g_cbClipInfo.pos_clipbox_max_bs, g_cbClipInfo.mat_clipbox_ws2bs) ? -1 : 1);
+
 	float3 pos_ip_ss = float3(input.f4PosSS.xy, 0.0f);
 	float3 pos_ip_ws = TransformPoint(pos_ip_ss, g_cbCamState.mat_ss2ws);
 	float3 vec_pos_ip2frag = input.f3PosWS - pos_ip_ws;
-	if (dot(vec_pos_ip2frag, g_cbCamState.dir_view_ws) < 0)
-		return;
+	clip(dot(vec_pos_ip2frag, g_cbCamState.dir_view_ws) < 0 ? -1 : 1);
 
 	float z_depth = length(vec_pos_ip2frag);
 	float alpha = min(g_cbPobj.alpha, 0.999f);
-	if (z_depth > FLT_LARGE || alpha == 0)
-		return;
+	clip((z_depth > FLT_LARGE || alpha == 0) ? -1 : 1);
 
 	int2 tex2d_xy = int2(input.f4PosSS.xy);
 
@@ -505,7 +498,7 @@ void Moment_GeneratePass(VS_OUTPUT input) // 그냥 이걸로 해도..
 	[allow_uav_condition][loop]
 	while (keep_loop)
 	{
-		if (++safe_unlock_count > 10000)//g_cbPobj.num_safe_loopexit)// && frag_cnt >= (uint) num_deep_layers)//g_cbPobj.num_safe_loopexit)
+		if (++safe_unlock_count > 10000)//g_cbPobj.num_safe_loopexit)// && frag_cnt >= (uint) k_value)//g_cbPobj.num_safe_loopexit)
 		{
 			InterlockedCompareExchange(fragment_counter[tex2d_xy.xy], 1, 77777, __dummy);
 			keep_loop = false;
@@ -523,7 +516,7 @@ void Moment_GeneratePass(VS_OUTPUT input) // 그냥 이걸로 해도..
 				uint frag_cnt = fragment_counter[tex2d_xy.xy];
 				if (frag_cnt == 0) // clear mask
 				{
-					int addr_base = (tex2d_xy.y * g_cbCamState.rt_width + tex2d_xy.x) * (g_cbCamState.num_deep_layers * 4);
+					int addr_base = (tex2d_xy.y * g_cbCamState.rt_width + tex2d_xy.x) * (g_cbCamState.k_value * 4);
 					for (int j = 0; j < NUM_MOMENTS + 2; j++)
 					{
 						//moment_container_buf[addr_base + j] = 0;
@@ -786,7 +779,7 @@ void resolveMoments(out float transmittance_at_depth, out float total_transmitta
 	//int4 idx0 = int4(sv_pos, 0, 0);
 	//int4 idx1 = idx0;
 	//idx1[2] = 1;
-	int addr_base = (sv_pos.y * g_cbCamState.rt_width + sv_pos.x) * (g_cbCamState.num_deep_layers * 4);
+	int addr_base = (sv_pos.y * g_cbCamState.rt_width + sv_pos.x) * (g_cbCamState.k_value * 4);
 
 	transmittance_at_depth = 1;
 	total_transmittance = 1;
@@ -1021,13 +1014,13 @@ PS_OUT Moment_ResolvePass(VS_OUTPUT input)
 #endif
 {
 #if PIXEL_SYNCH
-	POBJ_PRE_CONTEXT(return)
+	POBJ_PRE_CONTEXT;
 #else
 	PS_FILL_OUTPUT out_ps;
 	out_ps.ds_z = 1.f;
 	out_ps.color = (float4)0;
 	out_ps.depthcs = FLT_MAX;
-	POBJ_PRE_CONTEXT(return out_ps)
+	POBJ_PRE_CONTEXT;
 #endif
 
 	float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
@@ -1124,7 +1117,7 @@ PS_OUT Moment_ResolvePass(VS_OUTPUT input)
 	[allow_uav_condition][loop]
 	while (keep_loop)
 	{
-		if (++safe_unlock_count > g_cbPobj.num_safe_loopexit)// && frag_cnt >= (uint) num_deep_layers)//g_cbPobj.num_safe_loopexit)
+		if (++safe_unlock_count > g_cbPobj.num_safe_loopexit)// && frag_cnt >= (uint) k_value)//g_cbPobj.num_safe_loopexit)
 		{
 			keep_loop = false;
 		}

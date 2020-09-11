@@ -1,5 +1,5 @@
 #include "RendererHeader.h"
-
+#include <chrono>
 #include <fstream>
 #include <iostream>
 #include <cmath>
@@ -592,7 +592,7 @@ void ComputeSSAO(__ID3D11DeviceContext* dx11DeviceImmContext,
 
 	dx11DeviceImmContext->CSSetShader(GETCS(KBZ_TO_TEXTURE_cs_5_0), NULL, 0);
 	dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
-	dx11DeviceImmContext->Flush();
+	//dx11DeviceImmContext->Flush();
 	dx11DeviceImmContext->CSSetUnorderedAccessViews(15, 2, &dx11UAVs_SSAO[2], 0);
 	dx11DeviceImmContext->CSSetUnorderedAccessViews(20, 2, &dx11UAVs_SSAO[2], 0);
 	dx11DeviceImmContext->GenerateMips((ID3D11ShaderResourceView*)gres_fb_mip_z_halftexs[0].alloc_res_ptrs[DTYPE_SRV]);
@@ -626,7 +626,7 @@ void ComputeSSAO(__ID3D11DeviceContext* dx11DeviceImmContext,
 	if (blur_SSAO)
 	{
 		// BLUR process
-		dx11DeviceImmContext->Flush();
+		//dx11DeviceImmContext->Flush();
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(25, 2, &dx11UAVs_SSAO[2], 0);
 		if (involve_vr)
 		{
@@ -660,15 +660,22 @@ void ComputeSSAO(__ID3D11DeviceContext* dx11DeviceImmContext,
 	dx11DeviceImmContext->CSSetUnorderedAccessViews(30, 1, &dx11UAVs_SSAO[2], 0);
 }
 
+enum MFR_MODE
+{
+	KBZT = 0,
+	LL,
+	MOMENT,
+	DKplusB
+};
+
 bool RenderSrOIT(VmFnContainer* _fncontainer,
 	VmGpuManager* gpu_manager,
 	grd_helper::GpuDX11CommonParameters* dx11CommonParams,
 	LocalProgress* progress,
 	double* run_time_ptr)
 {
-	LARGE_INTEGER lIntFreq;
-	LARGE_INTEGER lIntCntStart, lIntCntEnd;
-
+	using namespace std::chrono;
+	
 	vector<VmObject*> input_pobjs;
 	_fncontainer->GetVmObjectList(&input_pobjs, VmObjKey(ObjectTypePRIMITIVE, true));
 
@@ -688,33 +695,34 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	VmIObject* iobj = (VmIObject*)_fncontainer->GetVmObject(VmObjKey(ObjectTypeIMAGEPLANE, false), 0);
 
 	//((std::mutex*)HDx11GetMutexGpuCriticalPath())->lock();
-	int num_deep_layers_old = 8;
-	lobj->GetCustomParameter("_int_NumDeepLayers", data_type::dtype<int>(), &num_deep_layers_old);
-	int num_deep_layers = _fncontainer->GetParamValue("_int_NumDeepLayers", num_deep_layers_old);
-	lobj->RegisterCustomParameter("_int_NumDeepLayers", num_deep_layers);
+	int k_value_old = 8;
+	lobj->GetCustomParameter("_int_NumK", data_type::dtype<int>(), &k_value_old);
+	int k_value = _fncontainer->GetParamValue("_int_NumK", k_value_old);
+	lobj->RegisterCustomParameter("_int_NumK", k_value);
 
 	int num_moments_old = 4;
 	lobj->GetCustomParameter("_int_NumQueueLayers", data_type::dtype<int>(), &num_moments_old);
 	int num_moments = _fncontainer->GetParamValue("_int_NumQueueLayers", num_moments_old);
 	int num_safe_loopexit = _fncontainer->GetParamValue("_int_SpinLockSafeLoops", (int)100);
-	bool apply_antialiasing = _fncontainer->GetParamValue("_bool_IsAntiAliasingRS", false);
 	bool is_final_renderer = _fncontainer->GetParamValue("_bool_IsFinalRenderer", true);
 	double v_thickness = _fncontainer->GetParamValue("_double_VZThickness", -1.0);
 	double v_copthickness = _fncontainer->GetParamValue("_double_CopVZThickness", -1.0);
 	double v_discont_depth = _fncontainer->GetParamValue("_double_DiscontDepth", -1.0);
 	float merging_beta = (float)_fncontainer->GetParamValue("_double_MergingBeta", 0.5);
 	bool blur_SSAO = _fncontainer->GetParamValue("_bool_BlurSSAO", true);
-	bool is_a_buffer = _fncontainer->GetParamValue("_bool_IsAbuffer", false);
-	int buf_ex_scale = _fncontainer->GetParamValue("_int_ABufEx", (int)3);
+
+	//bool is_a_buffer = _fncontainer->GetParamValue("_bool_IsAbuffer", false);
+	//bool is_moment_oit = is_a_buffer ? false : _fncontainer->GetParamValue("_bool_MomentOIT", false);
+	MFR_MODE mode_OIT = (MFR_MODE)_fncontainer->GetParamValue("_int_OitMode", (int)0);
+
+	int buf_ex_scale = _fncontainer->GetParamValue("_int_BufExScale", (int)4); // 32 layers
 	bool show_maxlayers_a_buffer_ = _fncontainer->GetParamValue("_bool_ShowMaxLayersAbuffer", false);
-	bool is_moment_oit = is_a_buffer? false : _fncontainer->GetParamValue("_bool_MomentOIT", false);
 	bool use_blending_option_MomentOIT = _fncontainer->GetParamValue("_bool_UseBlendingOptionMomentOIT", false);
 	bool pixel_transmittance = _fncontainer->GetParamValue("_bool_PixelTransmittance", false);
 	vmint2 pixel_pos = _fncontainer->GetParamValue("_int2_PixelPos", vmint2(0));
 	double tr_interval = _fncontainer->GetParamValue("_double_TrInvterval", (double)0.01);
 	double tr_startoffset = _fncontainer->GetParamValue("_double_TrStartOffset", (double)1.00);
 	vmdouble2 mot_nf = _fncontainer->GetParamValue("_double2_MotNearFar", vmdouble2(0.1, 100000.));
-	//is_a_buffer = show_maxlayers_a_buffer_ = true;
 	//vr_level = 2;
 	vmdouble4 global_light_factors = _fncontainer->GetParamValue("_double4_ShadingFactorsForGlobalPrimitives", vmdouble4(0.2, 1.0, 0.5, 5)); // Emission, Diffusion, Specular, Specular Power
 	vmdouble4 ui_light_factors = _fncontainer->GetParamValue("_double4_ShadingFactorsForUiPrimitives", vmdouble4(0.4, 0.8, 0.2, 30)); // Emission, Diffusion, Specular, Specular Power
@@ -753,8 +761,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		dx11CommonParams->dx11DeviceImmContext->PSSetShader(NULL, NULL, 0);
 		dx11CommonParams->dx11DeviceImmContext->CSSetShader(NULL, NULL, 0);
 #define VS_NUM 5
-#define PS_NUM 18
-#define CS_NUM 8
+#define PS_NUM 20
+#define CS_NUM 9
 #define SET_VS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(VERTEX_SHADER, NAME), __S, true)
 #define SET_PS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(PIXEL_SHADER, NAME), __S, true)
 #define SET_CS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(COMPUTE_SHADER, NAME), __S, true)
@@ -803,15 +811,17 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			  ,"SR_OIT_KDEPTH_TEXTUREIMGMAP_ps_5_0"
 			  ,"SR_SINGLE_LAYER_ps_5_0"
 			  //,"SR_OIT_KDEPTH_NPRGHOST_ps_5_0"
-			  
+
 			  ,"SR_OIT_ABUFFER_FRAGCOUNTER_ps_5_0"
+			  ,"SR_OIT_ABUFFER_FRAGCOUNTER_MTT_ps_5_0"
 			  ,"SR_OIT_ABUFFER_PHONGBLINN_ps_5_0"
 			  ,"SR_OIT_ABUFFER_DASHEDLINE_ps_5_0"
 			  ,"SR_OIT_ABUFFER_MULTITEXTMAPPING_ps_5_0"
 			  ,"SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0"
 			  ,"SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0"
-			  
+
 			  ,"SR_MOMENT_GEN_ps_5_0"
+			  ,"SR_MOMENT_GEN_ps_MTT_5_0"
 			  ,"SR_MOMENT_OIT_PHONGBLINN_ps_5_0"
 			  ,"SR_MOMENT_OIT_DASHEDLINE_ps_5_0"
 			  ,"SR_MOMENT_OIT_MULTITEXTMAPPING_ps_5_0"
@@ -851,6 +861,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			  ,"SR_OIT_PRESET_cs_5_0"
 			  ,"SR_OIT_ABUFFER_PREFIX_0_cs_5_0"
 			  ,"SR_OIT_ABUFFER_PREFIX_1_cs_5_0"
+			  ,"SR_OIT_ABUFFER_OffsetTable_cs_5_0"
 			  ,"SR_OIT_ABUFFER_SORT2SENDER_cs_5_0"
 			  ,"KB_SSAO_cs_5_0"
 			  ,"KB_SSAO_BLUR_cs_5_0"
@@ -924,13 +935,13 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	__ID3D11DeviceContext* dx11DeviceImmContext = dx11CommonParams->dx11DeviceImmContext;
 
 #pragma region // IOBJECT GPU
-	int buffer_ex = is_a_buffer? buf_ex_scale : 1, buffer_ex_old = 0; // optimal for K is 1
+	int buffer_ex = mode_OIT != MFR_MODE::KBZT? buf_ex_scale : 1, buffer_ex_old = 0; // optimal for K is 1
 	vmint2 fb_size_cur, fb_size_old = vmint2(0, 0);
 	iobj->GetFrameBufferInfo(&fb_size_cur);
 	iobj->GetCustomParameter("_int2_PreviousScreenSize", data_type::dtype<vmint2>(), &fb_size_old);
 	iobj->GetCustomParameter("_int_PreviousBufferEx", data_type::dtype<int>(), &buffer_ex_old);
 	if (fb_size_cur.x != fb_size_old.x || fb_size_cur.y != fb_size_old.y
-		|| num_deep_layers != num_deep_layers_old || num_moments != num_moments_old
+		|| k_value != k_value_old || num_moments != num_moments_old
 		|| buffer_ex != buffer_ex_old)
 	{
 		gpu_manager->ReleaseGpuResourcesBySrcID(iobj->GetObjectID());	// System Out 포함 //
@@ -945,9 +956,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	GpuRes gres_fb_deep_k_buffer;
 	GpuRes gres_fb_ao_texs[2], gres_fb_ao_blf_texs[2], gres_fb_mip_a_halftexs[2], gres_fb_mip_z_halftexs[2]; // max_layers
 	GpuRes gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex;
-	GpuRes gres_fb_prefix_sum_dxLL;
+	GpuRes gres_fb_ref_pidx;
 	// A buffers... for test
-	GpuRes gres_fb_sys_rgba, gres_fb_sys_depthcs, gres_fb_sys_deep_k, gres_fb_sys_prefix_sum_dxLL;
+	GpuRes gres_fb_sys_rgba, gres_fb_sys_depthcs, gres_fb_sys_deep_k, gres_fb_sys_ref_pidx;
 	// Ghost effect mode
 	//GpuRes gres_fb_mask_hotspot;
 	grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D,
@@ -962,9 +973,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
 
 	grd_helper::UpdateFrameBuffer(gres_fb_deep_k_buffer, iobj, "BUFFER_RW_DEEP_K_BUF", RTYPE_BUFFER,
-		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, num_deep_layers * 4 * buffer_ex);
+		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, k_value * 4 * buffer_ex);
 
-	// AO
+	// SSAO
 	{
 		grd_helper::UpdateFrameBuffer(gres_fb_ao_texs[0], iobj, "RW_TEXS_AO_0", RTYPE_TEXTURE2D,
 			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_MIPMAP);
@@ -990,15 +1001,16 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_rgba, iobj, "SYSTEM_OUT_RGBA", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_SYSOUT);
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_depthcs, iobj, "SYSTEM_OUT_DEPTH", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R32_FLOAT, UPFB_SYSOUT);
 
-	if(is_a_buffer)
-		grd_helper::UpdateFrameBuffer(gres_fb_prefix_sum_dxLL, iobj, "BUFFER_RW_LL_PREFIX_BUF", RTYPE_BUFFER,
+	if(mode_OIT == MFR_MODE::LL || mode_OIT == MFR_MODE::DKplusB)
+		grd_helper::UpdateFrameBuffer(gres_fb_ref_pidx, iobj, "BUFFER_RW_REF_PIDX_BUF", RTYPE_BUFFER,
 			D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
+
 	if (pixel_transmittance)
 	{
 		grd_helper::UpdateFrameBuffer(gres_fb_sys_deep_k, iobj, "SYSTEM_OUT_DEEP_K_BUF", RTYPE_BUFFER,
-			NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT, num_deep_layers * 3 * buffer_ex);
-		if (is_a_buffer)
-			grd_helper::UpdateFrameBuffer(gres_fb_sys_prefix_sum_dxLL, iobj, "SYSTEM_OUT_LL_PREFIX_BUF", RTYPE_BUFFER,
+			NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT, k_value * 3 * buffer_ex);
+		if (mode_OIT == MFR_MODE::LL)
+			grd_helper::UpdateFrameBuffer(gres_fb_sys_ref_pidx, iobj, "SYSTEM_OUT_REF_PIDX_BUF", RTYPE_BUFFER,
 				NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT);
 	}
 	if (is_ghost_mode)
@@ -1130,8 +1142,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	VmCObject* cam_obj = iobj->GetCameraObject();
 	vmmat44f matWS2SS, matWS2PS, matSS2WS;
 	CB_CameraState cbCamState;
-	grd_helper::SetCb_Camera(cbCamState, matWS2PS, matWS2SS, matSS2WS, cam_obj, fb_size_cur, num_deep_layers, fv_thickness);
-	if(!is_a_buffer) cbCamState.iSrCamDummy__0 = *(uint*)&merging_beta;
+	grd_helper::SetCb_Camera(cbCamState, matWS2PS, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, fv_thickness);
+	if(mode_OIT == MFR_MODE::KBZT || mode_OIT == MFR_MODE::DKplusB) 
+		cbCamState.iSrCamDummy__0 = *(uint*)&merging_beta;
 	D3D11_MAPPED_SUBRESOURCE mappedResCamState;
 	dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
 	CB_CameraState* cbCamStateData = (CB_CameraState*)mappedResCamState.pData;
@@ -1144,7 +1157,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 	//
 	MomentOIT cb_moment;
-	if (is_moment_oit)
+	if (mode_OIT == MFR_MODE::MOMENT)
 	{
 		ID3D11Buffer* cbuf_moment_state = dx11CommonParams->get_cbuf("MomentOIT");
 		computeWrappingZoneParameters((float*)&cb_moment.wrapping_zone_parameters);
@@ -1379,12 +1392,15 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	}
 
 	bool print_out_routine_objs = _fncontainer->GetParamValue("_bool_PrintOutRoutineObjs", false) && fb_size_cur.x > 200 && fb_size_cur.y > 200;
+	bool gpu_profile = false;
 	if (print_out_routine_objs)
 	{
 		cout << "  ** general_oit_routine_objs    : " << general_oit_routine_objs.size() << endl;
 		cout << "  ** special_effect_routine_objs : " << single_layer_routine_objs.size() << endl;
 		cout << "  ** foremost_sr_routine_objs : " << foremost_surfaces_routine_objs.size() << endl;
+		gpu_profile = _fncontainer->GetParamValue("_bool_GpuProfile", false);
 	}
+
 	//print_out_routine_objs = true;
 #pragma endregion // Presetting of VxObject
 
@@ -1410,8 +1426,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	//dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_deep_k_buffer.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 	//if(is_rov_mode)
 	//	dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_deep_k_buffer_rov.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
-	if(is_a_buffer)
-		dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_prefix_sum_dxLL.alloc_res_ptrs[DTYPE_UAV], clr_unit4); 
+	if(mode_OIT == MFR_MODE::LL || mode_OIT == MFR_MODE::DKplusB)
+		dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV], clr_unit4); 
 
 	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
 	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV], clr_float_fltmax_4);
@@ -1450,7 +1466,15 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 #pragma endregion // Other Presetting For Shaders
 
-	QueryPerformanceCounter(&lIntCntStart);
+	int gpu_profilecount = 0;
+	map<string, int> profile_map;
+	if (gpu_profile)
+	{
+		dx11DeviceImmContext->Begin(dx11CommonParams->dx11qr_disjoint);
+		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
+		profile_map["begin"] = gpu_profilecount;
+		gpu_profilecount++;
+	}
 
 	ID3D11DepthStencilView* dx11DSVNULL = NULL;
 	ID3D11RenderTargetView* dx11RTVsNULL[2] = { NULL, NULL };
@@ -1459,8 +1483,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	// For Each Primitive //
 	int count_call_render = 0;
 	int RENDERER_LOOP = 0;
-	bool is_LL_counter_buffer = is_a_buffer;
-	bool is_MOMENT_gen_buffer = is_moment_oit;
+	bool is_frag_counter_buffer = mode_OIT == MFR_MODE::LL || mode_OIT == MFR_MODE::DKplusB;
+	bool is_MOMENT_gen_buffer = mode_OIT == MFR_MODE::MOMENT;
 RENDERER_LOOP:
 	vector<RenderObjInfo>* pvtrValidPrimitives;
 	switch (RENDERER_LOOP)
@@ -1631,6 +1655,7 @@ RENDERER_LOOP:
 		uint offset = 0;
 		D3D_PRIMITIVE_TOPOLOGY pobj_topology_type;
 
+		bool is_MTT_vsout = false;
 		if (prim_data->GetVerticeDefinition("NORMAL"))
 		{
 			if (prim_data->GetVerticeDefinition("TEXCOORD0"))
@@ -1647,11 +1672,26 @@ RENDERER_LOOP:
 			}
 
 			if (render_obj_info.is_annotation_obj && dx11InputLayer_Target == dx11LI_PNT)
-				dx11PS_Target = is_a_buffer? GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0) : is_moment_oit? GETPS(SR_MOMENT_OIT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_KDEPTH_TEXTMAPPING_ps_5_0);
+				switch (mode_OIT)
+				{
+				case MFR_MODE::LL: dx11PS_Target = GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0); break;
+				case MFR_MODE::MOMENT: dx11PS_Target = GETPS(SR_MOMENT_OIT_TEXTMAPPING_ps_5_0); break;
+				default: dx11PS_Target = GETPS(SR_OIT_KDEPTH_TEXTMAPPING_ps_5_0); break;
+				}
 			else if(render_obj_info.has_texture_img && dx11InputLayer_Target == dx11LI_PNT)
-				dx11PS_Target = is_a_buffer ? GETPS(SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0) : is_moment_oit ? GETPS(SR_MOMENT_OIT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_KDEPTH_TEXTUREIMGMAP_ps_5_0);
+				switch (mode_OIT)
+				{
+				case MFR_MODE::LL: dx11PS_Target = GETPS(SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0); break;
+				case MFR_MODE::MOMENT: dx11PS_Target = GETPS(SR_MOMENT_OIT_TEXTUREIMGMAP_ps_5_0); break;
+				default: dx11PS_Target = GETPS(SR_OIT_KDEPTH_TEXTUREIMGMAP_ps_5_0); break;
+				}
 			else
-				dx11PS_Target = is_a_buffer ? GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0) : is_moment_oit ? GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_KDEPTH_PHONGBLINN_ps_5_0);
+				switch (mode_OIT)
+				{
+				case MFR_MODE::LL: dx11PS_Target = GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
+				case MFR_MODE::MOMENT: dx11PS_Target = GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0); break;
+				default: dx11PS_Target = GETPS(SR_OIT_KDEPTH_PHONGBLINN_ps_5_0); break;
+				}
 		}
 		else if (prim_data->GetVerticeDefinition("TEXCOORD0"))
 		{
@@ -1662,7 +1702,14 @@ RENDERER_LOOP:
 				// PTTT
 				dx11InputLayer_Target = dx11LI_PTTT;
 				dx11VS_Target = dx11VShader_PTTT;
-				dx11PS_Target = is_a_buffer ? GETPS(SR_OIT_ABUFFER_MULTITEXTMAPPING_ps_5_0) : is_moment_oit ? GETPS(SR_MOMENT_OIT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_KDEPTH_MULTITEXTMAPPING_ps_5_0);
+
+				is_MTT_vsout = true;
+				switch (mode_OIT)
+				{
+				case MFR_MODE::LL: dx11PS_Target = GETPS(SR_OIT_ABUFFER_MULTITEXTMAPPING_ps_5_0); break;
+				case MFR_MODE::MOMENT: dx11PS_Target = GETPS(SR_MOMENT_OIT_MULTITEXTMAPPING_ps_5_0); break;
+				default: dx11PS_Target = GETPS(SR_OIT_KDEPTH_MULTITEXTMAPPING_ps_5_0); break;
+				}
 			}
 			else
 			{
@@ -1672,11 +1719,26 @@ RENDERER_LOOP:
 				dx11VS_Target = dx11VShader_PT;
 
 				if (render_obj_info.is_annotation_obj)
-					dx11PS_Target = is_a_buffer ? GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0) : is_moment_oit ? GETPS(SR_MOMENT_OIT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_KDEPTH_TEXTMAPPING_ps_5_0);
+					switch (mode_OIT)
+					{
+					case MFR_MODE::LL: dx11PS_Target = GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0); break;
+					case MFR_MODE::MOMENT: dx11PS_Target = GETPS(SR_MOMENT_OIT_TEXTMAPPING_ps_5_0); break;
+					default: dx11PS_Target = GETPS(SR_OIT_KDEPTH_TEXTMAPPING_ps_5_0); break;
+					}
 				else if ((cbPolygonObj.pobj_flag & (0x1 << 19)) && prim_data->ptype == PrimitiveTypeLINE)
-					dx11PS_Target = is_a_buffer ? GETPS(SR_OIT_ABUFFER_DASHEDLINE_ps_5_0) : is_moment_oit ? GETPS(SR_MOMENT_OIT_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_KDEPTH_DASHEDLINE_ps_5_0);
+					switch (mode_OIT)
+					{
+					case MFR_MODE::LL: dx11PS_Target = GETPS(SR_OIT_ABUFFER_DASHEDLINE_ps_5_0); break;
+					case MFR_MODE::MOMENT: dx11PS_Target = GETPS(SR_MOMENT_OIT_DASHEDLINE_ps_5_0); break;
+					default: dx11PS_Target = GETPS(SR_OIT_KDEPTH_DASHEDLINE_ps_5_0); break;
+					}
 				else
-					dx11PS_Target = is_a_buffer ? GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0) : is_moment_oit ? GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_KDEPTH_PHONGBLINN_ps_5_0);
+					switch (mode_OIT)
+					{
+					case MFR_MODE::LL: dx11PS_Target = GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
+					case MFR_MODE::MOMENT: dx11PS_Target = GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0); break;
+					default: dx11PS_Target = GETPS(SR_OIT_KDEPTH_PHONGBLINN_ps_5_0); break;
+					}
 			}
 		}
 		else
@@ -1684,7 +1746,12 @@ RENDERER_LOOP:
 			// P
 			dx11InputLayer_Target = dx11LI_P;
 			dx11VS_Target = dx11VShader_P;
-			dx11PS_Target = dx11PS_Target = is_a_buffer ? GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0) : is_moment_oit ? GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_KDEPTH_PHONGBLINN_ps_5_0);
+			switch (mode_OIT)
+			{
+			case MFR_MODE::LL: dx11PS_Target = GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
+			case MFR_MODE::MOMENT: dx11PS_Target = GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0); break;
+			default: dx11PS_Target = GETPS(SR_OIT_KDEPTH_PHONGBLINN_ps_5_0); break;
+			}
 		}
 
 		if (pvtrValidPrimitives == &single_layer_routine_objs || pvtrValidPrimitives == &foremost_surfaces_routine_objs)
@@ -1693,15 +1760,20 @@ RENDERER_LOOP:
 
 		if (pvtrValidPrimitives == &general_oit_routine_objs)
 		{
-			if (is_LL_counter_buffer)
+			if (is_frag_counter_buffer)
 			{
 				// Create a count of the number of fragments at each pixel location
-				//CreateFragmentCount(pD3DContext, pScene, mWorldViewProjection, pRTV, pDSV);
-				dx11PS_Target = GETPS(SR_OIT_ABUFFER_FRAGCOUNTER_ps_5_0);
+				if (is_MTT_vsout)
+					dx11PS_Target = GETPS(SR_OIT_ABUFFER_FRAGCOUNTER_MTT_ps_5_0);
+				else
+					dx11PS_Target = GETPS(SR_OIT_ABUFFER_FRAGCOUNTER_ps_5_0);
 			}
 			else if (is_MOMENT_gen_buffer)
 			{
-				dx11PS_Target = GETPS(SR_MOMENT_GEN_ps_5_0);
+				if (is_MTT_vsout)
+					dx11PS_Target = GETPS(SR_MOMENT_GEN_ps_MTT_5_0);
+				else
+					dx11PS_Target = GETPS(SR_MOMENT_GEN_ps_5_0);
 			}
 		}
 
@@ -1816,10 +1888,10 @@ RENDERER_LOOP:
 				(ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV]
 				, (ID3D11UnorderedAccessView*)gres_fb_spinlock.alloc_res_ptrs[DTYPE_UAV]
 				, (ID3D11UnorderedAccessView*)gres_fb_deep_k_buffer.alloc_res_ptrs[DTYPE_UAV]
-				, is_a_buffer ? (ID3D11UnorderedAccessView*)gres_fb_prefix_sum_dxLL.alloc_res_ptrs[DTYPE_UAV] : NULL
+				, mode_OIT == MFR_MODE::LL || mode_OIT == MFR_MODE::DKplusB ? (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV] : NULL
 		};
 
-		if (is_moment_oit && !is_MOMENT_gen_buffer)
+		if (mode_OIT == MFR_MODE::MOMENT && !is_MOMENT_gen_buffer)
 		{
 			dx11DeviceImmContext->PSSetShaderResources(20, 1, (ID3D11ShaderResourceView**)&gres_fb_deep_k_buffer.alloc_res_ptrs[DTYPE_SRV]);
 			
@@ -1891,7 +1963,7 @@ RENDERER_LOOP:
 
 		dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, 5, dx11UAVs_NULL, 0);
 
-		if (RENDERER_LOOP == 1 && !is_a_buffer && !is_moment_oit)
+		if (RENDERER_LOOP == 1 && mode_OIT == MFR_MODE::KBZT)
 		{
 			// RT to K-Buffer
 			ID3D11ShaderResourceView* dx11SRVs_1st_pass[2] = {
@@ -1904,7 +1976,7 @@ RENDERER_LOOP:
 			UINT UAVInitialCounts = 0;
 			dx11DeviceImmContext->CSSetShader(GETCS(SR_OIT_PRESET_cs_5_0), NULL, 0);
 
-			dx11DeviceImmContext->Flush();
+			//dx11DeviceImmContext->Flush();
 			dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
 
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(2, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
@@ -1999,67 +2071,153 @@ RENDERER_LOOP:
 	}
 
 #define NUM_UAVs_2ND 4
-	if (is_a_buffer || is_moment_oit)
-		if (RENDERER_LOOP == 1) goto RENDERER_LOOP_EXIT;
+	if (mode_OIT == MFR_MODE::LL || mode_OIT == MFR_MODE::MOMENT)
+		if (!is_frag_counter_buffer && !is_MOMENT_gen_buffer) goto RENDERER_LOOP_EXIT;
 
-	if (is_LL_counter_buffer)
+	if (is_frag_counter_buffer)
 	{
-		is_LL_counter_buffer = false;
+		if (gpu_profile)
+		{
+			dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
+			profile_map["begin ref counter"] = gpu_profilecount;
+			gpu_profilecount++;
+		}
 
+		is_frag_counter_buffer = false;
 		dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, 5, dx11UAVs_NULL, 0);
-		// Create a prefix sum of the fragment counts.  Each pixel location will hold
-		// a count of the total number of fragments of every preceding pixel location.
-		//CreatePrefixSum(pD3DContext);
+
 		ID3D11UnorderedAccessView* dx11UAVs_2nd_pass[NUM_UAVs_2ND] = {
 				  (ID3D11UnorderedAccessView*)gres_fb_deep_k_buffer.alloc_res_ptrs[DTYPE_UAV]
 				, (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
 				, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
-				, (ID3D11UnorderedAccessView*)gres_fb_prefix_sum_dxLL.alloc_res_ptrs[DTYPE_UAV]
+				, (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV]
 		};
 		UINT UAVInitialCounts = 0;
+		dx11DeviceImmContext->CSSetShader(GETCS(SR_OIT_ABUFFER_OffsetTable_cs_5_0), NULL, 0);
 
-		dx11DeviceImmContext->CSSetShader(GETCS(SR_OIT_ABUFFER_PREFIX_0_cs_5_0), NULL, 0);
-		dx11DeviceImmContext->CSSetUnorderedAccessViews(1, NUM_UAVs_2ND, dx11UAVs_2nd_pass, (UINT*)(&dx11UAVs_2nd_pass));
-		dx11DeviceImmContext->CSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_SRV]);
-		dx11DeviceImmContext->Flush();
-
-		//dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
-		dx11DeviceImmContext->Dispatch(fb_size_cur.x, fb_size_cur.y, 1);
-
-		dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-		dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
-
-		for (int i = 4; i < (fb_size_cur.x*fb_size_cur.y * 2); i *= 2)
+		if (mode_OIT == MFR_MODE::LL)
 		{
-			D3D11_MAPPED_SUBRESOURCE mappedResCamState;
-			dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
-			CB_CameraState* cbCamStateData = (CB_CameraState*)mappedResCamState.pData;
-			memcpy(cbCamStateData, &cbCamState, sizeof(CB_CameraState));
-			cbCamStateData->iSrCamDummy__0 = i;
-			dx11DeviceImmContext->Unmap(cbuf_cam_state, 0);
-			dx11DeviceImmContext->CSSetConstantBuffers(0, 1, &cbuf_cam_state);
-
-			dx11DeviceImmContext->CSSetShader(GETCS(SR_OIT_ABUFFER_PREFIX_1_cs_5_0), NULL, 0);
-
-			// flush effect for m_pPrefixSumUAV
+#define __NEW_OFFSET_TABLE
+#ifndef __NEW_OFFSET_TABLE
+			dx11DeviceImmContext->CSSetShader(GETCS(SR_OIT_ABUFFER_PREFIX_0_cs_5_0), NULL, 0);
+#endif
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(1, NUM_UAVs_2ND, dx11UAVs_2nd_pass, (UINT*)(&dx11UAVs_2nd_pass));
+			dx11DeviceImmContext->CSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_SRV]);
+			//dx11DeviceImmContext->Flush();
+
+			//dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+			dx11DeviceImmContext->Dispatch(fb_size_cur.x, fb_size_cur.y, 1);
+
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+			dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
+
+#ifndef __NEW_OFFSET_TABLE
+			// Create a prefix sum of the fragment counts.  Each pixel location will hold
+			// a count of the total number of fragments of every preceding pixel location.
+			for (int i = 4; i < (fb_size_cur.x*fb_size_cur.y * 2); i *= 2)
+			{
+				D3D11_MAPPED_SUBRESOURCE mappedResCamState;
+				dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
+				CB_CameraState* cbCamStateData = (CB_CameraState*)mappedResCamState.pData;
+				memcpy(cbCamStateData, &cbCamState, sizeof(CB_CameraState));
+				cbCamStateData->iSrCamDummy__0 = i;
+				dx11DeviceImmContext->Unmap(cbuf_cam_state, 0);
+				dx11DeviceImmContext->CSSetConstantBuffers(0, 1, &cbuf_cam_state);
+
+				dx11DeviceImmContext->CSSetShader(GETCS(SR_OIT_ABUFFER_PREFIX_1_cs_5_0), NULL, 0);
+
+				// flush effect for m_pPrefixSumUAV
+				dx11DeviceImmContext->CSSetUnorderedAccessViews(1, NUM_UAVs_2ND, dx11UAVs_2nd_pass, (UINT*)(&dx11UAVs_2nd_pass));
+
+				dx11DeviceImmContext->CSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_SRV]);
+
+				// the "ceil((float) m_nFrameWidth*m_nFrameHeight/i)" calculation ensures that 
+				//    we dispatch enough threads to cover the entire range.
+				//dx11DeviceImmContext->Dispatch((int)(ceil((float)fb_size_cur.x*fb_size_cur.y / i)), 1, 1);
+				dx11DeviceImmContext->Dispatch((int)(ceil((float)fb_size_cur.x)), (int)(ceil((float)fb_size_cur.y / i)), 1);
+			}
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+			dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
+#endif
+			if (gpu_profile)
+			{
+				dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
+				profile_map["end ref counter"] = gpu_profilecount;
+				gpu_profilecount++;
+			}
+		}
+		else if (mode_OIT == MFR_MODE::DKplusB)
+		{
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(1, NUM_UAVs_2ND, dx11UAVs_2nd_pass, (UINT*)(&dx11UAVs_2nd_pass));
+			dx11DeviceImmContext->CSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_SRV]);
+			//dx11DeviceImmContext->Flush();
+
+			//dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+			dx11DeviceImmContext->Dispatch(fb_size_cur.x, fb_size_cur.y, 1);
+
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+			dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
+			
+			if (gpu_profile)
+			{
+				dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
+				profile_map["begin histogram analysis"] = gpu_profilecount;
+				gpu_profilecount++;
+			}
+			// histogram //
+			GpuRes histo_buf, histo_buf_sys;
+			histo_buf.res_name = "HISTO_FRAGS";
+			histo_buf.rtype = RTYPE_BUFFER;
+			histo_buf.options["USAGE"] = D3D11_USAGE_DEFAULT;
+			histo_buf.options["CPU_ACCESS_FLAG"] = NULL;
+			histo_buf.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+			histo_buf.options["FORMAT"] = DXGI_FORMAT_R32_UINT;
+			histo_buf.res_dvalues["NUM_ELEMENTS"] = (double)1024;
+			histo_buf.res_dvalues["STRIDE_BYTES"] = (double)sizeof(uint);
+			if (!gpu_manager->UpdateGpuResource(histo_buf))
+				gpu_manager->GenerateGpuResource(histo_buf);
 
 			dx11DeviceImmContext->CSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_SRV]);
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(10, 1, (ID3D11UnorderedAccessView**)&histo_buf.alloc_res_ptrs[DTYPE_UAV], 0);
 
-			// the "ceil((float) m_nFrameWidth*m_nFrameHeight/i)" calculation ensures that 
-			//    we dispatch enough threads to cover the entire range.
-			//dx11DeviceImmContext->Dispatch((int)(ceil((float)fb_size_cur.x*fb_size_cur.y / i)), 1, 1);
-			dx11DeviceImmContext->Dispatch((int)(ceil((float)fb_size_cur.x)), (int)(ceil((float)fb_size_cur.y / i)), 1);
+			dx11DeviceImmContext->CSSetShader(GETCS(SR_OIT_ABUFFER_OffsetTable_cs_5_0), NULL, 0);
+			dx11DeviceImmContext->Dispatch(fb_size_cur.x, fb_size_cur.y, 1);
+
+			// read-back //
+			histo_buf_sys = histo_buf;
+			histo_buf_sys.options["USAGE"] = D3D11_USAGE_STAGING;
+			histo_buf_sys.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_READ;
+			if (!gpu_manager->UpdateGpuResource(histo_buf_sys))
+				gpu_manager->GenerateGpuResource(histo_buf_sys);
+
+			dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)histo_buf_sys.alloc_res_ptrs[DTYPE_RES], (ID3D11Texture2D*)histo_buf.alloc_res_ptrs[DTYPE_RES]);
+
+			D3D11_MAPPED_SUBRESOURCE mappedResSysHisto;
+			HRESULT hr = dx11DeviceImmContext->Map((ID3D11Texture2D*)histo_buf_sys.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysHisto);
+			uint* histogram_frags = (uint*)mappedResSysHisto.pData;
+			// to do //
+
+			// k_value * 4 * buffer_ex
+			const int k_b = 32;
+			const int MemBudget_Mb = 32;
+			dx11DeviceImmContext->Unmap((ID3D11Texture2D*)histo_buf_sys.alloc_res_ptrs[DTYPE_RES], 0);
+
+			if (gpu_profile)
+			{
+				dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
+				profile_map["end histogram analysis"] = gpu_profilecount;
+				gpu_profilecount++;
+			}
 		}
-		dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-		dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
-
+		// used for the increment of the fragments (index)
 		dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
+		goto RENDERER_LOOP;
 	}
-	else if (is_MOMENT_gen_buffer)
+	else if (is_MOMENT_gen_buffer) // mode_OIT == MFR_MODE::MOMENT
 	{
 		is_MOMENT_gen_buffer = false;
 		dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, 5, dx11UAVs_NULL, 0);
+		goto RENDERER_LOOP;
 	}
 	else if (RENDERER_LOOP == 2 && foremost_surfaces_routine_objs.size() > 0)
 	{
@@ -2080,7 +2238,7 @@ RENDERER_LOOP:
 		UINT UAVInitialCounts = 0;
 		dx11DeviceImmContext->CSSetShader(GETCS(SR_OIT_PRESET_cs_5_0), NULL, 0);
 
-		dx11DeviceImmContext->Flush();
+		//dx11DeviceImmContext->Flush();
 		dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
 
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(2, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
@@ -2095,29 +2253,17 @@ RENDERER_LOOP:
 		RENDERER_LOOP++;
 		goto RENDERER_LOOP;
 	}
-	//else
-	//{
-	//
-	//}
 
 RENDERER_LOOP_EXIT:
-#pragma region // 2nd RENDERING PASS
-	// sorting and merging
-	auto DisplayTimes = [&](const string& _test)
+
+	if (gpu_profile)
 	{
-		QueryPerformanceFrequency(&lIntFreq);
-		QueryPerformanceCounter(&lIntCntEnd);
-		double dRunTime1 = (lIntCntEnd.QuadPart - lIntCntStart.QuadPart) / (double)(lIntFreq.QuadPart);
+		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
+		profile_map["end geometry pass"] = gpu_profilecount;
+		gpu_profilecount++;
+	}
 
-		if (print_out_routine_objs)
-		{
-			cout << "  ** screen size : " << fb_size_cur.x << " x " << fb_size_cur.y << endl;
-			cout << "  ** rendering time (" << _test << ")   : " << dRunTime1 * 1000 << " ms" << endl;
-			cout << "  ** rendering fps (" << _test << ")    : " << 1. / dRunTime1 << " fps" << endl;
-		}
-	};
-	//DisplayTimes("1");
-
+#pragma region // 2nd RENDERING PASS
 	dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, 5, dx11UAVs_NULL, 0);
 
 	UINT UAVInitialCounts = 0;
@@ -2126,11 +2272,11 @@ RENDERER_LOOP_EXIT:
 			(ID3D11UnorderedAccessView*)gres_fb_deep_k_buffer.alloc_res_ptrs[DTYPE_UAV]
 			, (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
 			, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
-			, is_a_buffer ? (ID3D11UnorderedAccessView*)gres_fb_prefix_sum_dxLL.alloc_res_ptrs[DTYPE_UAV] : NULL
+			, mode_OIT == MFR_MODE::LL ? (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV] : NULL
 	};
-	if (!is_moment_oit)
+	if (mode_OIT != MFR_MODE::MOMENT)
 	{
-		if (is_a_buffer)
+		if (mode_OIT == MFR_MODE::LL)
 		{
 			// Sort and render the fragments.  Use the prefix sum to determine where the 
 			// fragments for each pixel reside.
@@ -2147,19 +2293,25 @@ RENDERER_LOOP_EXIT:
 
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(1, NUM_UAVs_2ND, dx11UAVs_2nd_pass, (UINT*)(&dx11UAVs_2nd_pass));
 		// 나중에 1D 로 변경... 
-		dx11DeviceImmContext->Flush();
-		//DisplayTimes("2");
+		//dx11DeviceImmContext->Flush();
 
-		if (is_a_buffer)
+		if (mode_OIT == MFR_MODE::LL)
 			dx11DeviceImmContext->Dispatch(fb_size_cur.x, fb_size_cur.y, 1);
 		else
 			dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+
+		if (gpu_profile)
+		{
+			dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
+			profile_map["end resolve pass"] = gpu_profilecount;
+			gpu_profilecount++;
+		}
 
 		// SSAO
 		if(cbEnvState.r_kernel_ao > 0 && is_final_renderer)
 		{
 			//gres_fb_deep_k_SSAO
-			dx11DeviceImmContext->Flush();
+			//dx11DeviceImmContext->Flush();
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 			ComputeSSAO(dx11DeviceImmContext, dx11CommonParams, num_grid_x, num_grid_y,
 				gres_fb_counter, gres_fb_deep_k_buffer, gres_fb_rgba, blur_SSAO,
@@ -2167,8 +2319,6 @@ RENDERER_LOOP_EXIT:
 				gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex, false);
 		}
 	}
-	//dx11DeviceImmContext->Flush();
-	//DisplayTimes("3");
 
 	// Set NULL States //
 	dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
@@ -2176,6 +2326,13 @@ RENDERER_LOOP_EXIT:
 
 #pragma endregion // 2nd RENDERING PASS
 	//printf("# Textures : %d, # Drawing : %d, # RTBuffer Change : %d, # Merging : %d\n", iNumTexureLayers, iCountRendering, iCountRTBuffers, iCountMerging);
+
+	if (gpu_profile)
+	{
+		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
+		profile_map["end render"] = gpu_profilecount;
+		gpu_profilecount++;
+	}
 
 	//cout << "TEST VZ : " << v_thickness << endl;
 	iobj->RegisterCustomParameter("_int_NumCallRenders", count_call_render);
@@ -2195,12 +2352,16 @@ RENDERER_LOOP_EXIT:
 		else
 		{
 #pragma region // Copy GPU to CPU
+			if (gpu_profile)
+			{
+				dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
+				profile_map["begin copy-back"] = gpu_profilecount;
+				gpu_profilecount++;
+			}
 			dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_fb_sys_rgba.alloc_res_ptrs[DTYPE_RES], 
 				(ID3D11Texture2D*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RES]);
 			dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_fb_sys_depthcs.alloc_res_ptrs[DTYPE_RES], 
 				(ID3D11Texture2D*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RES]);
-			//dx11DeviceImmContext->Flush();
-			//DisplayTimes("3-A");
 
 			vmbyte4* rgba_sys_buf = (vmbyte4*)fb_rout->fbuffer;
 			float* depth_sys_buf = (float*)fb_dout->fbuffer;
@@ -2209,7 +2370,6 @@ RENDERER_LOOP_EXIT:
 			D3D11_MAPPED_SUBRESOURCE mappedResSysDepth;
 			HRESULT hr = dx11DeviceImmContext->Map((ID3D11Texture2D*)gres_fb_sys_rgba.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysRGBA);
 			hr |= dx11DeviceImmContext->Map((ID3D11Texture2D*)gres_fb_sys_depthcs.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysDepth);
-			DisplayTimes("3-B");
 
 			vmbyte4* rgba_gpu_buf = (vmbyte4*)mappedResSysRGBA.pData;
 			if (rgba_gpu_buf == NULL || depth_sys_buf == NULL)
@@ -2217,7 +2377,7 @@ RENDERER_LOOP_EXIT:
 				//test_out("SR ERROR -- OUT");
 				//test_out("screen : " + to_string(fb_size_cur.x) + " x " + to_string(fb_size_cur.y));
 				//test_out("v_thickness : " + to_string(fv_thickness));
-				//test_out("num_deep_layers : " + to_string(num_deep_layers));
+				//test_out("k_value : " + to_string(k_value));
 				//test_out("default_line_thickness : " + to_string(default_line_thickness));
 				//test_out("width and height max : " + to_string(_w_max) + " x " + to_string(_h_max));
 				//float* f_v = (float*)&matWS2SS;
@@ -2239,6 +2399,7 @@ RENDERER_LOOP_EXIT:
 				//	if (f_v[i] != f_v[i]) test_out("matSS2WS " + to_string(i) + " - element error");
 				//}
 			}
+
 			float* depth_gpu_buf = (float*)mappedResSysDepth.pData;
 			int buf_row_pitch = mappedResSysRGBA.RowPitch / 4;
 #ifdef PPL_USE
@@ -2271,31 +2432,33 @@ RENDERER_LOOP_EXIT:
 #else
 			}
 #endif
-			DisplayTimes("3-C");
+			if (gpu_profile)
+			{
+				dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
+				profile_map["end copy-back"] = gpu_profilecount;
+				gpu_profilecount++;
+			}
 			// TEST //
-			if (print_out_routine_objs && is_a_buffer)
+			if (print_out_routine_objs && show_maxlayers_a_buffer_ && mode_OIT == MFR_MODE::LL)
 			{
 				uint max_layers = 0;
 				double avr_layers_sum = 0;
 				uint pix_cnt = 0;
-				if (show_maxlayers_a_buffer_)
-				{
-					for (int i = 0; i < fb_size_cur.y; i++)
-						for (int j = 0; j < fb_size_cur.x; j++)
+				for (int i = 0; i < fb_size_cur.y; i++)
+					for (int j = 0; j < fb_size_cur.x; j++)
+					{
+						vmbyte4 rgba = rgba_gpu_buf[j + i * buf_row_pitch];
+						max_layers = max(max_layers, (uint)depth_gpu_buf[j + i * buf_row_pitch]);
+						if (rgba.a > 0)
 						{
-							vmbyte4 rgba = rgba_gpu_buf[j + i * buf_row_pitch];
-							max_layers = max(max_layers, (uint)depth_gpu_buf[j + i * buf_row_pitch]);
-							if (rgba.a > 0)
-							{
-								pix_cnt++;
-								avr_layers_sum += (double)max_layers;
-							}
+							pix_cnt++;
+							avr_layers_sum += (double)max_layers;
 						}
-					cout << "******************" << endl;
-					cout << "MAX LAYERS : " << max_layers << endl;
-					cout << "AVR LAYERS : " << avr_layers_sum / pix_cnt << ", pixels : " << pix_cnt << endl;
-					cout << "******************" << endl;
-				}
+					}
+				cout << "******************" << endl;
+				cout << "MAX LAYERS : " << max_layers << endl;
+				cout << "AVR LAYERS : " << avr_layers_sum / pix_cnt << ", pixels : " << pix_cnt << endl;
+				cout << "******************" << endl;
 			}
 			// TEST //
 			if (print_out_routine_objs && pixel_transmittance)
@@ -2310,11 +2473,11 @@ RENDERER_LOOP_EXIT:
 
 				D3D11_MAPPED_SUBRESOURCE mappedResSysDeepK, mappedResSysPrefixLL;
 				hr |= dx11DeviceImmContext->Map((ID3D11Buffer*)gres_fb_sys_deep_k.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysDeepK);
-				if (is_a_buffer)
+				if (mode_OIT == MFR_MODE::LL)
 				{
-					dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_fb_sys_prefix_sum_dxLL.alloc_res_ptrs[DTYPE_RES],
-						(ID3D11Buffer*)gres_fb_prefix_sum_dxLL.alloc_res_ptrs[DTYPE_RES]);
-					hr |= dx11DeviceImmContext->Map((ID3D11Buffer*)gres_fb_sys_prefix_sum_dxLL.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysPrefixLL);
+					dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_fb_sys_ref_pidx.alloc_res_ptrs[DTYPE_RES],
+						(ID3D11Buffer*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_RES]);
+					hr |= dx11DeviceImmContext->Map((ID3D11Buffer*)gres_fb_sys_ref_pidx.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysPrefixLL);
 
 					// to do //
 					uint pixel_prefix = ((uint*)mappedResSysPrefixLL.pData)[max(pixel_pos.y * fb_size_cur.x + pixel_pos.x - 1, 0)];
@@ -2408,7 +2571,7 @@ RENDERER_LOOP_EXIT:
 						writeFile_absorb.close();
 					}
 
-					dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_fb_sys_prefix_sum_dxLL.alloc_res_ptrs[DTYPE_RES], 0);
+					dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_fb_sys_ref_pidx.alloc_res_ptrs[DTYPE_RES], 0);
 					VMSAFE_DELETEARRAY(depth_array);
 					VMSAFE_DELETEARRAY(alpha_array);
 					VMSAFE_DELETEARRAY(nIndex);
@@ -2427,7 +2590,7 @@ RENDERER_LOOP_EXIT:
 						openFile.close();
 						uint num_layers = (uint)depth_array.size();
 
-						if (is_moment_oit)
+						if (mode_OIT == MFR_MODE::MOMENT)
 						{
 							// see Section 3.3 Warping Depth in Mement-based OIT
 							auto __warp_depth = [&mot_nf](float z_depth_cs) -> float
@@ -2538,8 +2701,70 @@ RENDERER_LOOP_EXIT:
 			dx11DeviceImmContext->Unmap((ID3D11Texture2D*)gres_fb_sys_rgba.alloc_res_ptrs[DTYPE_RES], 0);
 			dx11DeviceImmContext->Unmap((ID3D11Texture2D*)gres_fb_sys_depthcs.alloc_res_ptrs[DTYPE_RES], 0);
 #pragma endregion
-	}	// if (iCountDrawing == 0)
-}
+		}	// if (iCountDrawing == 0)
+	}
+
+	if(gpu_profile)
+	{
+		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
+		profile_map["end"] = gpu_profilecount;
+		gpu_profilecount++;
+
+		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_disjoint);
+
+		// Wait for data to be available
+		while (dx11DeviceImmContext->GetData(dx11CommonParams->dx11qr_disjoint, NULL, 0, 0) == S_FALSE)
+		{
+			Sleep(1);       // Wait a bit, but give other threads a chance to run
+		}
+
+		// Check whether timestamps were disjoint during the last frame
+		D3D10_QUERY_DATA_TIMESTAMP_DISJOINT tsDisjoint;
+		dx11DeviceImmContext->GetData(dx11CommonParams->dx11qr_disjoint, &tsDisjoint, sizeof(tsDisjoint), 0);
+		if (!tsDisjoint.Disjoint)
+		{
+			UINT64 tsBeginFrame = 0, tsBeginRefCounter = 0, tsEndRefCounter = 0, tsEndGeoPass = 0, 
+				tsEndResolvePass = 0, tsEndRender = 0, tsBeginCopyBack = 0, tsEndCopyBack = 0, tsEndFrame = 0,
+				tsBeginHisto = 0, tsEndHisto = 0;
+
+			auto GetTimeGpuProfile = [&profile_map, &dx11DeviceImmContext, &dx11CommonParams](const string& name, UINT64& ts) -> bool
+			{
+				auto it = profile_map.find(name);
+				if (it == profile_map.end())
+				{
+					ts = 0;
+					return false;
+				}
+
+				dx11DeviceImmContext->GetData(dx11CommonParams->dx11qr_timestamps[it->second], &ts, sizeof(UINT64), 0);
+			};
+
+			GetTimeGpuProfile("begin", tsBeginFrame);
+			GetTimeGpuProfile("begin ref counter", tsBeginRefCounter);
+			GetTimeGpuProfile("end ref counter", tsEndRefCounter);
+			GetTimeGpuProfile("end geometry pass", tsEndGeoPass);
+			GetTimeGpuProfile("end resolve pass", tsEndResolvePass);
+			GetTimeGpuProfile("end render", tsEndRender);
+			GetTimeGpuProfile("begin histogram analysis", tsBeginHisto);
+			GetTimeGpuProfile("end histogram analysis", tsEndHisto);
+			GetTimeGpuProfile("begin copy-back", tsBeginCopyBack);
+			GetTimeGpuProfile("end copy-back", tsEndCopyBack);
+			GetTimeGpuProfile("end", tsEndFrame);
+
+			auto DisplayDuration = [&tsDisjoint](UINT64 tsS, UINT64 tsE, const string& _test)
+			{
+				if (tsS == 0 || tsE == 0) return;
+				cout << _test << " : " << float(tsE - tsS) / float(tsDisjoint.Frequency) * 1000.0f << " ms" << endl;
+			};
+			DisplayDuration(tsBeginFrame, tsEndFrame, "#GPU# Total (including copyback) Time");
+			DisplayDuration(tsBeginFrame, tsEndRender, "#GPU# Render Time");
+			DisplayDuration(tsBeginRefCounter, tsEndRefCounter, "#GPU# Ref Time");
+			DisplayDuration(tsBeginHisto, tsEndHisto, "#GPU# Histogram Analysis Time");
+			DisplayDuration(tsBeginFrame, tsEndGeoPass, "#GPU# Geometry Rendering Time");
+			DisplayDuration(tsEndGeoPass, tsEndResolvePass, "#GPU# Resolve Pass Time");
+			DisplayDuration(tsBeginCopyBack, tsEndCopyBack, "#GPU# CopyBack Time");
+		}
+	}
 
 	dx11DeviceImmContext->ClearState();
 
@@ -2558,20 +2783,7 @@ RENDERER_LOOP_EXIT:
 		return d_v;
 	};
 	iobj->RegisterCustomParameter("_double_LatestSrTime", AsDouble(vmhelpers::GetCurrentTimePack()));
-	// Time Check
-	double dRunTime = (lIntCntEnd.QuadPart - lIntCntStart.QuadPart) / (double)(lIntFreq.QuadPart);
-	if (run_time_ptr)
-		*run_time_ptr = dRunTime;
-
-	//if (print_out_routine_objs)
-	//{
-	//	cout << "  ** rendering time (final)   : " << dRunTime * 1000 << " ms" << endl;
-	//	cout << "  ** rendering fps (final)    : " << 1. / dRunTime << " fps" << endl;
-	//}
-
 	//((std::mutex*)HDx11GetMutexGpuCriticalPath())->unlock();
 
 	return true;
 }
-
-

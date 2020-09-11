@@ -3,6 +3,91 @@
     BlockSkip BLK = ComputeBlockSkip(P, V, g_cbVobj.volblk_size_ts, g_cbVobj.volblk_value_range, tex3D_volblk);\
     BLK.num_skip_steps = min(max(1, BLK.num_skip_steps), N - I);
 
+
+#define sort_insert(num, fragments) {					\
+	[loop]												\
+	for (int j = 1; j < num; ++j)						\
+	{													\
+		FragmentVD key = fragments[j];					\
+		int i = j - 1;									\
+														\
+		[loop]											\
+		while (i >= 0 && fragments[i].depth > key.depth)\
+		{												\
+			fragments[i + 1] = fragments[i];			\
+			--i;										\
+		}												\
+		fragments[i + 1] = key;							\
+	}													\
+}
+
+#define sort_shell(num, fragments) {								\
+	int inc = num >> 1;												\
+	[loop]															\
+	while (inc > 0)													\
+	{																\
+		[loop]														\
+		for (int i = inc; i < num; ++i)								\
+		{															\
+			FragmentVD tmp = fragments[i];							\
+																	\
+			int j = i;												\
+			[loop]													\
+			while (j >= inc && fragments[j - inc].depth > tmp.depth)\
+			{														\
+				fragments[j] = fragments[j - inc];					\
+				j -= inc;											\
+			}														\
+			fragments[j] = tmp;										\
+		}															\
+		inc = int(inc / 2.2f + 0.5f);								\
+	}																\
+}
+
+#define merge(steps, a, b, c) {														 \
+	int i;																			 \
+	[loop]																			 \
+	for (i = 0; i < steps; ++i)														 \
+		leftArray[i] = fragments[a + i];											 \
+																					 \
+	i = 0;																			 \
+	int j = 0;																		 \
+	[loop]																			 \
+	for (int k = a; k < c; ++k)														 \
+	{																				 \
+		if (b + j >= c || (i < steps && leftArray[i].depth < fragments[b + j].depth))\
+			fragments[k] = leftArray[i++];											 \
+		else																		 \
+			fragments[k] = fragments[b + j++];										 \
+	}																				 \
+}
+
+#define sort_merge(num, fragments){								  \
+	FragmentVD leftArray[MAX_ARRAY_SIZE_2d];					  \
+	int n = num;												  \
+	int steps = 1;												  \
+																  \
+	[loop]														  \
+	while (steps <= n)											  \
+	{															  \
+		int i = 0;												  \
+		[loop]													  \
+		while (i < n - steps)									  \
+		{														  \
+			merge(steps, i, i + steps, min(i + steps + steps, n));\
+			i += (steps << 1); /*i += 2 * steps;*/				  \
+		}														  \
+		steps = (steps << 1); /*steps *= 2;	*/					  \
+	}															  \
+}
+
+#define sort(num, fragments) {	   \
+	if (num <= 16)				   \
+		sort_insert(num, fragments)\
+	else						   \
+		sort_shell(num, fragments)\
+}
+
 #define INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, thick_sample, fs, merging_beta) {\
     if (idx_dlayer >= num_frags)\
     {\

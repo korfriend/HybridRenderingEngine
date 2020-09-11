@@ -54,9 +54,7 @@
 //=====================================================================
 
 
-namespace vmd
-{
-	// ONLY FOR WINDOWS VERSION
+// ONLY FOR WINDOWS VERSION
 #define VMENGINEVERSION 0x29AD7‬	// 170711(allocating 20 bits) and  12 bits for modules and engine enhancement version
 #define VMSAFE_DELETE(p)	{ if(p) { delete (p); (p)=NULL; } }
 #define VMSAFE_DELETEARRAY(p)	{ if(p) { delete[] (p); (p)=NULL; } }
@@ -155,8 +153,6 @@ namespace vmd
 
 #define __VMCVT3__(d, s, t3, tt) d=t3((tt)s.x, (tt)s.y, (tt)s.z)
 #define __OPS__(d, s, op) d=op(d, s)
-}
-using namespace vmd;
 
 //=====================================
 // Global Enumerations

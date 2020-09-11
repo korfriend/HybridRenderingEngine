@@ -79,6 +79,9 @@ namespace grd_helper
 		D3D_FEATURE_LEVEL dx11_featureLevel;
 		DXGI_ADAPTER_DESC dx11_adapter;
 
+		ID3D11Query* dx11qr_disjoint;
+		ID3D11Query* dx11qr_timestamps[10];
+
 		__ID3D11Device* dx11Device;
 		__ID3D11DeviceContext* dx11DeviceImmContext;
 #ifdef __DX_DEBUG_QUERY
@@ -193,6 +196,9 @@ namespace grd_helper
 #ifdef __DX_DEBUG_QUERY
 			debug_info_queue = NULL;
 #endif
+			for (int i = 0; i < 10; i++)
+				dx11qr_timestamps[i] = NULL;
+			dx11qr_disjoint = NULL;
 		}
 
 		void Delete()
@@ -222,6 +228,15 @@ namespace grd_helper
 			if(debug_info_queue)
 				debug_info_queue->Release();
 #endif
+			if (dx11qr_disjoint)
+			{
+				dx11qr_disjoint->Release();
+				for (int i = 0; i < 10; i++)
+					dx11qr_timestamps[i]->Release();
+				for (int i = 0; i < 10; i++)
+					dx11qr_timestamps[i] = NULL;
+				dx11qr_disjoint = NULL;
+			}
 		}
 	};
 
@@ -318,7 +333,7 @@ namespace grd_helper
 		uint rt_height;
 
 		float cam_vz_thickness;
-		uint num_deep_layers;
+		uint k_value; // used for max k for DK+B algorithm
 		// 1st bit : 0 (orthogonal), 1 : (perspective)
 		// 2nd bit : for RT to k-buffer : 0 (just RT), 1 : (after silhouette processing)
 		uint cam_flag;
@@ -539,7 +554,7 @@ namespace grd_helper
 
 	// Compute Constant Buffers //
 	// global 
-	void SetCb_Camera(CB_CameraState& cb_cam, vmmat44f& matWS2PS, vmmat44f& matWS2SS, vmmat44f& matSS2WS, VmCObject* ccobj, const vmint2& fb_size, const int num_deep_layers, const float vz_thickness);
+	void SetCb_Camera(CB_CameraState& cb_cam, vmmat44f& matWS2PS, vmmat44f& matWS2SS, vmmat44f& matSS2WS, VmCObject* ccobj, const vmint2& fb_size, const int k_value, const float vz_thickness);
 	void SetCb_Env(CB_EnvState& cb_env, VmCObject* ccobj, VmFnContainer* _fncontainer, vmfloat3 simple_light_intensities);
 	// each object
 	void SetCb_TMap(CB_TMAP& cb_tmap, VmTObject* tobj);

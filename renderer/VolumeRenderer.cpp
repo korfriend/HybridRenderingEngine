@@ -61,9 +61,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		return vret;
 	};;
 	// TEST
-	int num_deep_layers_old = Get_LCParam("_int_NumDeepLayers", __DTYPE(int), (int)8);
-	int num_deep_layers = _fncontainer->GetParamValue("_int_NumDeepLayers", num_deep_layers_old);
-	lobj->RegisterCustomParameter("_int_NumDeepLayers", num_deep_layers);
+	int k_value_old = Get_LCParam("_int_NumK", __DTYPE(int), (int)8);
+	int k_value = _fncontainer->GetParamValue("_int_NumK", k_value_old);
+	lobj->RegisterCustomParameter("_int_NumK", k_value);
 
 	int test_value = _fncontainer->GetParamValue("_int_TestValue", (int)0);
 	int test_mode = _fncontainer->GetParamValue("_int_TestMode", (int)0);
@@ -139,7 +139,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	vmint2 fb_size_cur, fb_size_old = vmint2(0, 0);
 	iobj->GetFrameBufferInfo(&fb_size_cur);
 	iobj->GetCustomParameter("_int2_PreviousScreenSize", data_type::dtype<vmint2>(), &fb_size_old);
-	if (fb_size_cur.x != fb_size_old.x || fb_size_cur.y != fb_size_old.y || num_deep_layers != num_deep_layers_old)
+	if (fb_size_cur.x != fb_size_old.x || fb_size_cur.y != fb_size_old.y || k_value != k_value_old)
 	{
 		gpu_manager->ReleaseGpuResourcesBySrcID(iobj->GetObjectID());	// System Out Æ÷ÇÔ //
 		iobj->RegisterCustomParameter("_int2_PreviousScreenSize", fb_size_cur);
@@ -158,7 +158,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
 
 	grd_helper::UpdateFrameBuffer(gres_fb_deep_k_buffer, iobj, "BUFFER_RW_DEEP_K_BUF", RTYPE_BUFFER,
-		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, num_deep_layers * 4);
+		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, k_value * 4);
 
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_rgba, iobj, "SYSTEM_OUT_RGBA", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_SYSOUT);
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_depthcs, iobj, "SYSTEM_OUT_DEPTH", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R32_FLOAT, UPFB_SYSOUT);
@@ -312,7 +312,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	VmCObject* cam_obj = iobj->GetCameraObject();
 	vmmat44f matWS2SS, matWS2PS, matSS2WS;
 	CB_CameraState cbCamState;
-	grd_helper::SetCb_Camera(cbCamState, matWS2PS, matWS2SS, matSS2WS, cam_obj, fb_size_cur, num_deep_layers, (float)v_thickness);
+	grd_helper::SetCb_Camera(cbCamState, matWS2PS, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, (float)v_thickness);
 	cbCamState.iSrCamDummy__0 = *(uint*)&merging_beta;
 	D3D11_MAPPED_SUBRESOURCE mappedResCamState;
 	dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
@@ -840,7 +840,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				test_out("VR ERROR -- OUT");
 				test_out("screen : " + to_string(fb_size_cur.x) + " x " + to_string(fb_size_cur.y));
 				test_out("v_thickness : " + to_string(v_thickness));
-				test_out("num_deep_layers : " + to_string(num_deep_layers));
+				test_out("k_value : " + to_string(k_value));
 				test_out("grid width and height : " + to_string(num_grid_x) + " x " + to_string(num_grid_y));
 				//float* f_v = (float*)&matWS2SS;
 				//for (int i = 0; i < 16; i++)
