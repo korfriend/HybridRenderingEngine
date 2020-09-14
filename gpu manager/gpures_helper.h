@@ -336,8 +336,9 @@ namespace grd_helper
 		uint k_value; // used for max k for DK+B algorithm
 		// 1st bit : 0 (orthogonal), 1 : (perspective)
 		// 2nd bit : for RT to k-buffer : 0 (just RT), 1 : (after silhouette processing)
+		// 3rd bit : for DK+B
 		uint cam_flag;
-		uint iSrCamDummy__0; // used for 1) A-Buffer prefix computations or 2) beta (asfloat) for merging operation
+		uint iSrCamDummy__0; // used for 1) A-Buffer prefix computations /*deprecated*/ or 2) beta (asfloat) for merging operation
 
 		ZERO_SET(CB_CameraState)
 	};
