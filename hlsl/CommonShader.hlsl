@@ -1396,8 +1396,8 @@ void ComputeSSS_PerspMask2(out float r_i, const float3 p_c, const float r, const
 	r_i = r * cam2i_dist / cam2p_dist;
 }
 
-#define LOAD4_KBUF(V, F_ADDR, K) V = deep_k_buf.Load4((F_ADDR + (K) * 4) * 4)
-#define STORE4_KBUF(V, F_ADDR, K) deep_k_buf.Store4((F_ADDR + (K) * 4) * 4, V)
+#define LOAD4_KBUF(V, F_ADDR, K) V = deep_k_buf.Load4(F_ADDR + (K) * 4 * 4)
+#define STORE4_KBUF(V, F_ADDR, K) deep_k_buf.Store4(F_ADDR + (K) * 4 * 4, V)
 #define GET_FRAG(F, F_ADDR, K) {uint4 rb; LOAD4_KBUF(rb, F_ADDR, K); F.i_vis = rb.x; F.z = asfloat(rb.y); F.zthick = asfloat(rb.z); F.opacity_sum = asfloat(rb.w);}
 #define SET_FRAG(F_ADDR, K, F) {uint4 rb = uint4(F.i_vis, asuint(F.z), asuint(F.zthick), asuint(F.opacity_sum)); STORE4_KBUF(rb, F_ADDR, K);}
 #define SET_ZEROFRAG(F_ADDR, K) {STORE4_KBUF(0, F_ADDR, K);}

@@ -535,8 +535,9 @@ void DVR(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : 
     if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
         return;
 	
-	const uint k_value = MAX_LAYERS;// g_cbCamState.k_value; // 각 pixel 마다 max k 가 다르다.
-    uint addr_base = (DTid.y * g_cbCamState.rt_width + DTid.x) * MAX_LAYERS * 4;
+	const uint k_value = g_cbCamState.k_value; // 각 pixel 마다 max k 가 다르다.
+	uint bytes_frags_per_pixel = k_value * 4 * 4; // to do : consider the dynamic scheme. (4 bytes unit)
+    uint addr_base = (DTid.y * g_cbCamState.rt_width + DTid.x) * bytes_frags_per_pixel;
 	uint frag_cnt = fragment_counter[DTid.xy];
 	uint vr_hit_enc = frag_cnt >> 24;
 	frag_cnt = min(frag_cnt & 0xFFF, MAX_LAYERS);

@@ -50,7 +50,11 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 		return;
 
 	uint iv_rgba = ConvertFloat4ToUInt(v_rgba);
-	uint addr_base = (tex2d_xy.y * g_cbCamState.rt_width + tex2d_xy.x) * k_value * 4;
+
+	uint bytes_frags_per_pixel = k_value * 4 * 4; // to do : consider the dynamic scheme. (4 bytes unit)
+	uint pixel_id = tex2d_xy.y * g_cbCamState.rt_width + tex2d_xy.x;
+	uint addr_base = pixel_id * bytes_frags_per_pixel;
+	uint addr_base_max_z = (g_cbCamState.rt_height * g_cbCamState.rt_width) * bytes_frags_per_pixel + pixel_id;
 
 	Fragment f_in;
 	f_in.z = z_depth;
@@ -59,19 +63,22 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 	f_in.opacity_sum = v_rgba.a;
 
 	// pixel synchronization
-	uint frag_cnt = fragment_counter[tex2d_xy.xy];
+	uint frag_cnt = fragment_counter[tex2d_xy.xy]; // ROV metaphor
 	if (frag_cnt == 0) // clear k_buffer using the counter as a mask
 	{
 		for (uint k = 0; k < k_value; k++)
 		{
 			SET_ZEROFRAG(addr_base, k);
+			deep_k_buf.Store(addr_base_max_z, asuint(FLT_MAX)); // zero means invalid
 		}
 	}
+
+	//float prev_core_max_z = asfloat(deep_k_buf.Load(addr_base_max_z));
 
 	// critical section
 #if TAIL_HANDLING == 1
 	Fragment frag_tail;
-	
+
 	if (frag_cnt == k_value)
 	{
 		GET_FRAG(frag_tail, addr_base, k_value - 1);
@@ -85,6 +92,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 	}
 
 	if (f_in.z > frag_tail.z - frag_tail.zthick)
+	//if ((f_in.z - f_in.zthick) > prev_core_max_z)
 	{
 		// update the merging slot
 		Fragment_OrderIndependentMerge(frag_tail, f_in);
@@ -254,9 +262,9 @@ void Fill_kBuffer__(const in int2 tex2d_xy, const in uint k_value, const in floa
 		//[allow_uav_condition]
 		[loop]
 #if TAIL_HANDLING == 1
-		for (int i = 0; i < k_value - 1; i++)
+		for (uint i = 0; i < k_value - 1; i++)
 #else
-		for (int i = 0; i < k_value; i++)
+		for (uint i = 0; i < k_value; i++)
 #endif
 		{
 			// after atomic store operation

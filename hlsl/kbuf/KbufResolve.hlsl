@@ -23,7 +23,7 @@ RWTexture2D<float> fragment_zdepth : register(u3);
 //[numthreads(1, 1, 1)] // or consider 4x4 thread either
 [numthreads(GRIDSIZE, GRIDSIZE, 1)]
 //[numthreads(1, 1, 1)]
-void OIT_RESOLVE__(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
+void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
 {
     if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
         return;
@@ -31,7 +31,9 @@ void OIT_RESOLVE__(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uin
 	const uint k_value = g_cbCamState.k_value;
 
 	uint frag_cnt = min(fragment_counter[DTid.xy], k_value);
-	uint addr_base = (DTid.y * g_cbCamState.rt_width + DTid.x) * k_value * 4;
+
+	uint bytes_frags_per_pixel = k_value * 4 * 4; // to do : consider the dynamic scheme. (4 bytes unit)
+	uint addr_base = (DTid.y * g_cbCamState.rt_width + DTid.x) * bytes_frags_per_pixel;
 	if (frag_cnt == 0)
 	{
 		Fragment f_zero = (Fragment)0;
@@ -45,15 +47,14 @@ void OIT_RESOLVE__(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uin
 
     // we will test our oit with the number of deep layers : 4, 8, 16 ... here, set max 32 ( larger/equal than k_value * 2 )
 #define LOCAL_SIZE 8 // when static ... if dynamic... set the value... (LL ... 400)
-	Fragment fs[LOCAL_SIZE];
 
 #define QUICK_SORT_AND_INDEX_DRIVEN 1
 #ifdef QUICK_SORT_AND_INDEX_DRIVEN
+	uint idx_array[LOCAL_SIZE * 2]; // for the quick-sort algorithm
+	Fragment fs[LOCAL_SIZE];
 	uint valid_frag_cnt = 0;
-    uint idx_array[LOCAL_SIZE * 2]; // for the quick-sort algorithm
-    [loop]
-    for (uint k = 0; k < LOCAL_SIZE; k++)
-    {
+	for (uint k = 0; k < frag_cnt; k++)
+	{
 		// note that k-buffer is cleared as zeros by mask-checking
 		Fragment f;
 		GET_FRAG(f, addr_base, k);
@@ -61,14 +62,22 @@ void OIT_RESOLVE__(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uin
 		{
 			f.zthick = max(f.zthick, v_thickness);
 			idx_array[valid_frag_cnt] = valid_frag_cnt;
+			fs[valid_frag_cnt] = f;
 			valid_frag_cnt++;
 		}
-		else f.z = FLT_MAX;
-		fs[k] = f;
-    }
+	}
 	[loop]
 	for (k = valid_frag_cnt; k < LOCAL_SIZE * 2; k++)
+	{
 		idx_array[k] = k;
+		if (k < MAX_LAYERS)
+		{
+			Fragment f = (Fragment)0;
+			f.opacity_sum = 0;
+			f.z = FLT_MAX;
+			fs[k] = f;
+		}
+	}
 
 	if (valid_frag_cnt == 0)
 		return;
@@ -265,13 +274,14 @@ void OIT_RESOLVE__(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uin
 }
 
 [numthreads(GRIDSIZE, GRIDSIZE, 1)]
-void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
+void OIT_RESOLVE__(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
 {
 	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
 		return;
 
 	uint frag_cnt = min(fragment_counter[DTid.xy], MAX_LAYERS);
-	uint addr_base = (DTid.y * g_cbCamState.rt_width + DTid.x) * MAX_LAYERS * 4;
+	uint bytes_frags_per_pixel = MAX_LAYERS * 4 * 4; // to do : consider the dynamic scheme. (4 bytes unit)
+	uint addr_base = (DTid.y * g_cbCamState.rt_width + DTid.x) * bytes_frags_per_pixel;
 	if (frag_cnt == 0)
 	{
 		for (uint i = 0; i < MAX_LAYERS; i++)
