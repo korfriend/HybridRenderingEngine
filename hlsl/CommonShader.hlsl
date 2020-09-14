@@ -35,8 +35,9 @@ struct HxCB_CameraState // Hlsl dX Contant Buffer
 	uint k_value;
 	// 1st bit : 0 (orthogonal), 1 : (perspective)
 	// 2nd bit : for RT to k-buffer : 0 (just RT), 1 : (after silhouette processing)
+	// 3rd bit : for DK+B
 	uint cam_flag;
-	uint iSrCamDummy__0; // used for 1) A-Buffer prefix computations or 2) beta (asfloat) for merging operation
+	uint iSrCamDummy__0; // used for 1) A-Buffer prefix computations /*deprecated*/ or 2) beta (asfloat) for merging operation
 };
 
 struct HxCB_EnvState
@@ -1133,6 +1134,13 @@ struct Fragment
 	float z;
 	float zthick;
 	float opacity_sum;
+
+	//Fragment() {
+	//	i_vis = 0;
+	//	zthick = 0;
+	//	opacity_sum = 0;
+	//	z = FLT_MAX;
+	//}
 };
 
 struct Fragment_OUT
@@ -1392,4 +1400,5 @@ void ComputeSSS_PerspMask2(out float r_i, const float3 p_c, const float r, const
 #define STORE4_KBUF(V, F_ADDR, K) deep_k_buf.Store4((F_ADDR + (K) * 4) * 4, V)
 #define GET_FRAG(F, F_ADDR, K) {uint4 rb; LOAD4_KBUF(rb, F_ADDR, K); F.i_vis = rb.x; F.z = asfloat(rb.y); F.zthick = asfloat(rb.z); F.opacity_sum = asfloat(rb.w);}
 #define SET_FRAG(F_ADDR, K, F) {uint4 rb = uint4(F.i_vis, asuint(F.z), asuint(F.zthick), asuint(F.opacity_sum)); STORE4_KBUF(rb, F_ADDR, K);}
+#define SET_ZEROFRAG(F_ADDR, K) {STORE4_KBUF(0, F_ADDR, K);}
 

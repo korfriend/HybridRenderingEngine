@@ -718,7 +718,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	int buf_ex_scale = _fncontainer->GetParamValue("_int_BufExScale", (int)4); // 32 layers
 	bool show_maxlayers_a_buffer_ = _fncontainer->GetParamValue("_bool_ShowMaxLayersAbuffer", false);
 	bool use_blending_option_MomentOIT = _fncontainer->GetParamValue("_bool_UseBlendingOptionMomentOIT", false);
-	bool pixel_transmittance = _fncontainer->GetParamValue("_bool_PixelTransmittance", false);
+	bool check_pixel_transmittance = _fncontainer->GetParamValue("_bool_PixelTransmittance", false);
 	vmint2 pixel_pos = _fncontainer->GetParamValue("_int2_PixelPos", vmint2(0));
 	double tr_interval = _fncontainer->GetParamValue("_double_TrInvterval", (double)0.01);
 	double tr_startoffset = _fncontainer->GetParamValue("_double_TrStartOffset", (double)1.00);
@@ -762,7 +762,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		dx11CommonParams->dx11DeviceImmContext->CSSetShader(NULL, NULL, 0);
 #define VS_NUM 5
 #define PS_NUM 20
-#define CS_NUM 9
+#define CS_NUM 11
 #define SET_VS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(VERTEX_SHADER, NAME), __S, true)
 #define SET_PS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(PIXEL_SHADER, NAME), __S, true)
 #define SET_CS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(COMPUTE_SHADER, NAME), __S, true)
@@ -859,6 +859,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		string strNames_CS[CS_NUM] = {
 			   "SR_OIT_SORT2RENDER_cs_5_0"
 			  ,"SR_OIT_PRESET_cs_5_0"
+			  ,"SR_FillHistogram_cs_5_0"
+			  ,"SR_CreateOffsetTableKpB_cs_5_0"
 			  ,"SR_OIT_ABUFFER_PREFIX_0_cs_5_0"
 			  ,"SR_OIT_ABUFFER_PREFIX_1_cs_5_0"
 			  ,"SR_OIT_ABUFFER_OffsetTable_cs_5_0"
@@ -1005,10 +1007,10 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		grd_helper::UpdateFrameBuffer(gres_fb_ref_pidx, iobj, "BUFFER_RW_REF_PIDX_BUF", RTYPE_BUFFER,
 			D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
 
-	if (pixel_transmittance)
+	if (check_pixel_transmittance)
 	{
 		grd_helper::UpdateFrameBuffer(gres_fb_sys_deep_k, iobj, "SYSTEM_OUT_DEEP_K_BUF", RTYPE_BUFFER,
-			NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT, k_value * 3 * buffer_ex);
+			NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT, k_value * 4 * buffer_ex);
 		if (mode_OIT == MFR_MODE::LL)
 			grd_helper::UpdateFrameBuffer(gres_fb_sys_ref_pidx, iobj, "SYSTEM_OUT_REF_PIDX_BUF", RTYPE_BUFFER,
 				NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT);
@@ -2076,27 +2078,27 @@ RENDERER_LOOP:
 
 	if (is_frag_counter_buffer)
 	{
-		if (gpu_profile)
-		{
-			dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
-			profile_map["begin ref counter"] = gpu_profilecount;
-			gpu_profilecount++;
-		}
-
 		is_frag_counter_buffer = false;
 		dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, 5, dx11UAVs_NULL, 0);
 
-		ID3D11UnorderedAccessView* dx11UAVs_2nd_pass[NUM_UAVs_2ND] = {
-				  (ID3D11UnorderedAccessView*)gres_fb_deep_k_buffer.alloc_res_ptrs[DTYPE_UAV]
-				, (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
-				, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
-				, (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV]
-		};
-		UINT UAVInitialCounts = 0;
-		dx11DeviceImmContext->CSSetShader(GETCS(SR_OIT_ABUFFER_OffsetTable_cs_5_0), NULL, 0);
-
 		if (mode_OIT == MFR_MODE::LL)
 		{
+			if (gpu_profile)
+			{
+				dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
+				profile_map["begin offset table generation"] = gpu_profilecount;
+				gpu_profilecount++;
+			}
+
+			ID3D11UnorderedAccessView* dx11UAVs_2nd_pass[NUM_UAVs_2ND] = {
+					  (ID3D11UnorderedAccessView*)gres_fb_deep_k_buffer.alloc_res_ptrs[DTYPE_UAV]
+					, (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
+					, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
+					, (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV]
+			};
+			UINT UAVInitialCounts = 0;
+			dx11DeviceImmContext->CSSetShader(GETCS(SR_OIT_ABUFFER_OffsetTable_cs_5_0), NULL, 0);
+
 #define __NEW_OFFSET_TABLE
 #ifndef __NEW_OFFSET_TABLE
 			dx11DeviceImmContext->CSSetShader(GETCS(SR_OIT_ABUFFER_PREFIX_0_cs_5_0), NULL, 0);
@@ -2142,22 +2144,12 @@ RENDERER_LOOP:
 			if (gpu_profile)
 			{
 				dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
-				profile_map["end ref counter"] = gpu_profilecount;
+				profile_map["end offset table generation"] = gpu_profilecount;
 				gpu_profilecount++;
 			}
 		}
 		else if (mode_OIT == MFR_MODE::DKplusB)
 		{
-			dx11DeviceImmContext->CSSetUnorderedAccessViews(1, NUM_UAVs_2ND, dx11UAVs_2nd_pass, (UINT*)(&dx11UAVs_2nd_pass));
-			dx11DeviceImmContext->CSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_SRV]);
-			//dx11DeviceImmContext->Flush();
-
-			//dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
-			dx11DeviceImmContext->Dispatch(fb_size_cur.x, fb_size_cur.y, 1);
-
-			dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-			dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
-			
 			if (gpu_profile)
 			{
 				dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
@@ -2165,6 +2157,7 @@ RENDERER_LOOP:
 				gpu_profilecount++;
 			}
 			// histogram //
+			const int bins_frag_histo = 1024;
 			GpuRes histo_buf, histo_buf_sys;
 			histo_buf.res_name = "HISTO_FRAGS";
 			histo_buf.rtype = RTYPE_BUFFER;
@@ -2172,40 +2165,99 @@ RENDERER_LOOP:
 			histo_buf.options["CPU_ACCESS_FLAG"] = NULL;
 			histo_buf.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 			histo_buf.options["FORMAT"] = DXGI_FORMAT_R32_UINT;
-			histo_buf.res_dvalues["NUM_ELEMENTS"] = (double)1024;
+			histo_buf.res_dvalues["NUM_ELEMENTS"] = (double)bins_frag_histo;
 			histo_buf.res_dvalues["STRIDE_BYTES"] = (double)sizeof(uint);
 			if (!gpu_manager->UpdateGpuResource(histo_buf))
 				gpu_manager->GenerateGpuResource(histo_buf);
 
+			dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)histo_buf.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
+
 			dx11DeviceImmContext->CSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_SRV]);
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(10, 1, (ID3D11UnorderedAccessView**)&histo_buf.alloc_res_ptrs[DTYPE_UAV], 0);
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(11, 1, (ID3D11UnorderedAccessView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV], 0);
 
-			dx11DeviceImmContext->CSSetShader(GETCS(SR_OIT_ABUFFER_OffsetTable_cs_5_0), NULL, 0);
+			dx11DeviceImmContext->CSSetShader(GETCS(SR_FillHistogram_cs_5_0), NULL, 0);
 			dx11DeviceImmContext->Dispatch(fb_size_cur.x, fb_size_cur.y, 1);
 
 			// read-back //
 			histo_buf_sys = histo_buf;
+			histo_buf_sys.res_name = "SYS_OUT_HISTO_FRAGS";
 			histo_buf_sys.options["USAGE"] = D3D11_USAGE_STAGING;
+			histo_buf_sys.options["BIND_FLAG"] = NULL;
 			histo_buf_sys.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_READ;
 			if (!gpu_manager->UpdateGpuResource(histo_buf_sys))
 				gpu_manager->GenerateGpuResource(histo_buf_sys);
 
-			dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)histo_buf_sys.alloc_res_ptrs[DTYPE_RES], (ID3D11Texture2D*)histo_buf.alloc_res_ptrs[DTYPE_RES]);
+			dx11DeviceImmContext->CopyResource((ID3D11Buffer*)histo_buf_sys.alloc_res_ptrs[DTYPE_RES], (ID3D11Buffer*)histo_buf.alloc_res_ptrs[DTYPE_RES]);
 
 			D3D11_MAPPED_SUBRESOURCE mappedResSysHisto;
-			HRESULT hr = dx11DeviceImmContext->Map((ID3D11Texture2D*)histo_buf_sys.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysHisto);
+			HRESULT hr = dx11DeviceImmContext->Map((ID3D11Buffer*)histo_buf_sys.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysHisto);
 			uint* histogram_frags = (uint*)mappedResSysHisto.pData;
-			// to do //
+			uint dyn_k_value = bins_frag_histo;
+			uint totol_num_frags = 0;
+			for (uint i = 0; i < bins_frag_histo; i++)
+				totol_num_frags += histogram_frags[i] * (i + 1);
+			
+			const double Rh = _fncontainer->GetParamValue("_double_RobustRatio", 0.75);
+			const bool is_ztmodel = _fncontainer->GetParamValue("_bool_ApplyZTModel", false);
+			const uint bytes_per_f = is_ztmodel? 4 * 4 : 4 * 2; // here, we assign this w.r.t. our z-thickness model (rgba, depth, thickness, opacity_sum)
+			// here, we assign this w.r.t. our z-thickness model (rgba, depth, thickness, opacity_sum), i.e., 16 bytes per fragment
+			const double size_k_buf_mb = (double)(16 * k_value * buffer_ex) * ((double)fb_size_cur.x * (double)fb_size_cur.y / (1024.0 * 1024.0));
 
-			// k_value * 4 * buffer_ex
-			const int k_b = 32;
-			const int MemBudget_Mb = 32;
-			dx11DeviceImmContext->Unmap((ID3D11Texture2D*)histo_buf_sys.alloc_res_ptrs[DTYPE_RES], 0);
+			double min_diff_sq = 1.0;
+			for (; dyn_k_value >= 8; dyn_k_value--)
+			{
+				uint miss_frags = 0;
+				for (uint i = bins_frag_histo - 1; i >= dyn_k_value; i--)
+				{
+					miss_frags += (i + 1 - dyn_k_value) * histogram_frags[i];
+				}
+
+				double diff = (1. - (double)miss_frags / (double)totol_num_frags) - Rh;
+				if ((double)bytes_per_f * (double)(totol_num_frags - miss_frags) / (1024.0 * 1024.0) < size_k_buf_mb)
+				{
+					if (min_diff_sq >= diff * diff)
+					{
+						min_diff_sq = diff * diff;
+						k_value = dyn_k_value;
+					}
+					else 
+						break;
+				}
+			}
+			cout << "----> total frag : " << totol_num_frags << endl;
+			cout << "----> min diff : " << min_diff_sq << endl;
+			cout << "----> dynamic k : " << k_value << endl;
+
+			dx11DeviceImmContext->Unmap((ID3D11Buffer*)histo_buf_sys.alloc_res_ptrs[DTYPE_RES], 0);
 
 			if (gpu_profile)
 			{
 				dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
 				profile_map["end histogram analysis"] = gpu_profilecount;
+				gpu_profilecount++;
+			}
+
+			D3D11_MAPPED_SUBRESOURCE mappedResCamState;
+			dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
+			CB_CameraState* cbCamStateData = (CB_CameraState*)mappedResCamState.pData;
+			cbCamStateData->k_value = dyn_k_value;
+			cbCamStateData->cam_flag |= 0x1 << 2;
+			dx11DeviceImmContext->Unmap(cbuf_cam_state, 0);
+			dx11DeviceImmContext->PSSetConstantBuffers(0, 1, &cbuf_cam_state);
+			dx11DeviceImmContext->CSSetConstantBuffers(0, 1, &cbuf_cam_state);
+
+			dx11DeviceImmContext->CSSetShader(GETCS(SR_CreateOffsetTableKpB_cs_5_0), NULL, 0);
+			//dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+			dx11DeviceImmContext->Dispatch(fb_size_cur.x, fb_size_cur.y, 1);
+
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(10, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+			dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
+			
+			if (gpu_profile)
+			{
+				dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
+				profile_map["end offset table generation"] = gpu_profilecount;
 				gpu_profilecount++;
 			}
 		}
@@ -2258,6 +2310,7 @@ RENDERER_LOOP_EXIT:
 
 	if (gpu_profile)
 	{
+		//dx11DeviceImmContext->Flush();
 		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
 		profile_map["end geometry pass"] = gpu_profilecount;
 		gpu_profilecount++;
@@ -2461,7 +2514,7 @@ RENDERER_LOOP_EXIT:
 				cout << "******************" << endl;
 			}
 			// TEST //
-			if (print_out_routine_objs && pixel_transmittance)
+			if (print_out_routine_objs && check_pixel_transmittance)
 			{
 				cout << "******************" << endl;
 				cout << "pixel pos : " << pixel_pos.x << ", " << pixel_pos.y << endl;
@@ -2723,7 +2776,7 @@ RENDERER_LOOP_EXIT:
 		dx11DeviceImmContext->GetData(dx11CommonParams->dx11qr_disjoint, &tsDisjoint, sizeof(tsDisjoint), 0);
 		if (!tsDisjoint.Disjoint)
 		{
-			UINT64 tsBeginFrame = 0, tsBeginRefCounter = 0, tsEndRefCounter = 0, tsEndGeoPass = 0, 
+			UINT64 tsBeginFrame = 0, tsBeginOffsetTable = 0, tsEndOffsetTable = 0, tsEndGeoPass = 0, 
 				tsEndResolvePass = 0, tsEndRender = 0, tsBeginCopyBack = 0, tsEndCopyBack = 0, tsEndFrame = 0,
 				tsBeginHisto = 0, tsEndHisto = 0;
 
@@ -2740,8 +2793,8 @@ RENDERER_LOOP_EXIT:
 			};
 
 			GetTimeGpuProfile("begin", tsBeginFrame);
-			GetTimeGpuProfile("begin ref counter", tsBeginRefCounter);
-			GetTimeGpuProfile("end ref counter", tsEndRefCounter);
+			GetTimeGpuProfile("begin offset table generation", tsBeginOffsetTable);
+			GetTimeGpuProfile("end offset table generation", tsEndOffsetTable);
 			GetTimeGpuProfile("end geometry pass", tsEndGeoPass);
 			GetTimeGpuProfile("end resolve pass", tsEndResolvePass);
 			GetTimeGpuProfile("end render", tsEndRender);
@@ -2758,8 +2811,9 @@ RENDERER_LOOP_EXIT:
 			};
 			DisplayDuration(tsBeginFrame, tsEndFrame, "#GPU# Total (including copyback) Time");
 			DisplayDuration(tsBeginFrame, tsEndRender, "#GPU# Render Time");
-			DisplayDuration(tsBeginRefCounter, tsEndRefCounter, "#GPU# Ref Time");
+			DisplayDuration(tsBeginOffsetTable, tsEndOffsetTable, "#GPU# Offset Table (LL) Time");
 			DisplayDuration(tsBeginHisto, tsEndHisto, "#GPU# Histogram Analysis Time");
+			DisplayDuration(tsEndHisto, tsEndOffsetTable, "#GPU# Offset Table (DK+B) Time");
 			DisplayDuration(tsBeginFrame, tsEndGeoPass, "#GPU# Geometry Rendering Time");
 			DisplayDuration(tsEndGeoPass, tsEndResolvePass, "#GPU# Resolve Pass Time");
 			DisplayDuration(tsBeginCopyBack, tsEndCopyBack, "#GPU# CopyBack Time");

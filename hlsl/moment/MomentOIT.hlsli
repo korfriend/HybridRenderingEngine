@@ -1,4 +1,4 @@
-#include "../kbuf/Sr_Common.hlsl"
+#include "../Sr_Common.hlsl"
 /*! \file
 	This header provides the functionality to create the vectors of moments and 
 	to blend surfaces together with an appropriately reconstructed 

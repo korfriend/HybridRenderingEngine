@@ -115,6 +115,12 @@
     <Filter Include="bat">
       <UniqueIdentifier>{a59a4be1-fce7-4f35-96fc-ee08cd7491d0}</UniqueIdentifier>
     </Filter>
+    <Filter Include="hlsl source code\dvr">
+      <UniqueIdentifier>{2fd27554-a32f-4802-b970-efc91079d1c3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="hlsl source code\ssao">
+      <UniqueIdentifier>{5534595b-4923-44c9-81ef-e467aac3f473}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="vismtv_inbuilt_renderergpudx.rc">
@@ -152,20 +158,23 @@
     <FxCompile Include="hlsl\kbuf\KbufResolve.hlsl">
       <Filter>hlsl source code\k buf</Filter>
     </FxCompile>
-    <FxCompile Include="hlsl\kbuf\CommonShader.hlsl">
+    <FxCompile Include="hlsl\Sr_Common.hlsl">
       <Filter>hlsl source code</Filter>
     </FxCompile>
-    <FxCompile Include="hlsl\kbuf\SSAO.hlsl">
+    <FxCompile Include="hlsl\CommonShader.hlsl">
       <Filter>hlsl source code</Filter>
     </FxCompile>
-    <FxCompile Include="hlsl\kbuf\Sr_Common.hlsl">
+    <FxCompile Include="hlsl\macros.hlsl">
       <Filter>hlsl source code</Filter>
     </FxCompile>
-    <FxCompile Include="hlsl\kbuf\macros.hlsl">
-      <Filter>hlsl source code</Filter>
-    </FxCompile>
-    <FxCompile Include="KplusB.hlsl">
+    <FxCompile Include="hlsl\kbuf\KplusB.hlsl">
       <Filter>hlsl source code\k buf</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\ssao\SSAO.hlsl">
+      <Filter>hlsl source code\ssao</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\dvr\DvrCS.hlsl">
+      <Filter>hlsl source code\dvr</Filter>
     </FxCompile>
   </ItemGroup>
 </Project>

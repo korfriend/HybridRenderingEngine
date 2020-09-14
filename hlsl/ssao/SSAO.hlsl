@@ -1,16 +1,18 @@
-#include "CommonShader.hlsl"
+#include "../CommonShader.hlsl"
+
+#define LOCAL_SIZE 8
 
 Texture2D<uint> fragment_counter : register(t10);
 ByteAddressBuffer deep_k_buf : register(t11);
 
 RWTexture2D<unorm float4> rw_fragment_blendout : register(u10);
 
-Texture2D<float4> mip_z_textures[MAX_LAYERS / 4] : register(t15);
-RWTexture2D<float4> rw_mip_z_textures[MAX_LAYERS / 4] : register(u15);
-Texture2D<unorm float4> mip_opacity_textures[MAX_LAYERS / 4] : register(t20);
-RWTexture2D<unorm float4> rw_mip_opacity_textures[MAX_LAYERS / 4] : register(u20);
-Texture2D<unorm float4> ao_textures[MAX_LAYERS / 4] : register(t25);
-RWTexture2D<unorm float4> rw_ao_textures[MAX_LAYERS / 4] : register(u25);
+Texture2D<float4> mip_z_textures[LOCAL_SIZE / 4] : register(t15);
+RWTexture2D<float4> rw_mip_z_textures[LOCAL_SIZE / 4] : register(u15);
+Texture2D<unorm float4> mip_opacity_textures[LOCAL_SIZE / 4] : register(t20);
+RWTexture2D<unorm float4> rw_mip_opacity_textures[LOCAL_SIZE / 4] : register(u20);
+Texture2D<unorm float4> ao_textures[LOCAL_SIZE / 4] : register(t25);
+RWTexture2D<unorm float4> rw_ao_textures[LOCAL_SIZE / 4] : register(u25);
 
 Texture2D<unorm float> ao_vr_texture : register(t30);
 Texture2D<float> fragment_vr_zdepth : register(t31);
@@ -57,7 +59,8 @@ void KB_SSAO(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTi
 	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
 		return;
 
-	uint addr_base = (DTid.y * g_cbCamState.rt_width + DTid.x) * MAX_LAYERS * 4;
+	const uint k_value = g_cbCamState.k_value;
+	uint addr_base = (DTid.y * g_cbCamState.rt_width + DTid.x) * k_value * 4;
 	int frag_cnt = (int)fragment_counter[DTid.xy];
 
 	uint vr_hit_enc = frag_cnt >> 24;
@@ -94,7 +97,7 @@ void KB_SSAO(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTi
 	w_ws /= length(w_ws);
 	h_ws /= length(h_ws);
 
-	float v_AOs[MAX_LAYERS];
+	float v_AOs[LOCAL_SIZE];
 
 	[loop]
 	for (int i = 0; i < (int)frag_cnt; i++) // max 4 까지...?? frag_cnt
@@ -109,10 +112,10 @@ void KB_SSAO(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTi
 		// http://c0de517e.blogspot.com/2008/10/normals-without-normals.html
 		int x_offset = 1; // 쥼인 정밀도에 따라 다르게 줘야 한다.
 		int y_offset = 1;
-		uint addr_base_dxR = (DTid.y * g_cbCamState.rt_width + DTid.x + x_offset) * MAX_LAYERS * 4;
-		uint addr_base_dxL = (DTid.y * g_cbCamState.rt_width + DTid.x - x_offset) * MAX_LAYERS * 4;
-		uint addr_base_dyR = ((DTid.y + y_offset) * g_cbCamState.rt_width + DTid.x) * MAX_LAYERS * 4;
-		uint addr_base_dyL = ((DTid.y - y_offset) * g_cbCamState.rt_width + DTid.x) * MAX_LAYERS * 4;
+		uint addr_base_dxR = (DTid.y * g_cbCamState.rt_width + DTid.x + x_offset) * k_value * 4;
+		uint addr_base_dxL = (DTid.y * g_cbCamState.rt_width + DTid.x - x_offset) * k_value * 4;
+		uint addr_base_dyR = ((DTid.y + y_offset) * g_cbCamState.rt_width + DTid.x) * k_value * 4;
+		uint addr_base_dyL = ((DTid.y - y_offset) * g_cbCamState.rt_width + DTid.x) * k_value * 4;
 		float z_dxR = LOAD1_KBUF_Z(deep_k_buf, addr_base_dxR, i);//asfloat(deep_k_buf[addr_base_dxR + 3 * i + 1]);
 		float z_dxL = LOAD1_KBUF_Z(deep_k_buf, addr_base_dxL, i);//asfloat(deep_k_buf[addr_base_dxL + 3 * i + 1]);
 		float z_dyR = LOAD1_KBUF_Z(deep_k_buf, addr_base_dyR, i);//asfloat(deep_k_buf[addr_base_dyR + 3 * i + 1]);
@@ -216,9 +219,9 @@ void KB_SSAO(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTi
 				ss_xy_prev = ss_xy;
 				//[allow_uav_condition][loop]
 				int frag_nb_cnt = (int)fragment_counter[ss_xy.xy] & 0xFFF;
-				for (int j = 0; j < frag_nb_cnt; j++) // MAX_LAYERS, frag_nb_cnt
+				for (int j = 0; j < frag_nb_cnt; j++) // k_value, frag_nb_cnt
 				{
-					uint addr_base_cand = (ss_xy.y * g_cbCamState.rt_width + ss_xy.x) * MAX_LAYERS * 4;
+					uint addr_base_cand = (ss_xy.y * g_cbCamState.rt_width + ss_xy.x) * k_value * 4;
 					float z_cand = LOAD1_KBUF_Z(deep_k_buf, addr_base_cand, j); // asfloat(deep_k_buf[addr_base_cand + 3 * j + 1]);
 					if (z_cand < 1000000 && z_cand > 0)
 					{
@@ -268,7 +271,7 @@ void KB_SSAO(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTi
 
 						}
 					}
-				} // for (int j = 0; j < frag_nb_cnt; j++) // MAX_LAYERS, frag_nb_cnt
+				} // for (int j = 0; j < frag_nb_cnt; j++) // k_value, frag_nb_cnt
 				if (g_cbEnv.env_flag & 0x2)
 				{
 					// g_cbVobj.ao_intensity;
@@ -316,7 +319,7 @@ void KB_SSAO(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTi
 	}
 	//rw_fragment_blendout[DTid.xy] = float4((float3)1 - v_AOs[0], 1);
 
-	for (i = (int)frag_cnt; i < MAX_LAYERS; i++) v_AOs[i] = 0;
+	for (i = (int)frag_cnt; i < k_value; i++) v_AOs[i] = 0;
 
 	rw_ao_textures[0][DTid.xy] = float4(v_AOs[0], v_AOs[1], v_AOs[2], v_AOs[3]);
 	rw_ao_textures[1][DTid.xy] = float4(v_AOs[4], v_AOs[5], v_AOs[6], v_AOs[7]);
@@ -332,10 +335,10 @@ void KB_SSAO(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTi
 		// http://c0de517e.blogspot.com/2008/10/normals-without-normals.html
 		int x_offset = 1;
 		int y_offset = 1;
-		uint addr_base_dxR = (DTid.y * g_cbCamState.rt_width + DTid.x + x_offset) * MAX_LAYERS * 4;
-		uint addr_base_dxL = (DTid.y * g_cbCamState.rt_width + DTid.x - x_offset) * MAX_LAYERS * 4;
-		uint addr_base_dyR = ((DTid.y + y_offset) * g_cbCamState.rt_width + DTid.x) * MAX_LAYERS * 4;
-		uint addr_base_dyL = ((DTid.y - y_offset) * g_cbCamState.rt_width + DTid.x) * MAX_LAYERS * 4;
+		uint addr_base_dxR = (DTid.y * g_cbCamState.rt_width + DTid.x + x_offset) * k_value * 4;
+		uint addr_base_dxL = (DTid.y * g_cbCamState.rt_width + DTid.x - x_offset) * k_value * 4;
+		uint addr_base_dyR = ((DTid.y + y_offset) * g_cbCamState.rt_width + DTid.x) * k_value * 4;
+		uint addr_base_dyL = ((DTid.y - y_offset) * g_cbCamState.rt_width + DTid.x) * k_value * 4;
 		float z_dxR = fragment_vr_zdepth[uint2(DTid.x + x_offset, DTid.y)];
 		float z_dxL = fragment_vr_zdepth[uint2(DTid.x - x_offset, DTid.y)];
 		float z_dyR = fragment_vr_zdepth[uint2(DTid.x, DTid.y + y_offset)];
@@ -432,9 +435,9 @@ void KB_SSAO(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTi
 				ss_xy_prev = ss_xy;
 				//[allow_uav_condition][loop]
 				int frag_nb_cnt = (int)fragment_counter[ss_xy.xy] & 0xFFF;
-				for (int j = 0; j < frag_nb_cnt; j++) // MAX_LAYERS, frag_nb_cnt
+				for (int j = 0; j < frag_nb_cnt; j++) // k_value, frag_nb_cnt
 				{
-					uint addr_base_cand = (ss_xy.y * g_cbCamState.rt_width + ss_xy.x) * MAX_LAYERS * 4;
+					uint addr_base_cand = (ss_xy.y * g_cbCamState.rt_width + ss_xy.x) * k_value * 4;
 					float z_cand = LOAD1_KBUF_Z(deep_k_buf, addr_base_cand, j); // asfloat(deep_k_buf[addr_base_cand + 3 * j + 1]);
 					if (z_cand < 1000000 && z_cand > 0)
 					{
@@ -484,7 +487,7 @@ void KB_SSAO(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTi
 
 						}
 					}
-				} // for (int j = 0; j < frag_nb_cnt; j++) // MAX_LAYERS, frag_nb_cnt
+				} // for (int j = 0; j < frag_nb_cnt; j++) // k_value, frag_nb_cnt
 				//if (g_cbEnv.env_flag & 0x2) // always
 				{
 					// g_cbVobj.ao_intensity;
@@ -547,17 +550,20 @@ void KB_TO_TEXTURE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uin
 {
 	if (DTid.x >= g_cbCamState.rt_width / 2 || DTid.y >= g_cbCamState.rt_height / 2)
 		return;
-	uint addr_base_f0 = ((DTid.y * 2 + 0) * g_cbCamState.rt_width + (DTid.x * 2 + 0)) * MAX_LAYERS * 4;
-	uint addr_base_f1 = ((DTid.y * 2 + 0) * g_cbCamState.rt_width + (DTid.x * 2 + 1)) * MAX_LAYERS * 4;
-	uint addr_base_f2 = ((DTid.y * 2 + 1) * g_cbCamState.rt_width + (DTid.x * 2 + 0)) * MAX_LAYERS * 4;
-	uint addr_base_f3 = ((DTid.y * 2 + 1) * g_cbCamState.rt_width + (DTid.x * 2 + 1)) * MAX_LAYERS * 4;
+
+	const uint k_value = g_cbCamState.k_value;
+	uint addr_base_f0 = ((DTid.y * 2 + 0) * g_cbCamState.rt_width + (DTid.x * 2 + 0)) * k_value * 4;
+	uint addr_base_f1 = ((DTid.y * 2 + 0) * g_cbCamState.rt_width + (DTid.x * 2 + 1)) * k_value * 4;
+	uint addr_base_f2 = ((DTid.y * 2 + 1) * g_cbCamState.rt_width + (DTid.x * 2 + 0)) * k_value * 4;
+	uint addr_base_f3 = ((DTid.y * 2 + 1) * g_cbCamState.rt_width + (DTid.x * 2 + 1)) * k_value * 4;
 
 	int frag_cnt_max = max(max(fragment_counter[float2(DTid.x * 2 + 0, DTid.y * 2 + 0)] & 0xFFF, fragment_counter[float2(DTid.x * 2 + 0, DTid.y * 2 + 1)] & 0xFFF),
 		max(fragment_counter[float2(DTid.x * 2 + 1, DTid.y * 2 + 0)] & 0xFFF, fragment_counter[float2(DTid.x * 2 + 1, DTid.y * 2 + 1)] & 0xFFF));
 
-	float _zs_avr[MAX_LAYERS];
-	float _opacity_avr[MAX_LAYERS];
-	for (int i = 0; i < MAX_LAYERS; i++)
+
+	float _zs_avr[LOCAL_SIZE];
+	float _opacity_avr[LOCAL_SIZE];
+	for (int i = 0; i < LOCAL_SIZE; i++)
 	{
 		if (i < frag_cnt_max)
 		{
@@ -585,7 +591,8 @@ void KB_SSAO_BLUR(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
 		return;
 
-	uint addr_base_f = (DTid.y * g_cbCamState.rt_width + DTid.x) * MAX_LAYERS * 4;
+	const uint k_value = g_cbCamState.k_value;
+	uint addr_base_f = (DTid.y * g_cbCamState.rt_width + DTid.x) * k_value * 4;
 	int frag_cnt = (int)fragment_counter[DTid.xy];
 	uint vr_hit_enc = frag_cnt >> 24;
 	frag_cnt = frag_cnt & 0xFFF;
@@ -614,18 +621,18 @@ void KB_SSAO_BLUR(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 		kernel[kSize + j] = kernel[kSize - j] = normpdf(float(j), SIGMA);
 	}
 
-	float v_AOs[MAX_LAYERS];
-	float v_AOs_nb[MAX_LAYERS];
+	float v_AOs[LOCAL_SIZE];
+	float v_AOs_nb[LOCAL_SIZE];
 	float4 aos_tex0 = ao_textures[0][DTid.xy];
 	float4 aos_tex1 = ao_textures[1][DTid.xy];
 	v_AOs[0] = aos_tex0.x; v_AOs[1] = aos_tex0.y; v_AOs[2] = aos_tex0.z; v_AOs[3] = aos_tex0.w;
 	v_AOs[4] = aos_tex1.x; v_AOs[5] = aos_tex1.y; v_AOs[6] = aos_tex1.z; v_AOs[7] = aos_tex1.w;
 	float v_AO_vr = ao_vr_texture[DTid.xy];
 
-	float v_AOs_out[MAX_LAYERS];
-	float bZs[MAX_LAYERS];
+	float v_AOs_out[LOCAL_SIZE];
+	float bZs[LOCAL_SIZE];
 	[loop]
-	for (j = 0; j < MAX_LAYERS; j++)
+	for (j = 0; j < k_value; j++)
 	{
 		v_AOs_out[j] = 0;
 		bZs[j] = 0;

@@ -1,4 +1,4 @@
-#include "Sr_Common.hlsl"
+#include "../Sr_Common.hlsl"
 
 bool OverlapTest(const in Fragment f_1, const in Fragment f_2)
 {
@@ -41,15 +41,181 @@ int Fragment_OrderIndependentMerge(inout Fragment f_buf, const in Fragment f_in)
 #define TEX2D_COUNTER RWTexture2D
 #endif
 TEX2D_COUNTER<uint> fragment_counter : register(u2);
+//RWTexture2D<uint> fragment_counter_test : register(u10); // for experiments
 RWByteAddressBuffer deep_k_buf : register(u4);
 
-void Fill_kBuffer(const in int2 tex2d_xy, const in int k_value, const in float4 v_rgba, const in float z_depth, const in float z_thickness)
+void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4 v_rgba, const in float z_depth, const in float z_thickness)
 {
 	if (z_depth > FLT_LARGE || v_rgba.a == 0)
 		return;
 
 	uint iv_rgba = ConvertFloat4ToUInt(v_rgba);
-	uint addr_base = (tex2d_xy.y * g_cbCamState.rt_width + tex2d_xy.x) * MAX_LAYERS * 4;
+	uint addr_base = (tex2d_xy.y * g_cbCamState.rt_width + tex2d_xy.x) * k_value * 4;
+
+	Fragment f_in;
+	f_in.z = z_depth;
+	f_in.i_vis = ConvertFloat4ToUInt(v_rgba);
+	f_in.zthick = z_thickness;
+	f_in.opacity_sum = v_rgba.a;
+
+	// pixel synchronization
+	uint frag_cnt = fragment_counter[tex2d_xy.xy];
+	if (frag_cnt == 0) // clear k_buffer using the counter as a mask
+	{
+		for (uint k = 0; k < k_value; k++)
+		{
+			SET_ZEROFRAG(addr_base, k);
+		}
+	}
+
+	// critical section
+#if TAIL_HANDLING == 1
+	Fragment frag_tail;
+	
+	if (frag_cnt == k_value)
+	{
+		GET_FRAG(frag_tail, addr_base, k_value - 1);
+	}
+	else
+	{
+		frag_tail.i_vis = 0;
+		frag_tail.opacity_sum = 0;
+		frag_tail.zthick = 0;
+		frag_tail.z = FLT_MAX;
+	}
+
+	if (f_in.z > frag_tail.z - frag_tail.zthick)
+	{
+		// update the merging slot
+		Fragment_OrderIndependentMerge(frag_tail, f_in);
+		SET_FRAG(addr_base, k_value - 1, frag_tail);
+	}
+	else
+#endif
+	{
+		Fragment f_coremax = (Fragment)0;
+		int core_max_idx = -1;
+		bool count_frag = false;
+//#define NO_OVERLAP 1
+#if NO_OVERLAP == 1 && ZF_HANDLING == 1
+		int merge_idx = -1;
+#endif
+		[loop]
+#if TAIL_HANDLING == 1
+		for (uint i = 0; i < k_value - 1; i++)
+#else
+		for (uint i = 0; i < k_value; i++)
+#endif
+		{
+			Fragment f_ith;
+			GET_FRAG(f_ith, addr_base, i);
+			if (f_ith.i_vis == 0) // empty slot
+			{
+				SET_FRAG(addr_base, i, f_in);
+				core_max_idx = -3;
+				if(f_ith.opacity_sum == 0)
+					count_frag = true;
+				break;
+			}
+			else //if (f_ith.i_vis != 0)
+			{
+#if ZF_HANDLING == 1
+				if (OverlapTest(f_ith, f_in))
+				{
+#if NO_OVERLAP == 1
+					Fragment_OrderIndependentMerge(f_in, f_ith);
+					merge_idx = i;
+#else
+					Fragment_OrderIndependentMerge(f_ith, f_in);
+					SET_FRAG(addr_base, i, f_ith);
+#endif
+					core_max_idx = -2;
+					break;
+				}
+				else
+#endif
+					if (f_coremax.z < f_ith.z)
+					{
+						f_coremax = f_ith;
+						core_max_idx = i;
+					}
+			}
+		}
+#if NO_OVERLAP == 1 && ZF_HANDLING == 1
+		if (merge_idx >= 0) // core_max_idx == -2
+		{
+			Fragment f_zero_wildcard = (Fragment)0;
+			f_zero_wildcard.opacity_sum = -1.f; // to avoid invalid count
+			[loop]
+#if TAIL_HANDLING == 1
+			for (i = merge_idx + 1; i < k_value - 1; i++)
+#else
+			for (i = merge_idx + 1; i < k_value; i++)
+#endif
+			{
+				Fragment f_ith;
+				GET_FRAG(f_ith, addr_base, i);
+				if (f_ith.i_vis == 0)
+					break;
+
+				if (OverlapTest(f_ith, f_in))
+				{
+					Fragment_OrderIndependentMerge(f_in, f_ith);
+					SET_FRAG(addr_base, i, f_zero_wildcard);
+				}
+			}
+			SET_FRAG(addr_base, merge_idx, f_in);
+		}
+#endif
+
+		if (core_max_idx >= 0)
+		{
+			if (f_coremax.z > f_in.z) // replace
+			{
+				SET_FRAG(addr_base, core_max_idx, f_in);
+#if TAIL_HANDLING == 1
+				if (frag_cnt < k_value)
+				{
+					frag_tail = f_coremax;
+					count_frag = true; // first insertion to tail
+				}
+				else
+				{
+					Fragment_OrderIndependentMerge(frag_tail, f_coremax);
+				}
+				SET_FRAG(addr_base, k_value - 1, frag_tail);
+#endif
+			}
+#if TAIL_HANDLING == 1
+			else // merge tail
+			{
+				// remove this routine using loaded coremax depth!!!
+				if (frag_cnt < k_value)
+				{
+					frag_tail = f_in;
+					count_frag = true; // first insertion to tail
+				}
+				else
+				{
+					Fragment_OrderIndependentMerge(frag_tail, f_in);
+				}
+				SET_FRAG(addr_base, k_value - 1, frag_tail);
+			}
+#endif
+		}
+
+		if (count_frag)
+			fragment_counter[tex2d_xy.xy] = frag_cnt + 1;
+	}
+}
+
+void Fill_kBuffer__(const in int2 tex2d_xy, const in uint k_value, const in float4 v_rgba, const in float z_depth, const in float z_thickness)
+{
+	if (z_depth > FLT_LARGE || v_rgba.a == 0)
+		return;
+
+	uint iv_rgba = ConvertFloat4ToUInt(v_rgba);
+	uint addr_base = (tex2d_xy.y * g_cbCamState.rt_width + tex2d_xy.x) * k_value * 4;
 
 	Fragment f_in;
 	f_in.z = z_depth;
@@ -61,14 +227,12 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in int k_value, const in float4 
 	uint frag_cnt = fragment_counter[tex2d_xy.xy];
 	if (frag_cnt == 0) // clear mask
 	{
-		for (uint k = 0; k < MAX_LAYERS; k++)
+		for (uint k = 0; k < k_value; k++)
 			STORE4_KBUF((uint4)0, addr_base, k);
-			//deep_k_buf[addr_base + k] = (uint4)0;
 	}
 
 	Fragment frag_tail;
-	//GET_FRAG(frag_tail, deep_k_buf[addr_base + MAX_LAYERS - 1]);
-	GET_FRAG(frag_tail, addr_base, MAX_LAYERS - 1);
+	GET_FRAG(frag_tail, addr_base, k_value - 1);
 
 #if TAIL_HANDLING == 1
 	if (frag_tail.i_vis == 0)
@@ -80,8 +244,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in int k_value, const in float4 
 	{
 		// update the merging slot
 		Fragment_OrderIndependentMerge(frag_tail, f_in);
-		//SET_FRAG(deep_k_buf[addr_base + MAX_LAYERS - 1], frag_tail);
-		SET_FRAG(addr_base, MAX_LAYERS - 1, frag_tail);
+		SET_FRAG(addr_base, k_value - 1, frag_tail);
 	}
 	else
 #endif
@@ -91,9 +254,9 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in int k_value, const in float4 
 		//[allow_uav_condition]
 		[loop]
 #if TAIL_HANDLING == 1
-		for (int i = 0; i < MAX_LAYERS - 1; i++)
+		for (int i = 0; i < k_value - 1; i++)
 #else
-		for (int i = 0; i < MAX_LAYERS; i++)
+		for (int i = 0; i < k_value; i++)
 #endif
 		{
 			// after atomic store operation
@@ -109,7 +272,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in int k_value, const in float4 
 					//SET_FRAG(deep_k_buf[addr_base + i], f_ith);
 					SET_FRAG(addr_base, i, f_ith);
 					core_max_idx = -2;
-					//i = MAX_LAYERS;
+					//i = k_value;
 					break;
 				}
 				else
@@ -125,7 +288,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in int k_value, const in float4 
 				//SET_FRAG(deep_k_buf[addr_base + i], f_in);
 				SET_FRAG(addr_base, i, f_in);
 				core_max_idx = -3;
-				//i = MAX_LAYERS;
+				//i = k_value;
 				break;
 			}
 		}
@@ -134,13 +297,11 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in int k_value, const in float4 
 		{
 			if (f_coremax.z > f_in.z) // replace
 			{
-				//SET_FRAG(deep_k_buf[addr_base + core_max_idx], f_in);
 				SET_FRAG(addr_base, core_max_idx, f_in);
 #if TAIL_HANDLING == 1
 				if (frag_tail.i_vis == 0) frag_tail = f_coremax;
 				else Fragment_OrderIndependentMerge(frag_tail, f_coremax);
-				//SET_FRAG(deep_k_buf[addr_base + MAX_LAYERS - 1], frag_tail);
-				SET_FRAG(addr_base, MAX_LAYERS - 1, frag_tail);
+				SET_FRAG(addr_base, k_value - 1, frag_tail);
 #endif
 			}
 #if TAIL_HANDLING == 1
@@ -148,12 +309,11 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in int k_value, const in float4 
 			{
 				if (frag_tail.i_vis == 0) frag_tail = f_in;
 				else Fragment_OrderIndependentMerge(frag_tail, f_in);
-				//SET_FRAG(deep_k_buf[addr_base + MAX_LAYERS - 1], frag_tail);
-				SET_FRAG(addr_base, MAX_LAYERS - 1, frag_tail);
+				SET_FRAG(addr_base, k_value - 1, frag_tail);
 			}
 #endif
 		}
-		if (frag_cnt < MAX_LAYERS)
+		if (frag_cnt < k_value)
 			fragment_counter[tex2d_xy.xy] = 1 + frag_cnt;
 	}
 }
@@ -163,7 +323,7 @@ RWTexture2D<uint> fragment_spinlock : register(u3);
 //RWBuffer<uint> deep_k_buf : register(u4);
 RWByteAddressBuffer deep_k_buf : register(u4);
 
-void Fill_kBuffer(const in int2 tex2d_xy, const in int k_value, const in float4 v_rgba, const in float z_depth, const in float z_thickness)
+void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4 v_rgba, const in float z_depth, const in float z_thickness)
 {
 	if (z_depth > FLT_LARGE || v_rgba.a == 0)
 	{
@@ -171,7 +331,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in int k_value, const in float4 
 	}
 	uint __dummy;
 	uint iv_rgba = ConvertFloat4ToUInt(v_rgba);
-	uint addr_base = (tex2d_xy.y * g_cbCamState.rt_width + tex2d_xy.x) * MAX_LAYERS * 4;
+	uint addr_base = (tex2d_xy.y * g_cbCamState.rt_width + tex2d_xy.x) * k_value * 4;
 
 	Fragment f_in;
 	f_in.z = z_depth;
@@ -184,14 +344,12 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in int k_value, const in float4 
 	uint safe_unlock_count = 0;
 	bool keep_loop = true;
 	//break; ==> do not use this when using allow_uav_condition
-	[allow_uav_condition][loop]
+	[loop]
 	while (keep_loop)
 	{
 		if (++safe_unlock_count > g_cbPobj.num_safe_loopexit)
 		{
-			InterlockedExchange(fragment_counter[tex2d_xy.xy], 77777, __dummy);
 			keep_loop = false;
-			//break;
 		}
 		else
 		{
@@ -200,60 +358,79 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in int k_value, const in float4 
 			// use InterlockedCompareExchange(..) instead of InterlockedExchange(fragment_spinlock[tex2d_xy.xy], 1, spin_lock)
 			InterlockedCompareExchange(fragment_spinlock[tex2d_xy.xy], 0, 1, spin_lock);
 
+			// for a strict behavior, use InterlockedExchange instead of SET_(ZERO)FRAG
 			if (spin_lock == 0)
 			{
 #endif
 				uint frag_cnt = fragment_counter[tex2d_xy.xy];
 				if (frag_cnt == 0) // clear mask
 				{
-					for (int i = 0; i < MAX_LAYERS; i++)
+					for (uint i = 0; i < k_value; i++)
 					{
-						//__InterlockedExchange(deep_k_buf[addr_base + i * 4 + 0], 0, __dummy);
-						//__InterlockedExchange(deep_k_buf[addr_base + i * 4 + 1], 0, __dummy);
-						//__InterlockedExchange(deep_k_buf[addr_base + i * 4 + 2], 0, __dummy);
-						//__InterlockedExchange(deep_k_buf[addr_base + i * 4 + 3], 0, __dummy);
-						STORE4_KBUF((uint4)0, addr_base, i);
+						SET_ZEROFRAG(addr_base, i); // InterlockedExchange
 					}
 				}
 #if TAIL_HANDLING == 1
 				Fragment frag_tail;
-				GET_FRAG(frag_tail, addr_base, MAX_LAYERS - 1);
-				if (frag_tail.i_vis == 0)
+
+				if (frag_cnt == k_value)
 				{
-					frag_tail.z = FLT_MAX;
-					frag_tail.zthick = 0;
+					GET_FRAG(frag_tail, addr_base, k_value - 1);
 				}
+				else
+				{
+					frag_tail.i_vis = 0;
+					frag_tail.opacity_sum = 0;
+					frag_tail.zthick = 0;
+					frag_tail.z = FLT_MAX;
+				}
+
 				if (f_in.z > frag_tail.z - frag_tail.zthick)
 				{
 					// update the merging slot
 					Fragment_OrderIndependentMerge(frag_tail, f_in);
-					SET_FRAG(addr_base, MAX_LAYERS - 1, frag_tail);
+					SET_FRAG(addr_base, k_value - 1, frag_tail);
 				}
 				else
 #endif
 				{
 					Fragment f_coremax = (Fragment)0;
 					int core_max_idx = -1;
+					bool count_frag = false;
+#if NO_OVERLAP == 1 && ZF_HANDLING == 1
+					int merge_idx = -1;
+#endif
+					[loop]
 #if TAIL_HANDLING == 1
-					for (int i = 0; i < MAX_LAYERS - 1; i++)
+					for (uint i = 0; i < k_value - 1; i++)
 #else
-					for (int i = 0; i < MAX_LAYERS; i++)
+					for (uint i = 0; i < k_value; i++)
 #endif
 					{
-						// after atomic store operation
 						Fragment f_ith;
-						//GET_FRAG(f_ith, deep_k_buf[addr_base + i]);
 						GET_FRAG(f_ith, addr_base, i);
-						if (f_ith.i_vis != 0)
+						if (f_ith.i_vis == 0) // empty slot
+						{
+							SET_FRAG(addr_base, i, f_in);
+							core_max_idx = -3;
+							if (f_ith.opacity_sum == 0)
+								count_frag = true;
+							i = k_value;
+						}
+						else //if (f_ith.i_vis != 0)
 						{
 #if ZF_HANDLING == 1
 							if (OverlapTest(f_ith, f_in))
 							{
+#if NO_OVERLAP == 1
+								Fragment_OrderIndependentMerge(f_in, f_ith);
+								merge_idx = i;
+#else
 								Fragment_OrderIndependentMerge(f_ith, f_in);
-								//SET_FRAG(deep_k_buf[addr_base + i], f_ith);
 								SET_FRAG(addr_base, i, f_ith);
+#endif
 								core_max_idx = -2;
-								i = MAX_LAYERS;
+								i = k_value;
 								//break;
 							}
 							else
@@ -264,45 +441,72 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in int k_value, const in float4 
 									core_max_idx = i;
 								}
 						}
-						else // if (i_vis != 0) // empty slot
-						{
-							//SET_FRAG(deep_k_buf[addr_base + i], f_in);
-							SET_FRAG(addr_base, i, f_in);
-							core_max_idx = -3;
-							i = MAX_LAYERS;
-							//break;
-						}
 					}
-					
+#if NO_OVERLAP == 1 && ZF_HANDLING == 1
+					if (merge_idx >= 0) // core_max_idx == -2
+					{
+						Fragment f_zero_wildcard = (Fragment)0;
+						f_zero_wildcard.opacity_sum = -1.f; // to avoid invalid count
+						[loop]
+#if TAIL_HANDLING == 1
+						for (i = merge_idx + 1; i < k_value - 1; i++)
+#else
+						for (i = merge_idx + 1; i < k_value; i++)
+#endif
+						{
+							Fragment f_ith;
+							GET_FRAG(f_ith, addr_base, i);
+							if (f_ith.i_vis == 0)
+								break;
+
+							if (OverlapTest(f_ith, f_in))
+							{
+								Fragment_OrderIndependentMerge(f_in, f_ith);
+								SET_FRAG(addr_base, i, f_zero_wildcard);
+							}
+						}
+						SET_FRAG(addr_base, merge_idx, f_in);
+					}
+#endif
+
 					if (core_max_idx >= 0)
 					{
 						if (f_coremax.z > f_in.z) // replace
 						{
-							//SET_FRAG(deep_k_buf[addr_base + core_max_idx], f_in);
 							SET_FRAG(addr_base, core_max_idx, f_in);
 #if TAIL_HANDLING == 1
-							if (frag_tail.i_vis == 0) frag_tail = f_coremax;
-							else Fragment_OrderIndependentMerge(frag_tail, f_coremax);
-							//SET_FRAG(deep_k_buf[addr_base + MAX_LAYERS - 1], frag_tail);
-							SET_FRAG(addr_base, MAX_LAYERS - 1, frag_tail);
+							if (frag_cnt < k_value)
+							{
+								frag_tail = f_coremax;
+								count_frag = true; // first insertion to tail
+							}
+							else
+							{
+								Fragment_OrderIndependentMerge(frag_tail, f_coremax);
+							}
+							SET_FRAG(addr_base, k_value - 1, frag_tail);
 #endif
 						}
 #if TAIL_HANDLING == 1
 						else // merge tail
 						{
-							if (frag_tail.i_vis == 0) frag_tail = f_in;
-							else Fragment_OrderIndependentMerge(frag_tail, f_in);
-							//SET_FRAG(deep_k_buf[addr_base + MAX_LAYERS - 1], frag_tail);
-							SET_FRAG(addr_base, MAX_LAYERS - 1, frag_tail);
+							if (frag_cnt < k_value)
+							{
+								frag_tail = f_in;
+								count_frag = true; // first insertion to tail
+							}
+							else
+							{
+								Fragment_OrderIndependentMerge(frag_tail, f_in);
+							}
+							SET_FRAG(addr_base, k_value - 1, frag_tail);
 						}
 #endif
 					}
+					if (count_frag)
+						fragment_counter[tex2d_xy.xy] = frag_cnt + 1;
 				}
 
-				if (frag_cnt < MAX_LAYERS)
-					//InterlockedAdd(fragment_counter[tex2d_xy.xy], 1, frag_cnt);
-					fragment_counter[tex2d_xy.xy] = 1 + frag_cnt;
-				
 #if PIXEL_SYNCH == 1
 				// always fragment_spinlock[tex2d_xy.xy] is 1, thus use InterlockedExchange instead of InterlockedCompareExchange
 				InterlockedExchange(fragment_spinlock[tex2d_xy.xy], 0, spin_lock);
@@ -319,17 +523,17 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in int k_value, const in float4 
 [numthreads(GRIDSIZE, GRIDSIZE, 1)]
 void OIT_PRESET(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
 {
-    int2 tex2d_xy = int2(DTid.xy);
-    
-    //float4 v_rgba = sr_fragment_vis[tex2d_xy];
-    float depthcs = sr_fragment_zdepth[tex2d_xy];
+	int2 tex2d_xy = int2(DTid.xy);
+
+	//float4 v_rgba = sr_fragment_vis[tex2d_xy];
+	float depthcs = sr_fragment_zdepth[tex2d_xy];
 
 	float4 v_rgba = (float4)0;
 	if (BitCheck(g_cbCamState.cam_flag, 1))
 		v_rgba = OutlineTest(tex2d_xy, depthcs, g_cbPobj.depth_forward_bias);
 	else
 		v_rgba = sr_fragment_vis[tex2d_xy.xy];
-	
+
 	if (BitCheck(g_cbPobj.pobj_flag, 22))
 	{
 		int out_lined = 0;
@@ -346,10 +550,10 @@ void OIT_PRESET(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		v_rgba *= weight;
 	}
 
-    if (v_rgba.a == 0)
-        return;
-    
-    float vz_thickness = g_cbPobj.vz_thickness;
+	if (v_rgba.a == 0)
+		return;
+
+	float vz_thickness = g_cbPobj.vz_thickness;
 	Fill_kBuffer(tex2d_xy, g_cbCamState.k_value, v_rgba, depthcs, vz_thickness);
 }
 
@@ -360,30 +564,30 @@ void OIT_KDEPTH(VS_OUTPUT input)
 #endif
 {
 	POBJ_PRE_CONTEXT;
-    
-    if (g_cbPobj.alpha == 0 || z_depth < 0 || (input.f4PosSS.z / input.f4PosSS.w < 0) 
+
+	if (g_cbPobj.alpha == 0 || z_depth < 0 || (input.f4PosSS.z / input.f4PosSS.w < 0)
 		|| input.f4PosSS.x < 0 || input.f4PosSS.y < 0
-		|| (uint)input.f4PosSS.x >= g_cbCamState.rt_width 
+		|| (uint)input.f4PosSS.x >= g_cbCamState.rt_width
 		|| (uint)input.f4PosSS.y >= g_cbCamState.rt_height)
-        clip(-1);
-	
-    float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
-    float vz_thickness = g_cbPobj.vz_thickness;
-    
-    float3 nor = (float3)0;
-    float nor_len = 0;
-    
+		clip(-1);
+
+	float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
+	float vz_thickness = g_cbPobj.vz_thickness;
+
+	float3 nor = (float3)0;
+	float nor_len = 0;
+
 #if __RENDERING_MODE != 1 && __RENDERING_MODE != 2 && __RENDERING_MODE != 3
-    nor = input.f3VecNormalWS;
-    nor_len = length(nor);
+	nor = input.f3VecNormalWS;
+	nor_len = length(nor);
 #endif
-    
+
 #if __RENDERING_MODE == 1
-    DashedLine(v_rgba, z_depth, input.f3Custom.x, g_cbPobj.dash_interval, g_cbPobj.pobj_flag & (0x1 << 19), g_cbPobj.pobj_flag & (0x1 << 20));
+	DashedLine(v_rgba, z_depth, input.f3Custom.x, g_cbPobj.dash_interval, g_cbPobj.pobj_flag & (0x1 << 19), g_cbPobj.pobj_flag & (0x1 << 20));
 #elif __RENDERING_MODE == 2
-    MultiTextMapping(v_rgba, z_depth, input.f3Custom0.xy, (int)(input.f3Custom0.z + 0.5f), input.f3Custom1, input.f3Custom2);
+	MultiTextMapping(v_rgba, z_depth, input.f3Custom0.xy, (int)(input.f3Custom0.z + 0.5f), input.f3Custom1, input.f3Custom2);
 #elif __RENDERING_MODE == 3
-    TextMapping(v_rgba, z_depth, input.f3Custom.xy, g_cbPobj.pobj_flag & (0x1 << 9), g_cbPobj.pobj_flag & (0x1 << 10));
+	TextMapping(v_rgba, z_depth, input.f3Custom.xy, g_cbPobj.pobj_flag & (0x1 << 9), g_cbPobj.pobj_flag & (0x1 << 10));
 #elif __RENDERING_MODE == 4
 	if (g_cbPobj.tex_map_enum == 1)
 	{
@@ -430,7 +634,7 @@ void OIT_KDEPTH(VS_OUTPUT input)
 		//if(nor_len > 0)
 		//v_rgba.rgb = Ka;// float3(1, 0, 0);
 		//else
-			v_rgba.a *= d;
+		v_rgba.a *= d;
 	}
 #else
 	float3 Ka, Kd, Ks;
@@ -457,15 +661,15 @@ void OIT_KDEPTH(VS_OUTPUT input)
 		v_rgba.rgb = Kd;
 	//v_rgba.rgb = float3(1, 1, 0);
 #endif
-    
-    // make it as an associated color.
-    // as a color component is stored into 8 bit channel, the alpha-multiplied precision must be determined in this stage.
-    // unless, noise dots appear.
-    v_rgba.rgb *= v_rgba.a;
+
+	// make it as an associated color.
+	// as a color component is stored into 8 bit channel, the alpha-multiplied precision must be determined in this stage.
+	// unless, noise dots appear.
+	v_rgba.rgb *= v_rgba.a;
 
 	int2 tex2d_xy = int2(input.f4PosSS.xy);
 	// dynamic opacity modulation
-	if(BitCheck(g_cbPobj.pobj_flag, 22) && nor_len > 0 )//&& g_cbPobj.dash_interval != 77.77f)
+	if (BitCheck(g_cbPobj.pobj_flag, 22) && nor_len > 0)//&& g_cbPobj.dash_interval != 77.77f)
 	{
 		//int addr_base = (tex2d_xy.y * g_cbCamState.rt_width + tex2d_xy.x) * 4;
 		//float mask_v = g_bufHotSpotMask[addr_base + 3];
@@ -480,11 +684,11 @@ void OIT_KDEPTH(VS_OUTPUT input)
 		//}
 		//else
 		//	v_rgba = float4(0, 0, 0, 1);
-		
+
 		// mask value compute
 		int out_lined = 0;
 		float weight_[2] = { GetHotspotMaskWeightIdx(out_lined, tex2d_xy, 0, false) , GetHotspotMaskWeightIdx(out_lined, tex2d_xy, 1, false) };
-		if (out_lined > 0) 
+		if (out_lined > 0)
 		{
 			v_rgba = float4(1, 1, 0, 1);
 		}
@@ -522,30 +726,30 @@ void OIT_KDEPTH(VS_OUTPUT input)
 	}
 	//v_rgba.rgba = float4(0.5, 0.5, 0.5, 1);// saturate((z_depth - 500) / 1000);
 
-    // add opacity culling with biased z depth
-    // to do : SS-based LAO 에서는 z-culling 안 되도록.
-    //if (v_rgba.a > 0.99f)
-    //    out_ps.ds_z = input.f4PosSS.z + 0.00f; // to do : bias z
-    // FillFill_kBuffer
-    
-    // to do with dynamic determination of vz_thickness
+	// add opacity culling with biased z depth
+	// to do : SS-based LAO 에서는 z-culling 안 되도록.
+	//if (v_rgba.a > 0.99f)
+	//    out_ps.ds_z = input.f4PosSS.z + 0.00f; // to do : bias z
+	// FillFill_kBuffer
+
+	// to do with dynamic determination of vz_thickness
 #if __RENDERING_MODE != 2
-    //if (nor_len > 0)
-    //{
-    //    float3 u_nor = nor / nor_len;
-    //    float rad = abs(dot(u_nor, -view_dir));
-    //    float in_angle = min(acos(rad), F_PI / 3.f); // safe value
-    //    float cos_v = cos(in_angle);
-    //    vz_thickness /= cos_v;
-    //}
+	//if (nor_len > 0)
+	//{
+	//    float3 u_nor = nor / nor_len;
+	//    float rad = abs(dot(u_nor, -view_dir));
+	//    float in_angle = min(acos(rad), F_PI / 3.f); // safe value
+	//    float cos_v = cos(in_angle);
+	//    vz_thickness /= cos_v;
+	//}
 #endif
-    
+
 #define __TEST__
 #ifdef __TEST__
-    // test //
-    //z_depth -= vz_thickness;
-    //vz_thickness = 0.00001;
+	// test //
+	//z_depth -= vz_thickness;
+	//vz_thickness = 0.00001;
 #endif
-    
+
 	Fill_kBuffer(tex2d_xy, g_cbCamState.k_value, v_rgba, z_depth, vz_thickness);
 }

@@ -1,4 +1,4 @@
-#include "../kbuf/CommonShader.hlsl"
+#include "../CommonShader.hlsl"
 
 RWByteAddressBuffer deep_LL_buf : register(u1);
 RWTexture2D<float4> fragment_blendout : register(u2);
@@ -68,7 +68,7 @@ void CreateOffsetTable_CS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThre
 }
 
 #if DX_11_OIT==0
-#include "../kbuf/macros.hlsl"
+#include "../macros.hlsl"
 #define MAX_ARRAY_SIZE 400
 #define MAX_ARRAY_SIZE_1n MAX_ARRAY_SIZE - 1
 #define MAX_ARRAY_SIZE_2d MAX_ARRAY_SIZE >> 1
