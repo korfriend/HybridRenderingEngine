@@ -975,7 +975,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
 
 	grd_helper::UpdateFrameBuffer(gres_fb_deep_k_buffer, iobj, "BUFFER_RW_DEEP_K_BUF", RTYPE_BUFFER,
-		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, k_value * 4 * buffer_ex);
+		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, k_value * 4 * buffer_ex + 1 /*+1 for core max depth*/);
 
 	// SSAO
 	{
@@ -1010,7 +1010,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	if (check_pixel_transmittance)
 	{
 		grd_helper::UpdateFrameBuffer(gres_fb_sys_deep_k, iobj, "SYSTEM_OUT_DEEP_K_BUF", RTYPE_BUFFER,
-			NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT, k_value * 4 * buffer_ex);
+			NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT, k_value * 4 * buffer_ex + 1);
 		if (mode_OIT == MFR_MODE::LL)
 			grd_helper::UpdateFrameBuffer(gres_fb_sys_ref_pidx, iobj, "SYSTEM_OUT_REF_PIDX_BUF", RTYPE_BUFFER,
 				NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT);
