@@ -1,5 +1,7 @@
 #include "../Sr_Common.hlsl"
 
+#define DEBUG__
+
 bool OverlapTest(const in Fragment f_1, const in Fragment f_2)
 {
 	float z_front, z_back, zt_front, zt_back;
@@ -43,12 +45,11 @@ int Fragment_OrderIndependentMerge(inout Fragment f_buf, const in Fragment f_in)
 TEX2D_COUNTER<uint> fragment_counter : register(u2);
 //RWTexture2D<uint> fragment_counter_test : register(u10); // for experiments
 RWByteAddressBuffer deep_k_buf : register(u4);
-//RasterizerOrderedByteAddressBuffer deep_k_buf : register(u4);
 
 void Fill_kBuffer__TOO_MUCH(const in int2 tex2d_xy, const in uint k_value, const in float4 v_rgba, const in float z_depth, const in float z_thickness)
 {
 	if (z_depth > FLT_LARGE || v_rgba.a == 0)
-		return;
+		clip(-1);
 
 	uint iv_rgba = ConvertFloat4ToUInt(v_rgba);
 
@@ -63,7 +64,6 @@ void Fill_kBuffer__TOO_MUCH(const in int2 tex2d_xy, const in uint k_value, const
 	f_in.zthick = z_thickness;
 	f_in.opacity_sum = v_rgba.a;
 
-//#define DEBUG__
 #ifdef DEBUG__
 #define MARK_RED(C)\
 	if(C)\
@@ -263,7 +263,7 @@ void Fill_kBuffer__TOO_MUCH(const in int2 tex2d_xy, const in uint k_value, const
 void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4 v_rgba, const in float z_depth, const in float z_thickness)
 {
 	if (z_depth > FLT_LARGE || v_rgba.a == 0)
-		return;
+		clip(-1);
 
 	uint iv_rgba = ConvertFloat4ToUInt(v_rgba);
 
@@ -283,6 +283,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 #ifdef DEBUG__
 	if (frag_cnt == 7777777) clip(-1);
 #endif
+
 	if (frag_cnt == 0) // clear k_buffer using the counter as a mask
 	{
 		for (uint k = 0; k < k_value; k++)
@@ -294,10 +295,199 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 	int store_index = -1;
 	int core_max_idx = -1;
 	bool count_frags = false;
+	Fragment f_coremax = (Fragment)0;
+
+	Fragment frag_tail; // unless TAIL_HANDLING, then use this as max core fragment
+	if (frag_cnt == k_value)
+	{
+		GET_FRAG(frag_tail, addr_base, k_value - 1);
+	}
+	else
+	{
+		frag_tail.i_vis = 0;
+		frag_tail.opacity_sum = 0;
+		frag_tail.zthick = 0;
+		frag_tail.z = FLT_MAX;
+	}
+
+	const uint num_unsorted_cores = k_value - 1;
+	if (f_in.z > frag_tail.z - frag_tail.zthick)
+	{
+		// this routine implies that frag_tail.i_vis > 0 and frag_tail.z is finite
+		// update the merging slot
+#if TAIL_HANDLING == 0
+		if (OverlapTest(f_in, frag_tail))
+#endif
+#if ZF_HANDLING == 1
+		Fragment_OrderIndependentMerge(f_in, frag_tail);
+#endif
+		store_index = k_value - 1;
+	}
+	else
+	{
+		[loop]
+		for (uint i = 0; i < num_unsorted_cores; i++)
+		{
+			Fragment f_ith;
+			GET_FRAG(f_ith, addr_base, i);
+			if (f_ith.i_vis == 0) // empty slot
+			{
+				store_index = i;
+				core_max_idx = -2;
+#if NO_OVERLAP == 1 && ZF_HANDLING == 1
+				count_frags = f_ith.opacity_sum == 0;
+#else
+				count_frags = true;
+#endif
+				break; // finish
+			}
+			else //if (f_ith.i_vis != 0)
+			{
+#if ZF_HANDLING == 1
+				if (OverlapTest(f_ith, f_in))
+				{
+					Fragment_OrderIndependentMerge(f_in, f_ith);
+					store_index = i;
+					core_max_idx = -3;
+					break; // finish
+				}
+				else
+#endif
+					if (f_coremax.z < f_ith.z)
+					{
+						f_coremax = f_ith;
+						core_max_idx = i;
+					}
+
+				if (i == num_unsorted_cores - 1)
+				{
+					// core_max_idx >= 0
+					// replacing or tail merging case 
+					count_frags = frag_cnt < k_value;
+
+					if (f_coremax.z > f_in.z) // replace case
+					{
+						// f_in to the core (and f_coremax to the tail when tail handling mode)
+						store_index = core_max_idx;
+					}
+#if TAIL_HANDLING == 1
+					else
+					{
+						// f_in to the tail and no to the core
+						f_coremax = f_in;
+					}
+
+					if (count_frags) // implying frag_cnt < k_value
+						frag_tail = f_coremax;
+					else
+						Fragment_OrderIndependentMerge(frag_tail, f_coremax);
+#endif
+				}
+			}
+		}
+	}
+	// memory write section
+#if NO_OVERLAP == 1 && ZF_HANDLING == 1
+	if (core_max_idx == -3)
+	{
+		const int overlap_idx = store_index;
+
+		Fragment f_zero_wildcard = (Fragment)0;
+		f_zero_wildcard.opacity_sum = -1.f; // to avoid invalid count
+
+		for (int i = overlap_idx + 1; i < (int)num_unsorted_cores; i++)
+		{
+			Fragment f_ith;
+			GET_FRAG(f_ith, addr_base, i);
+			if (f_ith.i_vis == 0)
+				break;
+
+			if (OverlapTest(f_ith, f_in))
+			{
+				Fragment_OrderIndependentMerge(f_in, f_ith);
+				SET_FRAG(addr_base, i, f_zero_wildcard);
+			}
+		}
+	}
+#endif
+	if (store_index >= 0)
+	{
+		SET_FRAG(addr_base, store_index, f_in);
+	}
 
 #if TAIL_HANDLING == 1
-	const uint num_cores = k_value - 1;
+	if (core_max_idx >= 0) // replace
+	{
+		SET_FRAG(addr_base, k_value - 1, frag_tail);
+	}
+#endif
 
+	if (count_frags)
+	{
+		fragment_counter[tex2d_xy] = frag_cnt + 1;
+		// finish synch.. syntax
+	}
+}
+
+void Fill_kBuffer__MAX_Z_CULLING(const in int2 tex2d_xy, const in uint k_value, const in float4 v_rgba, const in float z_depth, const in float z_thickness)
+{
+	if (z_depth > FLT_LARGE || v_rgba.a == 0)
+		clip(-1);
+
+	uint iv_rgba = ConvertFloat4ToUInt(v_rgba);
+
+	uint bytes_frags_per_pixel = k_value * 4 * 4; // to do : consider the dynamic scheme. (4 bytes unit)
+	uint pixel_id = tex2d_xy.y * g_cbCamState.rt_width + tex2d_xy.x;
+	uint addr_base = pixel_id * bytes_frags_per_pixel;
+
+#if FRAG_Z_CULLING==1
+	uint addr_base_max_z = (g_cbCamState.rt_height * g_cbCamState.rt_width) * bytes_frags_per_pixel + pixel_id * 4;
+	float prev_core_max_z = FLT_MAX;
+#endif
+
+	Fragment f_in;
+	f_in.z = z_depth;
+	f_in.i_vis = ConvertFloat4ToUInt(v_rgba);
+	f_in.zthick = z_thickness;
+	f_in.opacity_sum = v_rgba.a;
+
+	// critical section
+	// pixel synchronization
+	uint frag_cnt = fragment_counter[tex2d_xy.xy];
+#ifdef DEBUG__
+	if (frag_cnt == 7777777) clip(-1);
+#endif
+
+#if TAIL_HANDLING==1
+	const uint num_cores = k_value - 1;
+#else
+	const uint num_cores = k_value;
+#endif
+
+	if (frag_cnt == 0) // clear k_buffer using the counter as a mask
+	{
+		for (uint k = 0; k < k_value; k++)
+		{
+			SET_ZEROFRAG(addr_base, k);
+		}
+#if FRAG_Z_CULLING==1
+		deep_k_buf.Store(addr_base_max_z, asuint(FLT_MAX));
+#endif
+	}
+#if FRAG_Z_CULLING==1
+	else if(frag_cnt >= num_cores)
+	{
+		prev_core_max_z = asfloat(deep_k_buf.Load(addr_base_max_z)); 
+		//MARK_RED(prev_core_max_z > 10000.f);
+	}
+#endif
+
+	int store_index = -1;
+	int core_max_idx = -1;
+	bool count_frags = false;
+	Fragment f_coremax = (Fragment)0;
+
+#if TAIL_HANDLING == 1
 	Fragment frag_tail;
 	if (frag_cnt == k_value)
 	{
@@ -311,6 +501,16 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 		frag_tail.z = FLT_MAX;
 	}
 
+#if FRAG_Z_CULLING==1
+	if (f_in.z >= prev_core_max_z)
+	{
+		// update the merging slot
+		if (frag_cnt == k_value)
+			Fragment_OrderIndependentMerge(f_in, frag_tail);
+		store_index = k_value - 1;
+		//MARK_RED(1);
+	}
+#else
 	if (f_in.z > frag_tail.z - frag_tail.zthick)
 	{
 		// this routine implies that frag_tail.i_vis > 0 and frag_tail.z is finite
@@ -318,13 +518,14 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 		Fragment_OrderIndependentMerge(f_in, frag_tail);
 		store_index = k_value - 1;
 	}
+#endif
 	else
 #else
-	const uint num_cores = k_value;
+#if FRAG_Z_CULLING==1
+	clip(f_in.z < prev_core_max_z);
+#endif
 #endif
 	{
-		Fragment f_coremax = (Fragment)0;
-
 		[loop]
 		for (uint i = 0; i < num_cores; i++)
 		{
@@ -371,11 +572,13 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 						store_index = core_max_idx;
 					}
 #if TAIL_HANDLING == 1
+#if FRAG_Z_CULLING==0
 					else
 					{
 						// f_in to the tail and no to the core
 						f_coremax = f_in;
 					}
+#endif
 
 					if (count_frags) // implying frag_cnt < k_value
 						frag_tail = f_coremax;
@@ -386,8 +589,6 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 			}
 		}
 	}
-
-
 	// memory write section
 #if NO_OVERLAP == 1 && ZF_HANDLING == 1
 	if (core_max_idx == -3)
@@ -416,289 +617,31 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 	{
 		SET_FRAG(addr_base, store_index, f_in);
 	}
-	if (count_frags)
+
+#if FRAG_Z_CULLING==1
+	if (core_max_idx >= 0)
 	{
-		fragment_counter[tex2d_xy] = frag_cnt + 1;
+		if (frag_cnt + 1 == num_cores && count_frags)
+		{
+			deep_k_buf.Store(addr_base_max_z, asuint(f_coremax.z));
+		}
+		else if(frag_cnt + 1 > num_cores)
+		{
+			deep_k_buf.Store(addr_base_max_z, asuint(max(f_coremax.z, f_in.z)));
+		}
 	}
+#endif
 #if TAIL_HANDLING == 1
 	if (core_max_idx >= 0) // replace
 	{
 		SET_FRAG(addr_base, k_value - 1, frag_tail);
 	}
 #endif
-}
 
-void Fill_kBuffer_(const in int2 tex2d_xy, const in uint k_value, const in float4 v_rgba, const in float z_depth, const in float z_thickness)
-{
-	if (z_depth > FLT_LARGE || v_rgba.a == 0)
-		return;
-
-	uint iv_rgba = ConvertFloat4ToUInt(v_rgba);
-	uint addr_base = (tex2d_xy.y * g_cbCamState.rt_width + tex2d_xy.x) * k_value * 4 * 4;
-
-	Fragment f_in;
-	f_in.z = z_depth;
-	f_in.i_vis = ConvertFloat4ToUInt(v_rgba);
-	f_in.zthick = z_thickness;
-	f_in.opacity_sum = v_rgba.a;
-
-	// pixel synchronization
-	uint frag_cnt = fragment_counter[tex2d_xy.xy];
-	if (frag_cnt == 0) // clear k_buffer using the counter as a mask
+	if (count_frags)
 	{
-		for (uint k = 0; k < k_value; k++)
-		{
-			SET_ZEROFRAG(addr_base, k);
-		}
-	}
-
-	// critical section
-#if TAIL_HANDLING == 1
-	Fragment frag_tail;
-	
-	if (frag_cnt == k_value)
-	{
-		GET_FRAG(frag_tail, addr_base, k_value - 1);
-	}
-	else
-	{
-		frag_tail.i_vis = 0;
-		frag_tail.opacity_sum = 0;
-		frag_tail.zthick = 0;
-		frag_tail.z = FLT_MAX;
-	}
-
-	if (f_in.z > frag_tail.z - frag_tail.zthick)
-	{
-		// update the merging slot
-		Fragment_OrderIndependentMerge(frag_tail, f_in);
-		SET_FRAG(addr_base, k_value - 1, frag_tail);
-	}
-	else
-#endif
-	{
-		Fragment f_coremax = (Fragment)0;
-		int core_max_idx = -1;
-		bool count_frags = false;
-//#define NO_OVERLAP 1
-#if NO_OVERLAP == 1 && ZF_HANDLING == 1
-		int merge_idx = -1;
-#endif
-		[loop]
-#if TAIL_HANDLING == 1
-		for (uint i = 0; i < k_value - 1; i++)
-#else
-		for (uint i = 0; i < k_value; i++)
-#endif
-		{
-			Fragment f_ith;
-			GET_FRAG(f_ith, addr_base, i);
-			if (f_ith.i_vis == 0) // empty slot
-			{
-				SET_FRAG(addr_base, i, f_in);
-				core_max_idx = -3;
-				if(f_ith.opacity_sum == 0)
-					count_frags = true;
-				break;
-			}
-			else //if (f_ith.i_vis != 0)
-			{
-#if ZF_HANDLING == 1
-				if (OverlapTest(f_ith, f_in))
-				{
-#if NO_OVERLAP == 1
-					Fragment_OrderIndependentMerge(f_in, f_ith);
-					merge_idx = i;
-#else
-					Fragment_OrderIndependentMerge(f_ith, f_in);
-					SET_FRAG(addr_base, i, f_ith);
-#endif
-					core_max_idx = -2;
-					break;
-				}
-				else
-#endif
-					if (f_coremax.z < f_ith.z)
-					{
-						f_coremax = f_ith;
-						core_max_idx = i;
-					}
-			}
-		}
-#if NO_OVERLAP == 1 && ZF_HANDLING == 1
-		if (merge_idx >= 0) // core_max_idx == -2
-		{
-			Fragment f_zero_wildcard = (Fragment)0;
-			f_zero_wildcard.opacity_sum = -1.f; // to avoid invalid count
-			[loop]
-#if TAIL_HANDLING == 1
-			for (i = merge_idx + 1; i < k_value - 1; i++)
-#else
-			for (i = merge_idx + 1; i < k_value; i++)
-#endif
-			{
-				Fragment f_ith;
-				GET_FRAG(f_ith, addr_base, i);
-				if (f_ith.i_vis == 0)
-					break;
-
-				if (OverlapTest(f_ith, f_in))
-				{
-					Fragment_OrderIndependentMerge(f_in, f_ith);
-					SET_FRAG(addr_base, i, f_zero_wildcard);
-				}
-			}
-			SET_FRAG(addr_base, merge_idx, f_in);
-		}
-#endif
-
-		if (core_max_idx >= 0)
-		{
-			if (f_coremax.z > f_in.z) // replace
-			{
-				SET_FRAG(addr_base, core_max_idx, f_in);
-#if TAIL_HANDLING == 1
-				if (frag_cnt < k_value)
-				{
-					frag_tail = f_coremax;
-					count_frags = true; // first insertion to tail
-				}
-				else
-				{
-					Fragment_OrderIndependentMerge(frag_tail, f_coremax);
-				}
-				SET_FRAG(addr_base, k_value - 1, frag_tail);
-#endif
-			}
-#if TAIL_HANDLING == 1
-			else // merge tail
-			{
-				// remove this routine using loaded coremax depth!!!
-				if (frag_cnt < k_value)
-				{
-					frag_tail = f_in;
-					count_frags = true; // first insertion to tail
-				}
-				else
-				{
-					Fragment_OrderIndependentMerge(frag_tail, f_in);
-				}
-				SET_FRAG(addr_base, k_value - 1, frag_tail);
-			}
-#endif
-		}
-
-		if (count_frags)
-			fragment_counter[tex2d_xy.xy] = frag_cnt + 1;
-	}
-}
-
-void Fill_kBuffer__(const in int2 tex2d_xy, const in uint k_value, const in float4 v_rgba, const in float z_depth, const in float z_thickness)
-{
-	if (z_depth > FLT_LARGE || v_rgba.a == 0)
-		return;
-
-	uint iv_rgba = ConvertFloat4ToUInt(v_rgba);
-	uint addr_base = (tex2d_xy.y * g_cbCamState.rt_width + tex2d_xy.x) * k_value * 4 * 4;
-
-	Fragment f_in;
-	f_in.z = z_depth;
-	f_in.i_vis = ConvertFloat4ToUInt(v_rgba);
-	f_in.zthick = z_thickness;
-	f_in.opacity_sum = v_rgba.a;
-
-	// pixel synchronization
-	uint frag_cnt = fragment_counter[tex2d_xy.xy];
-	if (frag_cnt == 0) // clear mask
-	{
-		for (uint k = 0; k < k_value; k++)
-			STORE4_KBUF((uint4)0, addr_base, k);
-	}
-
-	Fragment frag_tail;
-	GET_FRAG(frag_tail, addr_base, k_value - 1);
-
-#if TAIL_HANDLING == 1
-	if (frag_tail.i_vis == 0)
-	{
-		frag_tail.z = FLT_MAX;
-		frag_tail.zthick = 0;
-	}
-	if (f_in.z > frag_tail.z - frag_tail.zthick)
-	{
-		// update the merging slot
-		Fragment_OrderIndependentMerge(frag_tail, f_in);
-		SET_FRAG(addr_base, k_value - 1, frag_tail);
-	}
-	else
-#endif
-	{
-		Fragment f_coremax = (Fragment)0;
-		int core_max_idx = -1;
-		//[allow_uav_condition]
-		[loop]
-#if TAIL_HANDLING == 1
-		for (int i = 0; i < k_value - 1; i++)
-#else
-		for (int i = 0; i < k_value; i++)
-#endif
-		{
-			// after atomic store operation
-			Fragment f_ith;
-			//GET_FRAG(f_ith, deep_k_buf[addr_base + i]);
-			GET_FRAG(f_ith, addr_base, i);
-			if (f_ith.i_vis != 0)
-			{
-#if ZF_HANDLING == 1
-				if (OverlapTest(f_ith, f_in))
-				{
-					Fragment_OrderIndependentMerge(f_ith, f_in);
-					//SET_FRAG(deep_k_buf[addr_base + i], f_ith);
-					SET_FRAG(addr_base, i, f_ith);
-					core_max_idx = -2;
-					//i = k_value;
-					break;
-				}
-				else
-#endif
-					if (f_coremax.z < f_ith.z)
-					{
-						f_coremax = f_ith;
-						core_max_idx = i;
-					}
-			}
-			else // if (i_vis != 0) // empty slot
-			{
-				//SET_FRAG(deep_k_buf[addr_base + i], f_in);
-				SET_FRAG(addr_base, i, f_in);
-				core_max_idx = -3;
-				//i = k_value;
-				break;
-			}
-		}
-
-		if (core_max_idx >= 0)
-		{
-			if (f_coremax.z > f_in.z) // replace
-			{
-				SET_FRAG(addr_base, core_max_idx, f_in);
-#if TAIL_HANDLING == 1
-				if (frag_tail.i_vis == 0) frag_tail = f_coremax;
-				else Fragment_OrderIndependentMerge(frag_tail, f_coremax);
-				SET_FRAG(addr_base, k_value - 1, frag_tail);
-#endif
-			}
-#if TAIL_HANDLING == 1
-			else // merge tail
-			{
-				if (frag_tail.i_vis == 0) frag_tail = f_in;
-				else Fragment_OrderIndependentMerge(frag_tail, f_in);
-				SET_FRAG(addr_base, k_value - 1, frag_tail);
-			}
-#endif
-		}
-		if (frag_cnt < k_value)
-			fragment_counter[tex2d_xy.xy] = 1 + frag_cnt;
+		fragment_counter[tex2d_xy] = frag_cnt + 1;
+		// finish synch.. syntax
 	}
 }
 #else
@@ -711,7 +654,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 {
 	if (z_depth > FLT_LARGE || v_rgba.a == 0)
 	{
-		return;
+		clip(-1);
 	}
 	uint __dummy;
 	uint iv_rgba = ConvertFloat4ToUInt(v_rgba);
@@ -935,7 +878,7 @@ void OIT_PRESET(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	}
 
 	if (v_rgba.a == 0)
-		return;
+		clip(-1);
 
 	float vz_thickness = g_cbPobj.vz_thickness;
 	Fill_kBuffer(tex2d_xy, g_cbCamState.k_value, v_rgba, depthcs, vz_thickness);
@@ -982,7 +925,7 @@ void OIT_KDEPTH(VS_OUTPUT input)
 			//v_rgba.rgb = float3(1, 0, 0);
 			v_rgba = (float4) 0;
 			z_depth = FLT_MAX;
-			return;
+			clip(-1);
 		}
 		else
 		{
@@ -1135,6 +1078,6 @@ void OIT_KDEPTH(VS_OUTPUT input)
 	//vz_thickness = 0.00001;
 #endif
 
-	//Fill_kBuffer(tex2d_xy, g_cbCamState.k_value, v_rgba, z_depth, vz_thickness);
-	__F(tex2d_xy, g_cbCamState.k_value, v_rgba, z_depth, vz_thickness);
+	Fill_kBuffer(tex2d_xy, g_cbCamState.k_value, v_rgba, z_depth, vz_thickness);
+	//__F(tex2d_xy, g_cbCamState.k_value, v_rgba, z_depth, vz_thickness);
 }

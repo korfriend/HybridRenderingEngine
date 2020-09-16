@@ -28,23 +28,30 @@ RWTexture2D<float> fragment_zdepth : register(u3);
 void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
 {
     if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
-        return;
-
-	// we will test our oit with the number of deep layers : 4, 8, 16 ... here, set max 32 ( larger/equal than k_value * 2 )
-	const uint k_value = g_cbCamState.k_value;
-
-	uint frag_cnt = min(fragment_counter[DTid.xy], k_value);
-
-	uint bytes_frags_per_pixel = k_value * 4 * 4; // to do : consider the dynamic scheme. (4 bytes unit)
-	uint addr_base = (DTid.y * g_cbCamState.rt_width + DTid.x) * bytes_frags_per_pixel;
+		return;
+	uint frag_cnt = fragment_counter[DTid.xy];
 	if (frag_cnt == 0)
 	{
-		[loop]
-		for (uint i = 0; i < k_value; i++)
-			SET_ZEROFRAG(addr_base, i);
+		// note that this clear process is performed in PS using counter mask
+		//uint bytes_frags_per_pixel = g_cbCamState.k_value * 4 * 4; // to do : consider the dynamic scheme. (4 bytes unit)
+		//uint addr_base = (DTid.y * g_cbCamState.rt_width + DTid.x) * bytes_frags_per_pixel;
+		//[loop]
+		//for (uint i = 0; i < g_cbCamState.k_value; i++)
+		//	SET_ZEROFRAG(addr_base, i);
 		return;
 	}
+	else if (frag_cnt == 7777777)
+	{
+		fragment_blendout[DTid.xy] = float4(1, 0, 0, 1);
+		return;
+	}
+	const uint k_value = g_cbCamState.k_value;
+	frag_cnt = min(frag_cnt, k_value);
 
+	// we will test our oit with the number of deep layers : 4, 8, 16 ... here, set max 32 ( larger/equal than k_value * 2 )
+	uint bytes_frags_per_pixel = k_value * 4 * 4; // to do : consider the dynamic scheme. (4 bytes unit)
+	uint addr_base = (DTid.y * g_cbCamState.rt_width + DTid.x) * bytes_frags_per_pixel;
+	
 	float v_thickness = GetHotspotThickness((int2)DTid);
 	v_thickness = max(v_thickness, g_cbCamState.cam_vz_thickness);
 
