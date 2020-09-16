@@ -16,7 +16,7 @@ double g_dRunTimeVRs = 0;
 #define ENABLE_LEGACY
 #define ENABLE_NEWOIT
 #ifdef ENABLE_LEGACY
-grd_helper_legacy::GpuDX11CommonParameters g_vmCommonParams_legacy;
+grd_helper_legacy::GpuDX11CommonParametersOld g_vmCommonParams_legacy;
 #endif
 #ifdef ENABLE_NEWOIT
 grd_helper::GpuDX11CommonParameters g_vmCommonParams;
@@ -50,7 +50,7 @@ bool InitModule(fncontainer::VmFnContainer& _fncontainer)
 		g_pCGpuManager = new VmGpuManager(GpuSdkTypeDX11, "vismtv_inbuilt_renderergpudx.dll");
 
 #ifdef ENABLE_LEGACY
-	if (grd_helper_legacy::InitializePresettings(g_pCGpuManager, g_vmCommonParams_legacy) == -1)
+	if (grd_helper_legacy::InitializePresettings(g_pCGpuManager, &g_vmCommonParams_legacy) == -1)
 	{
 		std::cout << "failure legacy initializer!" << std::endl;
 		DeInitModule(fncontainer::VmFnContainer());
@@ -58,7 +58,7 @@ bool InitModule(fncontainer::VmFnContainer& _fncontainer)
 	}
 #endif
 #ifdef ENABLE_NEWOIT
-	if (grd_helper::InitializePresettings(g_pCGpuManager, g_vmCommonParams) == -1)
+	if (grd_helper::InitializePresettings(g_pCGpuManager, &g_vmCommonParams) == -1)
 	{
 		std::cout << "failure new initializer!" << std::endl;
 		DeInitModule(fncontainer::VmFnContainer());
@@ -79,7 +79,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 #ifdef ENABLE_LEGACY
 	if (g_vmCommonParams_legacy.pdx11Device == NULL || g_vmCommonParams_legacy.pdx11DeviceImmContext == NULL)
 	{
-		if (grd_helper_legacy::InitializePresettings(g_pCGpuManager, g_vmCommonParams_legacy) == -1)
+		if (grd_helper_legacy::InitializePresettings(g_pCGpuManager, &g_vmCommonParams_legacy) == -1)
 		{
 			DeInitModule(fncontainer::VmFnContainer());
 			return false;
@@ -89,7 +89,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 #ifdef ENABLE_NEWOIT
 	if (g_vmCommonParams.dx11Device == NULL || g_vmCommonParams.dx11DeviceImmContext == NULL)
 	{
-		if (grd_helper::InitializePresettings(g_pCGpuManager, g_vmCommonParams) == -1)
+		if (grd_helper::InitializePresettings(g_pCGpuManager, &g_vmCommonParams) == -1)
 		{
 			DeInitModule(fncontainer::VmFnContainer());
 			return false;
@@ -265,10 +265,10 @@ void InteropCustomWork(fncontainer::VmFnContainer& _fncontainer)
 			g_pCGpuManager = new VmGpuManager(GpuSdkTypeDX11, "vismtv_inbuilt_renderergpudx.dll");
 
 #if defined(ENABLE_LEGACY)
-		*piGpuState = grd_helper_legacy::InitializePresettings(g_pCGpuManager, g_vmCommonParams_legacy);
+		*piGpuState = grd_helper_legacy::InitializePresettings(g_pCGpuManager, &g_vmCommonParams_legacy);
 #endif
 #if defined(ENABLE_NEWOIT)
-		*piGpuState = grd_helper::InitializePresettings(g_pCGpuManager, g_vmCommonParams);
+		*piGpuState = grd_helper::InitializePresettings(g_pCGpuManager, &g_vmCommonParams);
 #endif
 
 		int* piFeatureLevel = (int*)_fncontainer.ReadRmwBufferPtr("_out_int_FeatureLevelDX11", (int*)NULL);
@@ -292,10 +292,10 @@ void InteropCustomWork(fncontainer::VmFnContainer& _fncontainer)
 		if (g_pCGpuManager == NULL)
 			g_pCGpuManager = new VmGpuManager(GpuSdkTypeDX11, "vismtv_inbuilt_renderergpudx.dll");
 #if defined(ENABLE_LEGACY)
-		grd_helper_legacy::InitializePresettings(g_pCGpuManager, g_vmCommonParams_legacy);
+		grd_helper_legacy::InitializePresettings(g_pCGpuManager, &g_vmCommonParams_legacy);
 #endif
 #if defined(ENABLE_NEWOIT)
-		grd_helper::InitializePresettings(g_pCGpuManager, g_vmCommonParams);
+		grd_helper::InitializePresettings(g_pCGpuManager, &g_vmCommonParams);
 #endif
 		*ppCGpuManager = g_pCGpuManager;
 	}

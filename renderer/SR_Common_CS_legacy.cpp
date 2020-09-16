@@ -12,7 +12,7 @@ using namespace grd_helper_legacy;
 
 bool RenderSrCommonCS(VmFnContainer* _fncontainer,
 	VmGpuManager* pCGpuManager,
-	GpuDX11CommonParameters* pdx11CommonParams,
+	GpuDX11CommonParametersOld* pdx11CommonParams,
 	ID3D11InputLayout* pdx11ILs[NUMINPUTLAYOUTS],
 	ID3D11VertexShader** ppdx11VS_CommonUsages[NUMSHADERS_SR_VS],
 	ID3D11VertexShader** ppdx11VS_BiasZs[NUMSHADERS_BIASZ_SR_VS],

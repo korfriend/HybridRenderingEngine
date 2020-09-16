@@ -137,7 +137,7 @@ namespace grd_helper_legacy
 		rxSR_CULL_FORCED_CCW,
 	};
 
-	struct GpuDX11CommonParameters
+	struct GpuDX11CommonParametersOld
 	{
 		bool bIsInitialized;
 		D3D_FEATURE_LEVEL eDx11FeatureLevel;
@@ -166,7 +166,7 @@ namespace grd_helper_legacy
 		ID3D11SamplerState* pdx11SStates[__SState_COUNT];
 		ID3D11Buffer* pdx11BufConstParameters[__CB_COUNT];
 
-		GpuDX11CommonParameters()
+		GpuDX11CommonParametersOld()
 		{
 			bIsInitialized = false;
 			eDx11FeatureLevel = D3D_FEATURE_LEVEL_9_1;
@@ -441,7 +441,7 @@ namespace grd_helper_legacy
 		uint uiScreenSizeY;
 	};
 
-	int InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonParameters& gpu_params);
+	int InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonParametersOld* gpu_params);
 	void DeinitializePresettings();
 
 	// volume/block structure

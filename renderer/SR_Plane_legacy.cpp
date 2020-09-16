@@ -4,7 +4,7 @@ using namespace grd_helper_legacy;
 
 bool RenderSrOnPlane(VmFnContainer* _fncontainer,
 	VmGpuManager* pCGpuManager,
-	GpuDX11CommonParameters* pdx11CommonParams,
+	GpuDX11CommonParametersOld* pdx11CommonParams,
 	ID3D11InputLayout* pdx11ILs[NUMINPUTLAYOUTS],
 	ID3D11VertexShader** ppdx11CommonVSs[NUMSHADERS_SR_VS],
 	ID3D11VertexShader** ppdx11PlaneVSs[NUMSHADERS_PLANE_SR_VS],

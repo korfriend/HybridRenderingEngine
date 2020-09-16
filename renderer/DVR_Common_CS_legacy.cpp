@@ -60,7 +60,7 @@ using namespace grd_helper_legacy;
 
 bool RenderVrCommonCS(VmFnContainer* _fncontainer,
 	VmGpuManager* pCGpuManager,
-	GpuDX11CommonParameters* pdx11CommonParams,
+	GpuDX11CommonParametersOld* pdx11CommonParams,
 	ID3D11ComputeShader** ppdx11CS_VRs[NUMSHADERS_VR_CS],
 	ID3D11ComputeShader** ppdx11CS_Merges[NUMSHADERS_MERGE_CS],
 	ID3D11VertexShader* pdx11VS_ProxyRect, ID3D11InputLayout* pdx11IL_ProxyRect,

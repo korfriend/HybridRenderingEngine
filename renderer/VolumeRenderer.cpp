@@ -53,18 +53,23 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	};
 
 #define __DTYPE(type) data_type::dtype<type>()
-
 	auto Get_LCParam = [&lobj](const string& name, data_type dtype, auto default_value)
 	{
 		auto vret = default_value;
 		lobj->GetCustomParameter(name, dtype, &vret);
 		return vret;
-	};;
-	// TEST
+	};
+
 	int k_value_old = Get_LCParam("_int_NumK", __DTYPE(int), (int)8);
 	int k_value = _fncontainer->GetParamValue("_int_NumK", k_value_old);
 	lobj->RegisterCustomParameter("_int_NumK", k_value);
+	MFR_MODE mode_OIT = (MFR_MODE)_fncontainer->GetParamValue("_int_OitMode", (int)0);
+	int buf_ex_scale = _fncontainer->GetParamValue("_int_BufExScale", (int)4); // 32 layers
+	int num_moments_old = 4;
+	lobj->GetCustomParameter("_int_NumQueueLayers", data_type::dtype<int>(), &num_moments_old);
+	int num_moments = _fncontainer->GetParamValue("_int_NumQueueLayers", num_moments_old);
 
+	// TEST
 	int test_value = _fncontainer->GetParamValue("_int_TestValue", (int)0);
 	int test_mode = _fncontainer->GetParamValue("_int_TestMode", (int)0);
 
@@ -136,10 +141,14 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	__ID3D11DeviceContext* dx11DeviceImmContext = dx11CommonParams->dx11DeviceImmContext;
 
 #pragma region // IOBJECT GPU
+	int buffer_ex = mode_OIT != MFR_MODE::KBZT ? buf_ex_scale : 1, buffer_ex_old = 0; // optimal for K is 1
 	vmint2 fb_size_cur, fb_size_old = vmint2(0, 0);
 	iobj->GetFrameBufferInfo(&fb_size_cur);
 	iobj->GetCustomParameter("_int2_PreviousScreenSize", data_type::dtype<vmint2>(), &fb_size_old);
-	if (fb_size_cur.x != fb_size_old.x || fb_size_cur.y != fb_size_old.y || k_value != k_value_old)
+	iobj->GetCustomParameter("_int_PreviousBufferEx", data_type::dtype<int>(), &buffer_ex_old);
+	if (fb_size_cur.x != fb_size_old.x || fb_size_cur.y != fb_size_old.y || k_value != k_value_old
+		|| k_value != k_value_old || num_moments != num_moments_old
+		|| buffer_ex != buffer_ex_old)
 	{
 		gpu_manager->ReleaseGpuResourcesBySrcID(iobj->GetObjectID());	// System Out Æ÷ÇÔ //
 		iobj->RegisterCustomParameter("_int2_PreviousScreenSize", fb_size_cur);
@@ -158,7 +167,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
 
 	grd_helper::UpdateFrameBuffer(gres_fb_deep_k_buffer, iobj, "BUFFER_RW_DEEP_K_BUF", RTYPE_BUFFER,
-		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, k_value * 4);
+		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, k_value * 4 * buffer_ex);
 
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_rgba, iobj, "SYSTEM_OUT_RGBA", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_SYSOUT);
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_depthcs, iobj, "SYSTEM_OUT_DEPTH", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R32_FLOAT, UPFB_SYSOUT);

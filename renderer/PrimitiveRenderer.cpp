@@ -660,14 +660,6 @@ void ComputeSSAO(__ID3D11DeviceContext* dx11DeviceImmContext,
 	dx11DeviceImmContext->CSSetUnorderedAccessViews(30, 1, &dx11UAVs_SSAO[2], 0);
 }
 
-enum MFR_MODE
-{
-	KBZT = 0,
-	LL,
-	MOMENT,
-	DKplusB
-};
-
 bool RenderSrOIT(VmFnContainer* _fncontainer,
 	VmGpuManager* gpu_manager,
 	grd_helper::GpuDX11CommonParameters* dx11CommonParams,
@@ -766,7 +758,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #define SET_VS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(VERTEX_SHADER, NAME), __S, true)
 #define SET_PS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(PIXEL_SHADER, NAME), __S, true)
 #define SET_CS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(COMPUTE_SHADER, NAME), __S, true)
-		
+		/*
 		string strNames_VS[VS_NUM] = {
 			   "SR_OIT_P_vs_5_0"
 			  ,"SR_OIT_PN_vs_5_0"
@@ -897,6 +889,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			}
 		}
 		/**/
+		dx11CommonParams->dx11DeviceImmContext->Flush();
 	}
 
 	ID3D11InputLayout* dx11LI_P = (ID3D11InputLayout*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(INPUT_LAYOUT, "P"));
@@ -975,7 +968,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
 
 	grd_helper::UpdateFrameBuffer(gres_fb_deep_k_buffer, iobj, "BUFFER_RW_DEEP_K_BUF", RTYPE_BUFFER,
-		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, k_value * 4 * buffer_ex + 1 /*+1 for core max depth*/);
+		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, (k_value * 4 * buffer_ex));
 
 	// SSAO
 	{
@@ -1010,7 +1003,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	if (check_pixel_transmittance)
 	{
 		grd_helper::UpdateFrameBuffer(gres_fb_sys_deep_k, iobj, "SYSTEM_OUT_DEEP_K_BUF", RTYPE_BUFFER,
-			NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT, k_value * 4 * buffer_ex + 1);
+			NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT, (k_value * 4 * buffer_ex));
 		if (mode_OIT == MFR_MODE::LL)
 			grd_helper::UpdateFrameBuffer(gres_fb_sys_ref_pidx, iobj, "SYSTEM_OUT_REF_PIDX_BUF", RTYPE_BUFFER,
 				NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT);

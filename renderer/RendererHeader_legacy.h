@@ -36,14 +36,14 @@ extern void RegisterVolumeRes(VmVObjectVolume* vol_obj, VmTObject* tobj, VmLObje
 int RTTandLayersToLayersCS(ID3D11DeviceContext* pdx11DeviceImmContext, uint uiNumGridX, uint uiNumGridY
 	, ID3D11ShaderResourceView* pdx11SRV_RenderOuts[NUM_TEXRT_LAYERS], ID3D11ShaderResourceView* pdx11SRV_DepthCSs[NUM_TEXRT_LAYERS], int iCountMerging
 	, ID3D11UnorderedAccessView* pUAV_Merge_PingpongCSs[2], ID3D11ShaderResourceView* pSRV_Merge_PingpongCSs[2]
-	, grd_helper_legacy::GpuDX11CommonParameters* pdx11CommonParams, ID3D11ComputeShader** ppdx11MergeCSs[NUMSHADERS_MERGE_CS]
+	, grd_helper_legacy::GpuDX11CommonParametersOld* pdx11CommonParams, ID3D11ComputeShader** ppdx11MergeCSs[NUMSHADERS_MERGE_CS]
 	, ID3D11ShaderResourceView* pdx11SRV_4NULLs[NUM_TEXRT_LAYERS]
 	, ID3D11ShaderResourceView* pdx11SRV_2NULLs[2], ID3D11RenderTargetView* pdx11RTV_2NULLs[2], int iMergeLevel
 	);
 
 bool RenderVrCommonCS(VmFnContainer* _fncontainer,
 	VmGpuManager* pCGpuManager,
-	grd_helper_legacy::GpuDX11CommonParameters* pdx11CommonParams,
+	grd_helper_legacy::GpuDX11CommonParametersOld* pdx11CommonParams,
 	ID3D11ComputeShader** ppdx11CS_VRs[NUMSHADERS_VR_CS],
 	ID3D11ComputeShader** ppdx11CS_Merges[NUMSHADERS_MERGE_CS],
 	ID3D11VertexShader* pdx11VS_ProxyRect, ID3D11InputLayout* pdx11IL_ProxyRect,
@@ -52,7 +52,7 @@ bool RenderVrCommonCS(VmFnContainer* _fncontainer,
 
 bool RenderSrCommonCS(VmFnContainer* _fncontainer,
 	VmGpuManager* pCGpuManager,
-	grd_helper_legacy::GpuDX11CommonParameters* pdx11CommonParams,
+	grd_helper_legacy::GpuDX11CommonParametersOld* pdx11CommonParams,
 	ID3D11InputLayout* pdx11ILs[NUMINPUTLAYOUTS],
 	ID3D11VertexShader** ppdx11VS_CommonUsages[NUMSHADERS_SR_VS],
 	ID3D11VertexShader** ppdx11VS_BiasZs[NUMSHADERS_BIASZ_SR_VS],
@@ -66,7 +66,7 @@ bool RenderSrCommonCS(VmFnContainer* _fncontainer,
 
 bool RenderSrOnPlane(VmFnContainer* _fncontainer,
 	VmGpuManager* pCGpuManager,
-	grd_helper_legacy::GpuDX11CommonParameters* pdx11CommonParams,
+	grd_helper_legacy::GpuDX11CommonParametersOld* pdx11CommonParams,
 	ID3D11InputLayout* pdx11ILs[NUMINPUTLAYOUTS],
 	ID3D11VertexShader** ppdx11CommonVSs[NUMSHADERS_SR_VS],
 	ID3D11VertexShader** ppdx11PlaneVSs[NUMSHADERS_PLANE_SR_VS],

@@ -40,7 +40,7 @@ using namespace grd_helper_legacy;
 int RTTandLayersToLayersCS(ID3D11DeviceContext* pdx11DeviceImmContext, uint uiNumGridX, uint uiNumGridY
 	, ID3D11ShaderResourceView* pdx11SRV_RenderOuts[NUM_TEXRT_LAYERS], ID3D11ShaderResourceView* pdx11SRV_DepthCSs[NUM_TEXRT_LAYERS], int iCountMerging
 	, ID3D11UnorderedAccessView* pUAV_Merge_PingpongCSs[2], ID3D11ShaderResourceView* pSRV_Merge_PingpongCSs[2]
-	, GpuDX11CommonParameters* pdx11CommonParams, ID3D11ComputeShader** ppdx11MergeCSs[NUMSHADERS_MERGE_CS]
+	, GpuDX11CommonParametersOld* pdx11CommonParams, ID3D11ComputeShader** ppdx11MergeCSs[NUMSHADERS_MERGE_CS]
 	, ID3D11ShaderResourceView* pdx11SRV_4NULLs[NUM_TEXRT_LAYERS]
 	, ID3D11ShaderResourceView* pdx11SRV_2NULLs[2], ID3D11RenderTargetView* pdx11RTV_2NULLs[2], int iMergeLevel
 	)

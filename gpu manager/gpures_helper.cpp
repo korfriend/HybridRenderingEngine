@@ -6,7 +6,7 @@ using namespace grd_helper;
 
 namespace grd_helper
 {
-	static GpuDX11CommonParameters g_VmCommonParams;
+	static GpuDX11CommonParameters* g_pvmCommonParams = NULL;
 	static VmGpuManager* g_pCGpuManager = NULL;
 }
 
@@ -56,7 +56,7 @@ ERROR_SHADER:
 	return E_FAIL;
 }
 
-int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonParameters& gpu_params)
+int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonParameters* gpu_params)
 {
 	enum RET_TYPE
 	{
@@ -69,40 +69,40 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 	//return 0;//
 
 	g_pCGpuManager = pCGpuManager;
+	g_pvmCommonParams = gpu_params;
 
-	if (g_VmCommonParams.is_initialized)
+	if (g_pvmCommonParams->is_initialized)
 	{
-		gpu_params = g_VmCommonParams;
 		return __ALREADY_CHECKED;
 	}
 
 #ifdef USE_DX11_3
-	g_pCGpuManager->GetDeviceInformation((void*)(&g_VmCommonParams.dx11Device), "DEVICE_POINTER_3");
-	g_pCGpuManager->GetDeviceInformation((void*)(&g_VmCommonParams.dx11DeviceImmContext), "DEVICE_CONTEXT_POINTER_3");
+	g_pCGpuManager->GetDeviceInformation((void*)(&g_pvmCommonParams->dx11Device), "DEVICE_POINTER_3");
+	g_pCGpuManager->GetDeviceInformation((void*)(&g_pvmCommonParams->dx11DeviceImmContext), "DEVICE_CONTEXT_POINTER_3");
 #else
-	g_pCGpuManager->GetDeviceInformation((void*)(&g_VmCommonParams.dx11Device), "DEVICE_POINTER");
-	g_pCGpuManager->GetDeviceInformation((void*)(&g_VmCommonParams.dx11DeviceImmContext), "DEVICE_CONTEXT_POINTER");
+	g_pCGpuManager->GetDeviceInformation((void*)(&g_pvmCommonParams->dx11Device), "DEVICE_POINTER");
+	g_pCGpuManager->GetDeviceInformation((void*)(&g_pvmCommonParams->dx11DeviceImmContext), "DEVICE_CONTEXT_POINTER");
 #endif
-	g_pCGpuManager->GetDeviceInformation(&g_VmCommonParams.dx11_adapter, "DEVICE_ADAPTER_DESC");
-	g_pCGpuManager->GetDeviceInformation(&g_VmCommonParams.dx11_featureLevel, "FEATURE_LEVEL");
+	g_pCGpuManager->GetDeviceInformation(&g_pvmCommonParams->dx11_adapter, "DEVICE_ADAPTER_DESC");
+	g_pCGpuManager->GetDeviceInformation(&g_pvmCommonParams->dx11_featureLevel, "FEATURE_LEVEL");
 	//return __SUPPORTED_GPU;
 
-	if (g_VmCommonParams.dx11Device == NULL || g_VmCommonParams.dx11DeviceImmContext == NULL)
+	if (g_pvmCommonParams->dx11Device == NULL || g_pvmCommonParams->dx11DeviceImmContext == NULL)
 	{
 		cout << "error devices!" << endl;
-		gpu_params = g_VmCommonParams;
+		gpu_params = g_pvmCommonParams;
 		return (int)__INVALID_GPU;
 	}
 
-	g_VmCommonParams.Delete();
+	g_pvmCommonParams->Delete();
 	
 	D3D11_QUERY_DESC qr_desc;
 	qr_desc.MiscFlags = 0;
 	qr_desc.Query = D3D11_QUERY_TIMESTAMP_DISJOINT;
-	g_VmCommonParams.dx11Device->CreateQuery(&qr_desc, &g_VmCommonParams.dx11qr_disjoint);
+	g_pvmCommonParams->dx11Device->CreateQuery(&qr_desc, &g_pvmCommonParams->dx11qr_disjoint);
 	qr_desc.Query = D3D11_QUERY_TIMESTAMP;
 	for (int i = 0; i < 10; i++)
-		g_VmCommonParams.dx11Device->CreateQuery(&qr_desc, &g_VmCommonParams.dx11qr_timestamps[i]);
+		g_pvmCommonParams->dx11Device->CreateQuery(&qr_desc, &g_pvmCommonParams->dx11qr_timestamps[i]);
 
 	HRESULT hr = S_OK;
 	// HLSL 에서 대체하는 방법 찾아 보기.
@@ -120,8 +120,8 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		descBlend.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
 		descBlend.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
 		ID3D11BlendState* blender_state;
-		hr |= g_VmCommonParams.dx11Device->CreateBlendState(&descBlend, &blender_state);
-		g_VmCommonParams.safe_set_res(COMRES_INDICATOR(BLEND_STATE, "ADD"), blender_state);
+		hr |= g_pvmCommonParams->dx11Device->CreateBlendState(&descBlend, &blender_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(BLEND_STATE, "ADD"), blender_state);
 
 		D3D11_RASTERIZER_DESC2 descRaster;
 		ZeroMemory(&descRaster, sizeof(D3D11_RASTERIZER_DESC));
@@ -138,51 +138,51 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		descRaster.ForcedSampleCount = 0;
 		descRaster.ConservativeRaster = D3D11_CONSERVATIVE_RASTERIZATION_MODE_OFF;
 		ID3D11RasterizerState2* raster_state;
-		hr |= g_VmCommonParams.dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
-		g_VmCommonParams.safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "SOLID_CW"), raster_state);
+		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "SOLID_CW"), raster_state);
 		descRaster.AntialiasedLineEnable = true;
-		hr |= g_VmCommonParams.dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
-		g_VmCommonParams.safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "AA_SOLID_CW"), raster_state);
+		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "AA_SOLID_CW"), raster_state);
 		//descRaster.CullMode = D3D11_CULL_FRONT;
 		descRaster.CullMode = D3D11_CULL_BACK;
 		descRaster.FrontCounterClockwise = TRUE;
 		descRaster.AntialiasedLineEnable = false;
-		hr |= g_VmCommonParams.dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
-		g_VmCommonParams.safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "SOLID_CCW"), raster_state);
+		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "SOLID_CCW"), raster_state);
 		descRaster.AntialiasedLineEnable = true;
-		hr |= g_VmCommonParams.dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
-		g_VmCommonParams.safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "AA_SOLID_CCW"), raster_state);
+		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "AA_SOLID_CCW"), raster_state);
 		descRaster.CullMode = D3D11_CULL_NONE;
 		descRaster.AntialiasedLineEnable = false;
-		hr |= g_VmCommonParams.dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
-		g_VmCommonParams.safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "SOLID_NONE"), raster_state);
+		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "SOLID_NONE"), raster_state);
 		descRaster.AntialiasedLineEnable = true;
-		hr |= g_VmCommonParams.dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
-		g_VmCommonParams.safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "AA_SOLID_NONE"), raster_state);
+		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "AA_SOLID_NONE"), raster_state);
 
 		descRaster.FillMode = D3D11_FILL_WIREFRAME;
 		descRaster.CullMode = D3D11_CULL_BACK;
 		descRaster.ConservativeRaster = D3D11_CONSERVATIVE_RASTERIZATION_MODE_OFF;
 		descRaster.AntialiasedLineEnable = false;
-		hr |= g_VmCommonParams.dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
-		g_VmCommonParams.safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "WIRE_CW"), raster_state);
+		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "WIRE_CW"), raster_state);
 		descRaster.AntialiasedLineEnable = true;
-		hr |= g_VmCommonParams.dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
-		g_VmCommonParams.safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "AA_WIRE_CW"), raster_state);
+		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "AA_WIRE_CW"), raster_state);
 		descRaster.CullMode = D3D11_CULL_FRONT;
 		descRaster.AntialiasedLineEnable = false;
-		hr |= g_VmCommonParams.dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
-		g_VmCommonParams.safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "WIRE_CCW"), raster_state);
+		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "WIRE_CCW"), raster_state);
 		descRaster.AntialiasedLineEnable = true;
-		hr |= g_VmCommonParams.dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
-		g_VmCommonParams.safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "AA_WIRE_CCW"), raster_state);
+		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "AA_WIRE_CCW"), raster_state);
 		descRaster.CullMode = D3D11_CULL_NONE;
 		descRaster.AntialiasedLineEnable = false;
-		hr |= g_VmCommonParams.dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
-		g_VmCommonParams.safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "WIRE_NONE"), raster_state);
+		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "WIRE_NONE"), raster_state);
 		descRaster.AntialiasedLineEnable = true;
-		hr |= g_VmCommonParams.dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
-		g_VmCommonParams.safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "AA_WIRE_NONE"), raster_state);
+		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "AA_WIRE_NONE"), raster_state);
 	}
 	{
 		D3D11_DEPTH_STENCIL_DESC descDepthStencil;
@@ -192,17 +192,17 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		descDepthStencil.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
 		descDepthStencil.StencilEnable = FALSE;
 		ID3D11DepthStencilState* ds_state;
-		hr |= g_VmCommonParams.dx11Device->CreateDepthStencilState(&descDepthStencil, &ds_state);
-		g_VmCommonParams.safe_set_res(COMRES_INDICATOR(DEPTHSTENCIL_STATE, "LESSEQUAL"), ds_state);
+		hr |= g_pvmCommonParams->dx11Device->CreateDepthStencilState(&descDepthStencil, &ds_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(DEPTHSTENCIL_STATE, "LESSEQUAL"), ds_state);
 		descDepthStencil.DepthFunc = D3D11_COMPARISON_ALWAYS;
-		hr |= g_VmCommonParams.dx11Device->CreateDepthStencilState(&descDepthStencil, &ds_state);
-		g_VmCommonParams.safe_set_res(COMRES_INDICATOR(DEPTHSTENCIL_STATE, "ALWAYS"), ds_state);
+		hr |= g_pvmCommonParams->dx11Device->CreateDepthStencilState(&descDepthStencil, &ds_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(DEPTHSTENCIL_STATE, "ALWAYS"), ds_state);
 		descDepthStencil.DepthFunc = D3D11_COMPARISON_GREATER;
-		hr |= g_VmCommonParams.dx11Device->CreateDepthStencilState(&descDepthStencil, &ds_state);
-		g_VmCommonParams.safe_set_res(COMRES_INDICATOR(DEPTHSTENCIL_STATE, "GREATER"), ds_state);
+		hr |= g_pvmCommonParams->dx11Device->CreateDepthStencilState(&descDepthStencil, &ds_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(DEPTHSTENCIL_STATE, "GREATER"), ds_state);
 		descDepthStencil.DepthFunc = D3D11_COMPARISON_LESS;
-		hr |= g_VmCommonParams.dx11Device->CreateDepthStencilState(&descDepthStencil, &ds_state);
-		g_VmCommonParams.safe_set_res(COMRES_INDICATOR(DEPTHSTENCIL_STATE, "LESS"), ds_state);
+		hr |= g_pvmCommonParams->dx11Device->CreateDepthStencilState(&descDepthStencil, &ds_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(DEPTHSTENCIL_STATE, "LESS"), ds_state);
 	}
 	{
 		D3D11_SAMPLER_DESC descSampler;
@@ -220,31 +220,31 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		descSampler.MaxLOD = FLT_MAX;
 		descSampler.MinLOD = FLT_MIN;
 		ID3D11SamplerState* sampler_state;
-		hr |= g_VmCommonParams.dx11Device->CreateSamplerState(&descSampler, &sampler_state);
-		g_VmCommonParams.safe_set_res(COMRES_INDICATOR(SAMPLER_STATE, "POINT_CLAMP"), sampler_state);
+		hr |= g_pvmCommonParams->dx11Device->CreateSamplerState(&descSampler, &sampler_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(SAMPLER_STATE, "POINT_CLAMP"), sampler_state);
 		descSampler.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;	// NEAREST by ROUND
-		hr |= g_VmCommonParams.dx11Device->CreateSamplerState(&descSampler, &sampler_state);
-		g_VmCommonParams.safe_set_res(COMRES_INDICATOR(SAMPLER_STATE, "LINEAR_CLAMP"), sampler_state);
+		hr |= g_pvmCommonParams->dx11Device->CreateSamplerState(&descSampler, &sampler_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(SAMPLER_STATE, "LINEAR_CLAMP"), sampler_state);
 
 		descSampler.AddressU = D3D11_TEXTURE_ADDRESS_BORDER;
 		descSampler.AddressV = D3D11_TEXTURE_ADDRESS_BORDER;
 		descSampler.AddressW = D3D11_TEXTURE_ADDRESS_BORDER;
 		descSampler.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;	// NEAREST by ROUND
-		hr |= g_VmCommonParams.dx11Device->CreateSamplerState(&descSampler, &sampler_state);
-		g_VmCommonParams.safe_set_res(COMRES_INDICATOR(SAMPLER_STATE, "LINEAR_ZEROBORDER"), sampler_state);
+		hr |= g_pvmCommonParams->dx11Device->CreateSamplerState(&descSampler, &sampler_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(SAMPLER_STATE, "LINEAR_ZEROBORDER"), sampler_state);
 		descSampler.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;	// NEAREST by ROUND
-		hr |= g_VmCommonParams.dx11Device->CreateSamplerState(&descSampler, &sampler_state);
-		g_VmCommonParams.safe_set_res(COMRES_INDICATOR(SAMPLER_STATE, "POINT_ZEROBORDER"), sampler_state);
+		hr |= g_pvmCommonParams->dx11Device->CreateSamplerState(&descSampler, &sampler_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(SAMPLER_STATE, "POINT_ZEROBORDER"), sampler_state);
 
 		descSampler.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
 		descSampler.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
 		descSampler.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
 		descSampler.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;	// NEAREST by ROUND
-		hr |= g_VmCommonParams.dx11Device->CreateSamplerState(&descSampler, &sampler_state);
-		g_VmCommonParams.safe_set_res(COMRES_INDICATOR(SAMPLER_STATE, "LINEAR_WRAP"), sampler_state);
+		hr |= g_pvmCommonParams->dx11Device->CreateSamplerState(&descSampler, &sampler_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(SAMPLER_STATE, "LINEAR_WRAP"), sampler_state);
 		descSampler.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;	// NEAREST by ROUND
-		hr |= g_VmCommonParams.dx11Device->CreateSamplerState(&descSampler, &sampler_state);
-		g_VmCommonParams.safe_set_res(COMRES_INDICATOR(SAMPLER_STATE, "POINT_WRAP"), sampler_state);
+		hr |= g_pvmCommonParams->dx11Device->CreateSamplerState(&descSampler, &sampler_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(SAMPLER_STATE, "POINT_WRAP"), sampler_state);
 	}
 	{
 		D3D11_BUFFER_DESC descCB;
@@ -256,8 +256,8 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		ID3D11Buffer* cbuffer;\
 		descCB.ByteWidth = sizeof(STRUCT);\
 		descCB.StructureByteStride = sizeof(STRUCT);\
-		hr |= g_VmCommonParams.dx11Device->CreateBuffer(&descCB, NULL, &cbuffer);\
-		g_VmCommonParams.safe_set_res(COMRES_INDICATOR(BUFFER, string(#STRUCT)), cbuffer);}\
+		hr |= g_pvmCommonParams->dx11Device->CreateBuffer(&descCB, NULL, &cbuffer);\
+		g_pvmCommonParams->safe_set_cbuf(string(#STRUCT), cbuffer);}\
 //CREATE_AND_SET
 
 		CREATE_AND_SET(CB_CameraState);
@@ -315,7 +315,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		{
 			ID3D11InputLayout* in_layout = NULL;
 			ID3D11VertexShader* vshader = NULL;
-			if (PresetCompiledShader(g_VmCommonParams.dx11Device, hModule, pSrcResource, "vs_5_0", (ID3D11DeviceChild**)&vshader
+			if (PresetCompiledShader(g_pvmCommonParams->dx11Device, hModule, pSrcResource, "vs_5_0", (ID3D11DeviceChild**)&vshader
 				, in_layout_desc, num_elements, &in_layout) != S_OK)
 			{
 				VMSAFE_RELEASE(in_layout);
@@ -323,14 +323,14 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 				return E_FAIL;
 			}
 			if(in_layout)
-				g_VmCommonParams.safe_set_res(COMRES_INDICATOR(INPUT_LAYOUT, name_layer), in_layout);
-			g_VmCommonParams.safe_set_res(COMRES_INDICATOR(VERTEX_SHADER, name_shader), vshader);
+				g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(INPUT_LAYOUT, name_layer), in_layout);
+			g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(VERTEX_SHADER, name_shader), vshader);
 			return S_OK;
 		};
 		auto register_shader = [&](const LPCWSTR pSrcResource, const string& name_shader, const string& profile)
 		{
 			ID3D11DeviceChild* shader = NULL;
-			if (PresetCompiledShader(g_VmCommonParams.dx11Device, hModule, pSrcResource, profile.c_str(), (ID3D11DeviceChild**)&shader, NULL, 0, NULL) != S_OK)
+			if (PresetCompiledShader(g_pvmCommonParams->dx11Device, hModule, pSrcResource, profile.c_str(), (ID3D11DeviceChild**)&shader, NULL, 0, NULL) != S_OK)
 			{
 				VMSAFE_RELEASE(shader);
 				return E_FAIL;
@@ -342,7 +342,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 			else if (profile.compare(0, 2, "cs") == 0) _type = COMPUTE_SHADER;
 			else GMERRORMESSAGE("UN DEFINED SHADER TYPE ! : grd_helper::InitializePresettings");
 
-			g_VmCommonParams.safe_set_res(COMRES_INDICATOR(_type, name_shader), shader);
+			g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(_type, name_shader), shader);
 			return S_OK;
 		};
 
@@ -406,46 +406,47 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50006), "VR_SURFACE_cs_5_0", "cs_5_0"), VR_SURFACE_cs_5_0);
 	}
 
-	g_VmCommonParams.is_initialized = true;
-	gpu_params = g_VmCommonParams;
+	g_pvmCommonParams->is_initialized = true;
+	gpu_params = g_pvmCommonParams;
 
 	if (hr != S_OK)
 		return __INVALID_GPU;
 
-	if (g_VmCommonParams.dx11_featureLevel == 0x9300 || g_VmCommonParams.dx11_featureLevel == 0xA000)
+	if (g_pvmCommonParams->dx11_featureLevel == 0x9300 || g_pvmCommonParams->dx11_featureLevel == 0xA000)
 		return __LOW_SPEC_NOT_SUPPORT_CS_GPU;
 
 	return __SUPPORTED_GPU;
 
 ERROR_PRESETTING:
 	DeinitializePresettings();
-	gpu_params = g_VmCommonParams;
+	gpu_params = g_pvmCommonParams;
 	return __INVALID_GPU;
 }
 
 void grd_helper::DeinitializePresettings()
 {
-	if (!g_VmCommonParams.is_initialized) return;
+	if (g_pvmCommonParams == NULL) return;
+	if (!g_pvmCommonParams->is_initialized) return;
 
-	if (g_VmCommonParams.dx11DeviceImmContext)
+	if (g_pvmCommonParams->dx11DeviceImmContext)
 	{
-		g_VmCommonParams.dx11DeviceImmContext->Flush();
-		g_VmCommonParams.dx11DeviceImmContext->ClearState();
+		g_pvmCommonParams->dx11DeviceImmContext->Flush();
+		g_pvmCommonParams->dx11DeviceImmContext->ClearState();
 	}
 
-	g_VmCommonParams.Delete();
+	g_pvmCommonParams->Delete();
 
-	if (g_VmCommonParams.dx11DeviceImmContext)
+	if (g_pvmCommonParams->dx11DeviceImmContext)
 	{
-		g_VmCommonParams.dx11DeviceImmContext->Flush();
-		g_VmCommonParams.dx11DeviceImmContext->ClearState();
+		g_pvmCommonParams->dx11DeviceImmContext->Flush();
+		g_pvmCommonParams->dx11DeviceImmContext->ClearState();
 	}
 
-	g_VmCommonParams.dx11Device = NULL;
-	g_VmCommonParams.dx11DeviceImmContext = NULL;
-	memset(&g_VmCommonParams.dx11_adapter, NULL, sizeof(DXGI_ADAPTER_DESC));
-	g_VmCommonParams.dx11_featureLevel = D3D_FEATURE_LEVEL_9_1;
-	g_VmCommonParams.is_initialized = false;
+	g_pvmCommonParams->dx11Device = NULL;
+	g_pvmCommonParams->dx11DeviceImmContext = NULL;
+	memset(&g_pvmCommonParams->dx11_adapter, NULL, sizeof(DXGI_ADAPTER_DESC));
+	g_pvmCommonParams->dx11_featureLevel = D3D_FEATURE_LEVEL_9_1;
+	g_pvmCommonParams->is_initialized = false;
 }
 
 int __UpdateBlocks(GpuRes& gres, const VmVObjectVolume* vobj, const string& vmode, LocalProgress* progress)
@@ -583,7 +584,7 @@ bool grd_helper::UpdateOtfBlocks(GpuRes& gres, const VmVObjectVolume* main_vobj,
 
 	ID3D11Texture3D* pdx11tx3d_blkmap = (ID3D11Texture3D*)gres.alloc_res_ptrs[DTYPE_RES];
 	D3D11_MAPPED_SUBRESOURCE d11MappedRes;
-	HRESULT hr = g_VmCommonParams.dx11DeviceImmContext->Map(pdx11tx3d_blkmap, 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes);
+	HRESULT hr = g_pvmCommonParams->dx11DeviceImmContext->Map(pdx11tx3d_blkmap, 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes);
 
 	vmint3 blk_bnd_size = volblk->blk_bnd_size;
 	vmint3 blk_sample_width = volblk->blk_vol_size + blk_bnd_size * 2;
@@ -661,7 +662,7 @@ bool grd_helper::UpdateOtfBlocks(GpuRes& gres, const VmVObjectVolume* main_vobj,
 	//	VMSAFE_DELETEARRAY(pusBlocksMap);
 	//}
 
-	g_VmCommonParams.dx11DeviceImmContext->Unmap(pdx11tx3d_blkmap, 0);
+	g_pvmCommonParams->dx11DeviceImmContext->Unmap(pdx11tx3d_blkmap, 0);
 	if (progress)
 		*progress->progress_ptr = (progress->start + progress->range);
 	return true;
@@ -688,8 +689,8 @@ bool grd_helper::UpdateMinMaxBlocks(GpuRes& gres_min, GpuRes& gres_max, const Vm
 	ID3D11Texture3D* pdx11tx3d_min_blk = (ID3D11Texture3D*)gres_min.alloc_res_ptrs[DTYPE_RES];
 	ID3D11Texture3D* pdx11tx3d_max_blk = (ID3D11Texture3D*)gres_max.alloc_res_ptrs[DTYPE_RES];
 	D3D11_MAPPED_SUBRESOURCE d11MappedRes_Min, d11MappedRes_Max;
-	HRESULT hr = g_VmCommonParams.dx11DeviceImmContext->Map(pdx11tx3d_min_blk, 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes_Min);
-	hr |= g_VmCommonParams.dx11DeviceImmContext->Map(pdx11tx3d_max_blk, 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes_Max);
+	HRESULT hr = g_pvmCommonParams->dx11DeviceImmContext->Map(pdx11tx3d_min_blk, 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes_Min);
+	hr |= g_pvmCommonParams->dx11DeviceImmContext->Map(pdx11tx3d_max_blk, 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes_Max);
 
 	ushort* min_data = (ushort*)d11MappedRes_Min.pData;
 	ushort* max_data = (ushort*)d11MappedRes_Max.pData;
@@ -709,8 +710,8 @@ bool grd_helper::UpdateMinMaxBlocks(GpuRes& gres_min, GpuRes& gres_max, const Vm
 				max_data[iAddrBlockInGpu] = mM_v.y;
 			}
 	}
-	g_VmCommonParams.dx11DeviceImmContext->Unmap(pdx11tx3d_min_blk, 0);
-	g_VmCommonParams.dx11DeviceImmContext->Unmap(pdx11tx3d_max_blk, 0);
+	g_pvmCommonParams->dx11DeviceImmContext->Unmap(pdx11tx3d_min_blk, 0);
+	g_pvmCommonParams->dx11DeviceImmContext->Unmap(pdx11tx3d_max_blk, 0);
 	if (progress)
 		*progress->progress_ptr = (progress->start + progress->range);
 	return true;
@@ -935,7 +936,7 @@ RETRY:
 
 	ID3D11Texture3D* pdx11tx3d_volume = (ID3D11Texture3D*)gres.alloc_res_ptrs[DTYPE_RES];
 	D3D11_MAPPED_SUBRESOURCE d11MappedRes;
-	HRESULT hr = g_VmCommonParams.dx11DeviceImmContext->Map(pdx11tx3d_volume, 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes);
+	HRESULT hr = g_pvmCommonParams->dx11DeviceImmContext->Map(pdx11tx3d_volume, 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes);
 	bool is_downscaled = sample_offset.x > 1.f || sample_offset.y > 1.f || sample_offset.z > 1.f;
 	vmint2 gpu_row_depth_pitch = vmint2(d11MappedRes.RowPitch, d11MappedRes.DepthPitch);
 	switch (gres.options["FORMAT"])
@@ -952,7 +953,7 @@ RETRY:
 	default:
 		break;
 	}
-	g_VmCommonParams.dx11DeviceImmContext->Unmap(pdx11tx3d_volume, 0);
+	g_pvmCommonParams->dx11DeviceImmContext->Unmap(pdx11tx3d_volume, 0);
 
 	return true;
 }
@@ -984,7 +985,7 @@ bool grd_helper::UpdateTMapBuffer(GpuRes& gres, const VmTObject* main_tobj,
 		g_pCGpuManager->GenerateGpuResource(gres);
 
 	D3D11_MAPPED_SUBRESOURCE d11MappedRes;
-	g_VmCommonParams.dx11DeviceImmContext->Map((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes);
+	g_pvmCommonParams->dx11DeviceImmContext->Map((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes);
 	vmbyte4* py4ColorTF = (vmbyte4*)d11MappedRes.pData;
 	if (tobj_map.size() <= 1 || otf_series <= 1 || !series_ids || !visible_mask)
 	{
@@ -1009,7 +1010,7 @@ bool grd_helper::UpdateTMapBuffer(GpuRes& gres, const VmTObject* main_tobj,
 			}
 		}
 	}
-	g_VmCommonParams.dx11DeviceImmContext->Unmap((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], 0);
+	g_pvmCommonParams->dx11DeviceImmContext->Unmap((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], 0);
 
 	return true;
 }
@@ -1106,7 +1107,7 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 						vtx_group[i*num_vtx_defs + j] = vtx_def_ptrs[j][i];
 					}
 				}
-				g_VmCommonParams.dx11DeviceImmContext->UpdateSubresource(pdx11bufvtx, 0, NULL, subres.pSysMem, subres.SysMemPitch, 0);
+				g_pvmCommonParams->dx11DeviceImmContext->UpdateSubresource(pdx11bufvtx, 0, NULL, subres.pSysMem, subres.SysMemPitch, 0);
 				VMSAFE_DELETEARRAY(subres.pSysMem);
 			}
 
@@ -1167,7 +1168,7 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 				subres.SysMemPitch = prim_data->num_vidx * sizeof(uint);
 				subres.SysMemSlicePitch = 0; // only for 3D resource
 				memcpy((void*)subres.pSysMem, prim_data->vidx_buffer, prim_data->num_vidx * sizeof(uint));
-				g_VmCommonParams.dx11DeviceImmContext->UpdateSubresource(pdx11bufidx, 0, NULL, subres.pSysMem, subres.SysMemPitch, 0);
+				g_pvmCommonParams->dx11DeviceImmContext->UpdateSubresource(pdx11bufidx, 0, NULL, subres.pSysMem, subres.SysMemPitch, 0);
 				VMSAFE_DELETEARRAY(subres.pSysMem);
 			}
 		}
@@ -1218,7 +1219,7 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 			}
 
 			// ??
-			g_VmCommonParams.dx11DeviceImmContext->UpdateSubresource(pdx11tx2dres, 0, NULL, subres.pSysMem, subres.SysMemPitch, subres.SysMemSlicePitch);
+			g_pvmCommonParams->dx11DeviceImmContext->UpdateSubresource(pdx11tx2dres, 0, NULL, subres.pSysMem, subres.SysMemPitch, subres.SysMemSlicePitch);
 			VMSAFE_DELETEARRAY(subres.pSysMem);
 		};
 
@@ -1349,7 +1350,7 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 							for (int i = byte_stride; i < byte_stride_gpu; i++)
 								tx_res_gpu[byte_stride_gpu * x + h * subres.SysMemPitch + i] = 255;
 						}
-					g_VmCommonParams.dx11DeviceImmContext->UpdateSubresource(pdx11tx2dres, 0, NULL, subres.pSysMem, subres.SysMemPitch, subres.SysMemSlicePitch);
+					g_pvmCommonParams->dx11DeviceImmContext->UpdateSubresource(pdx11tx2dres, 0, NULL, subres.pSysMem, subres.SysMemPitch, subres.SysMemSlicePitch);
 					VMSAFE_DELETEARRAY(subres.pSysMem);
 					//D3D11_MAPPED_SUBRESOURCE mappedRes;
 					//g_VmCommonParams.dx11DeviceImmContext->Map(pdx11tx2dres, 0, maptype, 0, &mappedRes);
@@ -2131,7 +2132,7 @@ bool grd_helper::Compile_Hlsl(const string& str, const string& entry_point, cons
 	}
 	if (shader_model.find("ps") != string::npos)
 	{
-		if (g_VmCommonParams.dx11Device->CreatePixelShader(pShaderBlob->GetBufferPointer(), pShaderBlob->GetBufferSize(), NULL, (ID3D11PixelShader**)sm) != S_OK)
+		if (g_pvmCommonParams->dx11Device->CreatePixelShader(pShaderBlob->GetBufferPointer(), pShaderBlob->GetBufferSize(), NULL, (ID3D11PixelShader**)sm) != S_OK)
 		{
 			std::cout << "*** COMPILE ERROR : " << str << ", " << entry_point << ", " << shader_model << endl;
 			return false;
@@ -2139,7 +2140,7 @@ bool grd_helper::Compile_Hlsl(const string& str, const string& entry_point, cons
 	}
 	else if (shader_model.find("vs") != string::npos)
 	{
-		if (g_VmCommonParams.dx11Device->CreateVertexShader(pShaderBlob->GetBufferPointer(), pShaderBlob->GetBufferSize(), NULL, (ID3D11VertexShader**)sm) != S_OK)
+		if (g_pvmCommonParams->dx11Device->CreateVertexShader(pShaderBlob->GetBufferPointer(), pShaderBlob->GetBufferSize(), NULL, (ID3D11VertexShader**)sm) != S_OK)
 		{
 			std::cout << "*** COMPILE ERROR : " << str << ", " << entry_point << ", " << shader_model << endl;
 			return false;
@@ -2147,7 +2148,7 @@ bool grd_helper::Compile_Hlsl(const string& str, const string& entry_point, cons
 	}
 	else if (shader_model.find("cs") != string::npos)
 	{
-		if (g_VmCommonParams.dx11Device->CreateComputeShader(pShaderBlob->GetBufferPointer(), pShaderBlob->GetBufferSize(), NULL, (ID3D11ComputeShader**)sm) != S_OK)
+		if (g_pvmCommonParams->dx11Device->CreateComputeShader(pShaderBlob->GetBufferPointer(), pShaderBlob->GetBufferSize(), NULL, (ID3D11ComputeShader**)sm) != S_OK)
 		{
 			std::cout << "*** COMPILE ERROR : " << str << ", " << entry_point << ", " << shader_model << endl;
 			return false;
@@ -2155,7 +2156,7 @@ bool grd_helper::Compile_Hlsl(const string& str, const string& entry_point, cons
 	}
 	else if (shader_model.find("gs") != string::npos)
 	{
-		if (g_VmCommonParams.dx11Device->CreateGeometryShader(pShaderBlob->GetBufferPointer(), pShaderBlob->GetBufferSize(), NULL, (ID3D11GeometryShader**)sm) != S_OK)
+		if (g_pvmCommonParams->dx11Device->CreateGeometryShader(pShaderBlob->GetBufferPointer(), pShaderBlob->GetBufferSize(), NULL, (ID3D11GeometryShader**)sm) != S_OK)
 		{
 			std::cout << "*** COMPILE ERROR : " << str << ", " << entry_point << ", " << shader_model << endl;
 			return false;

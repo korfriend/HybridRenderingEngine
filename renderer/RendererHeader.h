@@ -31,3 +31,11 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 
 #define IS_SAFE_OBJ(OBJID) ((OBJID & 0xFFFF) >= 65536 - 4096)
+
+enum MFR_MODE
+{
+	KBZT = 0,
+	LL,
+	MOMENT,
+	DKplusB
+};

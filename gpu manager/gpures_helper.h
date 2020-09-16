@@ -25,7 +25,7 @@ namespace grd_helper
 		PIXEL_SHADER,
 		GEOMETRY_SHADER,
 		COMPUTE_SHADER,
-		BUFFER, // constant buffer
+		//BUFFER, // constant buffer
 		DEPTHSTENCIL_STATE,
 		RASTERIZER_STATE,
 		BLEND_STATE,
@@ -63,15 +63,18 @@ namespace grd_helper
 		{
 			string a_str = to_string(a.res_type) + "_" + a.res_name;
 			string b_str = to_string(b.res_type) + "_" + b.res_name;
-			if (a_str.compare(b_str) < 0)
-				return true;
-			else if (a_str.compare(b_str) > 0)
-				return false;
-			return false;
+			return a_str < b_str;
+			//if (a_str.compare(b_str) < 0)
+			//	return true;
+			//else if (a_str.compare(b_str) > 0)
+			//	return false;
+			//return false;
 		}
 	};
 
-	typedef map<COMRES_INDICATOR, void*, value_cmp> GCRMAP;
+	//typedef map<COMRES_INDICATOR, ID3D11DeviceChild*, value_cmp> GCRMAP;
+	typedef map<string, ID3D11DeviceChild*> GCRMAP;
+	typedef map<string, ID3D11Resource*> CONSTBUFMAP;
 
 	struct GpuDX11CommonParameters
 	{
@@ -88,39 +91,50 @@ namespace grd_helper
 		ID3D11InfoQueue* debug_info_queue;
 #endif
 
-		std::function<void(GpuhelperResType res_type, void* res)> __check_and_release = [](GpuhelperResType res_type, void* res)
+		std::function<void(GpuhelperResType res_type, ID3D11DeviceChild* res)> __check_and_release = [](GpuhelperResType res_type, ID3D11DeviceChild* res)
 		{
-			switch (res_type)
-			{
-			case VERTEX_SHADER:			((ID3D11VertexShader*)res)->Release(); break;
-			case PIXEL_SHADER:			((ID3D11PixelShader*)res)->Release(); break;
-			case GEOMETRY_SHADER:		((ID3D11GeometryShader*)res)->Release(); break;
-			case COMPUTE_SHADER:		((ID3D11ComputeShader*)res)->Release(); break;
-			case BUFFER:				((ID3D11Buffer*)res)->Release(); break;
-			case DEPTHSTENCIL_STATE:	((ID3D11DepthStencilState*)res)->Release(); break;
-			case RASTERIZER_STATE:		((ID3D11RasterizerState2*)res)->Release(); break;
-			case SAMPLER_STATE:			((ID3D11SamplerState*)res)->Release(); break;
-			case INPUT_LAYOUT:			((ID3D11InputLayout*)res)->Release(); break;
-			case BLEND_STATE:			((ID3D11BlendState*)res)->Release(); break;
-			case ETC:
-			default:
-				GMERRORMESSAGE("UNEXPECTED RESTYPE : ~GpuDX11CommonParameters");
-			}
+			res->Release();
+			//switch (res_type)
+			//{
+			//case VERTEX_SHADER:			((ID3D11VertexShader*)res)->Release(); break;
+			//case PIXEL_SHADER:			((ID3D11PixelShader*)res)->Release(); break;
+			//case GEOMETRY_SHADER:		((ID3D11GeometryShader*)res)->Release(); break;
+			//case COMPUTE_SHADER:		((ID3D11ComputeShader*)res)->Release(); break;
+			////case BUFFER:				((ID3D11Buffer*)res)->Release(); break;
+			//case DEPTHSTENCIL_STATE:	((ID3D11DepthStencilState*)res)->Release(); break;
+			//case RASTERIZER_STATE:		((ID3D11RasterizerState2*)res)->Release(); break;
+			//case SAMPLER_STATE:			((ID3D11SamplerState*)res)->Release(); break;
+			//case INPUT_LAYOUT:			((ID3D11InputLayout*)res)->Release(); break;
+			//case BLEND_STATE:			((ID3D11BlendState*)res)->Release(); break;
+			//case ETC:
+			//default:
+			//	GMERRORMESSAGE("UNEXPECTED RESTYPE : ~GpuDX11CommonParameters");
+			//}
 		};
 
 		GCRMAP dx11_cres;
+		CONSTBUFMAP dx11_cbuf;
 		void safe_release_res(const COMRES_INDICATOR& idc)
 		{
-			auto it = dx11_cres.find(idc);
+			auto it = dx11_cres.find(idc.res_name);
 			if (it != dx11_cres.end())
 			{
-				__check_and_release(it->first.res_type, it->second);
+				__check_and_release(idc.res_type, it->second);
 				dx11_cres.erase(it);
 			}
 		}
-		void safe_set_res(const COMRES_INDICATOR& idc, void* res, bool enable_override = false)
+		void safe_release_cbuf(const string& name)
 		{
-			auto it = dx11_cres.find(idc);
+			auto it = dx11_cbuf.find(name);
+			if (it != dx11_cbuf.end())
+			{
+				it->second->Release();
+				dx11_cbuf.erase(it);
+			}
+		}
+		void safe_set_res(const COMRES_INDICATOR& idc, ID3D11DeviceChild* res, bool enable_override = false)
+		{
+			auto it = dx11_cres.find(idc.res_name);
 			if (it != dx11_cres.end())
 			{
 				if (enable_override)
@@ -135,12 +149,51 @@ namespace grd_helper
 				if(it->second == res)
 					GMERRORMESSAGE("ALREADY SET 2 ! : GpuDX11CommonParameters::safe_set_res");
 			}
-			dx11_cres[idc] = res;
+
+			//switch (idc.res_type)
+			//{
+			//case VERTEX_SHADER:			dx11_cres[idc] = (ID3D11VertexShader*)res; break;
+			//case PIXEL_SHADER:			dx11_cres[idc] = (ID3D11PixelShader*)res; break;
+			//case GEOMETRY_SHADER:		dx11_cres[idc] = (ID3D11GeometryShader*)res; break;
+			//case COMPUTE_SHADER:		dx11_cres[idc] = (ID3D11ComputeShader*)res; break;
+			////case BUFFER:				dx11_cres[idc] = (ID3D11Buffer*)res; break;
+			//case DEPTHSTENCIL_STATE:	dx11_cres[idc] = (ID3D11DepthStencilState*)res; break;
+			//case RASTERIZER_STATE:		dx11_cres[idc] = (ID3D11RasterizerState2*)res; break;
+			//case SAMPLER_STATE:			dx11_cres[idc] = (ID3D11SamplerState*)res; break;
+			//case INPUT_LAYOUT:			dx11_cres[idc] = (ID3D11InputLayout*)res; break;
+			//case BLEND_STATE:			dx11_cres[idc] = (ID3D11BlendState*)res; break;
+			//case ETC:
+			//default:
+			//	GMERRORMESSAGE("UNEXPECTED RESTYPE : ~GpuDX11CommonParameters");
+			//}
+
+			dx11_cres[idc.res_name] = res;
+		}
+
+		void safe_set_cbuf(const string& name, ID3D11Resource* res, bool enable_override = false)
+		{
+			auto it = dx11_cbuf.find(name);
+			if (it != dx11_cbuf.end())
+			{
+				if (enable_override)
+					safe_release_cbuf(name);
+				else
+					GMERRORMESSAGE("ALREADY SET 1 ! : GpuDX11CommonParameters::safe_set_cbuf");
+			}
+			for (auto it = dx11_cres.begin(); it != dx11_cres.end(); it++)
+			{
+				if (it->second == NULL)
+					GMERRORMESSAGE("NULL RES DETECTED ! : GpuDX11CommonParameters::safe_set_cbuf");
+				if (it->second == res)
+					GMERRORMESSAGE("ALREADY SET 2 ! : GpuDX11CommonParameters::safe_set_cbuf");
+			}
+			
+			dx11_cbuf[name] = res;
 		}
 
 		void* safe_get_res(const COMRES_INDICATOR& idc)
 		{
-			auto it = dx11_cres.find(idc);
+			auto it = dx11_cres.find(idc.res_name);
 			if (it == dx11_cres.end())
 				GMERRORMESSAGE("NO RESOURCE ! : GpuDX11CommonParameters::safe_get_res");
 			return it->second;
@@ -148,7 +201,10 @@ namespace grd_helper
 
 		ID3D11Buffer* get_cbuf(const string& name)
 		{
-			return (ID3D11Buffer*)safe_get_res(COMRES_INDICATOR(BUFFER, name));
+			auto it = dx11_cbuf.find(name);
+			if (it == dx11_cbuf.end())
+				GMERRORMESSAGE("NO RESOURCE ! : GpuDX11CommonParameters::get_cbuf");
+			return (ID3D11Buffer*)it->second;
 		}
 
 		ID3D11SamplerState* get_sampler(const string& name)
@@ -205,24 +261,31 @@ namespace grd_helper
 		{
 			for (auto it = dx11_cres.begin(); it != dx11_cres.end(); it++)
 			{
-				switch (it->first.res_type)
-				{
-				case VERTEX_SHADER:			((ID3D11VertexShader*)it->second)->Release(); break;
-				case PIXEL_SHADER:			((ID3D11PixelShader*)it->second)->Release(); break;
-				case GEOMETRY_SHADER:		((ID3D11GeometryShader*)it->second)->Release(); break;
-				case COMPUTE_SHADER:		((ID3D11ComputeShader*)it->second)->Release(); break;
-				case BUFFER:				((ID3D11Buffer*)it->second)->Release(); break;
-				case DEPTHSTENCIL_STATE:	((ID3D11DepthStencilState*)it->second)->Release(); break;
-				case RASTERIZER_STATE:		((ID3D11RasterizerState2*)it->second)->Release(); break;
-				case SAMPLER_STATE:			((ID3D11SamplerState*)it->second)->Release(); break;
-				case INPUT_LAYOUT:			((ID3D11InputLayout*)it->second)->Release(); break;
-				case BLEND_STATE:			((ID3D11BlendState*)it->second)->Release(); break;
-				case ETC:
-				default:
-					GMERRORMESSAGE("UNEXPECTED RESTYPE : ~GpuDX11CommonParameters");
-				}
+				it->second->Release();
+				//switch (it->first.res_type)
+				//{
+				//case VERTEX_SHADER:			((ID3D11VertexShader*)it->second)->Release(); break;
+				//case PIXEL_SHADER:			((ID3D11PixelShader*)it->second)->Release(); break;
+				//case GEOMETRY_SHADER:		((ID3D11GeometryShader*)it->second)->Release(); break;
+				//case COMPUTE_SHADER:		((ID3D11ComputeShader*)it->second)->Release(); break;
+				////case BUFFER:				((ID3D11Buffer*)it->second)->Release(); break;
+				//case DEPTHSTENCIL_STATE:	((ID3D11DepthStencilState*)it->second)->Release(); break;
+				//case RASTERIZER_STATE:		((ID3D11RasterizerState2*)it->second)->Release(); break;
+				//case SAMPLER_STATE:			((ID3D11SamplerState*)it->second)->Release(); break;
+				//case INPUT_LAYOUT:			((ID3D11InputLayout*)it->second)->Release(); break;
+				//case BLEND_STATE:			((ID3D11BlendState*)it->second)->Release(); break;
+				//case ETC:
+				//default:
+				//	GMERRORMESSAGE("UNEXPECTED RESTYPE : ~GpuDX11CommonParameters");
+				//}
 			}
 			dx11_cres.clear();
+
+			for (auto it = dx11_cbuf.begin(); it != dx11_cbuf.end(); it++)
+			{
+				it->second->Release();
+			}
+			dx11_cbuf.clear();
 
 #ifdef __DX_DEBUG_QUERY
 			if(debug_info_queue)
@@ -240,7 +303,7 @@ namespace grd_helper
 		}
 	};
 
-	int InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonParameters& gpu_params);
+	int InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonParameters* gpu_params);
 	void DeinitializePresettings();
 
 	// volume/block structure
