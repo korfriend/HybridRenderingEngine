@@ -1,5 +1,7 @@
 #include "../CommonShader.hlsl"
+#include "../macros.hlsl"
 
+#define DEBUG_OUT(C) {fragment_blendout[DTid.xy] = C; return;}
 
 //RasterizerOrderedStructuredBuffer<FragmentArray> deep_kf_buf_rov : register(u7);
 //RWStructuredBuffer<FragmentArray> deep_kf_buf : register(u8);
@@ -27,7 +29,8 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 {
     if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
         return;
-	
+
+	// we will test our oit with the number of deep layers : 4, 8, 16 ... here, set max 32 ( larger/equal than k_value * 2 )
 	const uint k_value = g_cbCamState.k_value;
 
 	uint frag_cnt = min(fragment_counter[DTid.xy], k_value);
@@ -36,19 +39,17 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 	uint addr_base = (DTid.y * g_cbCamState.rt_width + DTid.x) * bytes_frags_per_pixel;
 	if (frag_cnt == 0)
 	{
-		Fragment f_zero = (Fragment)0;
+		[loop]
 		for (uint i = 0; i < k_value; i++)
-			SET_FRAG(addr_base, i, f_zero);
+			SET_ZEROFRAG(addr_base, i);
 		return;
 	}
 
 	float v_thickness = GetHotspotThickness((int2)DTid);
 	v_thickness = max(v_thickness, g_cbCamState.cam_vz_thickness);
 
-    // we will test our oit with the number of deep layers : 4, 8, 16 ... here, set max 32 ( larger/equal than k_value * 2 )
 #define LOCAL_SIZE 8 // when static ... if dynamic... set the value... (LL ... 400)
-
-#define QUICK_SORT_AND_INDEX_DRIVEN 1
+//#define QUICK_SORT_AND_INDEX_DRIVEN 1
 #ifdef QUICK_SORT_AND_INDEX_DRIVEN
 	uint idx_array[LOCAL_SIZE * 2]; // for the quick-sort algorithm
 	Fragment fs[LOCAL_SIZE];
@@ -120,20 +121,23 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
         }
     }
 #else
+	Fragment fs[LOCAL_SIZE];
+	int valid_frag_cnt = 0;
 	[loop]
-	for (uint k = 0; k < LOCAL_SIZE; k++)
+	for (uint k = 0; k < frag_cnt; k++)
 	{
 		// note that k-buffer is cleared as zeros by mask-checking
 		Fragment f;
 		GET_FRAG(f, addr_base, k);
-		if (f.i_vis > 0)
+		if ((uint)f.i_vis > 0)
 		{
 			f.zthick = max(f.zthick, v_thickness);
+			fs[valid_frag_cnt] = f;
 			valid_frag_cnt++;
 		}
-		else f.z = FLT_MAX;
-		fs[k] = f;
 	}
+
+	sort(valid_frag_cnt, fs, Fragment);
 #endif
 
 	float merging_beta = asfloat(g_cbCamState.iSrCamDummy__0);
@@ -142,92 +146,49 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 	uint cnt_sorted_ztsurf = 0, i = 0;
 #if ZF_HANDLING == 1
     // merge self-overlapping surfaces to thickness surfaces
-//#define USE_RS
     [loop]	
-    for (i = 0; i < valid_frag_cnt; i++)
+    for (i = 0; i < (uint)valid_frag_cnt; i++)
     {
 #ifdef QUICK_SORT_AND_INDEX_DRIVEN
         uint idx_ith = idx_array[i];
 #else
 		uint idx_ith = i;
 #endif
-#ifdef USE_RS
-#define RST RaySegment2
-        RST rs_ith;
-#endif
         Fragment f_ith = fs[idx_ith];
 
         if (f_ith.i_vis > 0)
         {
-#ifdef USE_RS
-            rs_ith.fvis = ConvertUIntToFloat4(f_ith.i_vis);
-            rs_ith.zdepth = f_ith.z;
-            rs_ith.zthick = f_ith.zthick;
-            rs_ith.alphaw = f_ith.opacity_sum;
-#endif
-            for (uint j = i + 1; j < valid_frag_cnt + 1; j++)
+			
+            for (uint j = i + 1; j < (uint)valid_frag_cnt; j++)
             {
 #ifdef QUICK_SORT_AND_INDEX_DRIVEN
                 int idx_next = idx_array[j];
 #else
 				int idx_next = j;
 #endif
-#ifdef USE_RS
-                RST rs_next;
-#endif
 				Fragment f_next = fs[idx_next];
                 if (f_next.i_vis > 0)
                 {
-#ifdef USE_RS
-                    rs_next.fvis = ConvertUIntToFloat4(f_next.i_vis);
-                    rs_next.zdepth = f_next.z;
-					rs_next.zthick = f_next.zthick;
-					rs_next.alphaw = f_next.opacity_sum;
-                    MergeRS_OUT2 rs_out = MergeRS2(rs_ith, rs_next, merging_beta);
-                    rs_ith = rs_out.rs_prior;
-					f_next.i_vis = ConvertFloat4ToUInt(rs_out.rs_posterior.fvis);
-                    f_next.z = rs_out.rs_posterior.zdepth;
-                    f_next.zthick = rs_out.rs_posterior.zthick;
-                    f_next.opacity_sum = rs_out.rs_posterior.alphaw;
-#else
 					Fragment_OUT fs_out = MergeFrags(f_ith, f_next, merging_beta);
 					f_ith = fs_out.f_prior;
 					f_next = fs_out.f_posterior;
-#endif
 					fs[idx_next] = f_next;
                 }
             }
-#ifdef USE_RS
-			if (rs_ith.fvis.a >= FLT_OPACITY_MIN__) // always.. (just for safe-check)
-#else
 			if ((f_ith.i_vis >> 24) > 0) // always.. (just for safe-check)
-#endif
             {
 #ifdef QUICK_SORT_AND_INDEX_DRIVEN
                 int idx_sp = idx_array[cnt_sorted_ztsurf];
 #else
 				int idx_sp = cnt_sorted_ztsurf;
 #endif
-#ifdef USE_RS
-				Fragment f_sp;
-				f_sp.i_vis = ConvertFloat4ToUInt(rs_ith.fvis);
-                f_sp.z = rs_ith.zdepth;
-                f_sp.zthick = rs_ith.zthick;
-                f_sp.opacity_sum = rs_ith.alphaw;
-				fs[idx_sp] = f_sp;
-#else
 				fs[idx_sp] = f_ith;
-#endif
                 cnt_sorted_ztsurf++;
 
-#ifdef USE_RS
-				fmix_vis += rs_ith.fvis * (1.f - fmix_vis.a);
-#else
                 fmix_vis += ConvertUIntToFloat4(f_ith.i_vis) * (1.f - fmix_vis.a);
-#endif
                 //fmix_vis += ConvertUIntToFloat4(vis_array[idx_sp]) * (1.f - fmix_vis.a);
-                if (fmix_vis.a > ERT_ALPHA)
-                    i = valid_frag_cnt;
+				if (fmix_vis.a > ERT_ALPHA)
+					break;
             }
         } // if (rs_ith.zthick >= FLT_MIN__)
     }
@@ -246,18 +207,26 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 		Fragment f_invalid = (Fragment)0;
 		f_invalid.z = FLT_MAX;
 		[loop]
-		for (i = cnt_sorted_ztsurf; i < LOCAL_SIZE; i++)
+		for (i = cnt_sorted_ztsurf; i < frag_cnt; i++)
 		{
+#ifdef QUICK_SORT_AND_INDEX_DRIVEN
 			int idx = idx_array[i];
+#else
+			int idx = i;
+#endif
 			fs[idx] = f_invalid; // when displaying layers for test, disable this.
 		}
 	}
     
     float4 blendout = (float4) 0;
 	[loop]
-	for (i = 0; i < LOCAL_SIZE; i++)
+	for (i = 0; i < k_value; i++)
 	{
-		uint idx = idx_array[i];
+#ifdef QUICK_SORT_AND_INDEX_DRIVEN
+		int idx = idx_array[i];
+#else
+		int idx = i;
+#endif
 		Fragment f_ith = fs[idx];
 		if (i < cnt_sorted_ztsurf)
 		{
@@ -270,7 +239,11 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 	fragment_counter[DTid.xy] = cnt_sorted_ztsurf;
 	//fragment_blendout[DTid.xy] = ConvertUIntToFloat4(fs[idx_array[7]].i_vis);
     fragment_blendout[DTid.xy] = blendout;
+#ifdef QUICK_SORT_AND_INDEX_DRIVEN
 	fragment_zdepth[DTid.xy] = fs[idx_array[0]].z;
+#else
+	fragment_zdepth[DTid.xy] = fs[0].z;
+#endif
 }
 
 [numthreads(GRIDSIZE, GRIDSIZE, 1)]
@@ -279,7 +252,7 @@ void OIT_RESOLVE__(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uin
 	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
 		return;
 
-	uint frag_cnt = min(fragment_counter[DTid.xy], MAX_LAYERS);
+	uint frag_cnt = fragment_counter[DTid.xy];// min(fragment_counter[DTid.xy], MAX_LAYERS);
 	uint bytes_frags_per_pixel = MAX_LAYERS * 4 * 4; // to do : consider the dynamic scheme. (4 bytes unit)
 	uint addr_base = (DTid.y * g_cbCamState.rt_width + DTid.x) * bytes_frags_per_pixel;
 	if (frag_cnt == 0)
@@ -288,6 +261,12 @@ void OIT_RESOLVE__(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uin
 			SET_ZEROFRAG(addr_base, i);
 		return;
 	}
+	else if (frag_cnt == 7777777)
+	{
+		fragment_blendout[DTid.xy] = float4(1, 0, 0, 1);
+		return;
+	}
+
 
 	//Fragment f_test;
 	//GET_FRAG(f_test, addr_base, 7);

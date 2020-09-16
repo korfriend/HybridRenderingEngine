@@ -4,15 +4,15 @@
     BLK.num_skip_steps = min(max(1, BLK.num_skip_steps), N - I);
 
 
-#define sort_insert(num, fragments) {					\
+#define sort_insert(num, fragments, FRAG) {					\
 	[loop]												\
 	for (int j = 1; j < num; ++j)						\
 	{													\
-		FragmentVD key = fragments[j];					\
+		FRAG key = fragments[j];					\
 		int i = j - 1;									\
 														\
 		[loop]											\
-		while (i >= 0 && fragments[i].depth > key.depth)\
+		while (i >= 0 && fragments[i].z > key.z)\
 		{												\
 			fragments[i + 1] = fragments[i];			\
 			--i;										\
@@ -21,7 +21,7 @@
 	}													\
 }
 
-#define sort_shell(num, fragments) {								\
+#define sort_shell(num, fragments, FRAG) {								\
 	int inc = num >> 1;												\
 	[loop]															\
 	while (inc > 0)													\
@@ -29,11 +29,11 @@
 		[loop]														\
 		for (int i = inc; i < num; ++i)								\
 		{															\
-			FragmentVD tmp = fragments[i];							\
+			FRAG tmp = fragments[i];							\
 																	\
 			int j = i;												\
 			[loop]													\
-			while (j >= inc && fragments[j - inc].depth > tmp.depth)\
+			while (j >= inc && fragments[j - inc].z > tmp.z)\
 			{														\
 				fragments[j] = fragments[j - inc];					\
 				j -= inc;											\
@@ -55,15 +55,15 @@
 	[loop]																			 \
 	for (int k = a; k < c; ++k)														 \
 	{																				 \
-		if (b + j >= c || (i < steps && leftArray[i].depth < fragments[b + j].depth))\
+		if (b + j >= c || (i < steps && leftArray[i].z < fragments[b + j].z))\
 			fragments[k] = leftArray[i++];											 \
 		else																		 \
 			fragments[k] = fragments[b + j++];										 \
 	}																				 \
 }
 
-#define sort_merge(num, fragments){								  \
-	FragmentVD leftArray[MAX_ARRAY_SIZE_2d];					  \
+#define sort_merge(num, fragments, FRAG, SIZE_2D){								  \
+	FRAG leftArray[SIZE_2D];					  \
 	int n = num;												  \
 	int steps = 1;												  \
 																  \
@@ -81,11 +81,11 @@
 	}															  \
 }
 
-#define sort(num, fragments) {	   \
+#define sort(num, fragments, FRAG) {	   \
 	if (num <= 16)				   \
-		sort_insert(num, fragments)\
+		sort_insert(num, fragments, FRAG)\
 	else						   \
-		sort_shell(num, fragments)\
+		sort_shell(num, fragments, FRAG)\
 }
 
 #define INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, thick_sample, fs, merging_beta) {\

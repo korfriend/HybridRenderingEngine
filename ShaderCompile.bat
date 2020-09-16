@@ -6,16 +6,13 @@ fxc /E CommonVS_PTTT /T vs_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/
 
 fxc /E SINGLE_LAYER /T ps_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/SR_SINGLE_LAYER_ps_5_0
 
-fxc /E OIT_RESOLVE /T cs_5_0 ./hlsl/kbuf/KbufResolve.hlsl /Fo ./shader_compiled_objs/SR_OIT_SORT2RENDER_cs_5_0 /D MAX_LAYERS=8 /D ZF_HANDLING=1
-fxc /E OIT_KDEPTH /T ps_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_KDEPTH_PHONGBLINN_ps_5_0 /D __RENDERING_MODE=0 /D ZF_HANDLING=1 /D TAIL_HANDLING=1 /D MAX_LAYERS=8 /D PIXEL_SYNCH=1 /D USE_ROV=1
-fxc /E OIT_KDEPTH /T ps_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_KDEPTH_DASHEDLINE_ps_5_0 /D __RENDERING_MODE=1 /D ZF_HANDLING=1 /D TAIL_HANDLING=1 /D MAX_LAYERS=8 /D PIXEL_SYNCH=1 /D USE_ROV=1 
-fxc /E OIT_KDEPTH /T ps_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_KDEPTH_MULTITEXTMAPPING_ps_5_0 /D __RENDERING_MODE=2 /D ZF_HANDLING=1 /D TAIL_HANDLING=1 /D MAX_LAYERS=8 /D PIXEL_SYNCH=1 /D USE_ROV=1 
-fxc /E OIT_KDEPTH /T ps_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_KDEPTH_TEXTMAPPING_ps_5_0 /D __RENDERING_MODE=3 /D ZF_HANDLING=1 /D TAIL_HANDLING=1 /D MAX_LAYERS=8 /D PIXEL_SYNCH=1 /D USE_ROV=1
-fxc /E OIT_KDEPTH /T ps_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_KDEPTH_TEXTUREIMGMAP_ps_5_0 /D __RENDERING_MODE=4 /D ZF_HANDLING=1 /D TAIL_HANDLING=1 /D MAX_LAYERS=8 /D PIXEL_SYNCH=1 /D USE_ROV=1 
-fxc /E OIT_PRESET /T cs_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_PRESET_cs_5_0 /D ZF_HANDLING=1 /D TAIL_HANDLING=1 /D MAX_LAYERS=8 /D SILHOUETTE_EDGE=1 /D PIXEL_SYNCH=0 /D USE_ROV=1
-
-
-
+//fxc /E OIT_RESOLVE /T cs_5_0 ./hlsl/kbuf/KbufResolve.hlsl /Fo ./shader_compiled_objs/SR_OIT_SORT2RENDER_cs_5_0 /D MAX_LAYERS=8 /D ZF_HANDLING=1
+//fxc /E OIT_KDEPTH /T ps_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_KDEPTH_PHONGBLINN_ps_5_0 /D __RENDERING_MODE=0 /D ZF_HANDLING=1 /D TAIL_HANDLING=1 /D MAX_LAYERS=8 /D PIXEL_SYNCH=1 /D USE_ROV=1
+//fxc /E OIT_KDEPTH /T ps_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_KDEPTH_DASHEDLINE_ps_5_0 /D __RENDERING_MODE=1 /D ZF_HANDLING=1 /D TAIL_HANDLING=1 /D MAX_LAYERS=8 /D PIXEL_SYNCH=1 /D USE_ROV=1 
+//fxc /E OIT_KDEPTH /T ps_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_KDEPTH_MULTITEXTMAPPING_ps_5_0 /D __RENDERING_MODE=2 /D ZF_HANDLING=1 /D TAIL_HANDLING=1 /D MAX_LAYERS=8 /D PIXEL_SYNCH=1 /D USE_ROV=1 
+//fxc /E OIT_KDEPTH /T ps_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_KDEPTH_TEXTMAPPING_ps_5_0 /D __RENDERING_MODE=3 /D ZF_HANDLING=1 /D TAIL_HANDLING=1 /D MAX_LAYERS=8 /D PIXEL_SYNCH=1 /D USE_ROV=1
+//fxc /E OIT_KDEPTH /T ps_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_KDEPTH_TEXTUREIMGMAP_ps_5_0 /D __RENDERING_MODE=4 /D ZF_HANDLING=1 /D TAIL_HANDLING=1 /D MAX_LAYERS=8 /D PIXEL_SYNCH=1 /D USE_ROV=1 
+//fxc /E OIT_PRESET /T cs_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_PRESET_cs_5_0 /D ZF_HANDLING=1 /D TAIL_HANDLING=1 /D MAX_LAYERS=8 /D SILHOUETTE_EDGE=1 /D PIXEL_SYNCH=0 /D USE_ROV=1
 fxc /E OIT_RESOLVE /T cs_5_0 ./hlsl/kbuf/KbufResolve.hlsl /Fo ./shader_compiled_objs/SR_OIT_SORT2RENDER_cs_5_0 /D ZF_HANDLING=1
 fxc /E OIT_KDEPTH /T ps_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_KDEPTH_PHONGBLINN_ps_5_0 /D __RENDERING_MODE=0 /D ZF_HANDLING=1 /D TAIL_HANDLING=1 /D PIXEL_SYNCH=1 /D USE_ROV=1
 fxc /E OIT_KDEPTH /T ps_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_KDEPTH_DASHEDLINE_ps_5_0 /D __RENDERING_MODE=1 /D ZF_HANDLING=1 /D TAIL_HANDLING=1 /D PIXEL_SYNCH=1 /D USE_ROV=1 
@@ -41,7 +38,7 @@ fxc /E KB_SSAO /T cs_5_0 ./hlsl/ssao/SSAO.hlsl /Fo ./shader_compiled_objs/KB_SSA
 fxc /E KB_SSAO_BLUR /T cs_5_0 ./hlsl/ssao/SSAO.hlsl /Fo ./shader_compiled_objs/KB_SSAO_BLUR_cs_5_0 /D MAX_LAYERS=8
 fxc /E KB_TO_TEXTURE /T cs_5_0 ./hlsl/ssao/SSAO.hlsl /Fo ./shader_compiled_objs/KBZ_TO_TEXTURE_cs_5_0 /D MAX_LAYERS=8
 
-fxc /E SortAndRenderCS /T cs_5_0 ./hlsl/dx_abuf/DxPerPixelLL_Sort.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_SORT2SENDER_cs_5_0 /D DX_11_STYLE=0 /D DX_11_OIT=1
+fxc /E SortAndRenderCS /T cs_5_0 ./hlsl/dx_abuf/DxPerPixelLL_Sort.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_SORT2SENDER_cs_5_0 /D DX_11_STYLE=0 /D DX_11_OIT=0
 fxc /E OIT_A_BUFFER_CNF_FRAGS /T ps_5_0 ./hlsl/dx_abuf/DxPerPixelLL.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_FRAGCOUNTER_ps_5_0 /D DX_11_STYLE=0 
 fxc /E OIT_A_BUFFER_CNF_FRAGS /T ps_5_0 ./hlsl/dx_abuf/DxPerPixelLL.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_FRAGCOUNTER_MTT_ps_5_0 /D DX_11_STYLE=0 /D __RENDERING_MODE=2
 fxc /E OIT_A_BUFFER_FILL /T ps_5_0 ./hlsl/dx_abuf/DxPerPixelLL.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_PHONGBLINN_ps_5_0 /D __RENDERING_MODE=0 /D DX_11_STYLE=0

@@ -75,7 +75,7 @@ void CreateOffsetTable_CS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThre
 struct FragmentVD
 {
 	uint ivis;
-	float depth;
+	float z;
 };
 
 //static FragmentVD fragments[MAX_ARRAY_SIZE];
@@ -100,11 +100,11 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 	{
 		FragmentVD f;
 		f.ivis = LOAD1_RBB(2 * (offsettable_buf[nThreadNum] + i) + 0);
-		f.depth = asfloat(LOAD1_RBB(2 * (offsettable_buf[nThreadNum] + i) + 1));
+		f.z = asfloat(LOAD1_RBB(2 * (offsettable_buf[nThreadNum] + i) + 1));
 		fragments[i] = f;
 	}
 
-	sort(N, fragments);
+	sort(N, fragments, FragmentVD);
 
 	float4 result = (float4) 0.0f;
 	for (i = 0; i < N; i++)
