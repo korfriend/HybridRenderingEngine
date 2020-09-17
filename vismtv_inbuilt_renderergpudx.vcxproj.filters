@@ -103,9 +103,6 @@
     <Filter Include="renderer\legacy">
       <UniqueIdentifier>{2aa97e01-6f22-459e-a3d6-489b3f4da6b7}</UniqueIdentifier>
     </Filter>
-    <Filter Include="hlsl source code\DxPerPixelLL">
-      <UniqueIdentifier>{63f19760-d12e-4893-b68c-56ff570b2542}</UniqueIdentifier>
-    </Filter>
     <Filter Include="hlsl source code\Moment">
       <UniqueIdentifier>{3d60a282-de0d-4f81-971e-a82270d4889c}</UniqueIdentifier>
     </Filter>
@@ -121,6 +118,9 @@
     <Filter Include="hlsl source code\ssao">
       <UniqueIdentifier>{5534595b-4923-44c9-81ef-e467aac3f473}</UniqueIdentifier>
     </Filter>
+    <Filter Include="hlsl source code\DxABuf">
+      <UniqueIdentifier>{63f19760-d12e-4893-b68c-56ff570b2542}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="vismtv_inbuilt_renderergpudx.rc">
@@ -128,12 +128,6 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="hlsl\dx_abuf\DxPerPixelLL_Sort.hlsl">
-      <Filter>hlsl source code\DxPerPixelLL</Filter>
-    </FxCompile>
-    <FxCompile Include="hlsl\dx_abuf\DxPerPixelLL.hlsl">
-      <Filter>hlsl source code\DxPerPixelLL</Filter>
-    </FxCompile>
     <FxCompile Include="hlsl\legacy\VRShader_Common.hlsl">
       <Filter>hlsl source code\legacy</Filter>
     </FxCompile>
@@ -175,6 +169,12 @@
     </FxCompile>
     <FxCompile Include="hlsl\dvr\DvrCS.hlsl">
       <Filter>hlsl source code\dvr</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\dx_abuf\DxABuf.hlsl">
+      <Filter>hlsl source code\DxABuf</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\dx_abuf\DxABuf_Sort.hlsl">
+      <Filter>hlsl source code\DxABuf</Filter>
     </FxCompile>
   </ItemGroup>
 </Project>

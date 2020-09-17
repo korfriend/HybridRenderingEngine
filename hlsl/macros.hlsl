@@ -146,7 +146,7 @@
     }\
 }
 
-// visex 안 쓰는 버전
+// no ZTE
 #define INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, fs) {\
     if (idx_dlayer >= num_frags)\
     {\
@@ -194,3 +194,17 @@
         vis_out += vis_dly * (1.f - vis_out.a);\
     }\
 }
+
+#define LOAD4_KBUF(V, F_ADDR, K) V = deep_k_buf.Load4(F_ADDR + (K) * 4 * 4)
+#define STORE4_KBUF(V, F_ADDR, K) deep_k_buf.Store4(F_ADDR + (K) * 4 * 4, V)
+#define GET_FRAG(F, F_ADDR, K) {uint4 rb; LOAD4_KBUF(rb, F_ADDR, K); F.i_vis = rb.x; F.z = asfloat(rb.y); F.zthick = asfloat(rb.z); F.opacity_sum = asfloat(rb.w);}
+#define SET_FRAG(F_ADDR, K, F) {uint4 rb = uint4(F.i_vis, asuint(F.z), asuint(F.zthick), asuint(F.opacity_sum)); STORE4_KBUF(rb, F_ADDR, K);}
+#define SET_ZEROFRAG(F_ADDR, K) {STORE4_KBUF(0, F_ADDR, K);}
+
+#if DO_NOT_USE_DISCARD == 1
+#define EXIT return
+#else
+#define EXIT clip(-1)
+#endif
+
+#define DEBUG__

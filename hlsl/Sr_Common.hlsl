@@ -129,6 +129,12 @@ VS_OUTPUT_TTT CommonVS_PTTT(VS_INPUT_PTTT input)
     return vout;
 }
 
+#if __RENDERING_MODE == 2
+#define __VS_OUT VS_OUTPUT_TTT
+#else
+#define __VS_OUT VS_OUTPUT
+#endif
+
 #define __InterlockedExchange(A, B, C) A = B
 //#define __InterlockedExchange(A, B, C) InterlockedExchange(A, B, C)
 

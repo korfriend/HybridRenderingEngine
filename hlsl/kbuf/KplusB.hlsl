@@ -1,14 +1,9 @@
 #include "../Sr_Common.hlsl"
 
 ///////////// CS /////////////////
-RWByteAddressBuffer deep_k_buf : register(u1);
-RWTexture2D<float4> fragment_blendout : register(u2);
-RWTexture2D<float> fragment_zdepth : register(u3);
-
+Texture2D<uint> sr_fragment_counter : register(t0);
 RWBuffer<uint> histo_buf : register(u10); // 1024 elements
 RWBuffer<uint> offsettable_buf : register(u11); // gres_fb_ref_pidx
-
-Texture2D<uint> sr_fragment_counter : register(t0);
 
 // set larger thread group?
 #define MAX_FRAGS 1024
@@ -29,8 +24,8 @@ void FillHistogram(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID, u
 [numthreads(1, 1, 1)] // 조금 더 큰값으로 나중에..
 void CreateOffsetTableKpB(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID, uint3 nGTid : SV_GroupThreadID)
 {
-	uint nThreadId = nGid.y * g_cbCamState.rt_width + nGid.x;
-	uint num_frags = sr_fragment_counter[nGid.xy];
+	uint nThreadId = nDTid.y * g_cbCamState.rt_width + nDTid.x;
+	uint num_frags = sr_fragment_counter[nDTid.xy];
 	if (num_frags == 0
 		|| nThreadId == 0 // test
 		)

@@ -1,13 +1,13 @@
 #include "../CommonShader.hlsl"
 
-RWByteAddressBuffer deep_LL_buf : register(u1);
+RWByteAddressBuffer deep_DxA_buf : register(u1);
 RWTexture2D<float4> fragment_blendout : register(u2);
 RWTexture2D<float> fragment_zdepth : register(u3);
 RWBuffer<uint> offsettable_buf : register(u4); // gres_fb_ref_pidx
 
 Texture2D<uint> sr_fragment_counter : register(t0);
 
-#define LOAD1_RBB(ADDR) deep_LL_buf.Load((ADDR) * 4)
+#define LOAD1_RBB(ADDR) deep_DxA_buf.Load((ADDR) * 4)
 
 ///////////////////////////////////////////
 // GPU-accelerated A-buffer algorithm
@@ -82,6 +82,7 @@ struct FragmentVD
 //static FragmentVD leftArray[MAX_ARRAY_SIZE_2d];
 #endif
 
+Buffer<uint> sr_offsettable_buf : register(t50); // gres_fb_ref_pidx
 #define blocksize 1
 [numthreads(1, 1, 1)]
 void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID, uint3 nGTid : SV_GroupThreadID)
@@ -95,16 +96,24 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 		return;
 
 #if DX_11_OIT==0
+	uint offset = sr_offsettable_buf[nThreadNum];
+	//if (offset == 12)
+	//{
+	//	fragment_blendout[nGid.xy] = float4(1, 0, 0, 1);
+	//	return;
+	//}
+
 	FragmentVD fragments[MAX_ARRAY_SIZE];
 	for (int i = 0; i < N; i++)
 	{
 		FragmentVD f;
-		f.ivis = LOAD1_RBB(2 * (offsettable_buf[nThreadNum] + i) + 0);
-		f.z = asfloat(LOAD1_RBB(2 * (offsettable_buf[nThreadNum] + i) + 1));
+		f.ivis = LOAD1_RBB(2 * (offset + i) + 0);
+		f.z = asfloat(LOAD1_RBB(2 * (offset + i) + 1));
 		fragments[i] = f;
 	}
 
 	sort(N, fragments, FragmentVD);
+
 
 	float4 result = (float4) 0.0f;
 	for (i = 0; i < N; i++)
@@ -138,7 +147,7 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 	}
 
 	//if (N > 12)
-	//    fragment_blendout[nGid.xy] = float4(1, 0, 0, 1);//ConvertUIntToFloat4(deep_LL_buf[2 * (offsettable_buf[nThreadNum - 1] + 1) + 0]);
+	//    fragment_blendout[nGid.xy] = float4(1, 0, 0, 1);//ConvertUIntToFloat4(deep_DxA_buf[2 * (offsettable_buf[nThreadNum - 1] + 1) + 0]);
 	//return;
 
 	uint idx = blocksize * nGTid.y + nGTid.x;
@@ -184,13 +193,13 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 		   uint color[8];
 		   for(int i = 0; i < 8; i++)
 		   {
-			   color[i] = deep_LL_buf[2 * (offsettable_buf[nThreadNum - 1] + i) + 0];
+			   color[i] = deep_DxA_buf[2 * (offsettable_buf[nThreadNum - 1] + i) + 0];
 		   }
 
 		   for(i = 0; i < 8; i++)
 		   {
-			   deep_LL_buf[2 * (nThreadNum * 8 + i) + 1] = fDepth[i]; //fDepth[nIndex[i]];
-			   deep_LL_buf[2 * (nThreadNum * 8 + i) + 0] = color[nIndex[i]];
+			   deep_DxA_buf[2 * (nThreadNum * 8 + i) + 1] = fDepth[i]; //fDepth[nIndex[i]];
+			   deep_DxA_buf[2 * (nThreadNum * 8 + i) + 0] = color[nIndex[i]];
 		   }
 		/**/
 
@@ -198,7 +207,7 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 		float4 result = (float4) 0.0f;
 		//for (uint x = N - 1; x >= 0; x--)
 		//{
-		//    uint bufferValue = deep_LL_buf[2 * (offsettable_buf[nThreadNum - 1] + nIndex[x]) + 0];
+		//    uint bufferValue = deep_DxA_buf[2 * (offsettable_buf[nThreadNum - 1] + nIndex[x]) + 0];
 		//    float4 color = ConvertUIntToFloat4(bufferValue);
 		//    //result = lerp(result, color, color.a);
 		//    //result = result * (1 - color.a) + color * color.a;
@@ -206,7 +215,7 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 		//}
 		for (uint x = 0; x < N; x++)
 		{
-			//uint bufferValue = deep_LL_buf[2 * (offsettable_buf[nThreadNum - 1] + nIndex[x]) + 0];
+			//uint bufferValue = deep_DxA_buf[2 * (offsettable_buf[nThreadNum - 1] + nIndex[x]) + 0];
 			uint bufferValue = LOAD1_RBB(2 * (offsettable_buf[nThreadNum - 1] + nIndex[x]) + 0);
 			float4 color = ConvertUIntToFloat4(bufferValue);
 			result += color * (1 - result.a);
