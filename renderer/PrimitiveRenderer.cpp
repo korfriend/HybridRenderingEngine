@@ -1172,7 +1172,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		cbCamState.iSrCamDummy__0 = *(uint*)&merging_beta;
 	if (mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBZT)
 		cbCamState.cam_flag |= (0x1 << 2);
-	if (is_final_renderer)
+	if (!is_final_renderer) // which means the k-buffer can be used for the following renderer
 		cbCamState.cam_flag |= (0x1 << 3);
 	D3D11_MAPPED_SUBRESOURCE mappedResCamState;
 	dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
@@ -1516,6 +1516,21 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	bool is_frag_counter_buffer = mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBZT;
 	bool is_MOMENT_gen_buffer = mode_OIT == MFR_MODE::MOMENT;
 RENDERER_LOOP:
+	if (gpu_profile)
+	{
+		if (is_frag_counter_buffer)
+		{
+			dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
+			profile_map["begin frags counter"] = gpu_profilecount;
+			gpu_profilecount++;
+		}
+		else if(RENDERER_LOOP == 0)
+		{
+			dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
+			profile_map["begin geometry shader"] = gpu_profilecount;
+			gpu_profilecount++;
+		}
+	}
 	vector<RenderObjInfo>* pvtrValidPrimitives;
 	switch (RENDERER_LOOP)
 	{
@@ -2131,6 +2146,23 @@ RENDERER_LOOP:
 		//	VMSAFE_RELEASE(pDeepBufferThick_SYS);
 		//}
 #pragma endregion // 1st RENDERING PASS
+	}
+
+
+	if (gpu_profile)
+	{
+		if (is_frag_counter_buffer)
+		{
+			dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
+			profile_map["end frags counter"] = gpu_profilecount;
+			gpu_profilecount++;
+		}
+		else if (RENDERER_LOOP == 2)
+		{
+			dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
+			profile_map["end geometry shader"] = gpu_profilecount;
+			gpu_profilecount++;
+		}
 	}
 
 #define NUM_UAVs_2ND 4
@@ -2864,7 +2896,8 @@ RENDERER_LOOP_EXIT:
 		dx11DeviceImmContext->GetData(dx11CommonParams->dx11qr_disjoint, &tsDisjoint, sizeof(tsDisjoint), 0);
 		if (!tsDisjoint.Disjoint)
 		{
-			UINT64 tsBeginFrame = 0, tsBeginOffsetTable = 0, tsEndOffsetTable = 0, tsEndGeoPass = 0, 
+			UINT64 tsBeginFrame = 0, tsBeginOffsetTable = 0, tsEndOffsetTable = 0, tsEndGeoPass = 0,
+				tsBeginCounter = 0, tsEndCounter = 0, tsBeginGeoShader = 0, tsEndGeoShader = 0,
 				tsEndResolvePass = 0, tsEndRender = 0, tsBeginCopyBack = 0, tsEndCopyBack = 0, tsEndFrame = 0,
 				tsBeginHisto = 0, tsEndHisto = 0;
 
@@ -2883,6 +2916,10 @@ RENDERER_LOOP_EXIT:
 			GetTimeGpuProfile("begin", tsBeginFrame);
 			GetTimeGpuProfile("begin offset table generation", tsBeginOffsetTable);
 			GetTimeGpuProfile("end offset table generation", tsEndOffsetTable);
+			GetTimeGpuProfile("begin frags counter", tsBeginCounter);
+			GetTimeGpuProfile("end frags counter", tsEndCounter);
+			GetTimeGpuProfile("begin geometry shader", tsBeginGeoShader);
+			GetTimeGpuProfile("end geometry shader", tsEndGeoShader);
 			GetTimeGpuProfile("end geometry pass", tsEndGeoPass);
 			GetTimeGpuProfile("end resolve pass", tsEndResolvePass);
 			GetTimeGpuProfile("end render", tsEndRender);
@@ -2903,6 +2940,8 @@ RENDERER_LOOP_EXIT:
 			DisplayDuration(tsBeginHisto, tsEndHisto, "#GPU# Histogram Analysis Time");
 			DisplayDuration(tsEndHisto, tsEndOffsetTable, "#GPU# Offset Table (DK+B) Time");
 			DisplayDuration(tsBeginFrame, tsEndGeoPass, "#GPU# Geometry Rendering Time");
+			DisplayDuration(tsBeginCounter, tsEndCounter, "#GPU# Fragment Counting Time");
+			DisplayDuration(tsBeginGeoShader, tsEndGeoShader, "#GPU# Geometry Shader Time");
 			DisplayDuration(tsEndGeoPass, tsEndResolvePass, "#GPU# Resolve Pass Time");
 			DisplayDuration(tsBeginCopyBack, tsEndCopyBack, "#GPU# CopyBack Time");
 		}
