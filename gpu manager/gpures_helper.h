@@ -82,8 +82,9 @@ namespace grd_helper
 		D3D_FEATURE_LEVEL dx11_featureLevel;
 		DXGI_ADAPTER_DESC dx11_adapter;
 
+#define MAXSTAMPS 20
 		ID3D11Query* dx11qr_disjoint;
-		ID3D11Query* dx11qr_timestamps[10];
+		ID3D11Query* dx11qr_timestamps[MAXSTAMPS];
 
 		__ID3D11Device* dx11Device;
 		__ID3D11DeviceContext* dx11DeviceImmContext;
@@ -252,7 +253,7 @@ namespace grd_helper
 #ifdef __DX_DEBUG_QUERY
 			debug_info_queue = NULL;
 #endif
-			for (int i = 0; i < 10; i++)
+			for (int i = 0; i < MAXSTAMPS; i++)
 				dx11qr_timestamps[i] = NULL;
 			dx11qr_disjoint = NULL;
 		}
@@ -294,9 +295,9 @@ namespace grd_helper
 			if (dx11qr_disjoint)
 			{
 				dx11qr_disjoint->Release();
-				for (int i = 0; i < 10; i++)
+				for (int i = 0; i < MAXSTAMPS; i++)
 					dx11qr_timestamps[i]->Release();
-				for (int i = 0; i < 10; i++)
+				for (int i = 0; i < MAXSTAMPS; i++)
 					dx11qr_timestamps[i] = NULL;
 				dx11qr_disjoint = NULL;
 			}
