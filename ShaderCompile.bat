@@ -23,13 +23,6 @@ fxc /E OIT_KDEPTH /T ps_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/
 fxc /E OIT_PRESET /T cs_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/SR_SINGLE_LAYER_TO_DKBZT_cs_5_0 /D ZF_HANDLING=1 /D TAIL_HANDLING=1 /D SILHOUETTE_EDGE=1 /D PIXEL_SYNCH=0 /D USE_ROV=1 /D STRICT_LOCKED=1 /D DO_NOT_USE_DISCARD=1 /D DYNAMIC_K_MODE=1
 
 
-fxc /E OIT_RESOLVE /T cs_5_0 ./hlsl/kbuf/KbufResolve.hlsl /Fo ./shader_compiled_objs/OIT_DKBZ_RESOLVE_cs_5_0 /D ZF_HANDLING=0 /D DYNAMIC_K_MODE=1
-fxc /E OIT_KDEPTH /T ps_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_FILL_DKBZT_PHONGBLINN_ps_5_0 /D __RENDERING_MODE=0 /D ZF_HANDLING=0 /D TAIL_HANDLING=1 /D PIXEL_SYNCH=1 /D USE_ROV=1 /D STRICT_LOCKED=1 /D DYNAMIC_K_MODE=1
-
-
-
-
-
 fxc /E KB_SSAO /T cs_5_0 ./hlsl/ssao/SSAO.hlsl /Fo ./shader_compiled_objs/KB_SSAO_cs_5_0 /D HBAO=1
 fxc /E KB_SSAO_BLUR /T cs_5_0 ./hlsl/ssao/SSAO.hlsl /Fo ./shader_compiled_objs/KB_SSAO_BLUR_cs_5_0 
 fxc /E KB_TO_TEXTURE /T cs_5_0 ./hlsl/ssao/SSAO.hlsl /Fo ./shader_compiled_objs/KBZ_TO_TEXTURE_cs_5_0 

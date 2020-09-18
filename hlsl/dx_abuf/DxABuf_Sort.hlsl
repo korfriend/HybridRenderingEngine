@@ -129,7 +129,7 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 
 	sort(N, fragments, FragmentVD);
 
-
+	bool store_to_kbuf = BitCheck(g_cbCamState.cam_flag, 3);
 	float4 result = (float4) 0.0f;
 	for (i = 0; i < N; i++)
 	{
@@ -137,8 +137,11 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 		float4 color = ConvertUIntToFloat4(bufferValue);
 		result += color * (1 - result.a);
 
-		STORE1_RBB(bufferValue, 2 * nDeepBufferPos + 0);
-		STORE1_RBB(asuint(fragments[i].z), 2 * nDeepBufferPos + 1);
+		if (store_to_kbuf)
+		{
+			STORE1_RBB(bufferValue, 2 * nDeepBufferPos + 0);
+			STORE1_RBB(asuint(fragments[i].z), 2 * nDeepBufferPos + 1);
+		}
 	}
 	fragment_blendout[nDTid.xy] = result;
 	fragment_zdepth[nDTid.xy] = N; // for checking # of layers

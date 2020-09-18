@@ -1172,6 +1172,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		cbCamState.iSrCamDummy__0 = *(uint*)&merging_beta;
 	if (mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBZT)
 		cbCamState.cam_flag |= (0x1 << 2);
+	if (is_final_renderer)
+		cbCamState.cam_flag |= (0x1 << 3);
 	D3D11_MAPPED_SUBRESOURCE mappedResCamState;
 	dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
 	CB_CameraState* cbCamStateData = (CB_CameraState*)mappedResCamState.pData;

@@ -55,9 +55,9 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 	frag_cnt = min(frag_cnt, k_value);
 
 	// we will test our oit with the number of deep layers : 4, 8, 16 ... here, set max 32 ( larger/equal than k_value * 2 )
-	uint bytes_per_frag = 4 * 4;
+	uint bytes_per_frag = 4 * NUM_ELES_PER_FRAG;
 #if DYNAMIC_K_MODE== 1
-#define LOCAL_SIZE 100
+#define LOCAL_SIZE 400
 	uint offsettable_idx = DTid.y * g_cbCamState.rt_width + DTid.x; // num of frags
 	if (offsettable_idx == 0) return;
 	uint addr_base = sr_offsettable_buf[offsettable_idx] * bytes_per_frag;
@@ -157,13 +157,18 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 		GET_FRAG(f, addr_base, k);
 		if ((uint)f.i_vis > 0)
 		{
+#if ZF_HANDLING == 1
 			f.zthick = max(f.zthick, v_thickness);
+#endif
 			fs[valid_frag_cnt] = f;
 			valid_frag_cnt++;
 		}
 	}
 
 	sort(valid_frag_cnt, fs, Fragment);
+
+	//fragment_blendout[DTid.xy] = ConvertUIntToFloat4(fs[0].i_vis);
+	//return;
 #endif
 
 	float merging_beta = asfloat(g_cbCamState.iSrCamDummy__0);
@@ -243,7 +248,8 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 			fs[idx] = f_invalid; // when displaying layers for test, disable this.
 		}
 	}
-    
+	
+	bool store_to_kbuf = BitCheck(g_cbCamState.cam_flag, 3);
     float4 blendout = (float4) 0;
 	[loop]
 	for (i = 0; i < cnt_sorted_ztsurf; i++)
@@ -256,9 +262,9 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 		Fragment f_ith = fs[idx];
 		float4 vis = ConvertUIntToFloat4(f_ith.i_vis);
 		blendout += vis * (1.f - blendout.a);
-#if SKIP_STORE_KBUF == 0
-		SET_FRAG(addr_base, i, f_ith);
-#endif
+
+		if(store_to_kbuf)
+			SET_FRAG(addr_base, i, f_ith);
 	}
 
 	fragment_counter[DTid.xy] = cnt_sorted_ztsurf;

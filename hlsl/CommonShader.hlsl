@@ -36,6 +36,7 @@ struct HxCB_CameraState // Hlsl dX Contant Buffer
 	// 1st bit : 0 (orthogonal), 1 : (perspective)
 	// 2nd bit : for RT to k-buffer : 0 (just RT), 1 : (after silhouette processing)
 	// 3rd bit : for DK+B
+	// 4th bit : for storing the final fragments to the k buffer, which is used for sequentially coming renderer (e.g., DVR)
 	uint cam_flag;
 	uint iSrCamDummy__0; // used for 1) A-Buffer prefix computations /*deprecated*/ or 2) beta (asfloat) for merging operation
 };
@@ -1132,17 +1133,13 @@ struct Fragment
 {
 	uint i_vis;
 	float z;
+#if !defined(ZF_HANDLING) || ZF_HANDLING == 1
 	float zthick;
 	float opacity_sum;
-
-	//Fragment() {
-	//	i_vis = 0;
-	//	zthick = 0;
-	//	opacity_sum = 0;
-	//	z = FLT_MAX;
-	//}
+#endif
 };
 
+#if !defined(ZF_HANDLING) || ZF_HANDLING == 1
 struct Fragment_OUT
 {
 	Fragment f_prior; // Includes current intermixed depth
@@ -1282,6 +1279,7 @@ Fragment_OUT MergeFrags(Fragment f_prior, Fragment f_posterior, const in float b
 	fs_out.f_posterior = f_posterior;
 	return fs_out;
 }
+#endif
 
 cbuffer cbGlobalParams : register(b9)
 {
