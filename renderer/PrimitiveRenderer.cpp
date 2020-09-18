@@ -724,6 +724,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	vmdouble3 default_color_cmmobj = _fncontainer->GetParamValue("_double3_CmmGlobalColor", vmdouble3(-1, -1, -1));
 
 	bool is_ghost_mode = _fncontainer->GetParamValue("_bool_GhostEffect", false);
+	bool use_spinlock_pixsynch = _fncontainer->GetParamValue("_bool_UseSpinLock", false);
 
 	bool is_rgba = _fncontainer->GetParamValue("_bool_IsRGBA", false); // false means bgra
 
@@ -743,15 +744,30 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	bool reload_hlsl_objs = _fncontainer->GetParamValue("_bool_ReloadHLSLObjFiles", false);
 	if (reload_hlsl_objs)
 	{
-		//string prefix_path = "..\\..\\VisNativeModules\\vismtv_inbuilt_renderergpudx\\OIT\\";
-		//string prefix_path = "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
-		string prefix_path = "E:\\project_srcs\\VisMotive\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
+		char ownPth[2048];
+		GetModuleFileNameA(NULL, ownPth, (sizeof(ownPth)));
+		string exe_path = ownPth;
+		size_t pos = 0;
+		std::string token;
+		string delimiter = "\\";
+		string hlslobj_path = "";
+		while ((pos = exe_path.find(delimiter)) != std::string::npos) {
+			token = exe_path.substr(0, pos);
+			if (token.find(".exe") != std::string::npos) break;
+			hlslobj_path += token + "\\";
+			exe_path.erase(0, pos + delimiter.length());
+		}
+		hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
+		//cout << hlslobj_path << endl;
+
+		string prefix_path = hlslobj_path;
 		cout << "RECOMPILE HLSL _ OIT renderer!!" << endl;
 
 		dx11CommonParams->dx11DeviceImmContext->VSSetShader(NULL, NULL, 0);
 		dx11CommonParams->dx11DeviceImmContext->GSSetShader(NULL, NULL, 0);
 		dx11CommonParams->dx11DeviceImmContext->PSSetShader(NULL, NULL, 0);
 		dx11CommonParams->dx11DeviceImmContext->CSSetShader(NULL, NULL, 0);
+
 #define VS_NUM 5
 #define PS_NUM 25
 #define CS_NUM 13
@@ -973,11 +989,13 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		D3D11_BIND_DEPTH_STENCIL, DXGI_FORMAT_D32_FLOAT, false);
 	grd_helper::UpdateFrameBuffer(gres_fb_counter, iobj, "RW_COUNTER", RTYPE_TEXTURE2D,
 		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
-	grd_helper::UpdateFrameBuffer(gres_fb_spinlock, iobj, "RW_SPINLOCK", RTYPE_TEXTURE2D,
-		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
+	//if(use_spinlock_pixsynch)// || mode_OIT == MFR_MODE::MOMENT) // when MFR_MODE::DXAB mode, this buffer used for another purpose?!
+		grd_helper::UpdateFrameBuffer(gres_fb_spinlock, iobj, "RW_SPINLOCK", RTYPE_TEXTURE2D,
+			D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
 
+	const int num_frags_perpixel = k_value * 4 * buffer_ex;
 	grd_helper::UpdateFrameBuffer(gres_fb_k_buffer, iobj, "BUFFER_RW_K_BUF", RTYPE_BUFFER,
-		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, (k_value * 4 * buffer_ex));
+		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, num_frags_perpixel);
 
 	// SSAO
 	{
@@ -1011,8 +1029,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 	if (check_pixel_transmittance)
 	{
-		grd_helper::UpdateFrameBuffer(gres_fb_sys_deep_k, iobj, "SYSTEM_OUT_DEEP_K_BUF", RTYPE_BUFFER,
-			NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT, (k_value * 4 * buffer_ex));
+		grd_helper::UpdateFrameBuffer(gres_fb_sys_deep_k, iobj, "SYSTEM_OUT_K_BUF", RTYPE_BUFFER,
+			NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT, num_frags_perpixel);
 		if (mode_OIT == MFR_MODE::DXAB)
 			grd_helper::UpdateFrameBuffer(gres_fb_sys_ref_pidx, iobj, "SYSTEM_OUT_REF_PIDX_BUF", RTYPE_BUFFER,
 				NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT);
@@ -1093,9 +1111,12 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #pragma endregion // IOBJECT GPU
 
 #pragma region // Camera & Light Setting
-	const int __BLOCKSIZE = 8;
-	uint num_grid_x = (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
-	uint num_grid_y = (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
+	//const int __BLOCKSIZE = 8;
+	//uint num_grid_x = (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
+	//uint num_grid_y = (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
+	const int __BLOCKSIZE = _fncontainer->GetParamValue("_int_GpuThreadBlockSize", (int)8);
+	uint num_grid_x = __BLOCKSIZE == 1 ? fb_size_cur.x : (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
+	uint num_grid_y = __BLOCKSIZE == 1 ? fb_size_cur.y : (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
 
 	uint num_pobjs = (uint)input_pobjs.size();
 	float len_diagonal_max = 0;
@@ -1149,6 +1170,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	grd_helper::SetCb_Camera(cbCamState, matWS2PS, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, fv_thickness);
 	if(mode_OIT == MFR_MODE::SKBZT || mode_OIT == MFR_MODE::DKBZT) 
 		cbCamState.iSrCamDummy__0 = *(uint*)&merging_beta;
+	if (mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBZT)
+		cbCamState.cam_flag |= (0x1 << 2);
 	D3D11_MAPPED_SUBRESOURCE mappedResCamState;
 	dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
 	CB_CameraState* cbCamStateData = (CB_CameraState*)mappedResCamState.pData;
@@ -2147,8 +2170,8 @@ RENDERER_LOOP:
 			dx11DeviceImmContext->CSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_SRV]);
 			//dx11DeviceImmContext->Flush();
 
-			//dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
-			dx11DeviceImmContext->Dispatch(fb_size_cur.x, fb_size_cur.y, 1);
+			dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+			//dx11DeviceImmContext->Dispatch(fb_size_cur.x, fb_size_cur.y, 1);
 
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(1, NUM_UAVs_2ND, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 			dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
@@ -2217,7 +2240,8 @@ RENDERER_LOOP:
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(11, 1, (ID3D11UnorderedAccessView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV], 0);
 
 			dx11DeviceImmContext->CSSetShader(GETCS(SR_FillHistogram_cs_5_0), NULL, 0);
-			dx11DeviceImmContext->Dispatch(fb_size_cur.x, fb_size_cur.y, 1);
+			dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+			//dx11DeviceImmContext->Dispatch(fb_size_cur.x, fb_size_cur.y, 1);
 
 			// read-back //
 			histo_buf_sys = histo_buf;
@@ -2288,7 +2312,6 @@ RENDERER_LOOP:
 			const int test_K = _fncontainer->GetParamValue("_int_TestKvalue", -1);
 			if (test_K >= 8) k_value = test_K;
 			cbCamState.k_value = k_value;
-			cbCamState.cam_flag |= 0x1 << 2;
 
 			D3D11_MAPPED_SUBRESOURCE mappedResCamState;
 			dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
@@ -2299,8 +2322,8 @@ RENDERER_LOOP:
 			dx11DeviceImmContext->CSSetConstantBuffers(0, 1, &cbuf_cam_state);
 
 			dx11DeviceImmContext->CSSetShader(GETCS(SR_CreateOffsetTableKpB_cs_5_0), NULL, 0);
-			//dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
-			dx11DeviceImmContext->Dispatch(fb_size_cur.x, fb_size_cur.y, 1);
+			dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+			//dx11DeviceImmContext->Dispatch(fb_size_cur.x, fb_size_cur.y, 1);
 
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(10, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 			dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
@@ -2408,12 +2431,11 @@ RENDERER_LOOP_EXIT:
 
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(1, NUM_UAVs_2ND, dx11UAVs_2nd_pass, (UINT*)(&dx11UAVs_2nd_pass));
 
-		// 나중에 1D 로 변경... 
 		//dx11DeviceImmContext->Flush();
 
-		if (mode_OIT == MFR_MODE::DXAB)
-			dx11DeviceImmContext->Dispatch(fb_size_cur.x, fb_size_cur.y, 1);
-		else
+		//if (mode_OIT == MFR_MODE::DXAB)
+		//	dx11DeviceImmContext->Dispatch(fb_size_cur.x, fb_size_cur.y, 1);
+		//else
 			dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
 
 		if (gpu_profile)

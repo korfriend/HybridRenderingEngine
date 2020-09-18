@@ -1488,7 +1488,7 @@ bool grd_helper::UpdateFrameBuffer(GpuRes& gres,
 	const uint bind_flag,
 	const uint dx_format,
 	const int fb_flag,
-	const int num_deeplayers,
+	const int num_frags_perpixel,
 	const int structured_stride)
 {
 	gres.vm_src_id = iobj->GetObjectID();
@@ -1509,7 +1509,7 @@ bool grd_helper::UpdateFrameBuffer(GpuRes& gres,
 	switch (gres_type)
 	{
 	case RTYPE_BUFFER:
-		gres.res_dvalues["NUM_ELEMENTS"] = num_deeplayers > 0 ? fb_size.x * fb_size.y * num_deeplayers : fb_size.x * fb_size.y;
+		gres.res_dvalues["NUM_ELEMENTS"] = num_frags_perpixel > 0 ? fb_size.x * fb_size.y * num_frags_perpixel : fb_size.x * fb_size.y;
 		switch (dx_format)
 		{
 		case DXGI_FORMAT_R32_UINT: stride_bytes = sizeof(uint); break;

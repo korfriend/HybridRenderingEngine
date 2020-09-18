@@ -17,9 +17,6 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	LocalProgress* progress,
 	double* run_time_ptr)
 {
-	LARGE_INTEGER lIntFreq;
-	LARGE_INTEGER lIntCntStart, lIntCntEnd;
-
 #ifdef __DX_DEBUG_QUERY
 	if (dx11CommonParams->debug_info_queue == NULL)
 		dx11CommonParams->dx11Device->QueryInterface(__uuidof(ID3D11InfoQueue), (void **)&dx11CommonParams->debug_info_queue);
@@ -52,6 +49,13 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			cout << _message << endl;
 	};
 
+	bool print_out_routine_objs = _fncontainer->GetParamValue("_bool_PrintOutRoutineObjs", false);
+	bool gpu_profile = false;
+	if (print_out_routine_objs)
+	{
+		gpu_profile = _fncontainer->GetParamValue("_bool_GpuProfile", false);
+	}
+
 #define __DTYPE(type) data_type::dtype<type>()
 	auto Get_LCParam = [&lobj](const string& name, data_type dtype, auto default_value)
 	{
@@ -78,10 +82,23 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	bool recompile_hlsl = _fncontainer->GetParamValue("_bool_ReloadHLSLObjFiles", false);
 	if (recompile_hlsl)
 	{
-		//string prefix_path = "..\\..\\VisNativeModules\\vismtv_inbuilt_renderergpudx\\OIT\\";
-		//string prefix_path = "E:\\project_srcs\\VisMotive\\VisNativeModules\\vismtv_inbuilt_renderergpudx\\OIT\\";
-		//string prefix_path = "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
-		string prefix_path = "E:\\project_srcs\\VisMotive\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
+		char ownPth[2048];
+		GetModuleFileNameA(NULL, ownPth, (sizeof(ownPth)));
+		string exe_path = ownPth;
+		size_t pos = 0;
+		std::string token;
+		string delimiter = "\\";
+		string hlslobj_path = "";
+		while ((pos = exe_path.find(delimiter)) != std::string::npos) {
+			token = exe_path.substr(0, pos);
+			if (token.find(".exe") != std::string::npos) break;
+			hlslobj_path += token + "\\";
+			exe_path.erase(0, pos + delimiter.length());
+		}
+		hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
+		//cout << hlslobj_path << endl;
+
+		string prefix_path = hlslobj_path;
 
 #define CS_NUM 7
 #define SET_CS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(COMPUTE_SHADER, NAME), dx11CShader, true)
@@ -159,6 +176,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	GpuRes gres_fb_ao_texs[2], gres_fb_ao_blf_texs[2], gres_fb_mip_a_halftexs[2], gres_fb_mip_z_halftexs[2]; // max_layers
 	GpuRes gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex;
 	GpuRes gres_fb_sys_rgba, gres_fb_sys_depthcs;
+	GpuRes gres_fb_ref_pidx;
+
 	grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D,
 		D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
 	grd_helper::UpdateFrameBuffer(gres_fb_depthcs, iobj, "RENDER_OUT_DEPTH_0", RTYPE_TEXTURE2D,
@@ -196,6 +215,10 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		grd_helper::UpdateFrameBuffer(gres_fb_ao_vr_blf_tex, iobj, "RW_TEX_AO_VR_BLF", RTYPE_TEXTURE2D,
 			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8_UNORM, UPFB_MIPMAP);
 	}
+
+	if (mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBZT)
+		grd_helper::UpdateFrameBuffer(gres_fb_ref_pidx, iobj, "BUFFER_RW_REF_PIDX_BUF", RTYPE_BUFFER,
+			D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
 #pragma endregion // IOBJECT GPU
 
 #pragma region // Presetting of VxObject
@@ -314,15 +337,21 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	ID3D11UnorderedAccessView* dx11UAVs_NULL[6] = { NULL, NULL, NULL, NULL, NULL, NULL };
 	ID3D11ShaderResourceView* dx11SRVs_NULL[6] = { NULL, NULL, NULL, NULL, NULL, NULL };
 #pragma region // Camera & Environment 
-	const int __BLOCKSIZE = 8;
-	uint num_grid_x = (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
-	uint num_grid_y = (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
+// 	const int __BLOCKSIZE = 8;
+// 	uint num_grid_x = (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
+// 	uint num_grid_y = (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
+	const int __BLOCKSIZE = _fncontainer->GetParamValue("_int_GpuThreadBlockSize", (int)1);
+	uint num_grid_x = __BLOCKSIZE == 1 ? fb_size_cur.x : (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
+	uint num_grid_y = __BLOCKSIZE == 1 ? fb_size_cur.y : (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
 
 	VmCObject* cam_obj = iobj->GetCameraObject();
 	vmmat44f matWS2SS, matWS2PS, matSS2WS;
 	CB_CameraState cbCamState;
 	grd_helper::SetCb_Camera(cbCamState, matWS2PS, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, (float)v_thickness);
 	cbCamState.iSrCamDummy__0 = *(uint*)&merging_beta;
+	if (mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBZT)
+		cbCamState.cam_flag |= (0x2 << 1);
+	
 	D3D11_MAPPED_SUBRESOURCE mappedResCamState;
 	dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
 	CB_CameraState* cbCamStateData = (CB_CameraState*)mappedResCamState.pData;
@@ -351,8 +380,17 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	}
 #pragma endregion // Light & Shadow Setting
 
+	int gpu_profilecount = 0;
+	map<string, int> profile_map;
+	if (gpu_profile)
+	{
+		dx11DeviceImmContext->Begin(dx11CommonParams->dx11qr_disjoint);
+		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
+		profile_map["begin"] = gpu_profilecount;
+		gpu_profilecount++;
+	}
+
 	// Initial Setting of Frame Buffers //
-	QueryPerformanceCounter(&lIntCntStart);
 	int count_call_render = 0;
 	iobj->GetCustomParameter("_int_NumCallRenders", __DTYPE(int), &count_call_render);
 	bool is_performed_ssao = false;
@@ -711,6 +749,11 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
 		};
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs, (UINT*)(&dx11UAVs));
+
+		if (mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBZT) // filling
+		{
+			dx11DeviceImmContext->CSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]); // search why this does not work
+		}
 		
 		if(render_type != __RM_RAYMIN
 			&& render_type != __RM_RAYMAX
@@ -755,6 +798,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		count_call_render++;
 
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+		dx11DeviceImmContext->CSSetUnorderedAccessViews(50, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 #pragma endregion // Renderer
 	}
 
@@ -792,7 +836,13 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 	dx11DeviceImmContext->Flush();
 	//printf("# Textures : %d, # Drawing : %d, # RTBuffer Change : %d, # Merging : %d\n", iNumTexureLayers, iCountRendering, iCountRTBuffers, iCountMerging);
-
+	
+	if (gpu_profile)
+	{
+		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
+		profile_map["end dvr"] = gpu_profilecount;
+		gpu_profilecount++;
+	}
 	const bool is_system_out = true;
 	if (is_system_out)
 	{
@@ -906,8 +956,56 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			dx11DeviceImmContext->Unmap((ID3D11Texture2D*)gres_fb_sys_depthcs.alloc_res_ptrs[DTYPE_RES], 0);
 			test_out("COPY END STEP !!");
 #pragma endregion
-	}	// if (iCountDrawing == 0)
-}
+		}	// if (iCountDrawing == 0)
+	}
+
+	if(gpu_profile)
+	{
+		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
+		profile_map["end"] = gpu_profilecount;
+		gpu_profilecount++;
+
+		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_disjoint);
+
+		// Wait for data to be available
+		while (dx11DeviceImmContext->GetData(dx11CommonParams->dx11qr_disjoint, NULL, 0, 0) == S_FALSE)
+		{
+			Sleep(1);       // Wait a bit, but give other threads a chance to run
+		}
+
+		// Check whether timestamps were disjoint during the last frame
+		D3D10_QUERY_DATA_TIMESTAMP_DISJOINT tsDisjoint;
+		dx11DeviceImmContext->GetData(dx11CommonParams->dx11qr_disjoint, &tsDisjoint, sizeof(tsDisjoint), 0);
+		if (!tsDisjoint.Disjoint)
+		{
+			UINT64 tsBeginFrame = 0, tsEndDVR = 0, tsEndFrame = 0;
+
+			auto GetTimeGpuProfile = [&profile_map, &dx11DeviceImmContext, &dx11CommonParams](const string& name, UINT64& ts) -> bool
+			{
+				auto it = profile_map.find(name);
+				if (it == profile_map.end())
+				{
+					ts = 0;
+					return false;
+				}
+
+				dx11DeviceImmContext->GetData(dx11CommonParams->dx11qr_timestamps[it->second], &ts, sizeof(UINT64), 0);
+			};
+
+			GetTimeGpuProfile("begin", tsBeginFrame);
+			GetTimeGpuProfile("end dvr", tsEndDVR);
+			GetTimeGpuProfile("end", tsEndFrame);
+
+			auto DisplayDuration = [&tsDisjoint](UINT64 tsS, UINT64 tsE, const string& _test)
+			{
+				if (tsS == 0 || tsE == 0) return;
+				cout << _test << " : " << float(tsE - tsS) / float(tsDisjoint.Frequency) * 1000.0f << " ms" << endl;
+			};
+			DisplayDuration(tsBeginFrame, tsEndFrame, "#GPU# Total (including copyback) Time");
+			DisplayDuration(tsBeginFrame, tsEndDVR, "#GPU# Direct Volume Render Time");
+			DisplayDuration(tsEndDVR, tsEndFrame, "#GPU# CopyBack Time");
+		}
+	}
 
 	dx11DeviceImmContext->ClearState();
 
@@ -918,24 +1016,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	VMSAFE_RELEASE(pdxRTVOld);
 	VMSAFE_RELEASE(pdxDSVOld);
 
-	QueryPerformanceFrequency(&lIntFreq);
-	QueryPerformanceCounter(&lIntCntEnd);
-
 	iobj->SetDescriptor("vismtv_inbuilt_renderergpudx module : Volume Renderer");
-
-	auto AsInt2 = [](unsigned long long _v) -> vmint2
-	{
-		vmint2 d_v;
-		memcpy(&d_v, &_v, sizeof(vmint2));
-		return d_v;
-	};
-	//printf("DVR SUCCESS!");
-
-	// Time Check
-	QueryPerformanceFrequency(&lIntFreq);
-	QueryPerformanceCounter(&lIntCntEnd);
-	if (run_time_ptr)
-		*run_time_ptr = (lIntCntEnd.QuadPart - lIntCntStart.QuadPart) / (double)(lIntFreq.QuadPart);
 
 	return true;
 }

@@ -20,7 +20,6 @@ Buffer<uint> sr_offsettable_buf : register(t50); // gres_fb_ref_pidx
 //groupshared int idx_array[k_value * 2]; // ??
 //[numthreads(1, 1, 1)] // or consider 4x4 thread either
 [numthreads(GRIDSIZE, GRIDSIZE, 1)]
-//[numthreads(1, 1, 1)]
 void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
 {
     if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
@@ -255,12 +254,11 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 		int idx = i;
 #endif
 		Fragment f_ith = fs[idx];
-		//if (i < cnt_sorted_ztsurf)
-		{
-			float4 vis = ConvertUIntToFloat4(f_ith.i_vis);
-			blendout += vis * (1.f - blendout.a);
-		}
+		float4 vis = ConvertUIntToFloat4(f_ith.i_vis);
+		blendout += vis * (1.f - blendout.a);
+#if SKIP_STORE_KBUF == 0
 		SET_FRAG(addr_base, i, f_ith);
+#endif
 	}
 
 	fragment_counter[DTid.xy] = cnt_sorted_ztsurf;

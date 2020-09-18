@@ -527,7 +527,8 @@ void RayCasting(out float4 vis_out, out float depth_out, const in float3 pos_ip_
 #endif    
 }
 
-[numthreads(GRIDSIZE, GRIDSIZE, 1)]
+//[numthreads(GRIDSIZE, GRIDSIZE, 1)]
+[numthreads(1, 1, 1)]
 void DVR(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
 {
     int2 tex2d_xy = int2(DTid.xy);
@@ -540,7 +541,7 @@ void DVR(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : 
     uint addr_base = (DTid.y * g_cbCamState.rt_width + DTid.x) * bytes_frags_per_pixel;
 	uint frag_cnt = fragment_counter[DTid.xy];
 	uint vr_hit_enc = frag_cnt >> 24;
-	frag_cnt = min(frag_cnt & 0xFFF, MAX_LAYERS);
+	frag_cnt = frag_cnt & 0xFFF;
 
 #if SCULPT_MASK==1
 #if OTF_MASK==1
@@ -633,13 +634,13 @@ void DVR(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : 
     float3 pos_ray_start_ws = vbos_hit_start_pos + dir_sample_unit_ws * hits_t.x;
     // recompute the vis result    
 #if RAYMODE==1
-    RayMinMax(vis_out, depth_out, pos_ip_ws, pos_ray_start_ws, dir_sample_ws, num_ray_samples, 0, fs, addr_base, num_frags, k_value, merging_beta);
+    RayMinMax(vis_out, depth_out, pos_ip_ws, pos_ray_start_ws, dir_sample_ws, num_ray_samples, 0, fs, addr_base, num_frags, frag_cnt, merging_beta);
 #elif RAYMODE==2
-    RayMinMax(vis_out, depth_out, pos_ip_ws, pos_ray_start_ws, dir_sample_ws, num_ray_samples, 1, fs, addr_base, num_frags, k_value, merging_beta);
+    RayMinMax(vis_out, depth_out, pos_ip_ws, pos_ray_start_ws, dir_sample_ws, num_ray_samples, 1, fs, addr_base, num_frags, frag_cnt, merging_beta);
 #elif RAYMODE==3
-    RaySum(vis_out, depth_out, pos_ip_ws, pos_ray_start_ws, dir_sample_ws, num_ray_samples, fs, addr_base, num_frags, k_value, merging_beta);
+    RaySum(vis_out, depth_out, pos_ip_ws, pos_ray_start_ws, dir_sample_ws, num_ray_samples, fs, addr_base, num_frags, frag_cnt, merging_beta);
 #else
-    RayCasting(vis_out, depth_out, pos_ip_ws, pos_ray_start_ws, dir_sample_ws, num_ray_samples, fs, ao_vr, addr_base, num_frags, vr_hit_enc, k_value, merging_beta);
+    RayCasting(vis_out, depth_out, pos_ip_ws, pos_ray_start_ws, dir_sample_ws, num_ray_samples, fs, ao_vr, addr_base, num_frags, vr_hit_enc, frag_cnt, merging_beta);
 #endif
 	//vis_out = float4(ao_vr, ao_vr, ao_vr, 1);
 	//vis_out = float4(TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts), 1);
@@ -648,6 +649,7 @@ void DVR(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : 
 	fragment_counter[DTid.xy] = frag_cnt + 1;
 }
 
+//[numthreads(GRIDSIZE, GRIDSIZE, 1)]
 [numthreads(GRIDSIZE, GRIDSIZE, 1)]
 void VR_SURFACE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
 {

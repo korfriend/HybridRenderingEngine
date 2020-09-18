@@ -140,9 +140,6 @@
     <FxCompile Include="hlsl\legacy\SRShader_Common.hlsl">
       <Filter>hlsl source code\legacy</Filter>
     </FxCompile>
-    <FxCompile Include="hlsl\kbuf\DvrCS.hlsl">
-      <Filter>hlsl source code\k buf</Filter>
-    </FxCompile>
     <FxCompile Include="hlsl\legacy\ShaderCommonHeader.hlsl">
       <Filter>hlsl source code\legacy</Filter>
     </FxCompile>

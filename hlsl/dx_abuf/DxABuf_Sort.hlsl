@@ -8,20 +8,23 @@ RWBuffer<uint> offsettable_buf : register(u4); // gres_fb_ref_pidx
 Texture2D<uint> sr_fragment_counter : register(t0);
 
 #define LOAD1_RBB(ADDR) deep_DxA_buf.Load((ADDR) * 4)
+#define STORE1_RBB(V, ADDR) deep_DxA_buf.Store((ADDR) * 4, V)
 
 ///////////////////////////////////////////
 // GPU-accelerated A-buffer algorithm
 // First pass of the prefix sum creation algorithm.  Converts a 2D buffer to a 1D buffer,
 // and sums every other value with the previous value.
-[numthreads(1, 1, 1)]
+//[numthreads(1, 1, 1)]
+#if DX_11_STYLE==1
+[numthreads(GRIDSIZE, GRIDSIZE, 1)]
 void CreatePrefixSum_Pass0_CS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID, uint3 nGTid : SV_GroupThreadID)
 {
 	//if (nDTid.x >= g_cbCamState.rt_width || nDTid.y >= g_cbCamState.rt_height)
 	//    return;
-	uint nThreadNum = nGid.y * g_cbCamState.rt_width + nGid.x;
+	uint nThreadNum = nDTid.y * g_cbCamState.rt_width + nDTid.x;
 	if (nThreadNum % 2 == 0)
 	{
-		offsettable_buf[nThreadNum] = sr_fragment_counter[nGid.xy];
+		offsettable_buf[nThreadNum] = sr_fragment_counter[nDTid.xy];
 
 		// Add the Fragment count to the next bin
 		if ((nThreadNum + 1) < g_cbCamState.rt_width * g_cbCamState.rt_height)
@@ -37,10 +40,11 @@ void CreatePrefixSum_Pass0_CS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_Dispatch
 // to the second half of the group.  There are n/groupsize groups in each pass.
 // Each pass increases the group size until it is the size of the buffer.
 // The resulting buffer holds the prefix sum of all preceding values in each position .
-[numthreads(1, 1, 1)]
+//[numthreads(1, 1, 1)]
+[numthreads(GRIDSIZE, GRIDSIZE, 1)]
 void CreatePrefixSum_Pass1_CS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID, uint3 nGTid : SV_GroupThreadID)
 {
-	int nThreadNum = nGid.x + nGid.y * g_cbCamState.rt_width;
+	int nThreadNum = nDTid.x + nDTid.y * g_cbCamState.rt_width;
 	uint g_nPassSize = g_cbCamState.iSrCamDummy__0;
 	uint nValue = offsettable_buf[nThreadNum * g_nPassSize + g_nPassSize / 2 - 1];
 	for (uint i = nThreadNum * g_nPassSize + g_nPassSize / 2; i < nThreadNum * g_nPassSize + g_nPassSize && i < g_cbCamState.rt_width * g_cbCamState.rt_height; i++)
@@ -48,13 +52,14 @@ void CreatePrefixSum_Pass1_CS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_Dispatch
 		offsettable_buf[i] = offsettable_buf[i] + nValue;
 	}
 }
-
+#else
 groupshared int __offset = 0;
-[numthreads(1, 1, 1)] // 조금 더 큰값으로 나중에..
+//[numthreads(1, 1, 1)] 
+[numthreads(GRIDSIZE, GRIDSIZE, 1)]
 void CreateOffsetTable_CS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID, uint3 nGTid : SV_GroupThreadID)
 {
-	uint nThreadId = nGid.y * g_cbCamState.rt_width + nGid.x;
-	uint num_frags = sr_fragment_counter[nGid.xy];
+	uint nThreadId = nDTid.y * g_cbCamState.rt_width + nDTid.x;
+	uint num_frags = sr_fragment_counter[nDTid.xy];
 	if (num_frags == 0 
 		|| nThreadId == 0 // test
 		)
@@ -66,6 +71,7 @@ void CreateOffsetTable_CS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThre
 
 	offsettable_buf[nThreadId] = offset;
 }
+#endif
 
 #if DX_11_OIT==0
 #include "../macros.hlsl"
@@ -83,11 +89,11 @@ struct FragmentVD
 #endif
 
 Buffer<uint> sr_offsettable_buf : register(t50); // gres_fb_ref_pidx
-#define blocksize 1
-[numthreads(1, 1, 1)]
+//[numthreads(1, 1, 1)]
+[numthreads(GRIDSIZE, GRIDSIZE, 1)]
 void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID, uint3 nGTid : SV_GroupThreadID)
 {
-	uint nThreadNum = nGid.y * g_cbCamState.rt_width + nGid.x; // nDTid
+	uint nThreadNum = nDTid.y * g_cbCamState.rt_width + nDTid.x; // nDTid
 	if (nThreadNum == 0) // we used 0th pixel for temporal synch //
 		return;
 
@@ -95,11 +101,15 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 	if (N == 0)
 		return;
 
+#if DX_11_STYLE==1
+	nThreadNum += 1; // to reuse nThreadNum - 1
+#endif
+
 #if DX_11_OIT==0
 	uint offset = sr_offsettable_buf[nThreadNum];
 	//if (offset == 12)
 	//{
-	//	fragment_blendout[nGid.xy] = float4(1, 0, 0, 1);
+	//	fragment_blendout[nDTid.xy] = float4(1, 0, 0, 1);
 	//	return;
 	//}
 
@@ -112,6 +122,11 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 		fragments[i] = f;
 	}
 
+	//const int test_idx = 0;
+	//if (N <= test_idx + 1) return;
+	//fragment_blendout[nDTid.xy] = ConvertUIntToFloat4(fragments[test_idx].ivis);
+	//return;
+
 	sort(N, fragments, FragmentVD);
 
 
@@ -121,15 +136,15 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 		uint bufferValue = fragments[i].ivis;
 		float4 color = ConvertUIntToFloat4(bufferValue);
 		result += color * (1 - result.a);
+
+		STORE1_RBB(bufferValue, 2 * nDeepBufferPos + 0);
+		STORE1_RBB(asuint(fragments[i].z), 2 * nDeepBufferPos + 1);
 	}
-	fragment_blendout[nGid.xy] = result;
-	fragment_zdepth[nGid.xy] = N; // for checking # of layers
+	fragment_blendout[nDTid.xy] = result;
+	fragment_zdepth[nDTid.xy] = N; // for checking # of layers
 
 #else 
-#if DX_11_STYLE==0
-	nThreadNum += 1; // to reuse nThreadNum - 1
-#endif
-
+#define blocksize 1
 	uint N2 = 1 << (int)(ceil(log2(N)));
 
 #define MAX_SORT 400
@@ -147,10 +162,10 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 	}
 
 	//if (N > 12)
-	//    fragment_blendout[nGid.xy] = float4(1, 0, 0, 1);//ConvertUIntToFloat4(deep_DxA_buf[2 * (offsettable_buf[nThreadNum - 1] + 1) + 0]);
+	//    fragment_blendout[nDTid.xy] = float4(1, 0, 0, 1);//ConvertUIntToFloat4(deep_DxA_buf[2 * (offsettable_buf[nThreadNum - 1] + 1) + 0]);
 	//return;
 
-	uint idx = blocksize * nGTid.y + nGTid.x;
+	uint idx = blocksize * nDTid.y + nDTid.x;
 
 	// Bitonic sort
 	for (uint k = 2; k <= N2; k = 2 * k)
@@ -220,11 +235,11 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 			float4 color = ConvertUIntToFloat4(bufferValue);
 			result += color * (1 - result.a);
 		}
-		//fragment_blendout[nGid.xy] = float4((float3)N / 8, 1);//
-		//fragment_blendout[nGid.xy] = float4((float3)N / 8, 1); //ConvertUIntToFloat4(LOAD1_RBB(2 * (offsettable_buf[nThreadNum - 1] + nIndex[0]) + 0));
-		fragment_blendout[nGid.xy] = result;
-		//fragment_zdepth[nGid.xy] = asfloat(LOAD1_RBB(2 * (offsettable_buf[nThreadNum - 1] + nIndex[x - 1]) + 1));
-		fragment_zdepth[nGid.xy] = N; // for checking # of layers
+		//fragment_blendout[nDTid.xy] = float4((float3)N / 8, 1);//
+		//fragment_blendout[nDTid.xy] = float4((float3)N / 8, 1); //ConvertUIntToFloat4(LOAD1_RBB(2 * (offsettable_buf[nThreadNum - 1] + nIndex[0]) + 0));
+		fragment_blendout[nDTid.xy] = result;
+		//fragment_zdepth[nDTid.xy] = asfloat(LOAD1_RBB(2 * (offsettable_buf[nThreadNum - 1] + nIndex[x - 1]) + 1));
+		fragment_zdepth[nDTid.xy] = N; // for checking # of layers
 	}
 #endif
 }

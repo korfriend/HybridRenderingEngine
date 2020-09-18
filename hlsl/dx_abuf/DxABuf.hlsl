@@ -49,8 +49,8 @@ void OIT_A_BUFFER_FILL(__VS_OUT input)
 		TextureImgMap(clr_map, input.f3Custom);
 		if (clr_map.a == 0)
 		{
-			v_rgba = (float4) 0;
-			z_depth = FLT_MAX;
+			//v_rgba = (float4) 0;
+			//z_depth = FLT_MAX;
 			clip(-1);
 		}
 		else
@@ -131,7 +131,7 @@ void OIT_A_BUFFER_FILL(__VS_OUT input)
 
 	// Store fragment data into the allocated space
 	//deep_DxA_buf[2 * nDeepBufferPos + 0] = ConvertFloat4ToUInt(v_rgba);
-	STORE1_RBB(ConvertFloat4ToUInt(v_rgba), 2 * nDeepBufferPos + 0);
 	//deep_DxA_buf[2 * nDeepBufferPos + 1] = asuint(z_depth);
+	STORE1_RBB(ConvertFloat4ToUInt(v_rgba), 2 * nDeepBufferPos + 0);
 	STORE1_RBB(asuint(z_depth), 2 * nDeepBufferPos + 1);
 }

@@ -464,7 +464,8 @@ __IES(ADDR + (K) * 4 * 4, 3, asuint(F.opacity_sum));}
 #endif
 
 // SINGLE_LAYER 로 그려진 것을 읽고, outline 그리는 함수
-[numthreads(GRIDSIZE, GRIDSIZE, 1)]
+//[numthreads(GRIDSIZE, GRIDSIZE, 1)]
+[numthreads(1, 1, 1)]
 void OIT_PRESET(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
 {
 	int2 tex2d_xy = int2(DTid.xy);
