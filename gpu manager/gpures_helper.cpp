@@ -101,7 +101,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 	qr_desc.Query = D3D11_QUERY_TIMESTAMP_DISJOINT;
 	g_pvmCommonParams->dx11Device->CreateQuery(&qr_desc, &g_pvmCommonParams->dx11qr_disjoint);
 	qr_desc.Query = D3D11_QUERY_TIMESTAMP;
-	for (int i = 0; i < 10; i++)
+	for (int i = 0; i < MAXSTAMPS; i++)
 		g_pvmCommonParams->dx11Device->CreateQuery(&qr_desc, &g_pvmCommonParams->dx11qr_timestamps[i]);
 
 	HRESULT hr = S_OK;
