@@ -989,7 +989,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		D3D11_BIND_DEPTH_STENCIL, DXGI_FORMAT_D32_FLOAT, false);
 	grd_helper::UpdateFrameBuffer(gres_fb_counter, iobj, "RW_COUNTER", RTYPE_TEXTURE2D,
 		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
-	//if(use_spinlock_pixsynch)// || mode_OIT == MFR_MODE::MOMENT) // when MFR_MODE::DXAB mode, this buffer used for another purpose?!
+	if(use_spinlock_pixsynch)// || mode_OIT == MFR_MODE::MOMENT) // when MFR_MODE::DXAB mode, this buffer used for another purpose?!
 		grd_helper::UpdateFrameBuffer(gres_fb_spinlock, iobj, "RW_SPINLOCK", RTYPE_TEXTURE2D,
 			D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
 
@@ -1448,8 +1448,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	float clr_float_zero_4[4] = { 0, 0, 0, 0 };
 	float clr_float_fltmax_4[4] = { FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX };
 	//float clr_float_minus_4[4] = { -1.f, -1.f, -1.f, -1.f };
-	dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
-	dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_spinlock.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
+	dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], clr_unit4); 
+	if (use_spinlock_pixsynch)
+		dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_spinlock.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 	//dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_deep_k_buffer.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 	//if(is_rov_mode)
 	//	dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_deep_k_buffer_rov.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
@@ -1930,7 +1931,7 @@ RENDERER_LOOP:
 
 		ID3D11UnorderedAccessView* dx11UAVs_1st_pass[NUM_UAVs_1ST] = {
 				(ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV]
-				, (ID3D11UnorderedAccessView*)gres_fb_spinlock.alloc_res_ptrs[DTYPE_UAV]
+				, use_spinlock_pixsynch ? (ID3D11UnorderedAccessView*)gres_fb_spinlock.alloc_res_ptrs[DTYPE_UAV] : NULL
 				, (ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]
 				, NULL 
 		};
@@ -1958,7 +1959,7 @@ RENDERER_LOOP:
 					{
 						dx11UAVs_1st_pass[0] = (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV];
 						dx11UAVs_1st_pass[1] = (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV];
-						dx11UAVs_1st_pass[2] = (ID3D11UnorderedAccessView*)gres_fb_spinlock.alloc_res_ptrs[DTYPE_UAV];
+						dx11UAVs_1st_pass[2] = use_spinlock_pixsynch ? (ID3D11UnorderedAccessView*)gres_fb_spinlock.alloc_res_ptrs[DTYPE_UAV] : NULL;
 						dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(0, NULL, NULL, 2, 3, dx11UAVs_1st_pass, 0);
 					}
 					break;
@@ -2349,7 +2350,7 @@ RENDERER_LOOP:
 	{
 		ID3D11UnorderedAccessView* dx11UAVs_1st_pass[NUM_UAVs_1ST] = {
 				(ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV]
-				, (ID3D11UnorderedAccessView*)gres_fb_spinlock.alloc_res_ptrs[DTYPE_UAV]
+				, NULL//(ID3D11UnorderedAccessView*)gres_fb_spinlock.alloc_res_ptrs[DTYPE_UAV]
 				, (ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]
 				, NULL
 		};
