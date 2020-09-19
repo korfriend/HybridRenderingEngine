@@ -400,7 +400,7 @@ namespace grd_helper
 		uint k_value; // used for max k for DK+B algorithm
 		// 1st bit : 0 (orthogonal), 1 : (perspective)
 		// 2nd bit : for RT to k-buffer : 0 (just RT), 1 : (after silhouette processing)
-		// 3rd bit : for dynamic K value
+		// 3rd bit : for dynamic K value // deprecated... (this will be treated as a separate shader
 		// 4th bit : for storing the final fragments to the k buffer, which is used for sequentially coming renderer (e.g., DVR) : 0 (skipping), 1 (storing)
 		uint cam_flag;
 		uint iSrCamDummy__0; // used for 1) A-Buffer prefix computations /*deprecated*/ or 2) beta (asfloat) for merging operation

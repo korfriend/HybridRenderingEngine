@@ -59,7 +59,7 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 #if DYNAMIC_K_MODE== 1
 #define LOCAL_SIZE 400
 	uint offsettable_idx = DTid.y * g_cbCamState.rt_width + DTid.x; // num of frags
-	if (offsettable_idx == 0) return;
+	if (offsettable_idx == 0) return; // for test
 	uint addr_base = sr_offsettable_buf[offsettable_idx] * bytes_per_frag;
 #else
 	// note that this local size is for the indexable temp registers of GPU threads 

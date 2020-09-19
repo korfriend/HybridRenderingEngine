@@ -139,8 +139,8 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 
 		if (store_to_kbuf)
 		{
-			STORE1_RBB(bufferValue, 2 * nDeepBufferPos + 0);
-			STORE1_RBB(asuint(fragments[i].z), 2 * nDeepBufferPos + 1);
+			STORE1_RBB(bufferValue, 2 * offset + 0);
+			STORE1_RBB(asuint(fragments[i].z), 2 * offset + 1);
 		}
 	}
 	fragment_blendout[nDTid.xy] = result;

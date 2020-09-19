@@ -995,6 +995,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			GetTimeGpuProfile("begin", tsBeginFrame);
 			GetTimeGpuProfile("end dvr", tsEndDVR);
 			GetTimeGpuProfile("end", tsEndFrame);
+			UINT64 __dummny;
+			for (int i = 0; i < MAXSTAMPS; i++)
+				dx11DeviceImmContext->GetData(dx11CommonParams->dx11qr_timestamps[i], &__dummny, sizeof(UINT64), 0);
 
 			auto DisplayDuration = [&tsDisjoint](UINT64 tsS, UINT64 tsE, const string& _test)
 			{
