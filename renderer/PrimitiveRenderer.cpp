@@ -769,7 +769,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		dx11CommonParams->dx11DeviceImmContext->CSSetShader(NULL, NULL, 0);
 
 #define VS_NUM 5
-#define PS_NUM 25
+#define PS_NUM 26
 #define CS_NUM 13
 #define SET_VS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(VERTEX_SHADER, NAME), __S, true)
 #define SET_PS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(PIXEL_SHADER, NAME), __S, true)
@@ -836,6 +836,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			  ,"SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0"
 
 			  ,"SR_MOMENT_GEN_ps_5_0"
+			  ,"SR_MOMENT_GEN_TEXT_ps_5_0"
 			  ,"SR_MOMENT_GEN_MTT_ps_5_0"
 			  ,"SR_MOMENT_OIT_PHONGBLINN_ps_5_0"
 			  ,"SR_MOMENT_OIT_DASHEDLINE_ps_5_0"
@@ -1707,7 +1708,6 @@ BEGIN_RENDERER_LOOP:
 		uint offset = 0;
 		D3D_PRIMITIVE_TOPOLOGY pobj_topology_type;
 
-		bool is_MTT_vsout = false;
 		if (prim_data->GetVerticeDefinition("NORMAL"))
 		{
 			if (prim_data->GetVerticeDefinition("TEXCOORD0"))
@@ -1761,7 +1761,6 @@ BEGIN_RENDERER_LOOP:
 				dx11InputLayer_Target = dx11LI_PTTT;
 				dx11VS_Target = dx11VShader_PTTT;
 
-				is_MTT_vsout = true;
 				switch (mode_OIT)
 				{
 				case MFR_MODE::DXAB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_MULTITEXTMAPPING_ps_5_0); break;
@@ -1831,15 +1830,18 @@ BEGIN_RENDERER_LOOP:
 			if (is_frag_counter_buffer)
 			{
 				// Create a count of the number of fragments at each pixel location
-				if (is_MTT_vsout)
+				if (dx11InputLayer_Target == dx11LI_PTTT)
 					dx11PS_Target = GETPS(SR_OIT_ABUFFER_FRAGCOUNTER_MTT_ps_5_0);
 				else
 					dx11PS_Target = GETPS(SR_OIT_ABUFFER_FRAGCOUNTER_ps_5_0);
 			}
 			else if (is_MOMENT_gen_buffer)
 			{
-				if (is_MTT_vsout)
+				if (dx11InputLayer_Target == dx11LI_PTTT)
 					dx11PS_Target = GETPS(SR_MOMENT_GEN_MTT_ps_5_0);
+				else if ((dx11InputLayer_Target == dx11LI_PT || dx11InputLayer_Target == dx11LI_PT) 
+					&& render_obj_info.is_annotation_obj)
+					dx11PS_Target = GETPS(SR_MOMENT_GEN_TEXT_ps_5_0);
 				else
 					dx11PS_Target = GETPS(SR_MOMENT_GEN_ps_5_0);
 			}
@@ -2173,7 +2175,7 @@ BEGIN_RENDERER_LOOP:
 			if (gpu_profile)
 			{
 				dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
-				profile_map["end offset table generation (DXFB)"] = gpu_profilecount;
+				profile_map["end offset table generation"] = gpu_profilecount;
 				gpu_profilecount++;
 			}
 		}
@@ -2828,7 +2830,7 @@ RENDERER_LOOP_EXIT:
 		dx11DeviceImmContext->GetData(dx11CommonParams->dx11qr_disjoint, &tsDisjoint, sizeof(tsDisjoint), 0);
 		if (!tsDisjoint.Disjoint)
 		{
-			UINT64 tsBeginFrame = 0, tsBeginOffsetTable = 0, tsEndOffsetTable = 0, tsEndDxOffsetTable = 0, tsEndGeoPass = 0,
+			UINT64 tsBeginFrame = 0, tsBeginOffsetTable = 0, tsEndOffsetTable = 0, tsEndGeoPass = 0,
 				tsBeginCounter = 0, tsEndCounter = 0, tsBeginGeoShader = 0, tsEndGeoShader = 0,
 				tsEndResolvePass = 0, tsEndRender = 0, tsBeginCopyBack = 0, tsEndCopyBack = 0, tsEndFrame = 0,
 				tsBeginHisto = 0, tsEndHisto = 0;
@@ -2848,7 +2850,6 @@ RENDERER_LOOP_EXIT:
 			GetTimeGpuProfile("begin", tsBeginFrame);
 			GetTimeGpuProfile("begin offset table generation", tsBeginOffsetTable);
 			GetTimeGpuProfile("end offset table generation", tsEndOffsetTable);
-			GetTimeGpuProfile("end offset table generation (DXFB)", tsEndDxOffsetTable);
 			GetTimeGpuProfile("begin frags counter", tsBeginCounter);
 			GetTimeGpuProfile("end frags counter", tsEndCounter);
 			GetTimeGpuProfile("begin geometry shader", tsBeginGeoShader);
@@ -2873,7 +2874,6 @@ RENDERER_LOOP_EXIT:
 			DisplayDuration(tsBeginFrame, tsEndFrame, "#GPU# Total (including copyback) Time");
 			DisplayDuration(tsBeginFrame, tsEndRender, "#GPU# Render Time");
 			DisplayDuration(tsBeginOffsetTable, tsEndOffsetTable, "#GPU# Offset Table Time");
-			DisplayDuration(tsBeginOffsetTable, tsEndDxOffsetTable, "#GPU# DX Offset Table Time");
 			DisplayDuration(tsBeginHisto, tsEndHisto, "#GPU# Histogram Analysis Time");
 			DisplayDuration(tsEndHisto, tsEndOffsetTable, "#GPU# Offset Table (DK+B) Time");
 			DisplayDuration(tsBeginFrame, tsEndGeoPass, "#GPU# Geometry Rendering Time");

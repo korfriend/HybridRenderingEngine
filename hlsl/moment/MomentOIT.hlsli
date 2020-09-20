@@ -380,12 +380,25 @@ void Moment_GeneratePass(__VS_OUT input)
 	clip(dot(vec_pos_ip2frag, g_cbCamState.dir_view_ws) < 0 ? -1 : 1);
 
 	float z_depth = length(vec_pos_ip2frag);
-	float alpha = min(g_cbPobj.alpha, 0.999f);
-	clip((z_depth > FLT_LARGE || alpha == 0) ? -1 : 1);
+	clip((z_depth > FLT_LARGE || z_depth <= 0) ? -1 : 1);
+
+#if __RENDERING_MODE == 2
+	float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
+	MultiTextMapping(v_rgba, z_depth, input.f3Custom0.xy, (int)(input.f3Custom0.z + 0.5f), input.f3Custom1, input.f3Custom2);
+	float alpha = min(v_rgba.a, 0.999f);
+#elif __RENDERING_MODE == 3
+	float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
+	TextMapping(v_rgba, z_depth, input.f3Custom.xy, g_cbPobj.pobj_flag & (0x1 << 9), g_cbPobj.pobj_flag & (0x1 << 10));
+	float alpha = min(v_rgba.a, 0.999f);
+#else
+	float alpha = min(g_cbPobj.alpha, 0.999f); // to avoid opaque out
+#endif
+	clip(alpha == 0 ? -1 : 1);
 
 	int2 tex2d_xy = int2(input.f4PosSS.xy);
 
 	// atomic routine (we are using spin-lock scheme)
+#if USE_ROV == 0
 	uint __dummy;
 	uint safe_unlock_count = 0;
 	bool keep_loop = true;
@@ -405,6 +418,7 @@ void Moment_GeneratePass(__VS_OUT input)
 
 			if (spin_lock == 0)
 			{
+#endif
 				uint frag_cnt = fragment_counter[tex2d_xy.xy];
 				if (frag_cnt == 0) // clear mask
 				{
@@ -422,7 +436,8 @@ void Moment_GeneratePass(__VS_OUT input)
 
 				if(frag_cnt == 0)
 					fragment_counter[tex2d_xy.xy] = frag_cnt + 1;
-					//InterlockedAdd(fragment_counter[tex2d_xy.xy], 1, frag_cnt);
+#if USE_ROV == 0
+				//InterlockedAdd(fragment_counter[tex2d_xy.xy], 1, frag_cnt);
 				// always fragment_spinlock[tex2d_xy.xy] is 1, thus use InterlockedExchange instead of InterlockedCompareExchange
 				InterlockedExchange(fragment_spinlock[tex2d_xy.xy], 0, spin_lock);
 				keep_loop = false;
@@ -430,6 +445,7 @@ void Moment_GeneratePass(__VS_OUT input)
 			} // critical section
 		}
 	} // while for spin-lock
+#endif
 }
 
 
@@ -441,8 +457,10 @@ ByteAddressBuffer moment_container_buf : register(t20);
 #if PIXEL_SYNCH
 RWTexture2D<unorm float4> fragment_blendout : register(u2);
 RWTexture2D<float> fragment_zdepth : register(u3);
-TEX2D_LOCK<uint> fragment_lock : register(u4); // ROV or not
-RWTexture2D<float4> vis_recon : register(u5);
+#if USE_ROV == 0
+RWTexture2D<uint> fragment_spinlock : register(u4); // ROV or not
+#endif
+TEX2D_LOCK<float4> vis_recon : register(u5);
 #define PS_OUT void
 #else
 #define PS_OUT PS_FILL_OUTPUT
@@ -788,19 +806,20 @@ PS_OUT Moment_ResolvePass(__VS_OUT input)
 	// This pass do not care opaque surface.
 	// According to the authors of the paper "Moment-based OIT", 
 	// they recommend an additional pass for handling the opaque object,
-	// which means that this pass handles onlt transparecy surface, and 
+	// which means that this pass handles only transparecy surface, and 
 	// blending them in the additive pass.
-	// For our experimental comparison, we treat only objects that have transparency.
+	// For our comparison experiments, we treat only objects that have transparency.
 	// The entire pipeline that can handle opaque surfaces will be prepared after submitting our paper.
 	if (transmittance_at_depth == 0)
 		clip(-1);
 
-	// make it as an associated color.
+	// make it as an alpha-multiplied color.
 	// as a color component is stored into 8 bit channel, the alpha-multiplied precision must be determined in this stage.
 	// unless, noise dots appear.
 	v_rgba.rgb *= v_rgba.a;
 
 #if PIXEL_SYNCH
+#if USE_ROV == 0
 	uint __dummy;
 	uint safe_unlock_count = 0;
 	bool keep_loop = true;
@@ -815,12 +834,13 @@ PS_OUT Moment_ResolvePass(__VS_OUT input)
 		{
 			uint spin_lock = 0;
 			// note that all of fragment_spinlock are initialized as zero
-			InterlockedCompareExchange(fragment_lock[tex2d_xy], 0, 1, spin_lock);
+			InterlockedCompareExchange(fragment_spinlock[tex2d_xy], 0, 1, spin_lock);
 			if (spin_lock == 0)
 			{
+#endif
 				// blending //
 				float4 prev_vis = vis_recon[tex2d_xy];
-				//if (prev_vis.a < 0.99f)
+				//if (lock_v > 0) // always true, but for avoid eliminating this routine during the compiling
 				{
 					float4 res_rgba;
 					res_rgba.a = prev_vis.a + v_rgba.a * transmittance_at_depth;
@@ -835,15 +855,17 @@ PS_OUT Moment_ResolvePass(__VS_OUT input)
 					fragment_blendout[tex2d_xy] = final_visout;
 
 					// for z... use InterlockedMax ...
-
-					// always fragment_spinlock[tex2d_xy] is 1, thus use InterlockedExchange instead of InterlockedCompareExchange
-					InterlockedExchange(fragment_lock[tex2d_xy], 0, spin_lock);
+					// to do 
 				}
+#if USE_ROV == 0
+					// always fragment_spinlock[tex2d_xy] is 1, thus use InterlockedExchange instead of InterlockedCompareExchange
+				InterlockedExchange(fragment_spinlock[tex2d_xy], 0, spin_lock);
 				keep_loop = false;
 				//break;
 			} // critical section
 		}
 	} // while for spin-lock
+#endif
 #else
 	// make it as an associated color.
 	// as a color component is stored into 8 bit channel, the alpha-multiplied precision must be determined in this stage.
