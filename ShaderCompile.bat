@@ -30,11 +30,8 @@ fxc /E KB_TO_TEXTURE /T cs_5_0 ./hlsl/ssao/SSAO.hlsl /Fo ./shader_compiled_objs/
 //fxc /E KB_SSAO_BLUR /T cs_5_0 ./hlsl/ssao/SSAO.hlsl /Fo ./shader_compiled_objs/KB_SSAO_BLUR_cs_5_0 /D MAX_LAYERS=8
 //fxc /E KB_TO_TEXTURE /T cs_5_0 ./hlsl/ssao/SSAO.hlsl /Fo ./shader_compiled_objs/KBZ_TO_TEXTURE_cs_5_0 /D MAX_LAYERS=8
 
-
-
 fxc /E FillHistogram /T cs_5_0 ./hlsl/kbuf/KplusB.hlsl /Fo ./shader_compiled_objs/SR_FillHistogram_cs_5_0
 fxc /E CreateOffsetTableKpB /T cs_5_0 ./hlsl/kbuf/KplusB.hlsl /Fo ./shader_compiled_objs/SR_CreateOffsetTableKpB_cs_5_0
-
 
 fxc /E SortAndRenderCS /T cs_5_0 ./hlsl/dx_abuf/DxABuf_Sort.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_SORT2SENDER_cs_5_0 /D DX_11_STYLE=0 /D DX_11_OIT=0
 fxc /E OIT_A_BUFFER_CNF_FRAGS /T ps_5_0 ./hlsl/dx_abuf/DxABuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_FRAGCOUNTER_ps_5_0 /D DX_11_STYLE=0 
@@ -56,19 +53,6 @@ fxc /E Moment_ResolvePass /T ps_5_0 ./hlsl/moment/MomentOIT.hlsli /Fo ./shader_c
 fxc /E Moment_ResolvePass /T ps_5_0 ./hlsl/moment/MomentOIT.hlsli /Fo ./shader_compiled_objs/SR_MOMENT_OIT_MULTITEXTMAPPING_ps_5_0 /D __RENDERING_MODE=2 /D SINGLE_PRECISION=1 /D PIXEL_SYNCH=1 /D NUM_MOMENTS=8 /D USE_ROV=1
 fxc /E Moment_ResolvePass /T ps_5_0 ./hlsl/moment/MomentOIT.hlsli /Fo ./shader_compiled_objs/SR_MOMENT_OIT_TEXTMAPPING_ps_5_0 /D __RENDERING_MODE=3 /D SINGLE_PRECISION=1 /D PIXEL_SYNCH=1 /D NUM_MOMENTS=8 /D USE_ROV=1
 fxc /E Moment_ResolvePass /T ps_5_0 ./hlsl/moment/MomentOIT.hlsli /Fo ./shader_compiled_objs/SR_MOMENT_OIT_TEXTUREIMGMAP_ps_5_0 /D __RENDERING_MODE=4 /D SINGLE_PRECISION=1 /D PIXEL_SYNCH=1 /D NUM_MOMENTS=8 /D USE_ROV=1
-
-fxc /E Moment_GeneratePass /T ps_5_0 ./hlsl/moment/MomentOIT.hlsli /Fo ./shader_compiled_objs/SR_MOMENT_GEN_ps_5_0 /D SINGLE_PRECISION=1 /D PIXEL_SYNCH=1 /D MOMENT_GENERATION=1 /D NUM_MOMENTS=4 /D USE_ROV=1
-fxc /E Moment_GeneratePass /T ps_5_0 ./hlsl/moment/MomentOIT.hlsli /Fo ./shader_compiled_objs/SR_MOMENT_GEN_MTT_ps_5_0 /D SINGLE_PRECISION=1 /D PIXEL_SYNCH=1 /D MOMENT_GENERATION=1 /D NUM_MOMENTS=4 /D __RENDERING_MODE=2 /D USE_ROV=1
-fxc /E Moment_GeneratePass /T ps_5_0 ./hlsl/moment/MomentOIT.hlsli /Fo ./shader_compiled_objs/SR_MOMENT_GEN_TEXT_ps_5_0 /D SINGLE_PRECISION=1 /D PIXEL_SYNCH=1 /D MOMENT_GENERATION=1 /D NUM_MOMENTS=4 /D __RENDERING_MODE=3 /D USE_ROV=1
-fxc /E Moment_ResolvePass /T ps_5_0 ./hlsl/moment/MomentOIT.hlsli /Fo ./shader_compiled_objs/SR_MOMENT_OIT_PHONGBLINN_ps_5_0 /D __RENDERING_MODE=0 /D SINGLE_PRECISION=1 /D PIXEL_SYNCH=1 /D NUM_MOMENTS=4 /D USE_ROV=1
-fxc /E Moment_ResolvePass /T ps_5_0 ./hlsl/moment/MomentOIT.hlsli /Fo ./shader_compiled_objs/SR_MOMENT_OIT_DASHEDLINE_ps_5_0 /D __RENDERING_MODE=1 /D SINGLE_PRECISION=1 /D PIXEL_SYNCH=1 /D NUM_MOMENTS=4 /D USE_ROV=1
-fxc /E Moment_ResolvePass /T ps_5_0 ./hlsl/moment/MomentOIT.hlsli /Fo ./shader_compiled_objs/SR_MOMENT_OIT_MULTITEXTMAPPING_ps_5_0 /D __RENDERING_MODE=2 /D SINGLE_PRECISION=1 /D PIXEL_SYNCH=1 /D NUM_MOMENTS=4 /D USE_ROV=1
-fxc /E Moment_ResolvePass /T ps_5_0 ./hlsl/moment/MomentOIT.hlsli /Fo ./shader_compiled_objs/SR_MOMENT_OIT_TEXTMAPPING_ps_5_0 /D __RENDERING_MODE=3 /D SINGLE_PRECISION=1 /D PIXEL_SYNCH=1 /D NUM_MOMENTS=4 /D USE_ROV=1
-fxc /E Moment_ResolvePass /T ps_5_0 ./hlsl/moment/MomentOIT.hlsli /Fo ./shader_compiled_objs/SR_MOMENT_OIT_TEXTUREIMGMAP_ps_5_0 /D __RENDERING_MODE=4 /D SINGLE_PRECISION=1 /D PIXEL_SYNCH=1 /D NUM_MOMENTS=4 /D USE_ROV=1
-
-
-
-
 
 fxc /E GS_ThickPoints /T gs_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/GS_ThickPoints_gs_5_0
 fxc /E GS_ThickLines /T gs_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/GS_ThickLines_gs_5_0
