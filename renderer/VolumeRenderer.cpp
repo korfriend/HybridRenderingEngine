@@ -287,7 +287,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		pos_aabb_max_ws.y = max(pos_aabb_max_ws.y, max_aabb.y);
 		pos_aabb_max_ws.z = max(pos_aabb_max_ws.z, max_aabb.z);
 
-		min_pitch = min(min(min(it->second->GetVolumeData()->vox_pitch.x, it->second->GetVolumeData()->vox_pitch.y), it->second->GetVolumeData()->vox_pitch.z), min_pitch)
+		min_pitch = min(min(min(it->second->GetVolumeData()->vox_pitch.x, it->second->GetVolumeData()->vox_pitch.y), it->second->GetVolumeData()->vox_pitch.z), min_pitch);
 	}
 	if (!is_valid_list)
 	{
