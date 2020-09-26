@@ -36,7 +36,7 @@ bool RenderSrOnPlane(VmFnContainer* _fncontainer,
 
 	bool bIsAntiAliasingRS = false;
 	int iNumTexureLayers = NUM_TEXRT_LAYERS;
-	double dVThickness = -1.0;
+	double dVThickness = 0;
 	int iLevelSR = 1;
 	vmdouble4 d4GlobalShadingFactors = vmdouble4(0.4, 0.6, 0.2, 30);	// Emission, Diffusion, Specular, Specular Power
 
@@ -362,7 +362,7 @@ bool RenderSrOnPlane(VmFnContainer* _fncontainer,
 		}
 		else
 		{
-			dVThickness = min(leng_max_diag * 0.005, 0.001);
+			dVThickness = leng_max_diag * 0.003;
 		}
 	}
 	float fVZThickness = (float)dVThickness;

@@ -697,8 +697,10 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	int num_moments = _fncontainer->GetParamValue("_int_NumQueueLayers", num_moments_old);
 	int num_safe_loopexit = _fncontainer->GetParamValue("_int_SpinLockSafeLoops", (int)100);
 	bool is_final_renderer = _fncontainer->GetParamValue("_bool_IsFinalRenderer", true);
-	double v_thickness = _fncontainer->GetParamValue("_double_VZThickness", -1.0);
-	double v_copthickness = _fncontainer->GetParamValue("_double_CopVZThickness", -1.0);
+	double v_thickness = _fncontainer->GetParamValue("_double_VZThickness", 0.003);
+	double v_copthickness = _fncontainer->GetParamValue("_double_CopVZThickness", 0.002);
+	if (v_copthickness <= 0) v_copthickness = 0.002;
+	if (v_thickness <= 0) v_thickness = v_copthickness * 1.5;
 	double v_discont_depth = _fncontainer->GetParamValue("_double_DiscontDepth", -1.0);
 	float merging_beta = (float)_fncontainer->GetParamValue("_double_MergingBeta", 0.5);
 	bool blur_SSAO = _fncontainer->GetParamValue("_bool_BlurSSAO", true);
@@ -1153,22 +1155,12 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	len_diagonal_max = fLengthVector(&(pos_aabb_min_ws - pos_aabb_max_ws));
 	if(test_consoleout)
 		cout << "len_diagonal_max : " << len_diagonal_max << endl;
-	if (v_thickness < 0)
-	{
-		if (len_diagonal_max == 0)
-		{
-			v_thickness = 0.001;
-		}
-		else
-		{
-			v_thickness = len_diagonal_max * 0.005; // min(len_diagonal_max * 0.005, 0.01);
-		}
-	}
+
 	if (v_discont_depth < 0)
 		v_discont_depth = len_diagonal_max * 0.1;
 	iobj->RegisterCustomParameter("_double_ploygonobjs_diagonallenth", (double)len_diagonal_max);
 
-	float fv_thickness = (float)v_thickness;
+	float fv_thickness = (float)len_diagonal_max * v_thickness;
 	VmCObject* cam_obj = iobj->GetCameraObject();
 	vmmat44f matWS2SS, matWS2PS, matSS2WS;
 	CB_CameraState cbCamState;
@@ -1374,8 +1366,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 		RenderObjInfo render_obj_info;
 		render_obj_info.pobj = pobj;
-		render_obj_info.vzthickness = v_copthickness < 0 ? len_diagonal_max * 0.0001f : (float)v_copthickness; //(float)pobj_vzthickness;
-		//render_obj_info.vzthickness = v_copthickness < 0 ? len_diagonal_max * 0.0001f : (float)pobj_vzthickness;
+		render_obj_info.vzthickness = len_diagonal_max * (float)v_copthickness; //(float)pobj_vzthickness;
 
 		render_obj_info.num_safe_loopexit = num_safe_loopexit;
 		lobj->GetDstObjValue(pobj_id, "_int_SpinLockSafeLoops", &render_obj_info.num_safe_loopexit);

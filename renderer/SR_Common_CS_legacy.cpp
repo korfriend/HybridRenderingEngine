@@ -56,7 +56,7 @@ bool RenderSrCommonCS(VmFnContainer* _fncontainer,
 	bool bIsAntiAliasingRS = false;
 	int iNumTexureLayers = NUM_TEXRT_LAYERS;
 	bool bIsFinalRenderer = true;
-	double dVThickness = -1.0;
+	double dVThickness = 0;
 	int iMaxNumSelfTransparentRenderPass = 2;
 	int iLevelSR = 1;
 	int iLevelVR = 1;
@@ -467,7 +467,7 @@ bool RenderSrCommonCS(VmFnContainer* _fncontainer,
 	}
 #pragma endregion // Presetting of VxObject
 
-	if (dVThickness < 0)
+	if (dVThickness <= 0)
 	{
 		if (leng_max_diag == 0)
 		{
@@ -475,7 +475,7 @@ bool RenderSrCommonCS(VmFnContainer* _fncontainer,
 		}
 		else
 		{
-			dVThickness = leng_max_diag * 0.005;// min(fLengthDiagonalMax * 0.005, 0.01);
+			dVThickness = leng_max_diag * 0.003;// min(fLengthDiagonalMax * 0.005, 0.01);
 		}
 	}
 	float fVZThickness = (float)dVThickness;

@@ -110,7 +110,7 @@ bool RenderVrCommonCS(VmFnContainer* _fncontainer,
 	double user_sample_rate = _fncontainer->GetParamValue("_double_UserSampleRate", 0.0);
 	//iLevelVR = 2;
 
-	double v_thickness = _fncontainer->GetParamValue("_double_VZThickness", -1.0);
+	double v_thickness = _fncontainer->GetParamValue("_double_VZThickness", 0.0);
 
 	// TEST
 	int iTestValue = 0;

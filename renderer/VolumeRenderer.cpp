@@ -36,7 +36,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	vmdouble4 global_light_factors = _fncontainer->GetParamValue("_double4_ShadingFactorsForGlobalPrimitives", vmdouble4(0.4, 0.6, 0.2, 30)); // Emission, Diffusion, Specular, Specular Power
 	bool force_to_update_otf = _fncontainer->GetParamValue("_bool_ForceToUpdateOtf", false);
 	bool show_block_test = _fncontainer->GetParamValue("_bool_IsShowBlock", false);
-	double v_thickness = _fncontainer->GetParamValue("_double_VZThickness", -1.0);
+	double v_thickness = _fncontainer->GetParamValue("_double_VZThickness", 0.0);
 	float merging_beta = (float)_fncontainer->GetParamValue("_double_MergingBeta", 0.5);
 	bool is_rgba = _fncontainer->GetParamValue("_bool_IsRGBA", false); // false means bgra
 	bool is_ghost_mode = _fncontainer->GetParamValue("_bool_GhostEffect", false);
@@ -256,6 +256,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	vector<int> ordered_main_volume_ids;
 	bool is_valid_list = false;
 	vmfloat3 pos_aabb_min_ws(FLT_MAX), pos_aabb_max_ws(-FLT_MAX);
+	float min_pitch = FLT_MAX;
 	for (int i = 0; i < num_main_volumes; i++)
 	{
 		int vobj_id = main_volume_ids[i];
@@ -285,6 +286,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		pos_aabb_max_ws.x = max(pos_aabb_max_ws.x, max_aabb.x);
 		pos_aabb_max_ws.y = max(pos_aabb_max_ws.y, max_aabb.y);
 		pos_aabb_max_ws.z = max(pos_aabb_max_ws.z, max_aabb.z);
+
+		min_pitch = min(min(min(it->second->GetVolumeData()->vox_pitch.x, it->second->GetVolumeData()->vox_pitch.y), it->second->GetVolumeData()->vox_pitch.z), min_pitch)
 	}
 	if (!is_valid_list)
 	{
@@ -347,7 +350,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	VmCObject* cam_obj = iobj->GetCameraObject();
 	vmmat44f matWS2SS, matWS2PS, matSS2WS;
 	CB_CameraState cbCamState;
-	grd_helper::SetCb_Camera(cbCamState, matWS2PS, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, (float)v_thickness);
+	grd_helper::SetCb_Camera(cbCamState, matWS2PS, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, v_thickness <= 0? min_pitch : (float)v_thickness);
 	cbCamState.iSrCamDummy__0 = *(uint*)&merging_beta;
 	if (mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBZT)
 		cbCamState.cam_flag |= (0x2 << 1);
