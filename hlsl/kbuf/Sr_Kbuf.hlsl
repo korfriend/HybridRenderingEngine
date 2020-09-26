@@ -548,8 +548,7 @@ __IES(ADDR + (K) * 4 * 4, 1, asuint(F.z)); }
 #endif
 
 // SINGLE_LAYER 로 그려진 것을 읽고, outline 그리는 함수
-//[numthreads(GRIDSIZE, GRIDSIZE, 1)]
-[numthreads(1, 1, 1)]
+[numthreads(GRIDSIZE, GRIDSIZE, 1)]
 void OIT_PRESET(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
 {
 	int2 tex2d_xy = int2(DTid.xy);
@@ -562,6 +561,8 @@ void OIT_PRESET(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		v_rgba = OutlineTest(tex2d_xy, depthcs, g_cbPobj.depth_forward_bias);
 	else
 		v_rgba = sr_fragment_vis[tex2d_xy.xy];
+	if(v_rgba.a == 0)
+		v_rgba = float4(1, 0, 0, 1);
 
 	if (BitCheck(g_cbPobj.pobj_flag, 22))
 	{
