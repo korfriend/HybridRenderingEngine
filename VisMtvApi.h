@@ -154,7 +154,8 @@ namespace vzm
 	__dojostatic bool DeinitEngineLib();
 
 	// here, obj_id (without const) is [in/out].. in : when a registered object of obj_id exists, out : when there is no registered object of obj_id
-	__dojostatic bool LoadModelFile(const std::string& filename, int& obj_id, const bool unify_redundancy = false); 
+	__dojostatic bool LoadModelFile(const std::string& filename, int& obj_id, const bool unify_redundancy = false);
+	__dojostatic bool LoadMultipleModelsFile(const std::string& filename, std::list<int>& obj_ids, const bool unify_redundancy = false);
 	// data_type "CHAR" "BYTE" "SHORT" "USHORT" "INT" "FLOAT"
 	__dojostatic bool GenerateEmptyVolume(int& vol_id, const int ref_vol_id = 0, const std::string& data_type = "", const double min_v = 0, const double max_v = 0, const double fill_v = 0);
 	__dojostatic bool GenerateEmptyPrimitive(int& prim_id);
@@ -177,7 +178,7 @@ namespace vzm
 	__dojostatic bool ReplaceOrAddSceneObject(const int scene_id, const int obj_id, const ObjStates& obj_states);
 	__dojostatic bool GetSceneObjectState(const int scene_id, const int obj_id, ObjStates& obj_states);
 	// when empty initializer_list, all objs in the scene are considered.
-	__dojostatic bool GetSceneBoundingBox(const std::initializer_list<int>& io_obj_ids, const int scene_id, float* pos_aabb_min_ws, float* pos_aabb_max_ws);
+	__dojostatic bool GetSceneBoundingBox(const std::list<int>& io_obj_ids, const int scene_id, float* pos_aabb_min_ws, float* pos_aabb_max_ws);
 	__dojostatic bool RemoveSceneObject(const int scene_id, const int obj_id);
 	__dojostatic bool RemoveScene(const int scene_id);
 	__dojostatic bool DeleteObject(const int obj_id); // the obj is deleted in memory
@@ -203,7 +204,7 @@ namespace vzm
 	__dojostatic void DebugTestSet(const std::string& _script, const void* _pvalue, const size_t size_bytes, const int scene_id, const int cam_id, const int obj_id = -1);
 	__dojostatic void DisplayConsoleMessages(const bool is_display);
 
-	__dojostatic bool ExecuteModule2(const std::string& module_dll_file, const std::string& dll_function, const std::initializer_list<int>& io_obj_ids, const std::map<std::string, std::any>& parameters);
+	__dojostatic bool ExecuteModule2(const std::string& module_dll_file, const std::string& dll_function, const std::list<int>& io_obj_ids, const std::map<std::string, std::any>& parameters);
 }
 
 namespace vzmproc
