@@ -158,7 +158,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	__ID3D11DeviceContext* dx11DeviceImmContext = dx11CommonParams->dx11DeviceImmContext;
 
 #pragma region // IOBJECT GPU
-	int buffer_ex = mode_OIT != MFR_MODE::SKBZT ? buf_ex_scale : 1, buffer_ex_old = 0; // optimal for K is 1
+	int buffer_ex = mode_OIT != MFR_MODE::SKBTZ ? buf_ex_scale : 1, buffer_ex_old = 0; // optimal for K is 1
 	vmint2 fb_size_cur, fb_size_old = vmint2(0, 0);
 	iobj->GetFrameBufferInfo(&fb_size_cur);
 	iobj->GetCustomParameter("_int2_PreviousScreenSize", data_type::dtype<vmint2>(), &fb_size_old);
