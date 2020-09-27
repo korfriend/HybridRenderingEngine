@@ -881,10 +881,10 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		
 		string strNames_CS[CS_NUM] = {
 			   "OIT_SKBZ_RESOLVE_cs_5_0"
-			  ,"SR_SINGLE_LAYER_TO_SKBZT_cs_5_0"
+			  ,"SR_SINGLE_LAYER_TO_SKBTZ_cs_5_0"
 			  ,"OIT_DKBZ_RESOLVE_cs_5_0"
 			  ,"OIT_DKB_RESOLVE_cs_5_0"
-			  ,"SR_SINGLE_LAYER_TO_DKBZT_cs_5_0"
+			  ,"SR_SINGLE_LAYER_TO_DKBTZ_cs_5_0"
 			  ,"SR_FillHistogram_cs_5_0"
 			  ,"SR_CreateOffsetTableKpB_cs_5_0"
 			  ,"SR_OIT_ABUFFER_PREFIX_0_cs_5_0"
@@ -2062,7 +2062,7 @@ BEGIN_RENDERER_LOOP:
 		//dx11DeviceImmContext->CSSetShaderResources(50, 1, dx11SRVs_NULL);
 
 		if (RENDERER_LOOP == 1 && 
-			(mode_OIT == MFR_MODE::SKBTZ || mode_OIT == MFR_MODE::DKBTZ))
+			(mode_OIT == MFR_MODE::SKBTZ || mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::DKBT))
 		{
 			// RT to K-Buffer
 			ID3D11ShaderResourceView* dx11SRVs_1st_pass[2] = {
@@ -2074,9 +2074,11 @@ BEGIN_RENDERER_LOOP:
 
 			UINT UAVInitialCounts = 0;
 			if(mode_OIT == MFR_MODE::SKBTZ)
-				dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_SKBZT_cs_5_0), NULL, 0);
-			else 
-				dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_DKBZT_cs_5_0), NULL, 0);
+				dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_SKBTZ_cs_5_0), NULL, 0);
+			else if (mode_OIT == MFR_MODE::DKBTZ)
+				dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_DKBTZ_cs_5_0), NULL, 0);
+			else
+				dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_DKBTZ_cs_5_0), NULL, 0);
 
 			//dx11DeviceImmContext->Flush();
 			dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
@@ -2341,9 +2343,9 @@ BEGIN_RENDERER_LOOP:
 
 		UINT UAVInitialCounts = 0;
 		if(mode_OIT == MFR_MODE::SKBTZ)
-			dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_SKBZT_cs_5_0), NULL, 0);
+			dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_SKBTZ_cs_5_0), NULL, 0);
 		else
-			dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_DKBZT_cs_5_0), NULL, 0);
+			dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_DKBTZ_cs_5_0), NULL, 0);
 
 		//dx11DeviceImmContext->Flush();
 		dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
