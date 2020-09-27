@@ -158,25 +158,31 @@ auto load_preset = [](const std::string& preset_file, const std::list<int>& obj_
 		{
 			double v;
 			iss >> v;
-			vzm::DebugTestSet("_double_CopVZThickness", &v, sizeof(double), 0, 0);
+			vzm::DebugTestSet("_double_CopVZThickness", v, sizeof(double), 0, 0);
 		}
 		else if (param_name == "z_thickenss_rp")
 		{
 			double v;
 			iss >> v;
-			vzm::DebugTestSet("_double_VZThickness", &v, sizeof(double), 0, 0);
+			vzm::DebugTestSet("_double_VZThickness", v, sizeof(double), 0, 0);
 		}
 		else if (param_name == "beta")
 		{
 			double v;
 			iss >> v;
-			vzm::DebugTestSet("_double_MergingBeta", &v, sizeof(double), 0, 0);
+			vzm::DebugTestSet("_double_MergingBeta", v, sizeof(double), 0, 0);
+		}
+		else if (param_name == "robustness_ratio")
+		{
+			double v;
+			iss >> v;
+			vzm::DebugTestSet("_double_RobustRatio", v, sizeof(double), 0, 0);
 		}
 		else if (param_name == "forced_shading")
 		{
 			glm::dvec4 v;
 			iss >> v.x >> v.y >> v.z >> v.w;
-			vzm::DebugTestSet("_double4_ShadingFactorsForGlobalPrimitives", &v, sizeof(glm::dvec4), 0, 0);
+			vzm::DebugTestSet("_double4_ShadingFactorsForGlobalPrimitives", v, sizeof(glm::dvec4), 0, 0);
 		}
 		else if (param_name == "alpha")
 		{
@@ -211,7 +217,7 @@ auto store_preset = [](const std::string& preset_file, const std::list<int>& obj
 	fileout << "cam_up " << __PR(cam_params.up, " ") << endl;
 	fileout << "cam_view " << __PR(cam_params.view, " ") << endl;
 
-	double z_thickenss_sp, z_thickenss_rp, beta;
+	double z_thickenss_sp, z_thickenss_rp, beta, Rh;
 	glm::dvec4 shading_param;
 
 	if (vzm::DebugTestGet("_double_CopVZThickness", &z_thickenss_sp, sizeof(double), 0, 0))
@@ -220,6 +226,8 @@ auto store_preset = [](const std::string& preset_file, const std::list<int>& obj
 		fileout << "z_thickenss_rp " << z_thickenss_rp << endl;
 	if (vzm::DebugTestGet("_double_MergingBeta", &beta, sizeof(double), 0, 0))
 		fileout << "beta " << beta << endl;
+	if (vzm::DebugTestGet("_double_RobustRatio", &Rh, sizeof(double), 0, 0))
+		fileout << "robustness_ratio " << Rh << endl;
 	if (vzm::DebugTestGet("_double4_ShadingFactorsForGlobalPrimitives", &shading_param, sizeof(glm::dvec4), 0, 0))
 		fileout << "forced_shading " << __PR(((double*)&shading_param), " ") << " " << shading_param.w << endl;
 
@@ -312,12 +320,7 @@ int main()
 	vzm::InitEngineLib();
 
 	std::list<int> loaded_obj_ids;
-
-	double z_thickenss_sp = 0.002;
-	double z_thickenss_rp = 0;
-	double beta = 0.5;
-	glm::dvec4 shading_param(0.4, 0.6, 0.2, 30.0);
-
+	
 	vzm::CameraParameters cam_params;
 	vzm::ObjStates obj_state;
 #define __OBJ1
@@ -398,21 +401,19 @@ int main()
 
 	align_obj_to_world_center(0, loaded_obj_ids);
 
-	vzm::DebugTestSet("_double_CopVZThickness", &z_thickenss_sp, sizeof(double), 0, 0);
-	vzm::DebugTestSet("_double_VZThickness", &z_thickenss_rp, sizeof(double), 0, 0);
-	vzm::DebugTestSet("_double_MergingBeta", &beta, sizeof(double), 0, 0);
-	vzm::DebugTestSet("_double4_ShadingFactorsForGlobalPrimitives", &shading_param, sizeof(glm::dvec4), 0, 0);
+	vzm::DebugTestSet("_double_CopVZThickness", 0.002, sizeof(double), 0, 0);
+	vzm::DebugTestSet("_double_VZThickness", 0.0, sizeof(double), 0, 0);
+	vzm::DebugTestSet("_double_MergingBeta", 0.5, sizeof(double), 0, 0);
+	vzm::DebugTestSet("_double_RobustRatio", 0.5, sizeof(double), 0, 0);
+	vzm::DebugTestSet("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), 0, 0);
 	// after presetting of DebugTestSets
 	load_preset(preset_file, loaded_obj_ids);
 
-	bool write_img_file = false;
-	bool reload_hlsl_objs = false;
 	int oit_mode = 0;
 	int key = -1;
 	while (key != 'q')
 	{
-		write_img_file = false;
-		reload_hlsl_objs = false;
+		bool write_img_file = false;
 		switch (key)
 		{
 		case 'g':
@@ -420,8 +421,8 @@ int main()
 			// (de)activate GPU profiling
 			static bool gpu_profile = false;
 			gpu_profile = !gpu_profile;
-			vzm::DebugTestSet("_bool_PrintOutRoutineObjs", &gpu_profile, sizeof(bool), 0, 0);
-			vzm::DebugTestSet("_bool_GpuProfile", &gpu_profile, sizeof(bool), 0, 0);
+			vzm::DebugTestSet("_bool_PrintOutRoutineObjs", gpu_profile, sizeof(bool), 0, 0);
+			vzm::DebugTestSet("_bool_GpuProfile", gpu_profile, sizeof(bool), 0, 0);
 			std::cout << "gpu profiling : " << (gpu_profile? "ON" : "OFF") << std::endl;
 			break;
 		}
@@ -433,8 +434,7 @@ int main()
 		}
 		case 'r':
 		{
-			reload_hlsl_objs = true;
-			vzm::DebugTestSet("_bool_ReloadHLSLObjFiles", &reload_hlsl_objs, sizeof(bool), 0, 0);
+			vzm::DebugTestSet("_bool_ReloadHLSLObjFiles", true, sizeof(bool), 0, 0);
 			std::cout << "reload hlsl objs" << std::endl;
 			break;
 		}
@@ -452,47 +452,44 @@ int main()
 		}
 		case '0':
 		{
-			oit_mode = 0;
+			vzm::DebugTestSet("_int_OitMode", (int)0, sizeof(int), 0, 0);
 			std::cout << "oit mode : SK+BTZ" << std::endl;
 			break;
 		}
 		case '1':
 		{
-			oit_mode = 1;
+			vzm::DebugTestSet("_int_OitMode", (int)1, sizeof(int), 0, 0);
 			std::cout << "oit mode : DFB" << std::endl;
 			break;
 		}
 		case '2':
 		{
-			oit_mode = 2;
+			vzm::DebugTestSet("_int_OitMode", (int)2, sizeof(int), 0, 0);
 			std::cout << "oit mode : MBT" << std::endl;
 			break;
 		}
 		case '3':
 		{
-			oit_mode = 3;
+			vzm::DebugTestSet("_int_OitMode", (int)3, sizeof(int), 0, 0);
 			std::cout << "oit mode : DK+BTZ" << std::endl;
 			break;
 		}
 		case '4':
 		{
-			// to do
-			oit_mode = 4;
+			vzm::DebugTestSet("_int_OitMode", (int)4, sizeof(int), 0, 0);
 			std::cout << "oit mode : DK+BT" << std::endl;
 			break;
 		}
+		default:
+			break;
 		}
-		vzm::DebugTestSet("_int_OitMode", &oit_mode, sizeof(int), 0, 0);
 
 		for (auto& it : scene_name)
 		{
 			show_window(it.second, it.first, 0, write_img_file);
 		}
-		if (reload_hlsl_objs)
-		{
-			reload_hlsl_objs = false;
-			vzm::DebugTestSet("_bool_ReloadHLSLObjFiles", &reload_hlsl_objs, sizeof(bool), 0, 0);
-		}
+
+		vzm::DebugTestSet("_bool_ReloadHLSLObjFiles", false, sizeof(bool), 0, 0);
 		key = cv::waitKey(1);
 	}
 
