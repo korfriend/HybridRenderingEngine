@@ -692,7 +692,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	int k_value = _fncontainer->GetParamValue("_int_NumK", k_value_old);
 	lobj->RegisterCustomParameter("_int_NumK", k_value);
 
-	int num_moments_old = 4;
+	int num_moments_old = 8;
 	lobj->GetCustomParameter("_int_NumQueueLayers", data_type::dtype<int>(), &num_moments_old);
 	int num_moments = _fncontainer->GetParamValue("_int_NumQueueLayers", num_moments_old);
 	int num_safe_loopexit = _fncontainer->GetParamValue("_int_SpinLockSafeLoops", (int)100);
@@ -2260,7 +2260,7 @@ BEGIN_RENDERER_LOOP:
 			{
 				cout << "----> total frag : " << totol_num_frags << endl;
 				cout << "----> max layers : " << max_layers << endl;
-				cout << "----> min diff   : " << min_diff_sq << endl;
+				cout << "----> min diff   : " << min_diff_sq << " (" << Rh << ")" << endl;
 				cout << "----> dynamic k  : " << k_value << endl;
 
 				dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
