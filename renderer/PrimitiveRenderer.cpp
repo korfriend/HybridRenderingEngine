@@ -716,7 +716,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	vmint2 pixel_pos = _fncontainer->GetParamValue("_int2_PixelPos", vmint2(0));
 	double tr_interval = _fncontainer->GetParamValue("_double_TrInvterval", (double)0.01);
 	double tr_startoffset = _fncontainer->GetParamValue("_double_TrStartOffset", (double)1.00);
-	vmdouble2 mot_nf = _fncontainer->GetParamValue("_double2_MotNearFar", vmdouble2(0.1, 100000.));
 	//vr_level = 2;
 	vmdouble4 global_light_factors = _fncontainer->GetParamValue("_double4_ShadingFactorsForGlobalPrimitives", vmdouble4(0.2, 1.0, 0.5, 5)); // Emission, Diffusion, Specular, Specular Power
 	vmdouble4 ui_light_factors = _fncontainer->GetParamValue("_double4_ShadingFactorsForUiPrimitives", vmdouble4(0.4, 0.8, 0.2, 30)); // Emission, Diffusion, Specular, Specular Power
@@ -1190,12 +1189,16 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 	//
 	MomentOIT cb_moment;
+	vmdouble2 mot_nf;
 	if (mode_OIT == MFR_MODE::MOMENT)
 	{
 		ID3D11Buffer* cbuf_moment_state = dx11CommonParams->get_cbuf("MomentOIT");
 		computeWrappingZoneParameters((float*)&cb_moment.wrapping_zone_parameters);
 		cb_moment.overestimation = 0.25f;
 		cb_moment.moment_bias = 0.0025f;
+		double np, fp;
+		cam_obj->GetCameraIntState(NULL, &np, &fp, NULL);
+		mot_nf = _fncontainer->GetParamValue("_double2_MotNearFar", vmdouble2(np, fp));
 		cb_moment.warp_nf = mot_nf;
 		switch (num_moments)
 		{
