@@ -328,6 +328,8 @@ int main()
 	__cv3__ cam_params.pos = glm::fvec3(0, 0, 5.f);
 	__cv3__ cam_params.up = glm::fvec3(0, 1.f, 0);
 	__cv3__ cam_params.view = glm::fvec3(0, 0, -1.f);
+	cam_params.np = 0.01f;
+	cam_params.fp = 20.f;
 	// obj file includes material info, which is prior shading option for rendering; therefore, wildcard setting is required to change shading.
 
 #elif defined(__OBJ2)
@@ -336,6 +338,8 @@ int main()
 	__cv3__ cam_params.pos = glm::fvec3(0, 0, 300);
 	__cv3__ cam_params.up = glm::fvec3(0, 1.f, 0);
 	__cv3__ cam_params.view = glm::fvec3(0, 0, -1.f);
+	cam_params.np = 1.0f;
+	cam_params.fp = 10000.f;
 	obj_state.emission = 0.3f;
 	obj_state.diffusion = 0.5f;
 	obj_state.specular = 0.2f;
@@ -346,6 +350,8 @@ int main()
 	__cv3__ cam_params.pos = glm::fvec3(0, 0, 300);
 	__cv3__ cam_params.up = glm::fvec3(0, 1.f, 0);
 	__cv3__ cam_params.view = glm::fvec3(0, 0, -1.f);
+	cam_params.np = 1.0f;
+	cam_params.fp = 10000.f;
 	obj_state.emission = 0.3f;
 	obj_state.diffusion = 0.5f;
 	obj_state.specular = 0.2f;
