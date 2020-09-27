@@ -6,11 +6,10 @@
 *.user
 *.userosscache
 *.sln.docstates
-*.txt
 *.jpg
+*.png
 branch_Optimization/
 OIT/
-shader_compiled_objs/
 bks/
 
 # User-specific files (MonoDevelop/Xamarin Studio)
