@@ -24,7 +24,7 @@ static int scene_id_cnt = 0;
 static std::map<int, std::string> scene_name;
 static float scene_stage_scale = 300;
 static glm::fvec3 scene_stage_center = glm::fvec3();
-auto show_window = [](const std::string& title, const int scene_id, const int cam_id, const bool write_img_file)
+void show_window(const std::string& title, const int scene_id, const int cam_id, const bool write_img_file)
 {
 	vzm::RenderScene(scene_id, cam_id);
 	unsigned char* ptr_rgba;
@@ -39,7 +39,7 @@ auto show_window = [](const std::string& title, const int scene_id, const int ca
 		if (write_img_file) cv::imwrite("testout" + std::to_string(scene_id) + ".png", cvmat);
 	}
 
-};
+}
 
 void CallBackFunc_Mouse(int event, int x, int y, int flags, void* userdata)
 {
@@ -105,7 +105,7 @@ void CallBackFunc_Mouse(int event, int x, int y, int flags, void* userdata)
 #define __cm4__ *(glm::fmat4x4*)
 #define __PR(A, INTERVAL) A[0] << INTERVAL << A[1] << INTERVAL << A[2]
 
-auto align_obj_to_world_center = [](int scene_id, const std::list<int>& obj_ids)
+void align_obj_to_world_center(int scene_id, const std::list<int>& obj_ids)
 {
 	glm::fvec3 pos_min, pos_max;
 	vzm::GetSceneBoundingBox(obj_ids, scene_id, (float*)&pos_min, (float*)&pos_max);
@@ -116,9 +116,9 @@ auto align_obj_to_world_center = [](int scene_id, const std::list<int>& obj_ids)
 		__cm4__ obj_state.os2ws = glm::translate(-(pos_min + pos_max) * 0.5f);
 		vzm::ReplaceOrAddSceneObject(scene_id, obj_id, obj_state);
 	}
-};
+}
 
-auto load_preset = [](const std::string& preset_file, const std::list<int>& obj_ids)
+void load_preset(const std::string& preset_file, const std::list<int>& obj_ids)
 {
 	using namespace std;
 	
@@ -201,9 +201,9 @@ auto load_preset = [](const std::string& preset_file, const std::list<int>& obj_
 		vzm::SetCameraParameters(0, cam_params, 0);
 
 	filein.close();
-};
+}
 
-auto store_preset = [](const std::string& preset_file, const std::list<int>& obj_ids)
+void store_preset(const std::string& preset_file, const std::list<int>& obj_ids)
 {
 	using namespace std;
 	ofstream fileout(preset_file);
@@ -236,7 +236,64 @@ auto store_preset = [](const std::string& preset_file, const std::list<int>& obj
 		fileout << "alpha " << _obj_state.color[3] << endl;
 
 	fileout.close();
-};
+}
+
+void compute_difference(std::string out_file)
+{
+	auto make_cvmat = [](int oit_mode, double rh = 0.5) -> cv::Mat
+	{
+		int ot_mode_original;
+		vzm::DebugTestGet("_int_OitMode", &ot_mode_original, sizeof(int), 0, 0);
+		float rh_original;
+		vzm::DebugTestGet("_double_RobustRatio", &rh_original, sizeof(double), 0, 0);
+
+		vzm::DebugTestSet("_int_OitMode", oit_mode, sizeof(int), 0, 0);
+		vzm::DebugTestSet("_double_RobustRatio", rh, sizeof(int), 0, 0);
+		vzm::RenderScene(0, 0);
+		unsigned char* ptr_rgba;
+		float* ptr_zdepth;
+		int w, h;
+		vzm::GetRenderBufferPtrs(0, &ptr_rgba, &ptr_zdepth, &w, &h, 0);
+		cv::Mat cvmat(h, w, CV_8UC4), cvmat3;
+		memcpy(cvmat.data, ptr_rgba, sizeof(unsigned char) * 4 * w * h);
+		cv::cvtColor(cvmat, cvmat3, cv::COLOR_BGRA2BGR);
+
+		vzm::DebugTestSet("_int_OitMode", ot_mode_original, sizeof(int), 0, 0);
+		vzm::DebugTestSet("_double_RobustRatio", &rh_original, sizeof(double), 0, 0);
+		return cvmat3;
+	};
+
+	cv::Mat cvmat_DFB = make_cvmat(1);
+	cv::Mat cvmat_MBT = make_cvmat(2), cvmat_MBT_DIFF, cvmat_MBT_DIFFMAP;
+	cv::Mat cvmat_DKBT_075 = make_cvmat(4, 0.75), cvmat_DKBT_075_DIFF, cvmat_DKBT_075_DIFFMAP;
+	cv::Mat cvmat_DKBT_05 = make_cvmat(4, 0.5), cvmat_DKBT_05_DIFF, cvmat_DKBT_05_DIFFMAP;
+	cv::Mat cvmat_DKBT_02 = make_cvmat(4, 0.2), cvmat_DKBT_02_DIFF, cvmat_DKBT_02_DIFFMAP;
+	cv::Mat cvmat_DKBTZ_02 = make_cvmat(3, 0.2), cvmat_DKBTZ_02_DIFF, cvmat_DKBTZ_02_DIFFMAP;
+	cv::Mat cvmat_SKBTZ = make_cvmat(0), cvmat_SKBTZ_DIFF, cvmat_SKBTZ_DIFFMAP;
+
+	cv::absdiff(cvmat_DFB, cvmat_MBT, cvmat_MBT_DIFF);
+	cv::absdiff(cvmat_DFB, cvmat_DKBT_075, cvmat_DKBT_075_DIFF);
+	cv::absdiff(cvmat_DFB, cvmat_DKBT_05, cvmat_DKBT_05_DIFF);
+	cv::absdiff(cvmat_DFB, cvmat_DKBT_02, cvmat_DKBT_02_DIFF);
+	cv::absdiff(cvmat_DFB, cvmat_DKBTZ_02, cvmat_DKBTZ_02_DIFF);
+	cv::absdiff(cvmat_DFB, cvmat_SKBTZ, cvmat_SKBTZ_DIFF);
+
+	cv::applyColorMap(cvmat_MBT_DIFF, cvmat_MBT_DIFFMAP, cv::COLORMAP_JET);
+	cv::applyColorMap(cvmat_DKBT_075_DIFF, cvmat_DKBT_075_DIFFMAP, cv::COLORMAP_JET);
+	cv::applyColorMap(cvmat_DKBT_05_DIFF, cvmat_DKBT_05_DIFFMAP, cv::COLORMAP_JET);
+	cv::applyColorMap(cvmat_DKBT_02_DIFF, cvmat_DKBT_02_DIFFMAP, cv::COLORMAP_JET);
+	cv::applyColorMap(cvmat_DKBTZ_02_DIFF, cvmat_DKBTZ_02_DIFFMAP, cv::COLORMAP_JET);
+	cv::applyColorMap(cvmat_SKBTZ_DIFF, cvmat_SKBTZ_DIFFMAP, cv::COLORMAP_JET);
+
+	// bg color to white//
+
+	cv::imshow("cvmat_MBT_DIFFMAP", cvmat_MBT_DIFFMAP);
+	cv::imshow("cvmat_DKBT_075_DIFFMAP", cvmat_DKBT_075_DIFFMAP);
+	cv::imshow("cvmat_DKBT_05_DIFFMAP", cvmat_DKBT_05_DIFFMAP);
+	cv::imshow("cvmat_DKBT_05_DIFFMAP", cvmat_DKBT_05_DIFFMAP);
+	cv::imshow("cvmat_DKBT_02_DIFFMAP", cvmat_DKBT_02_DIFFMAP);
+	cv::imshow("cvmat_SKBTZ_DIFFMAP", cvmat_SKBTZ_DIFFMAP);
+}
 
 #if (_MSVC_LANG < 201703L)
 # this program uses C++ standard ver 17
@@ -478,6 +535,12 @@ int main()
 		{
 			vzm::DebugTestSet("_int_OitMode", (int)4, sizeof(int), 0, 0);
 			std::cout << "oit mode : DK+BT" << std::endl;
+			break;
+		}
+		case 'c':
+		{
+			compute_difference("");
+			std::cout << "compute difference" << std::endl;
 			break;
 		}
 		default:
