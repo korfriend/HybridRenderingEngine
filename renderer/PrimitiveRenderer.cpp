@@ -2078,7 +2078,7 @@ BEGIN_RENDERER_LOOP:
 			else if (mode_OIT == MFR_MODE::DKBTZ)
 				dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_DKBTZ_cs_5_0), NULL, 0);
 			else
-				dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_DKBTZ_cs_5_0), NULL, 0);
+				dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_DKBT_cs_5_0), NULL, 0);
 
 			//dx11DeviceImmContext->Flush();
 			dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
@@ -2398,13 +2398,13 @@ RENDERER_LOOP_EXIT:
 		}
 		else
 		{
-			if (mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::DKBT)
+			if (mode_OIT == MFR_MODE::SKBTZ)
+				dx11DeviceImmContext->CSSetShader(GETCS(OIT_SKBZ_RESOLVE_cs_5_0), NULL, 0);
+			else 
 			{
-				dx11DeviceImmContext->CSSetShader(GETCS(OIT_DKBZ_RESOLVE_cs_5_0), NULL, 0);
+				dx11DeviceImmContext->CSSetShader(mode_OIT == MFR_MODE::DKBTZ ? GETCS(OIT_DKBZ_RESOLVE_cs_5_0) : GETCS(OIT_DKB_RESOLVE_cs_5_0), NULL, 0);
 				dx11DeviceImmContext->CSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]);
 			}
-			else
-				dx11DeviceImmContext->CSSetShader(GETCS(OIT_SKBZ_RESOLVE_cs_5_0), NULL, 0);
 			//dx11DeviceImmContext->CSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_SRV]);
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], 0); // trimming may occur 
 		}
@@ -2827,9 +2827,8 @@ RENDERER_LOOP_EXIT:
 		if (mode_OIT == MFR_MODE::SKBTZ || mode_OIT == MFR_MODE::DKBTZ)
 		{
 			cout << "z_thickness used in store pass   : " << len_diagonal_max * (float)v_copthickness << endl;
-			cout << "z_thickness used in resolve pass : " << len_diagonal_max * (float)fv_thickness << endl;
+			cout << "z_thickness used in resolve pass : " << fv_thickness << endl; // len_diagonal_max * (float)v_thickness 
 		}
-		len_diagonal_max * (float)v_copthickness;
 
 		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
 		profile_map["end"] = gpu_profilecount;
