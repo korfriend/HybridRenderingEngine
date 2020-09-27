@@ -69,7 +69,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	lobj->RegisterCustomParameter("_int_NumK", k_value);
 	MFR_MODE mode_OIT = (MFR_MODE)_fncontainer->GetParamValue("_int_OitMode", (int)0);
 	int buf_ex_scale = _fncontainer->GetParamValue("_int_BufExScale", (int)4); // 32 layers
-	int num_moments_old = 4;
+	int num_moments_old = 8;
 	lobj->GetCustomParameter("_int_NumQueueLayers", data_type::dtype<int>(), &num_moments_old);
 	int num_moments = _fncontainer->GetParamValue("_int_NumQueueLayers", num_moments_old);
 
