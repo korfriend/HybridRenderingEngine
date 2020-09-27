@@ -7,7 +7,7 @@
 #define DEBUG_GREEN(C) {if(C) {fragment_counter[tex2d_xy.xy] = 9999999; return; }}
 #endif
 
-#if ZF_HANDLING == 1
+#if FRAG_MERGING == 1
 bool OverlapTest(const in Fragment f_1, const in Fragment f_2)
 {
 	float z_front, z_back, zt_front, zt_back;
@@ -36,7 +36,7 @@ int Fragment_OrderIndependentMerge(inout Fragment f_buf, const in Fragment f_in)
 	float4 f_buf_fvis = ConvertUIntToFloat4(f_buf.i_vis);
 	float4 f_in_fvis = ConvertUIntToFloat4(f_in.i_vis);
 
-#if ZF_HANDLING == 1
+#if FRAG_MERGING == 1
 	float4 f_mix_vis = MixOpt(f_buf_fvis, f_buf.opacity_sum, f_in_fvis, f_in.opacity_sum);
 	f_buf.i_vis = ConvertFloat4ToUInt(f_mix_vis);
 	f_buf.opacity_sum = f_buf.opacity_sum + f_in.opacity_sum;
@@ -84,7 +84,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 	Fragment f_in;
 	f_in.i_vis = ConvertFloat4ToUInt(v_rgba);
 	f_in.z = z_depth;
-#if ZF_HANDLING == 1
+#if FRAG_MERGING == 1
 	f_in.zthick = z_thickness;
 	f_in.opacity_sum = v_rgba.a;
 #endif
@@ -121,7 +121,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 	{
 		frag_tail.i_vis = 0;
 		frag_tail.z = FLT_MAX;
-#if ZF_HANDLING == 1
+#if FRAG_MERGING == 1
 		frag_tail.zthick = 0;
 		frag_tail.opacity_sum = 0;
 #endif
@@ -129,7 +129,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 
 	const uint num_unsorted_cores = k_value - 1;
 	
-#if ZF_HANDLING == 0
+#if FRAG_MERGING == 0
 	if (frag_cnt < num_unsorted_cores)
 	{
 		// filling the unsorted core fragments without checking max core
@@ -139,7 +139,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 	}
 	else
 #endif
-#if ZF_HANDLING == 1
+#if FRAG_MERGING == 1
 	if (f_in.z > frag_tail.z - frag_tail.zthick)
 #else
 	if (f_in.z > frag_tail.z)
@@ -152,7 +152,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 		Fragment_OrderIndependentMerge(f_in, frag_tail);
 		store_index = k_value - 1;
 #else
-#if ZF_HANDLING == 1
+#if FRAG_MERGING == 1
 		if (frag_tail.z > f_in.z)
 		{
 			Fragment_OrderIndependentMerge(f_in, frag_tail);
@@ -174,7 +174,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 			{
 				store_index = i;
 				core_max_idx = -2;
-#if NO_OVERLAP == 1 && ZF_HANDLING == 1
+#if NO_OVERLAP == 1 && FRAG_MERGING == 1
 				count_frags = f_ith.opacity_sum == 0;
 #else
 				count_frags = true;
@@ -183,7 +183,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 			}
 			else // if (f_ith.i_vis != 0)
 			{
-#if ZF_HANDLING == 1
+#if FRAG_MERGING == 1
 				if (OverlapTest(f_ith, f_in))
 				{
 					Fragment_OrderIndependentMerge(f_in, f_ith);
@@ -223,7 +223,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 						Fragment_OrderIndependentMerge(frag_tail, f_coremax);
 #else
 					{
-#if ZF_HANDLING == 1
+#if FRAG_MERGING == 1
 						if (OverlapTest(frag_tail, f_coremax))
 							Fragment_OrderIndependentMerge(frag_tail, f_coremax);
 						else 
@@ -239,7 +239,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 		}
 	}
 	// memory write section
-#if NO_OVERLAP == 1 && ZF_HANDLING == 1
+#if NO_OVERLAP == 1 && FRAG_MERGING == 1
 	if (core_max_idx == -3)
 	{
 		const int overlap_idx = store_index;
@@ -306,14 +306,14 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 	Fragment f_in;
 	f_in.z = z_depth;
 	f_in.i_vis = ConvertFloat4ToUInt(v_rgba);
-#if ZF_HANDLING == 1
+#if FRAG_MERGING == 1
 	f_in.zthick = z_thickness;
 	f_in.opacity_sum = v_rgba.a;
 #endif
 
 #if STRICT_LOCKED == 1
 #define __IES(_ADDR, I, V) deep_k_buf.InterlockedExchange(_ADDR + I * 4, V, __dummy)
-#if ZF_HANDLING == 1
+#if FRAG_MERGING == 1
 #define __SET_ZEROFRAG(ADDR, K) {__IES(ADDR + (K) * 4 * 4, 0, 0); \
 __IES(ADDR + (K) * 4 * 4, 1, 0); \
 __IES(ADDR + (K) * 4 * 4, 2, 0); \
@@ -380,14 +380,14 @@ __IES(ADDR + (K) * 4 * 4, 1, asuint(F.z)); }
 				{
 					frag_tail.i_vis = 0;
 					frag_tail.z = FLT_MAX;
-#if ZF_HANDLING == 1
+#if FRAG_MERGING == 1
 					frag_tail.opacity_sum = 0;
 					frag_tail.zthick = 0;
 #endif
 				}
 
 				const uint num_unsorted_cores = k_value - 1;
-#if ZF_HANDLING == 0
+#if FRAG_MERGING == 0
 				if (frag_cnt < num_unsorted_cores)
 				{
 					// filling the unsorted core fragments without checking max core
@@ -397,7 +397,7 @@ __IES(ADDR + (K) * 4 * 4, 1, asuint(F.z)); }
 				}
 				else
 #endif
-#if ZF_HANDLING == 1
+#if FRAG_MERGING == 1
 				if (f_in.z > frag_tail.z - frag_tail.zthick)
 #else
 				if (f_in.z > frag_tail.z)
@@ -410,7 +410,7 @@ __IES(ADDR + (K) * 4 * 4, 1, asuint(F.z)); }
 					Fragment_OrderIndependentMerge(f_in, frag_tail);
 					store_index = k_value - 1;
 #else
-#if ZF_HANDLING == 1
+#if FRAG_MERGING == 1
 					if (frag_tail.z > f_in.z)
 					{
 						Fragment_OrderIndependentMerge(f_in, frag_tail);
@@ -432,7 +432,7 @@ __IES(ADDR + (K) * 4 * 4, 1, asuint(F.z)); }
 						{
 							store_index = i;
 							core_max_idx = -2;
-#if NO_OVERLAP == 1 && ZF_HANDLING == 1
+#if NO_OVERLAP == 1 && FRAG_MERGING == 1
 							count_frags = f_ith.opacity_sum == 0;
 #else
 							count_frags = true;
@@ -441,7 +441,7 @@ __IES(ADDR + (K) * 4 * 4, 1, asuint(F.z)); }
 						}
 						else // if (f_ith.i_vis != 0)
 						{
-#if ZF_HANDLING == 1
+#if FRAG_MERGING == 1
 							if (OverlapTest(f_ith, f_in))
 							{
 								Fragment_OrderIndependentMerge(f_in, f_ith);
@@ -481,7 +481,7 @@ __IES(ADDR + (K) * 4 * 4, 1, asuint(F.z)); }
 									Fragment_OrderIndependentMerge(frag_tail, f_coremax);
 #else
 								{
-#if ZF_HANDLING == 1
+#if FRAG_MERGING == 1
 									if (OverlapTest(frag_tail, f_coremax))
 										Fragment_OrderIndependentMerge(frag_tail, f_coremax);
 									else
@@ -498,7 +498,7 @@ __IES(ADDR + (K) * 4 * 4, 1, asuint(F.z)); }
 				}
 
 				// memory write section
-#if NO_OVERLAP == 1 && ZF_HANDLING == 1
+#if NO_OVERLAP == 1 && FRAG_MERGING == 1
 				if (core_max_idx == -3)
 				{
 					const int overlap_idx = store_index;

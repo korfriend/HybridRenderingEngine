@@ -157,7 +157,7 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 		GET_FRAG(f, addr_base, k);
 		if ((uint)f.i_vis > 0)
 		{
-#if ZF_HANDLING == 1
+#if FRAG_MERGING == 1
 			f.zthick = max(f.zthick, v_thickness);
 #endif
 			fs[valid_frag_cnt] = f;
@@ -175,7 +175,7 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 
 	float4 fmix_vis = (float4) 0;
 	uint cnt_sorted_ztsurf = 0, i = 0;
-#if ZF_HANDLING == 1
+#if FRAG_MERGING == 1
     // merge self-overlapping surfaces to thickness surfaces
     [loop]	
     for (i = 0; i < (uint)valid_frag_cnt; i++)

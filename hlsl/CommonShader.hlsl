@@ -1133,13 +1133,13 @@ struct Fragment
 {
 	uint i_vis;
 	float z;
-#if !defined(ZF_HANDLING) || ZF_HANDLING == 1
+#if !defined(FRAG_MERGING) || FRAG_MERGING == 1
 	float zthick;
 	float opacity_sum;
 #endif
 };
 
-#if !defined(ZF_HANDLING) || ZF_HANDLING == 1
+#if !defined(FRAG_MERGING) || FRAG_MERGING == 1
 struct Fragment_OUT
 {
 	Fragment f_prior; // Includes current intermixed depth
