@@ -216,7 +216,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8_UNORM, UPFB_MIPMAP);
 	}
 
-	if (mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBZT)
+	if (mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::DKBT)
 		grd_helper::UpdateFrameBuffer(gres_fb_ref_pidx, iobj, "BUFFER_RW_REF_PIDX_BUF", RTYPE_BUFFER,
 			D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
 #pragma endregion // IOBJECT GPU
@@ -352,7 +352,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	CB_CameraState cbCamState;
 	grd_helper::SetCb_Camera(cbCamState, matWS2PS, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, v_thickness <= 0? min_pitch : (float)v_thickness);
 	cbCamState.iSrCamDummy__0 = *(uint*)&merging_beta;
-	if (mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBZT)
+	if (mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::DKBT)
 		cbCamState.cam_flag |= (0x2 << 1);
 	
 	D3D11_MAPPED_SUBRESOURCE mappedResCamState;
@@ -753,7 +753,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		};
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs, (UINT*)(&dx11UAVs));
 
-		if (mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBZT) // filling
+		if (mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::DKBT) // filling
 		{
 			dx11DeviceImmContext->CSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]); // search why this does not work
 		}

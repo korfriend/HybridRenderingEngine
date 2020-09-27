@@ -771,8 +771,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		dx11CommonParams->dx11DeviceImmContext->CSSetShader(NULL, NULL, 0);
 
 #define VS_NUM 5
-#define PS_NUM 26
-#define CS_NUM 13
+#define PS_NUM 31
+#define CS_NUM 14
 #define SET_VS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(VERTEX_SHADER, NAME), __S, true)
 #define SET_PS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(PIXEL_SHADER, NAME), __S, true)
 #define SET_CS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(COMPUTE_SHADER, NAME), __S, true)
@@ -814,17 +814,23 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		/**/
 		
 		string strNames_PS[PS_NUM] = {
-			   "SR_OIT_FILL_SKBZT_PHONGBLINN_ps_5_0"
-			  ,"SR_OIT_FILL_SKBZT_DASHEDLINE_ps_5_0"
-			  ,"SR_OIT_FILL_SKBZT_MULTITEXTMAPPING_ps_5_0"
-			  ,"SR_OIT_FILL_SKBZT_TEXTMAPPING_ps_5_0"
-			  ,"SR_OIT_FILL_SKBZT_TEXTUREIMGMAP_ps_5_0"
+			   "SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0"
+			  ,"SR_OIT_FILL_SKBTZ_DASHEDLINE_ps_5_0"
+			  ,"SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ps_5_0"
+			  ,"SR_OIT_FILL_SKBTZ_TEXTMAPPING_ps_5_0"
+			  ,"SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ps_5_0"
 
-			  ,"SR_OIT_FILL_DKBZT_PHONGBLINN_ps_5_0"
-			  ,"SR_OIT_FILL_DKBZT_DASHEDLINE_ps_5_0"
-			  ,"SR_OIT_FILL_DKBZT_MULTITEXTMAPPING_ps_5_0"
-			  ,"SR_OIT_FILL_DKBZT_TEXTMAPPING_ps_5_0"
-			  ,"SR_OIT_FILL_DKBZT_TEXTUREIMGMAP_ps_5_0"
+			  ,"SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0"
+			  ,"SR_OIT_FILL_DKBTZ_DASHEDLINE_ps_5_0"
+			  ,"SR_OIT_FILL_DKBTZ_MULTITEXTMAPPING_ps_5_0"
+			  ,"SR_OIT_FILL_DKBTZ_TEXTMAPPING_ps_5_0"
+			  ,"SR_OIT_FILL_DKBTZ_TEXTUREIMGMAP_ps_5_0"
+
+			  ,"SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0"
+			  ,"SR_OIT_FILL_DKBT_DASHEDLINE_ps_5_0"
+			  ,"SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ps_5_0"
+			  ,"SR_OIT_FILL_DKBT_TEXTMAPPING_ps_5_0"
+			  ,"SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ps_5_0"
 
 			  ,"SR_SINGLE_LAYER_ps_5_0"
 			  //,"SR_OIT_KDEPTH_NPRGHOST_ps_5_0"
@@ -878,6 +884,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			   "OIT_SKBZ_RESOLVE_cs_5_0"
 			  ,"SR_SINGLE_LAYER_TO_SKBZT_cs_5_0"
 			  ,"OIT_DKBZ_RESOLVE_cs_5_0"
+			  ,"OIT_DKB_RESOLVE_cs_5_0"
 			  ,"SR_SINGLE_LAYER_TO_DKBZT_cs_5_0"
 			  ,"SR_FillHistogram_cs_5_0"
 			  ,"SR_CreateOffsetTableKpB_cs_5_0"
@@ -1030,7 +1037,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_rgba, iobj, "SYSTEM_OUT_RGBA", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_SYSOUT);
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_depthcs, iobj, "SYSTEM_OUT_DEPTH", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R32_FLOAT, UPFB_SYSOUT);
 
-	if(mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBZT)
+	if(mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::DKBT)
 		grd_helper::UpdateFrameBuffer(gres_fb_ref_pidx, iobj, "BUFFER_RW_REF_PIDX_BUF", RTYPE_BUFFER,
 			D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
 
@@ -1165,9 +1172,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	vmmat44f matWS2SS, matWS2PS, matSS2WS;
 	CB_CameraState cbCamState;
 	grd_helper::SetCb_Camera(cbCamState, matWS2PS, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, fv_thickness);
-	if(mode_OIT == MFR_MODE::SKBZT || mode_OIT == MFR_MODE::DKBZT) 
+	if(mode_OIT == MFR_MODE::SKBZT || mode_OIT == MFR_MODE::DKBTZ)
 		cbCamState.iSrCamDummy__0 = *(uint*)&merging_beta;
-	if (mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBZT)
+	if (mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::DKBT)
 		cbCamState.cam_flag |= (0x1 << 2);
 	if (!is_final_renderer) // which means the k-buffer can be used for the following renderer
 		cbCamState.cam_flag |= (0x1 << 3);
@@ -1455,7 +1462,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	//dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_deep_k_buffer.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 	//if(is_rov_mode)
 	//	dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_deep_k_buffer_rov.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
-	if(mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBZT)
+	if(mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::DKBT)
 		dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV], clr_unit4); 
 
 	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
@@ -1512,7 +1519,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	// For Each Primitive //
 	int count_call_render = 0;
 	int RENDERER_LOOP = 0;
-	bool is_frag_counter_buffer = mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBZT;
+	bool is_frag_counter_buffer = mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::DKBT;
 	bool is_MOMENT_gen_buffer = mode_OIT == MFR_MODE::MOMENT;
 BEGIN_RENDERER_LOOP:
 	if (gpu_profile)
@@ -1719,27 +1726,30 @@ BEGIN_RENDERER_LOOP:
 				{
 				case MFR_MODE::DXAB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0); break;
 				case MFR_MODE::MOMENT: dx11PS_Target = GETPS(SR_MOMENT_OIT_TEXTMAPPING_ps_5_0); break;
-				case MFR_MODE::DKBZT: dx11PS_Target = GETPS(SR_OIT_FILL_DKBZT_TEXTMAPPING_ps_5_0); break;
+				case MFR_MODE::DKBTZ: dx11PS_Target = GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ps_5_0); break;
+				case MFR_MODE::DKBT: dx11PS_Target = GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ps_5_0); break;
 				case MFR_MODE::SKBZT:
-				default: dx11PS_Target = GETPS(SR_OIT_FILL_SKBZT_TEXTMAPPING_ps_5_0); break;
+				default: dx11PS_Target = GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ps_5_0); break;
 				}
 			else if(render_obj_info.has_texture_img && dx11InputLayer_Target == dx11LI_PNT)
 				switch (mode_OIT)
 				{
 				case MFR_MODE::DXAB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0); break;
 				case MFR_MODE::MOMENT: dx11PS_Target = GETPS(SR_MOMENT_OIT_TEXTUREIMGMAP_ps_5_0); break;
-				case MFR_MODE::DKBZT: dx11PS_Target = GETPS(SR_OIT_FILL_DKBZT_TEXTUREIMGMAP_ps_5_0); break;
+				case MFR_MODE::DKBTZ: dx11PS_Target = GETPS(SR_OIT_FILL_DKBTZ_TEXTUREIMGMAP_ps_5_0); break;
+				case MFR_MODE::DKBT: dx11PS_Target = GETPS(SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ps_5_0); break;
 				case MFR_MODE::SKBZT:
-				default: dx11PS_Target = GETPS(SR_OIT_FILL_SKBZT_TEXTUREIMGMAP_ps_5_0); break;
+				default: dx11PS_Target = GETPS(SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ps_5_0); break;
 				}
 			else
 				switch (mode_OIT)
 				{
 				case MFR_MODE::DXAB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
 				case MFR_MODE::MOMENT: dx11PS_Target = GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0); break;
-				case MFR_MODE::DKBZT: dx11PS_Target = GETPS(SR_OIT_FILL_DKBZT_PHONGBLINN_ps_5_0); break;
+				case MFR_MODE::DKBTZ: dx11PS_Target = GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0); break;
+				case MFR_MODE::DKBT: dx11PS_Target = GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0); break;
 				case MFR_MODE::SKBZT:
-				default: dx11PS_Target = GETPS(SR_OIT_FILL_SKBZT_PHONGBLINN_ps_5_0); break;
+				default: dx11PS_Target = GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0); break;
 				}
 		}
 		else if (prim_data->GetVerticeDefinition("TEXCOORD0"))
@@ -1756,9 +1766,10 @@ BEGIN_RENDERER_LOOP:
 				{
 				case MFR_MODE::DXAB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_MULTITEXTMAPPING_ps_5_0); break;
 				case MFR_MODE::MOMENT: dx11PS_Target = GETPS(SR_MOMENT_OIT_MULTITEXTMAPPING_ps_5_0); break;
-				case MFR_MODE::DKBZT: dx11PS_Target = GETPS(SR_OIT_FILL_DKBZT_MULTITEXTMAPPING_ps_5_0); break;
+				case MFR_MODE::DKBTZ: dx11PS_Target = GETPS(SR_OIT_FILL_DKBTZ_MULTITEXTMAPPING_ps_5_0); break;
+				case MFR_MODE::DKBT: dx11PS_Target = GETPS(SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ps_5_0); break;
 				case MFR_MODE::SKBZT:
-				default: dx11PS_Target = GETPS(SR_OIT_FILL_SKBZT_MULTITEXTMAPPING_ps_5_0); break;
+				default: dx11PS_Target = GETPS(SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ps_5_0); break;
 				}
 			}
 			else
@@ -1773,27 +1784,30 @@ BEGIN_RENDERER_LOOP:
 					{
 					case MFR_MODE::DXAB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0); break;
 					case MFR_MODE::MOMENT: dx11PS_Target = GETPS(SR_MOMENT_OIT_TEXTMAPPING_ps_5_0); break;
-					case MFR_MODE::DKBZT: dx11PS_Target = GETPS(SR_OIT_FILL_DKBZT_TEXTMAPPING_ps_5_0); break;
+					case MFR_MODE::DKBTZ: dx11PS_Target = GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ps_5_0); break;
+					case MFR_MODE::DKBT: dx11PS_Target = GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ps_5_0); break;
 					case MFR_MODE::SKBZT:
-					default: dx11PS_Target = GETPS(SR_OIT_FILL_SKBZT_TEXTMAPPING_ps_5_0); break;
+					default: dx11PS_Target = GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ps_5_0); break;
 					}
 				else if ((cbPolygonObj.pobj_flag & (0x1 << 19)) && prim_data->ptype == PrimitiveTypeLINE)
 					switch (mode_OIT)
 					{
 					case MFR_MODE::DXAB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_DASHEDLINE_ps_5_0); break;
 					case MFR_MODE::MOMENT: dx11PS_Target = GETPS(SR_MOMENT_OIT_DASHEDLINE_ps_5_0); break;
-					case MFR_MODE::DKBZT: dx11PS_Target = GETPS(SR_OIT_FILL_DKBZT_DASHEDLINE_ps_5_0); break;
+					case MFR_MODE::DKBTZ: dx11PS_Target = GETPS(SR_OIT_FILL_DKBTZ_DASHEDLINE_ps_5_0); break;
+					case MFR_MODE::DKBT: dx11PS_Target = GETPS(SR_OIT_FILL_DKBT_DASHEDLINE_ps_5_0); break;
 					case MFR_MODE::SKBZT:
-					default: dx11PS_Target = GETPS(SR_OIT_FILL_SKBZT_DASHEDLINE_ps_5_0); break;
+					default: dx11PS_Target = GETPS(SR_OIT_FILL_SKBTZ_DASHEDLINE_ps_5_0); break;
 					}
 				else
 					switch (mode_OIT)
 					{
 					case MFR_MODE::DXAB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
 					case MFR_MODE::MOMENT: dx11PS_Target = GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0); break;
-					case MFR_MODE::DKBZT: dx11PS_Target = GETPS(SR_OIT_FILL_DKBZT_PHONGBLINN_ps_5_0); break;
+					case MFR_MODE::DKBTZ: dx11PS_Target = GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0); break;
+					case MFR_MODE::DKBT: dx11PS_Target = GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0); break;
 					case MFR_MODE::SKBZT:
-					default: dx11PS_Target = GETPS(SR_OIT_FILL_SKBZT_PHONGBLINN_ps_5_0); break;
+					default: dx11PS_Target = GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0); break;
 					}
 			}
 		}
@@ -1806,9 +1820,10 @@ BEGIN_RENDERER_LOOP:
 			{
 			case MFR_MODE::DXAB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
 			case MFR_MODE::MOMENT: dx11PS_Target = GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0); break;
-			case MFR_MODE::DKBZT: dx11PS_Target = GETPS(SR_OIT_FILL_DKBZT_PHONGBLINN_ps_5_0); break;
+			case MFR_MODE::DKBTZ: dx11PS_Target = GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0); break;
+			case MFR_MODE::DKBT: dx11PS_Target = GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0); break;
 			case MFR_MODE::SKBZT:
-			default: dx11PS_Target = GETPS(SR_OIT_FILL_SKBZT_PHONGBLINN_ps_5_0); break;
+			default: dx11PS_Target = GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0); break;
 			}
 		}
 
@@ -1998,7 +2013,7 @@ BEGIN_RENDERER_LOOP:
 		}
 		else //if (mode_OIT != MFR_MODE::MOMENT)
 		{
-			if ((mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBZT) && !is_frag_counter_buffer) // filling
+			if ((mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::DKBT) && !is_frag_counter_buffer) // filling
 			{
 				// weird //mode_OIT == MFR_MODE::DXAB ? (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV] : NULL
 				//dx11UAVs_1st_pass[3] = (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV];
@@ -2044,7 +2059,7 @@ BEGIN_RENDERER_LOOP:
 		//dx11DeviceImmContext->CSSetShaderResources(50, 1, dx11SRVs_NULL);
 
 		if (RENDERER_LOOP == 1 && 
-			(mode_OIT == MFR_MODE::SKBZT || mode_OIT == MFR_MODE::DKBZT))
+			(mode_OIT == MFR_MODE::SKBZT || mode_OIT == MFR_MODE::DKBTZ))
 		{
 			// RT to K-Buffer
 			ID3D11ShaderResourceView* dx11SRVs_1st_pass[2] = {
@@ -2170,7 +2185,7 @@ BEGIN_RENDERER_LOOP:
 				gpu_profilecount++;
 			}
 		}
-		else if (mode_OIT == MFR_MODE::DKBZT)
+		else if (mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::DKBT)
 		{
 			if (gpu_profile)
 			{
@@ -2378,7 +2393,7 @@ RENDERER_LOOP_EXIT:
 		}
 		else
 		{
-			if (mode_OIT == MFR_MODE::DKBZT)
+			if (mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::DKBT)
 			{
 				dx11DeviceImmContext->CSSetShader(GETCS(OIT_DKBZ_RESOLVE_cs_5_0), NULL, 0);
 				dx11DeviceImmContext->CSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]);

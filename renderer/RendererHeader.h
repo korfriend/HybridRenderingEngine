@@ -37,5 +37,6 @@ enum MFR_MODE
 	SKBZT = 0,
 	DXAB,
 	MOMENT,
-	DKBZT
+	DKBTZ,
+	DKBT
 };
