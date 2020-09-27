@@ -202,6 +202,7 @@ namespace vzm
 
 	// only for the contributor's (by DongJoon Kim) test info.
 	__dojostatic void DebugTestSet(const std::string& _script, const void* _pvalue, const size_t size_bytes, const int scene_id, const int cam_id, const int obj_id = -1);
+	__dojostatic bool DebugTestGet(const std::string& _script, void* _pvalue, const size_t size_bytes, const int scene_id, const int cam_id, const int obj_id = -1);
 	__dojostatic void DisplayConsoleMessages(const bool is_display);
 
 	__dojostatic bool ExecuteModule2(const std::string& module_dll_file, const std::string& dll_function, const std::list<int>& io_obj_ids, const std::map<std::string, std::any>& parameters);

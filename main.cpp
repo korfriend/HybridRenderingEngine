@@ -2,6 +2,8 @@
 #include <iostream>
 #include <chrono>
 #include <thread>
+#include <fstream>
+#include <sstream>
 
 #include "VisMtvApi.h"
 
@@ -101,7 +103,7 @@ void CallBackFunc_Mouse(int event, int x, int y, int flags, void* userdata)
 #define __cv3__ *(glm::fvec3*)
 #define __cv4__ *(glm::fvec4*)
 #define __cm4__ *(glm::fmat4x4*)
-#define __PR(A) A[0] << ", " << A[1] << ", " << A[2]
+#define __PR(A, INTERVAL) A[0] << INTERVAL << A[1] << INTERVAL << A[2]
 
 auto align_obj_to_world_center = [](int scene_id, const std::list<int>& obj_ids)
 {
@@ -114,6 +116,118 @@ auto align_obj_to_world_center = [](int scene_id, const std::list<int>& obj_ids)
 		__cm4__ obj_state.os2ws = glm::translate(-(pos_min + pos_max) * 0.5f);
 		vzm::ReplaceOrAddSceneObject(scene_id, obj_id, obj_state);
 	}
+};
+
+auto load_preset = [](const std::string& preset_file, const std::list<int>& obj_ids)
+{
+	using namespace std;
+	
+	ifstream filein(preset_file); //File to read from
+	if (!filein.is_open()) return;
+
+	vzm::CameraParameters cam_params;
+	vzm::GetCameraParameters(0, cam_params, 0);
+	int cam_loaded = 0;
+	string line;
+	while (getline(filein, line))
+	{
+		istringstream iss(line);
+
+		string param_name;
+
+		iss >> param_name;
+
+#define SET_CAM(A) A[0] >> A[1] >> A[2]
+
+		if (param_name == "cam_pos")
+		{
+			cam_loaded++;
+			iss >> SET_CAM(cam_params.pos);
+		}
+		else if (param_name == "cam_up")
+		{
+			cam_loaded++;
+			iss >> SET_CAM(cam_params.up);
+		}
+		else if (param_name == "cam_view")
+		{
+			cam_loaded++;
+			iss >> SET_CAM(cam_params.view);
+		}
+		else if (param_name == "z_thickenss_sp")
+		{
+			double v;
+			iss >> v;
+			vzm::DebugTestSet("_double_CopVZThickness", &v, sizeof(double), 0, 0);
+		}
+		else if (param_name == "z_thickenss_rp")
+		{
+			double v;
+			iss >> v;
+			vzm::DebugTestSet("_double_VZThickness", &v, sizeof(double), 0, 0);
+		}
+		else if (param_name == "beta")
+		{
+			double v;
+			iss >> v;
+			vzm::DebugTestSet("_double_MergingBeta", &v, sizeof(double), 0, 0);
+		}
+		else if (param_name == "forced_shading")
+		{
+			glm::dvec4 v;
+			iss >> v.x >> v.y >> v.z >> v.w;
+			vzm::DebugTestSet("_double4_ShadingFactorsForGlobalPrimitives", &v, sizeof(glm::dvec4), 0, 0);
+		}
+		else if (param_name == "alpha")
+		{
+			double v;
+			iss >> v;
+			vzm::ObjStates _obj_state;
+			if (vzm::GetSceneObjectState(0, *obj_ids.begin(), _obj_state))
+			{
+				_obj_state.color[3] = (float)v;
+				for (const int& obj_id : obj_ids)
+					vzm::ReplaceOrAddSceneObject(0, obj_id, _obj_state);
+			}
+		}
+	}
+	if (cam_loaded == 3)
+		vzm::SetCameraParameters(0, cam_params, 0);
+
+	filein.close();
+};
+
+auto store_preset = [](const std::string& preset_file, const std::list<int>& obj_ids)
+{
+	using namespace std;
+	ofstream fileout(preset_file);
+	if (!fileout.is_open()) return;
+
+	fileout.clear();
+
+	vzm::CameraParameters cam_params;
+	vzm::GetCameraParameters(0, cam_params, 0);
+	fileout << "cam_pos " << __PR(cam_params.pos, " ") << endl;
+	fileout << "cam_up " << __PR(cam_params.up, " ") << endl;
+	fileout << "cam_view " << __PR(cam_params.view, " ") << endl;
+
+	double z_thickenss_sp, z_thickenss_rp, beta;
+	glm::dvec4 shading_param;
+
+	if (vzm::DebugTestGet("_double_CopVZThickness", &z_thickenss_sp, sizeof(double), 0, 0))
+		fileout << "z_thickenss_sp " << z_thickenss_sp << endl;
+	if (vzm::DebugTestGet("_double_VZThickness", &z_thickenss_rp, sizeof(double), 0, 0))
+		fileout << "z_thickenss_rp " << z_thickenss_rp << endl;
+	if (vzm::DebugTestGet("_double_MergingBeta", &beta, sizeof(double), 0, 0))
+		fileout << "beta " << beta << endl;
+	if (vzm::DebugTestGet("_double4_ShadingFactorsForGlobalPrimitives", &shading_param, sizeof(glm::dvec4), 0, 0))
+		fileout << "forced_shading " << __PR(((double*)&shading_param), " ") << " " << shading_param.w << endl;
+
+	vzm::ObjStates _obj_state;
+	if (vzm::GetSceneObjectState(0, *obj_ids.begin(), _obj_state))
+		fileout << "alpha " << _obj_state.color[3] << endl;
+
+	fileout.close();
 };
 
 #if (_MSVC_LANG < 201703L)
@@ -199,20 +313,25 @@ int main()
 
 	std::list<int> loaded_obj_ids;
 
+	double z_thickenss_sp = 0.002;
+	double z_thickenss_rp = 0;
+	double beta = 0.5;
+	glm::dvec4 shading_param(0.4, 0.6, 0.2, 30.0);
+
 	vzm::CameraParameters cam_params;
 	vzm::ObjStates obj_state;
 #define __OBJ1
 #ifdef __OBJ1
+	std::string preset_file = ".\\data\\preset_oit1_sportscar.txt";
 	vzm::LoadMultipleModelsFile(".\\data\\sportsCar.obj", loaded_obj_ids, true);
 	scene_stage_scale = 5.f;
 	__cv3__ cam_params.pos = glm::fvec3(0, 0, 5.f);
 	__cv3__ cam_params.up = glm::fvec3(0, 1.f, 0);
 	__cv3__ cam_params.view = glm::fvec3(0, 0, -1.f);
 	// obj file includes material info, which is prior shading option for rendering; therefore, wildcard setting is required to change shading.
-	glm::dvec4 shading_param(0.5, 1.5, 1.5, 100.0);
-	vzm::DebugTestSet("_double4_ShadingFactorsForGlobalPrimitives", &shading_param, sizeof(glm::dvec4), 0, 0);
 
 #elif defined(__OBJ2)
+	std::string preset_file = ".\\data\\preset_oit1_hairball.obj";
 	vzm::LoadMultipleModelsFile(".\\data\\hairball_colored.ply", loaded_obj_ids, true);
 	__cv3__ cam_params.pos = glm::fvec3(0, 0, 300);
 	__cv3__ cam_params.up = glm::fvec3(0, 1.f, 0);
@@ -222,6 +341,7 @@ int main()
 	obj_state.specular = 0.2f;
 	obj_state.sp_pow = 30.f;
 #elif defined(__OBJ3)
+	std::string preset_file = ".\\data\\preset_oit1_floor.obj";
 	vzm::LoadMultipleModelsFile(".\\data\\densepoints_floor.ply", loaded_obj_id, true);
 	__cv3__ cam_params.pos = glm::fvec3(0, 0, 300);
 	__cv3__ cam_params.up = glm::fvec3(0, 1.f, 0);
@@ -272,23 +392,23 @@ int main()
 
 	align_obj_to_world_center(0, loaded_obj_ids);
 
+	vzm::DebugTestSet("_double_CopVZThickness", &z_thickenss_sp, sizeof(double), 0, 0);
+	vzm::DebugTestSet("_double_VZThickness", &z_thickenss_rp, sizeof(double), 0, 0);
+	vzm::DebugTestSet("_double_MergingBeta", &beta, sizeof(double), 0, 0);
+	vzm::DebugTestSet("_double4_ShadingFactorsForGlobalPrimitives", &shading_param, sizeof(glm::dvec4), 0, 0);
+	// after presetting of DebugTestSets
+	load_preset(preset_file, loaded_obj_ids);
+
+	bool write_img_file = false;
+	bool reload_hlsl_objs = false;
+	int oit_mode = 0;
 	int key = -1;
 	while (key != 'q')
 	{
-		bool write_img_file = false;
-		bool reload_hlsl_objs = false;
+		write_img_file = false;
+		reload_hlsl_objs = false;
 		switch (key)
 		{
-		case 'c':
-		{
-			// show cam states
-			vzm::CameraParameters cam_params;
-			vzm::GetCameraParameters(0, cam_params, 0);
-			std::cout << "cam pos  : " << __PR(cam_params.pos) << std::endl;;
-			std::cout << "up vec   : " << __PR(cam_params.up) << std::endl;;
-			std::cout << "view vec : " << __PR(cam_params.view) << std::endl;;
-			break;
-		}
 		case 'g':
 		{
 			// (de)activate GPU profiling
@@ -299,40 +419,64 @@ int main()
 			std::cout << "gpu profiling : " << (gpu_profile? "ON" : "OFF") << std::endl;
 			break;
 		}
-		case '[':
-		{
-			vzm::ObjStates _obj_state;
-			vzm::GetSceneObjectState(0, 0, _obj_state);
-			if (_obj_state.color[3] > 0.1f) _obj_state.color[3] -= 0.1f;
-			else _obj_state.color[3] -= 0.01f;
-			_obj_state.color[3] = std::max(0.01f, _obj_state.color[3]);
-			std::cout << "alpha : " << _obj_state.color[3] << std::endl;;
-			vzm::ReplaceOrAddSceneObject(0, 0, _obj_state);
-			break;
-		}
-		case ']':
-		{
-			vzm::ObjStates _obj_state;
-			vzm::GetSceneObjectState(0, 0, _obj_state);
-			if (_obj_state.color[3] >= 0.1f) _obj_state.color[3] += 0.1f;
-			else _obj_state.color[3] += 0.01f;
-			_obj_state.color[3] = std::min(1.f, _obj_state.color[3]);
-			std::cout << "alpha : " << _obj_state.color[3] << std::endl;;
-			vzm::ReplaceOrAddSceneObject(0, 0, _obj_state);
-			break;
-		}
 		case 'w':
 		{
 			write_img_file = true;
+			std::cout << "write result image into a file" << std::endl;
 			break;
 		}
 		case 'r':
 		{
 			reload_hlsl_objs = true;
 			vzm::DebugTestSet("_bool_ReloadHLSLObjFiles", &reload_hlsl_objs, sizeof(bool), 0, 0);
+			std::cout << "reload hlsl objs" << std::endl;
+			break;
+		}
+		case 's':
+		{
+			store_preset(preset_file, loaded_obj_ids);
+			std::cout << "store preset" << std::endl;
+			break;
+		}
+		case 'l':
+		{
+			load_preset(preset_file, loaded_obj_ids);
+			std::cout << "load preset" << std::endl;
+			break;
+		}
+		case '0':
+		{
+			oit_mode = 0;
+			std::cout << "oit mode : SK+BTZ" << std::endl;
+			break;
+		}
+		case '1':
+		{
+			oit_mode = 1;
+			std::cout << "oit mode : DFB" << std::endl;
+			break;
+		}
+		case '2':
+		{
+			oit_mode = 2;
+			std::cout << "oit mode : MBT" << std::endl;
+			break;
+		}
+		case '3':
+		{
+			oit_mode = 3;
+			std::cout << "oit mode : DK+BTZ" << std::endl;
+			break;
+		}
+		case '4':
+		{
+			// to do
+			oit_mode = 4;
+			std::cout << "oit mode : DK+BT" << std::endl;
 			break;
 		}
 		}
+		vzm::DebugTestSet("_int_OitMode", &oit_mode, sizeof(int), 0, 0);
 
 		for (auto& it : scene_name)
 		{
