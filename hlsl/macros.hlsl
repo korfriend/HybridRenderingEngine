@@ -195,6 +195,8 @@
     }\
 }
 
+#define BitCheck(BITS, IDX) (BITS & (0x1 << IDX))
+
 #define LOAD4_KBUF(V, F_ADDR, K) V = deep_k_buf.Load4(F_ADDR + (K) * 4 * 4)
 #define STORE4_KBUF(V, F_ADDR, K) deep_k_buf.Store4(F_ADDR + (K) * 4 * 4, V)
 

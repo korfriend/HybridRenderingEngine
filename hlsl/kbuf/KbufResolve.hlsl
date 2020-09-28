@@ -235,6 +235,7 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 	}
 	else
 	{
+		/*
 		Fragment f_invalid = (Fragment)0;
 		f_invalid.z = FLT_MAX;
 		[loop]
@@ -247,29 +248,40 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 #endif
 			fs[idx] = f_invalid; // when displaying layers for test, disable this.
 		}
+		/**/
 	}
-	
+
 	bool store_to_kbuf = BitCheck(g_cbCamState.cam_flag, 3);
-    float4 blendout = (float4) 0;
-	[loop]
-	for (i = 0; i < cnt_sorted_ztsurf; i++)
-	{
-#ifdef QUICK_SORT_AND_INDEX_DRIVEN
-		int idx = idx_array[i];
-#else
-		int idx = i;
+#if FRAG_MERGING == 1
+	if (store_to_kbuf)
 #endif
-		Fragment f_ith = fs[idx];
-		float4 vis = ConvertUIntToFloat4(f_ith.i_vis);
-		blendout += vis * (1.f - blendout.a);
+	{
+		[loop]
+		for (i = 0; i < cnt_sorted_ztsurf; i++)
+		{
+#ifdef QUICK_SORT_AND_INDEX_DRIVEN
+			int idx = idx_array[i];
+#else
+			int idx = i;
+#endif
+			Fragment f_ith = fs[idx];
+#if FRAG_MERGING == 0
+			float4 vis = ConvertUIntToFloat4(f_ith.i_vis);
+			fmix_vis += vis * (1.f - fmix_vis.a);
+			if (store_to_kbuf)
+#endif
 
-		if(store_to_kbuf)
-			SET_FRAG(addr_base, i, f_ith);
+				SET_FRAG(addr_base, i, f_ith);
+		}
+
+#if FRAG_MERGING == 0
+		if (store_to_kbuf)
+#endif
+			fragment_counter[DTid.xy] = cnt_sorted_ztsurf;
 	}
 
-	fragment_counter[DTid.xy] = cnt_sorted_ztsurf;
 	//fragment_blendout[DTid.xy] = ConvertUIntToFloat4(fs[idx_array[7]].i_vis);
-    fragment_blendout[DTid.xy] = blendout;
+	fragment_blendout[DTid.xy] = fmix_vis;
 #ifdef QUICK_SORT_AND_INDEX_DRIVEN
 	fragment_zdepth[DTid.xy] = fs[idx_array[0]].z;
 #else

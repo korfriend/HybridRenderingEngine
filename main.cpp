@@ -27,7 +27,7 @@ static int scene_id_cnt = 0;
 static std::map<int, std::string> scene_name;
 static float scene_stage_scale = 300;
 static glm::fvec3 scene_stage_center = glm::fvec3();
-void show_window(const std::string& title, const int scene_id, const int cam_id, const bool write_img_file)
+void show_window(const std::string& title, const int scene_id, const int cam_id, const bool write_img_file, const std::string& preset_file)
 {
 	vzm::RenderScene(scene_id, cam_id);
 	unsigned char* ptr_rgba;
@@ -39,7 +39,12 @@ void show_window(const std::string& title, const int scene_id, const int cam_id,
 		//show the image
 		cv::imshow(title, cvmat);
 
-		if (write_img_file) cv::imwrite("testout" + std::to_string(scene_id) + ".png", cvmat);
+		if (write_img_file)
+		{
+			size_t lastindex = preset_file.find_last_of(".");
+			std::string rawname = preset_file.substr(0, lastindex);
+			cv::imwrite(rawname + "_render.png", cvmat);
+		}
 	}
 
 }
@@ -201,6 +206,18 @@ void load_preset(const std::string& preset_file, const std::list<int>& obj_ids)
 					vzm::ReplaceOrAddSceneObject(0, obj_id, _obj_state);
 			}
 		}
+		else if (param_name == "point_thickness")
+		{
+			double v;
+			iss >> v;
+			vzm::ObjStates _obj_state;
+			if (vzm::GetSceneObjectState(0, *obj_ids.begin(), _obj_state))
+			{
+				_obj_state.point_thickness = (float)v;
+				for (const int& obj_id : obj_ids)
+					vzm::ReplaceOrAddSceneObject(0, obj_id, _obj_state);
+			}
+		}
 	}
 	if (cam_loaded == 3)
 		vzm::SetCameraParameters(0, cam_params, 0);
@@ -238,66 +255,108 @@ void store_preset(const std::string& preset_file, const std::list<int>& obj_ids)
 
 	vzm::ObjStates _obj_state;
 	if (vzm::GetSceneObjectState(0, *obj_ids.begin(), _obj_state))
+	{
 		fileout << "alpha " << _obj_state.color[3] << endl;
+		fileout << "point_thickness " << _obj_state.point_thickness << endl;
+	}
 
 	fileout.close();
 }
 
-void compute_difference(std::string out_file)
+double high_Rh = 0.8, low_Rh = 0.2, diff_amp = 10.0;
+void compute_difference(const std::string& out_file_prefix)
 {
 	auto make_cvmat = [](int oit_mode, double rh = 0.5) -> cv::Mat
 	{
-		int ot_mode_original;
+		int ot_mode_original = 0;
 		vzm::DebugTestGet("_int_OitMode", &ot_mode_original, sizeof(int), 0, 0);
-		float rh_original;
+		double rh_original;
 		vzm::DebugTestGet("_double_RobustRatio", &rh_original, sizeof(double), 0, 0);
 
 		vzm::DebugTestSet("_int_OitMode", oit_mode, sizeof(int), 0, 0);
-		vzm::DebugTestSet("_double_RobustRatio", rh, sizeof(int), 0, 0);
+		vzm::DebugTestSet("_double_RobustRatio", rh, sizeof(double), 0, 0);
 		vzm::RenderScene(0, 0);
 		unsigned char* ptr_rgba;
 		float* ptr_zdepth;
 		int w, h;
 		vzm::GetRenderBufferPtrs(0, &ptr_rgba, &ptr_zdepth, &w, &h, 0);
-		cv::Mat cvmat(h, w, CV_8UC4), cvmat3;
+		cv::Mat cvmat(h, w, CV_8UC4);
 		memcpy(cvmat.data, ptr_rgba, sizeof(unsigned char) * 4 * w * h);
-		cv::cvtColor(cvmat, cvmat3, cv::COLOR_BGRA2BGR);
 
 		vzm::DebugTestSet("_int_OitMode", ot_mode_original, sizeof(int), 0, 0);
 		vzm::DebugTestSet("_double_RobustRatio", &rh_original, sizeof(double), 0, 0);
-		return cvmat3;
+		return cvmat;
 	};
 
+	bool profiling_original = false;
+	vzm::DebugTestGet("_bool_GpuProfile", &profiling_original, sizeof(bool), 0, 0);
+	vzm::DebugTestSet("_bool_PrintOutRoutineObjs", true, sizeof(bool), 0, 0);
+	vzm::DebugTestSet("_bool_GpuProfile", true, sizeof(bool), 0, 0);
 	cv::Mat cvmat_DFB = make_cvmat(1);
-	cv::Mat cvmat_MBT = make_cvmat(2), cvmat_MBT_DIFF, cvmat_MBT_DIFFMAP;
-	cv::Mat cvmat_DKBT_075 = make_cvmat(4, 0.75), cvmat_DKBT_075_DIFF, cvmat_DKBT_075_DIFFMAP;
-	cv::Mat cvmat_DKBT_05 = make_cvmat(4, 0.5), cvmat_DKBT_05_DIFF, cvmat_DKBT_05_DIFFMAP;
-	cv::Mat cvmat_DKBT_02 = make_cvmat(4, 0.2), cvmat_DKBT_02_DIFF, cvmat_DKBT_02_DIFFMAP;
-	cv::Mat cvmat_DKBTZ_02 = make_cvmat(3, 0.2), cvmat_DKBTZ_02_DIFF, cvmat_DKBTZ_02_DIFFMAP;
-	cv::Mat cvmat_SKBTZ = make_cvmat(0), cvmat_SKBTZ_DIFF, cvmat_SKBTZ_DIFFMAP;
+	cv::Mat cvmat_MBT = make_cvmat(2);
+	cv::Mat cvmat_DKBT_highRh = make_cvmat(4, high_Rh);
+	cv::Mat cvmat_DKBT_lowRh = make_cvmat(4, low_Rh);
+	cv::Mat cvmat_DKBTZ_lowRh = make_cvmat(3, low_Rh);
+	cv::Mat cvmat_SKBTZ = make_cvmat(0);
+	vzm::DebugTestSet("_bool_PrintOutRoutineObjs", profiling_original, sizeof(bool), 0, 0);
+	vzm::DebugTestSet("_bool_GpuProfile", profiling_original, sizeof(bool), 0, 0);
 
-	cv::absdiff(cvmat_DFB, cvmat_MBT, cvmat_MBT_DIFF);
-	cv::absdiff(cvmat_DFB, cvmat_DKBT_075, cvmat_DKBT_075_DIFF);
-	cv::absdiff(cvmat_DFB, cvmat_DKBT_05, cvmat_DKBT_05_DIFF);
-	cv::absdiff(cvmat_DFB, cvmat_DKBT_02, cvmat_DKBT_02_DIFF);
-	cv::absdiff(cvmat_DFB, cvmat_DKBTZ_02, cvmat_DKBTZ_02_DIFF);
-	cv::absdiff(cvmat_DFB, cvmat_SKBTZ, cvmat_SKBTZ_DIFF);
+	cv::Mat cvmat_DFB_rgb;
+	cv::cvtColor(cvmat_DFB, cvmat_DFB_rgb, cv::COLOR_BGRA2BGR);
 
-	cv::applyColorMap(cvmat_MBT_DIFF, cvmat_MBT_DIFFMAP, cv::COLORMAP_JET);
-	cv::applyColorMap(cvmat_DKBT_075_DIFF, cvmat_DKBT_075_DIFFMAP, cv::COLORMAP_JET);
-	cv::applyColorMap(cvmat_DKBT_05_DIFF, cvmat_DKBT_05_DIFFMAP, cv::COLORMAP_JET);
-	cv::applyColorMap(cvmat_DKBT_02_DIFF, cvmat_DKBT_02_DIFFMAP, cv::COLORMAP_JET);
-	cv::applyColorMap(cvmat_DKBTZ_02_DIFF, cvmat_DKBTZ_02_DIFFMAP, cv::COLORMAP_JET);
-	cv::applyColorMap(cvmat_SKBTZ_DIFF, cvmat_SKBTZ_DIFFMAP, cv::COLORMAP_JET);
+	auto GenColorMap = [&cvmat_DFB_rgb](cv::Mat mat_rgba, float _amp) -> cv::Mat
+	{
+		cv::Mat mat_rgb;
+		cv::cvtColor(mat_rgba, mat_rgb, cv::COLOR_BGRA2BGR);
 
-	// bg color to white//
+		cv::Mat mat_diff;
+		cv::absdiff(cvmat_DFB_rgb, mat_rgb, mat_diff);
+
+		auto enhance_diff = [](cv::Mat& img, float factor)
+		{
+			int ch = img.channels();
+			for (int i = 0; i < img.rows * img.cols * ch; i++)
+			{
+				img.data[i] = (uchar)std::min(img.data[i] * factor, 255.f);
+			}
+		};
+		enhance_diff(mat_diff, _amp);
+
+		cv::Mat mat_heatmap; // 3 channels
+		cv::applyColorMap(mat_diff, mat_heatmap, cv::COLORMAP_JET);
+
+		for (int i = 0; i < mat_heatmap.rows * mat_heatmap.cols; i++)
+		{
+			byte a = mat_rgba.data[4 * i + 3];
+			if (a == 0)
+			{
+				mat_heatmap.data[3 * i + 0] = 255;
+				mat_heatmap.data[3 * i + 1] = 255;
+				mat_heatmap.data[3 * i + 2] = 255;
+			}
+		}
+
+		return mat_heatmap;
+	};
+
+	const float _amp = diff_amp;
+	cv::Mat cvmat_MBT_DIFFMAP = GenColorMap(cvmat_MBT, _amp);
+	cv::Mat cvmat_DKBT_highRh_DIFFMAP = GenColorMap(cvmat_DKBT_highRh, _amp);
+	cv::Mat cvmat_DKBT_lowRh_DIFFMAP = GenColorMap(cvmat_DKBT_lowRh, _amp);
+	cv::Mat cvmat_DKBTZ_lowRh_DIFFMAP = GenColorMap(cvmat_DKBTZ_lowRh, _amp);
+	cv::Mat cvmat_SKBTZ_DIFFMAP = GenColorMap(cvmat_SKBTZ, _amp);
 
 	cv::imshow("cvmat_MBT_DIFFMAP", cvmat_MBT_DIFFMAP);
-	cv::imshow("cvmat_DKBT_075_DIFFMAP", cvmat_DKBT_075_DIFFMAP);
-	cv::imshow("cvmat_DKBT_05_DIFFMAP", cvmat_DKBT_05_DIFFMAP);
-	cv::imshow("cvmat_DKBT_05_DIFFMAP", cvmat_DKBT_05_DIFFMAP);
-	cv::imshow("cvmat_DKBT_02_DIFFMAP", cvmat_DKBT_02_DIFFMAP);
+	cv::imshow("cvmat_DKBT_HighRh_DIFFMAP", cvmat_DKBT_highRh_DIFFMAP);
+	cv::imshow("cvmat_DKBT_lowRh_DIFFMAP", cvmat_DKBT_lowRh_DIFFMAP);
+	cv::imshow("cvmat_DKBTZ_lowRh_DIFFMAP", cvmat_DKBTZ_lowRh_DIFFMAP);
 	cv::imshow("cvmat_SKBTZ_DIFFMAP", cvmat_SKBTZ_DIFFMAP);
+
+	cv::imwrite(out_file_prefix + "MBT_DIFFMAP.png", cvmat_MBT_DIFFMAP);
+	cv::imwrite(out_file_prefix + "DKBT_HighRh_DIFFMAP.png", cvmat_DKBT_highRh_DIFFMAP);
+	cv::imwrite(out_file_prefix + "DKBT_lowRh_DIFFMAP.png", cvmat_DKBT_lowRh_DIFFMAP);
+	cv::imwrite(out_file_prefix + "DKBTZ_lowRh_DIFFMAP.png", cvmat_DKBTZ_lowRh_DIFFMAP);
+	cv::imwrite(out_file_prefix + "SKBTZ_DIFFMAP.png", cvmat_SKBTZ_DIFFMAP);
 }
 
 std::string GetSolutionPath()
@@ -329,7 +388,8 @@ int main__()
 
 	int loaded_obj_id = 0;
 
-	vzm::LoadModelFile(GetSolutionPath() + ".\\data\\Bunny70k.ply", loaded_obj_id, true);
+	std::string model_file = GetSolutionPath() + ".\\data\\Bunny70k.ply";
+	vzm::LoadModelFile(model_file, loaded_obj_id, true);
 
 	vzm::CameraParameters cam_params;
 	__cv3__ cam_params.pos = glm::fvec3(0, 0, 300);
@@ -386,7 +446,7 @@ int main__()
 	{
 		for (auto& it : scene_name)
 		{
-			show_window(it.second, it.first, 0, false);
+			show_window(it.second, it.first, 0, false, model_file);
 		}
 		key = cv::waitKey(1);
 	}
@@ -404,12 +464,14 @@ int main()
 	
 	vzm::CameraParameters cam_params;
 	vzm::ObjStates obj_state;
-#define __OBJ1
+#define __OBJ3
 #ifdef __OBJ1
+	high_Rh = 0.7, low_Rh = 0.2, diff_amp = 5.0;
+	scene_stage_scale = 5.f;
+
 	std::string preset_file = GetSolutionPath() + ".\\data\\preset_oit1_sportscar.txt";
 	vzm::LoadMultipleModelsFile(GetSolutionPath() + ".\\data\\sportsCar.obj", loaded_obj_ids, true);
-	scene_stage_scale = 5.f;
-	__cv3__ cam_params.pos = glm::fvec3(0, 0, 5.f);
+	__cv3__ cam_params.pos = glm::fvec3(0, 0, scene_stage_scale);
 	__cv3__ cam_params.up = glm::fvec3(0, 1.f, 0);
 	__cv3__ cam_params.view = glm::fvec3(0, 0, -1.f);
 	cam_params.np = 0.01f;
@@ -417,30 +479,28 @@ int main()
 	// obj file includes material info, which is prior shading option for rendering; therefore, wildcard setting is required to change shading.
 
 #elif defined(__OBJ2)
-	std::string preset_file = GetSolutionPath() + ".\\data\\preset_oit1_hairball.obj";
+	high_Rh = 0.7, low_Rh = 0.2, diff_amp = 10.0;
+	scene_stage_scale = 15.f;
+
+	std::string preset_file = GetSolutionPath() + ".\\data\\preset_oit1_hairball.txt";
 	vzm::LoadMultipleModelsFile(GetSolutionPath() + ".\\data\\hairball_colored.ply", loaded_obj_ids, true);
-	__cv3__ cam_params.pos = glm::fvec3(0, 0, 300);
+	__cv3__ cam_params.pos = glm::fvec3(0, 0, scene_stage_scale);
 	__cv3__ cam_params.up = glm::fvec3(0, 1.f, 0);
 	__cv3__ cam_params.view = glm::fvec3(0, 0, -1.f);
-	cam_params.np = 1.0f;
-	cam_params.fp = 10000.f;
-	obj_state.emission = 0.3f;
-	obj_state.diffusion = 0.5f;
-	obj_state.specular = 0.2f;
-	obj_state.sp_pow = 30.f;
+	cam_params.np = 0.01f;
+	cam_params.fp = 100.f;
 #elif defined(__OBJ3)
-	std::string preset_file = GetSolutionPath() + ".\\data\\preset_oit1_floor.obj";
-	vzm::LoadMultipleModelsFile(GetSolutionPath() + ".\\data\\densepoints_floor.ply", loaded_obj_id, true);
-	__cv3__ cam_params.pos = glm::fvec3(0, 0, 300);
+	high_Rh = 0.7, low_Rh = 0.2, diff_amp = 10.0;
+	scene_stage_scale = 50.f;
+
+	std::string preset_file = GetSolutionPath() + ".\\data\\preset_oit1_floor.txt";
+	vzm::LoadMultipleModelsFile(GetSolutionPath() + ".\\data\\densepoints_floor.ply", loaded_obj_ids, true);
+	__cv3__ cam_params.pos = glm::fvec3(0, 0, scene_stage_scale);
 	__cv3__ cam_params.up = glm::fvec3(0, 1.f, 0);
 	__cv3__ cam_params.view = glm::fvec3(0, 0, -1.f);
-	cam_params.np = 1.0f;
-	cam_params.fp = 10000.f;
-	obj_state.emission = 0.3f;
-	obj_state.diffusion = 0.5f;
-	obj_state.specular = 0.2f;
-	obj_state.sp_pow = 30.f;
-	obj_state.point_thickness = 20.f; // control for visible point size
+	cam_params.np = 0.1f;
+	cam_params.fp = 500.f;
+	obj_state.point_thickness = 15.f; // control for visible point size
 #endif
 
 	cam_params.fov_y = 3.141592654f / 4.f;
@@ -489,6 +549,7 @@ int main()
 	vzm::DebugTestSet("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), 0, 0);
 	// after presetting of DebugTestSets
 	load_preset(preset_file, loaded_obj_ids);
+	std::cout << "oit mode : SK+BTZ" << std::endl;
 
 	int oit_mode = 0;
 	int key = -1;
@@ -531,6 +592,7 @@ int main()
 			std::cout << "load preset" << std::endl;
 			break;
 		}
+		case '`':
 		case '0':
 		{
 			vzm::DebugTestSet("_int_OitMode", (int)0, sizeof(int), 0, 0);
@@ -563,7 +625,9 @@ int main()
 		}
 		case 'c':
 		{
-			compute_difference("");
+			size_t lastindex = preset_file.find_last_of(".");
+			std::string rawname = preset_file.substr(0, lastindex);
+			compute_difference(rawname + "_");
 			std::cout << "compute difference" << std::endl;
 			break;
 		}
@@ -573,7 +637,7 @@ int main()
 
 		for (auto& it : scene_name)
 		{
-			show_window(it.second, it.first, 0, write_img_file);
+			show_window(it.second, it.first, 0, write_img_file, preset_file);
 		}
 
 		vzm::DebugTestSet("_bool_ReloadHLSLObjFiles", false, sizeof(bool), 0, 0);

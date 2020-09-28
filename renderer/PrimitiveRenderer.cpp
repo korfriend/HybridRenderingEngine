@@ -1568,6 +1568,12 @@ BEGIN_RENDERER_LOOP:
 			profile_map["begin frags counter"] = gpu_profilecount;
 			gpu_profilecount++;
 		}
+		else if (is_MOMENT_gen_buffer)
+		{
+			dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
+			profile_map["begin gen moment"] = gpu_profilecount;
+			gpu_profilecount++;
+		}
 		else if(RENDERER_LOOP == 0)
 		{
 			dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
@@ -2139,6 +2145,12 @@ BEGIN_RENDERER_LOOP:
 			profile_map["end frags counter"] = gpu_profilecount;
 			gpu_profilecount++;
 		}
+		else if (is_MOMENT_gen_buffer)
+		{
+			dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
+			profile_map["end gen moment"] = gpu_profilecount;
+			gpu_profilecount++;
+		}
 		else if (RENDERER_LOOP == 2)
 		{
 			dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
@@ -2531,6 +2543,12 @@ RENDERER_LOOP_EXIT:
 				(ID3D11Texture2D*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RES]);
 			dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_fb_sys_depthcs.alloc_res_ptrs[DTYPE_RES], 
 				(ID3D11Texture2D*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RES]);
+			if (gpu_profile)
+			{
+				dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
+				profile_map["end CopyResource"] = gpu_profilecount;
+				gpu_profilecount++;
+			}
 
 			vmbyte4* rgba_sys_buf = (vmbyte4*)fb_rout->fbuffer;
 			float* depth_sys_buf = (float*)fb_dout->fbuffer;
@@ -2541,34 +2559,6 @@ RENDERER_LOOP_EXIT:
 			hr |= dx11DeviceImmContext->Map((ID3D11Texture2D*)gres_fb_sys_depthcs.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysDepth);
 
 			vmbyte4* rgba_gpu_buf = (vmbyte4*)mappedResSysRGBA.pData;
-			if (rgba_gpu_buf == NULL || depth_sys_buf == NULL)
-			{
-				//test_out("SR ERROR -- OUT");
-				//test_out("screen : " + to_string(fb_size_cur.x) + " x " + to_string(fb_size_cur.y));
-				//test_out("v_thickness : " + to_string(fv_thickness));
-				//test_out("k_value : " + to_string(k_value));
-				//test_out("default_line_thickness : " + to_string(default_line_thickness));
-				//test_out("width and height max : " + to_string(_w_max) + " x " + to_string(_h_max));
-				//float* f_v = (float*)&matWS2SS;
-				//for (int i = 0; i < 16; i++)
-				//{
-				//	test_out("matWS2SS " + to_string(i) + " : " + to_string(f_v[i]));
-				//	if (f_v[i] != f_v[i]) test_out("matWS2SS " + to_string(i) + " - element error");
-				//}
-				//f_v = (float*)&matWS2PS;
-				//for (int i = 0; i < 16; i++)
-				//{
-				//	test_out("matWS2PS " + to_string(i) + " : " + to_string(f_v[i]));
-				//	if (f_v[i] != f_v[i]) test_out("matWS2PS " + to_string(i) + " - element error");
-				//}
-				//f_v = (float*)&matSS2WS;
-				//for (int i = 0; i < 16; i++)
-				//{
-				//	test_out("matSS2WS " + to_string(i) + " : " + to_string(f_v[i]));
-				//	if (f_v[i] != f_v[i]) test_out("matSS2WS " + to_string(i) + " - element error");
-				//}
-			}
-
 			float* depth_gpu_buf = (float*)mappedResSysDepth.pData;
 			int buf_row_pitch = mappedResSysRGBA.RowPitch / 4;
 #ifdef PPL_USE
@@ -2901,8 +2891,8 @@ RENDERER_LOOP_EXIT:
 		if (!tsDisjoint.Disjoint)
 		{
 			UINT64 tsBeginFrame = 0, tsBeginOffsetTable = 0, tsEndOffsetTable = 0, tsEndGeoPass = 0,
-				tsBeginCounter = 0, tsEndCounter = 0, tsBeginGeoShader = 0, tsEndGeoShader = 0,
-				tsEndResolvePass = 0, tsEndRender = 0, tsBeginCopyBack = 0, tsEndCopyBack = 0, tsEndFrame = 0,
+				tsBeginCounter = 0, tsEndCounter = 0, tsBeginGenMM = 0, tsEndGenMM = 0, tsBeginGeoShader = 0, tsEndGeoShader = 0,
+				tsEndResolvePass = 0, tsEndRender = 0, tsBeginCopyBack = 0, tsEndCopyRes = 0, tsEndCopyBack = 0, tsEndFrame = 0,
 				tsBeginHisto = 0, tsEndHisto = 0;
 
 			auto GetTimeGpuProfile = [&profile_map, &dx11DeviceImmContext, &dx11CommonParams](const string& name, UINT64& ts) -> bool
@@ -2922,6 +2912,8 @@ RENDERER_LOOP_EXIT:
 			GetTimeGpuProfile("end offset table generation", tsEndOffsetTable);
 			GetTimeGpuProfile("begin frags counter", tsBeginCounter);
 			GetTimeGpuProfile("end frags counter", tsEndCounter);
+			GetTimeGpuProfile("begin gen moment", tsBeginGenMM);
+			GetTimeGpuProfile("end gen moment", tsEndGenMM);
 			GetTimeGpuProfile("begin geometry shader", tsBeginGeoShader);
 			GetTimeGpuProfile("end geometry shader", tsEndGeoShader);
 			GetTimeGpuProfile("end geometry pass", tsEndGeoPass);
@@ -2930,6 +2922,7 @@ RENDERER_LOOP_EXIT:
 			GetTimeGpuProfile("begin histogram analysis", tsBeginHisto);
 			GetTimeGpuProfile("end histogram analysis", tsEndHisto);
 			GetTimeGpuProfile("begin copy-back", tsBeginCopyBack);
+			GetTimeGpuProfile("end CopyResource", tsEndCopyRes);
 			GetTimeGpuProfile("end copy-back", tsEndCopyBack);
 			GetTimeGpuProfile("end", tsEndFrame);
 			UINT64 __dummny;
@@ -2941,16 +2934,18 @@ RENDERER_LOOP_EXIT:
 				if (tsS == 0 || tsE == 0) return;
 				cout << _test << " : " << float(tsE - tsS) / float(tsDisjoint.Frequency) * 1000.0f << " ms" << endl;
 			};
-			DisplayDuration(tsBeginFrame, tsEndFrame, "#GPU# Total (including copyback) Time");
+			//DisplayDuration(tsBeginFrame, tsEndFrame, "#GPU# Total (including copyback) Time");
 			DisplayDuration(tsBeginFrame, tsEndRender, "#GPU# Render Time");
 			DisplayDuration(tsBeginOffsetTable, tsEndOffsetTable, "#GPU# Offset Table Time");
 			DisplayDuration(tsBeginHisto, tsEndHisto, "#GPU# Histogram Analysis Time");
 			DisplayDuration(tsEndHisto, tsEndOffsetTable, "#GPU# Offset Table (DK+B) Time");
 			DisplayDuration(tsBeginFrame, tsEndGeoPass, "#GPU# Geometry Rendering Time");
 			DisplayDuration(tsBeginCounter, tsEndCounter, "#GPU# Fragment Counting Time");
+			DisplayDuration(tsBeginGenMM, tsEndGenMM, "#GPU# Moment Generating Time");
 			DisplayDuration(tsBeginGeoShader, tsEndGeoShader, "#GPU# Geometry Shader Time");
 			DisplayDuration(tsEndGeoPass, tsEndResolvePass, "#GPU# Resolve Pass Time");
-			DisplayDuration(tsBeginCopyBack, tsEndCopyBack, "#GPU# CopyBack Time");
+			DisplayDuration(tsBeginCopyBack, tsEndCopyRes, "#GPU# CopyResource Time");
+			DisplayDuration(tsEndCopyRes, tsEndCopyBack, "#GPU# CopyBack Time");
 		}
 	}
 

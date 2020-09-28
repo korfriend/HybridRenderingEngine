@@ -1,3 +1,5 @@
+#include "macros.hlsl"
+
 #define FLT_MAX 3.402823466e+38F
 #define FLT_COMP_MAX 3.402823466e+30F
 #define FLT_MIN 0.0000001F
@@ -295,8 +297,6 @@ float3 TransformVectorWoPerspective(const in float3 vec_src, const in float4x4 m
 {
     return mul(vec_src, (float3x3)matT);
 }
-
-#define BitCheck(BITS, IDX) (BITS & (0x1 << IDX))
 
 float4 BlendFloat4AndFloat4(const in float4 fColor1, const in float4 fColor2)
 {

@@ -75,7 +75,7 @@ void CreateOffsetTable_CS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThre
 
 #if DX_11_OIT==0
 #include "../macros.hlsl"
-#define MAX_ARRAY_SIZE 400
+#define MAX_ARRAY_SIZE 1024
 #define MAX_ARRAY_SIZE_1n MAX_ARRAY_SIZE - 1
 #define MAX_ARRAY_SIZE_2d MAX_ARRAY_SIZE >> 1
 struct FragmentVD
@@ -101,11 +101,7 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 	if (N == 0)
 		return;
 
-#if DX_11_STYLE==1
-	nThreadNum += 1; // to reuse nThreadNum - 1
-#endif
-
-#if DX_11_OIT==0
+#if DX_11_STYLE==0
 	uint offset = sr_offsettable_buf[nThreadNum];
 	//if (offset == 12)
 	//{
@@ -144,9 +140,11 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 		}
 	}
 	fragment_blendout[nDTid.xy] = result;
-	fragment_zdepth[nDTid.xy] = N; // for checking # of layers
+	fragment_zdepth[nDTid.xy] = fragments[0].z;
 
 #else 
+	nThreadNum += 1; // to reuse nThreadNum - 1
+
 #define blocksize 1
 	uint N2 = 1 << (int)(ceil(log2(N)));
 
