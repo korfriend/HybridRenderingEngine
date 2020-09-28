@@ -4,6 +4,9 @@
 #include <thread>
 #include <fstream>
 #include <sstream>
+#include <mutex>
+
+#include "Windows.h"
 
 #include "VisMtvApi.h"
 
@@ -41,8 +44,10 @@ void show_window(const std::string& title, const int scene_id, const int cam_id,
 
 }
 
+std::mutex the_mutex;
 void CallBackFunc_Mouse(int event, int x, int y, int flags, void* userdata)
 {
+	std::lock_guard<std::mutex> guard(the_mutex);
 	using namespace cv;
 
 	static int x_old = x;
@@ -295,17 +300,36 @@ void compute_difference(std::string out_file)
 	cv::imshow("cvmat_SKBTZ_DIFFMAP", cvmat_SKBTZ_DIFFMAP);
 }
 
+std::string GetSolutionPath()
+{
+	using namespace std;
+	char ownPth[2048];
+	GetModuleFileNameA(NULL, ownPth, (sizeof(ownPth)));
+	string exe_path = ownPth;
+	size_t pos = 0;
+	std::string token;
+	string delimiter = "\\";
+	string sol_path = "";
+	while ((pos = exe_path.find(delimiter)) != std::string::npos) {
+		token = exe_path.substr(0, pos);
+		if (token.find(".exe") != std::string::npos) break;
+		exe_path += token + "\\";
+		exe_path.erase(0, pos + delimiter.length());
+	}
+	return sol_path + "..\\..\\VmProjects\\hybrid_rendering_engine\\";
+}
+
 #if (_MSVC_LANG < 201703L)
 # this program uses C++ standard ver 17
 #endif
 
-int main_test()
+int main__()
 {
 	vzm::InitEngineLib();
 
 	int loaded_obj_id = 0;
 
-	vzm::LoadModelFile(".\\data\\Bunny70k.ply", loaded_obj_id, true);
+	vzm::LoadModelFile(GetSolutionPath() + ".\\data\\Bunny70k.ply", loaded_obj_id, true);
 
 	vzm::CameraParameters cam_params;
 	__cv3__ cam_params.pos = glm::fvec3(0, 0, 300);
@@ -382,8 +406,8 @@ int main()
 	vzm::ObjStates obj_state;
 #define __OBJ1
 #ifdef __OBJ1
-	std::string preset_file = ".\\data\\preset_oit1_sportscar.txt";
-	vzm::LoadMultipleModelsFile(".\\data\\sportsCar.obj", loaded_obj_ids, true);
+	std::string preset_file = GetSolutionPath() + ".\\data\\preset_oit1_sportscar.txt";
+	vzm::LoadMultipleModelsFile(GetSolutionPath() + ".\\data\\sportsCar.obj", loaded_obj_ids, true);
 	scene_stage_scale = 5.f;
 	__cv3__ cam_params.pos = glm::fvec3(0, 0, 5.f);
 	__cv3__ cam_params.up = glm::fvec3(0, 1.f, 0);
@@ -393,8 +417,8 @@ int main()
 	// obj file includes material info, which is prior shading option for rendering; therefore, wildcard setting is required to change shading.
 
 #elif defined(__OBJ2)
-	std::string preset_file = ".\\data\\preset_oit1_hairball.obj";
-	vzm::LoadMultipleModelsFile(".\\data\\hairball_colored.ply", loaded_obj_ids, true);
+	std::string preset_file = GetSolutionPath() + ".\\data\\preset_oit1_hairball.obj";
+	vzm::LoadMultipleModelsFile(GetSolutionPath() + ".\\data\\hairball_colored.ply", loaded_obj_ids, true);
 	__cv3__ cam_params.pos = glm::fvec3(0, 0, 300);
 	__cv3__ cam_params.up = glm::fvec3(0, 1.f, 0);
 	__cv3__ cam_params.view = glm::fvec3(0, 0, -1.f);
@@ -405,8 +429,8 @@ int main()
 	obj_state.specular = 0.2f;
 	obj_state.sp_pow = 30.f;
 #elif defined(__OBJ3)
-	std::string preset_file = ".\\data\\preset_oit1_floor.obj";
-	vzm::LoadMultipleModelsFile(".\\data\\densepoints_floor.ply", loaded_obj_id, true);
+	std::string preset_file = GetSolutionPath() + ".\\data\\preset_oit1_floor.obj";
+	vzm::LoadMultipleModelsFile(GetSolutionPath() + ".\\data\\densepoints_floor.ply", loaded_obj_id, true);
 	__cv3__ cam_params.pos = glm::fvec3(0, 0, 300);
 	__cv3__ cam_params.up = glm::fvec3(0, 1.f, 0);
 	__cv3__ cam_params.view = glm::fvec3(0, 0, -1.f);

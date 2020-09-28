@@ -268,11 +268,11 @@ bool __UpdateGpuResource(GpuRes& gres)
 	if (itrResDX11 == g_mapVmResources.end())
 		return false;
 	
-	itrResDX11->second.res_dvalues["LASTEST_ACCESS_TIME"] = 0;
+	itrResDX11->second.res_dvalues["LASTEST_GENCALL_TIME"] = 0;
 	unsigned long long _time = vmhelpers::GetCurrentTimePack();
 	double d_time;
 	memcpy(&d_time, &_time, sizeof(double));
-	itrResDX11->second.res_dvalues["LASTEST_ACCESS_TIME"] = d_time;
+	itrResDX11->second.res_dvalues["LASTEST_GENCALL_TIME"] = d_time;
 	//gres.alloc_res_ptrs = itrResDX11->second.alloc_res_ptrs;
 	gres = itrResDX11->second;
 
@@ -318,17 +318,7 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		double d_time;
 		memcpy(&d_time, &_time, sizeof(double));
 		gres.res_dvalues["LASTEST_GENCALL_TIME"] = d_time;
-		gres.options["REUSE_MEMORY"] = 0;
 	};
-
-	if(gres.vm_src_id)
-
-	if (GetOption("REUSE_MEMORY") == 1)
-	{
-		UpdateGenCallTime();
-		return true;
-	}
-
 
 	//if (gres.vm_src_id == 33554445)
 	//	cout << "------33554445-----> " << gres.res_name << (uint)GetParam("NUM_ELEMENTS") << endl;

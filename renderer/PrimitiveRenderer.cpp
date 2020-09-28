@@ -1334,6 +1334,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		int pobj_id = pobj->GetObjectID();
 		lobj->GetDstObjValue(pobj_id, "_int_AssociatedVolumeID", &vobj_id);
 		lobj->GetDstObjValue(pobj_id, "_int_AssociatedTObjectID", &tobj_id);
+		lobj->GetDstObjValue(pobj_id, "_bool_visibility", &is_visible);
+		if (!is_visible)
+			continue;
 
 		VmVObjectVolume* vol_obj = (VmVObjectVolume*)find_asscociated_obj(vobj_id);
 		VmTObject* tobj = (VmTObject*)find_asscociated_obj(tobj_id);
@@ -1437,6 +1440,23 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		gpu_profile = _fncontainer->GetParamValue("_bool_GpuProfile", false);
 	}
 
+	double pcFreq;
+	auto DisplayTimes = [&print_out_routine_objs, &pcFreq](const __int64 CounterStart, const string& _test)
+	{
+		if (!print_out_routine_objs) return;
+
+		LARGE_INTEGER lIntCntEnd;
+		QueryPerformanceCounter(&lIntCntEnd);
+		double dRunTime1 = double(lIntCntEnd.QuadPart - CounterStart) / pcFreq;
+
+		cout << _test << " : " << dRunTime1 << " ms" << endl;
+	};
+	auto GetCounter = []() -> __int64
+	{
+		LARGE_INTEGER lIntCntFreq;
+		QueryPerformanceCounter(&lIntCntFreq);
+		return lIntCntFreq.QuadPart;
+	};
 	//print_out_routine_objs = true;
 #pragma endregion // Presetting of VxObject
 
@@ -1445,6 +1465,15 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	ID3D11RenderTargetView* pdxRTVOld = NULL;
 	ID3D11DepthStencilView* pdxDSVOld = NULL;
 	dx11DeviceImmContext->OMGetRenderTargets(1, &pdxRTVOld, &pdxDSVOld);
+
+	__int64 __CounterStart = 0;
+	if (gpu_profile)
+	{
+		LARGE_INTEGER li;
+		QueryPerformanceFrequency(&li);
+		pcFreq = double(li.QuadPart) / 1000.0;
+		__CounterStart = GetCounter();
+	}
 
 	// Clear Depth Stencil //
 	ID3D11DepthStencilView* dx11DSV = (ID3D11DepthStencilView*)gres_fb_depthstencil.alloc_res_ptrs[DTYPE_DSV];
@@ -1524,6 +1553,12 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	int RENDERER_LOOP = 0;
 	bool is_frag_counter_buffer = mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::DKBT;
 	bool is_MOMENT_gen_buffer = mode_OIT == MFR_MODE::MOMENT;
+
+	if (gpu_profile)
+	{
+		DisplayTimes(__CounterStart, "Clearing");
+		__CounterStart = GetCounter();
+	}
 BEGIN_RENDERER_LOOP:
 	if (gpu_profile)
 	{
@@ -1572,6 +1607,7 @@ BEGIN_RENDERER_LOOP:
 		break;
 	}
 
+	// main geometry rendering process
 	for (uint pobj_idx = 0; pobj_idx < (int)pvtrValidPrimitives->size(); pobj_idx++)
 	{
 		RenderObjInfo& render_obj_info = pvtrValidPrimitives->at(pobj_idx);
@@ -2077,8 +2113,9 @@ BEGIN_RENDERER_LOOP:
 				dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_SKBTZ_cs_5_0), NULL, 0);
 			else if (mode_OIT == MFR_MODE::DKBTZ)
 				dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_DKBTZ_cs_5_0), NULL, 0);
-			else
+			else if (mode_OIT == MFR_MODE::DKBT)
 				dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_DKBT_cs_5_0), NULL, 0);
+			else assert(0);	
 
 			//dx11DeviceImmContext->Flush();
 			dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
@@ -2095,6 +2132,7 @@ BEGIN_RENDERER_LOOP:
 
 	if (gpu_profile)
 	{
+		dx11DeviceImmContext->Flush();
 		if (is_frag_counter_buffer)
 		{
 			dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
@@ -2309,6 +2347,7 @@ BEGIN_RENDERER_LOOP:
 			
 			if (gpu_profile)
 			{
+				dx11DeviceImmContext->Flush();
 				dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
 				profile_map["end offset table generation"] = gpu_profilecount;
 				gpu_profilecount++;
@@ -2342,10 +2381,13 @@ BEGIN_RENDERER_LOOP:
 		dx11DeviceImmContext->CSSetShaderResources(10, 2, dx11SRVs_1st_pass);
 
 		UINT UAVInitialCounts = 0;
-		if(mode_OIT == MFR_MODE::SKBTZ)
+		if (mode_OIT == MFR_MODE::SKBTZ)
 			dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_SKBTZ_cs_5_0), NULL, 0);
-		else
-			dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_DKBTZ_cs_5_0), NULL, 0);
+		if (mode_OIT == MFR_MODE::DKBTZ)
+			dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_SKBTZ_cs_5_0), NULL, 0);
+		else if (mode_OIT == MFR_MODE::DKBT)
+			dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_DKBT_cs_5_0), NULL, 0);
+		else assert(0);
 
 		//dx11DeviceImmContext->Flush();
 		dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
@@ -2371,6 +2413,12 @@ RENDERER_LOOP_EXIT:
 		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
 		profile_map["end geometry pass"] = gpu_profilecount;
 		gpu_profilecount++;
+	}
+
+	if (gpu_profile)
+	{
+		DisplayTimes(__CounterStart, "Main Geometry");
+		__CounterStart = GetCounter();
 	}
 
 #pragma region // 2nd RENDERING PASS
@@ -2420,6 +2468,7 @@ RENDERER_LOOP_EXIT:
 
 		if (gpu_profile)
 		{
+			dx11DeviceImmContext->Flush();
 			dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
 			profile_map["end resolve pass"] = gpu_profilecount;
 			gpu_profilecount++;
@@ -2475,6 +2524,8 @@ RENDERER_LOOP_EXIT:
 				dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
 				profile_map["begin copy-back"] = gpu_profilecount;
 				gpu_profilecount++;
+
+				__CounterStart = GetCounter();
 			}
 			dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_fb_sys_rgba.alloc_res_ptrs[DTYPE_RES], 
 				(ID3D11Texture2D*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RES]);
@@ -2555,6 +2606,8 @@ RENDERER_LOOP_EXIT:
 				dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
 				profile_map["end copy-back"] = gpu_profilecount;
 				gpu_profilecount++;
+
+				DisplayTimes(__CounterStart, "CopyBack");
 			}
 			// TEST //
 			if (print_out_routine_objs && show_maxlayers_a_buffer_ && mode_OIT == MFR_MODE::DXAB)
