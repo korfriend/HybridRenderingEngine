@@ -31,7 +31,11 @@ bool OverlapTest(const in Fragment f_1, const in Fragment f_2)
 }
 #endif
 
+#if FRAG_MERGING == 1
 int Fragment_OrderIndependentMerge(inout Fragment f_buf, const in Fragment f_in)
+#else
+int Fragment_OrderIndependentMerge(inout Fragment f_buf, inout float opacity_sum, const in Fragment f_in)
+#endif
 {
 	float4 f_buf_fvis = ConvertUIntToFloat4(f_buf.i_vis);
 	float4 f_in_fvis = ConvertUIntToFloat4(f_in.i_vis);
@@ -44,9 +48,11 @@ int Fragment_OrderIndependentMerge(inout Fragment f_buf, const in Fragment f_in)
 	f_buf.z = max(f_buf.z, f_in.z);
 	f_buf.zthick = f_buf.z - z_front;
 #else
+	// in this case (FRAG_MERGING == 0), only for tail fragment
 	f_buf.z = min(f_buf.z, f_in.z);
-	float4 f_mix_vis = MixOpt(f_buf_fvis, 1.f, f_in_fvis, 1.f);
+	float4 f_mix_vis = MixOpt(f_buf_fvis, opacity_sum, f_in_fvis, f_in_fvis.a);
 	f_buf.i_vis = ConvertFloat4ToUInt(f_mix_vis);
+	opacity_sum = opacity_sum + f_in_fvis.a;
 #endif
 	return 0;
 }
@@ -70,7 +76,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 
 	uint iv_rgba = ConvertFloat4ToUInt(v_rgba);
 
-	uint bytes_per_frag = 4 * NUM_ELES_PER_FRAG;
+	uint bytes_per_frag = 4 * NUM_ELES_PER_FRAG; 
 #if DYNAMIC_K_MODE == 1
 	uint offsettable_idx = tex2d_xy.y * g_cbCamState.rt_width + tex2d_xy.x; // num of frags
 	if(offsettable_idx == 0) EXIT;
@@ -113,9 +119,16 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 	Fragment f_coremax = (Fragment)0;
 
 	Fragment frag_tail; // unless TAIL_HANDLING, then use this as max core fragment
+#if FRAG_MERGING == 0 && TAIL_HANDLING == 1
+	float tail_opacity_sum = 0;
+#endif
 	if (frag_cnt == k_value)
 	{
 		GET_FRAG(frag_tail, addr_base, k_value - 1);
+#if FRAG_MERGING == 0 && TAIL_HANDLING == 1
+		// +8 is okay because NUM_ELES_PER_FRAG is 3 when TAIL_HANDLING == 1
+		tail_opacity_sum = asfloat(deep_k_buf.Load(addr_base + (k_value - 1) * NUM_ELES_PER_FRAG * 4 + 8));
+#endif
 	}
 	else
 	{
@@ -149,13 +162,17 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 		// this routine implies that frag_tail.i_vis > 0 and frag_tail.z is finite
 		// update the merging slot
 #if TAIL_HANDLING == 1
+#if FRAG_MERGING == 1
 		Fragment_OrderIndependentMerge(f_in, frag_tail);
+#else
+		Fragment_OrderIndependentMerge(f_in, tail_opacity_sum, frag_tail);
+#endif
 		store_index = k_value - 1;
 #else
 #if FRAG_MERGING == 1
 		if (frag_tail.z > f_in.z)
 		{
-			Fragment_OrderIndependentMerge(f_in, frag_tail);
+			Fragment_OrderIndependentMerge(f_in, tail_opacity_sum, frag_tail);
 			store_index = k_value - 1;
 		}
 #endif
@@ -174,7 +191,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 			{
 				store_index = i;
 				core_max_idx = -2;
-#if NO_OVERLAP == 1 && FRAG_MERGING == 1
+#if FURTHER_OVERLAPS == 1 && FRAG_MERGING == 1
 				count_frags = f_ith.opacity_sum == 0;
 #else
 				count_frags = true;
@@ -220,7 +237,11 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 						frag_tail = f_coremax;
 					else
 #if TAIL_HANDLING == 1
+#if FRAG_MERGING == 1
 						Fragment_OrderIndependentMerge(frag_tail, f_coremax);
+#else
+						Fragment_OrderIndependentMerge(frag_tail, tail_opacity_sum, f_coremax);
+#endif
 #else
 					{
 #if FRAG_MERGING == 1
@@ -239,7 +260,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 		}
 	}
 	// memory write section
-#if NO_OVERLAP == 1 && FRAG_MERGING == 1
+#if FURTHER_OVERLAPS == 1 && FRAG_MERGING == 1
 	if (core_max_idx == -3)
 	{
 		const int overlap_idx = store_index;
@@ -265,11 +286,19 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 	if (store_index >= 0)
 	{
 		SET_FRAG(addr_base, store_index, f_in);
+
+#if FRAG_MERGING == 0 && TAIL_HANDLING == 1
+		if(store_index == (int)k_value - 1)
+			deep_k_buf.Store(addr_base + (k_value - 1) * NUM_ELES_PER_FRAG * 4 + 8, asuint(tail_opacity_sum));
+#endif
 	}
 
 	if (core_max_idx >= 0) // replace
 	{
 		SET_FRAG(addr_base, k_value - 1, frag_tail);
+#if FRAG_MERGING == 0 && TAIL_HANDLING == 1
+		deep_k_buf.Store(addr_base + (k_value - 1) * NUM_ELES_PER_FRAG * 4 + 8, asuint(tail_opacity_sum));
+#endif
 	}
 
 	if (count_frags)
@@ -432,7 +461,7 @@ __IES(ADDR + (K) * 4 * 4, 1, asuint(F.z)); }
 						{
 							store_index = i;
 							core_max_idx = -2;
-#if NO_OVERLAP == 1 && FRAG_MERGING == 1
+#if FURTHER_OVERLAPS == 1 && FRAG_MERGING == 1
 							count_frags = f_ith.opacity_sum == 0;
 #else
 							count_frags = true;
@@ -498,7 +527,7 @@ __IES(ADDR + (K) * 4 * 4, 1, asuint(F.z)); }
 				}
 
 				// memory write section
-#if NO_OVERLAP == 1 && FRAG_MERGING == 1
+#if FURTHER_OVERLAPS == 1 && FRAG_MERGING == 1
 				if (core_max_idx == -3)
 				{
 					const int overlap_idx = store_index;
@@ -547,7 +576,7 @@ __IES(ADDR + (K) * 4 * 4, 1, asuint(F.z)); }
 }
 #endif
 
-// SINGLE_LAYER 로 그려진 것을 읽고, outline 그리는 함수
+// load the result obtained by SINGLE_LAYER, and draw its outlines
 [numthreads(GRIDSIZE, GRIDSIZE, 1)]
 void OIT_PRESET(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
 {
