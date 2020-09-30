@@ -630,7 +630,7 @@ namespace grd_helper
 	void SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vobj, VmLObject* lobj, VmFnContainer* _fncontainer, const bool high_samplerate, const vmint3& vol_size, const int iso_value, const float volblk_valuerange, const int sculpt_index = -1);
 	void SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimitive* pobj, VmLObject* lobj,
 		const vmmat44f& matOS2WS, const vmmat44f& matWS2SS, const vmmat44f& matWS2PS,
-		const RenderObjInfo& rendering_obj_info, const double default_point_thickness, const double default_line_thickness);
+		const RenderObjInfo& rendering_obj_info, const double default_point_thickness, const double default_line_thickness, const double default_surfel_size);
 	void SetCb_RenderingEffect(CB_RenderingEffect& cb_reffect, VmVObject* obj, VmLObject* lobj, const RenderObjInfo& rendering_obj_info);
 	void SetCb_VolumeRenderingEffect(CB_VolumeRenderingEffect& cb_vreffect, VmVObjectVolume* vobj, VmLObject* lobj);
 	

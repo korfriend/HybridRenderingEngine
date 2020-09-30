@@ -413,6 +413,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA21004), "SR_SINGLE_LAYER_TO_DKBTZ_cs_5_0", "cs_5_0"), SR_SINGLE_LAYER_TO_DKBTZ_cs_5_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31010), "GS_ThickPoints_gs_5_0", "gs_5_0"), GS_ThickPoints_gs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31011), "GS_SurfelPoints_gs_5_0", "gs_5_0"), GS_SurfelPoints_gs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31020), "GS_ThickLines_gs_5_0", "gs_5_0"), GS_ThickLines_gs_5_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50000), "VR_RAYMAX_cs_5_0", "cs_5_0"), VR_RAYMAX_cs_5_0);
@@ -1774,7 +1775,7 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 
 void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimitive* pobj, VmLObject* lobj, 
 	const vmmat44f& matOS2WS, const vmmat44f& matWS2SS, const vmmat44f& matWS2PS, 
-	const RenderObjInfo& rendering_obj_info, const double default_point_thickness, const double default_line_thickness)
+	const RenderObjInfo& rendering_obj_info, const double default_point_thickness, const double default_line_thickness, const double default_surfel_size)
 {
 	PrimitiveData* pobj_data = pobj->GetPrimitiveData();
 
@@ -1891,14 +1892,35 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 
 	bool force_to_pointsetrender = false;
 	lobj->GetDstObjValue(pobj_id, "_bool_ForceToPointsetRender", &force_to_pointsetrender);
-	double dPointThickness = default_point_thickness;
-	double dLineThickness = default_line_thickness;
-	lobj->GetDstObjValue(pobj_id, "_double_PointThickness", &dPointThickness);
-	lobj->GetDstObjValue(pobj_id, "_double_LineThickness", &dLineThickness);
 	if (pobj_data->ptype == PrimitiveTypePOINT || force_to_pointsetrender)
+	{
+		bool is_surfel = true;
+		double dPointThickness = default_surfel_size;
+		lobj->GetDstObjValue(pobj_id, "_bool_PointToSurfel", &is_surfel);
+		if (is_surfel)
+		{
+			lobj->GetDstObjValue(pobj_id, "_double_SurfelSize", &dPointThickness);
+			if (dPointThickness <= 0)
+			{
+				vmfloat3 pos_max_ws, pos_min_ws;
+				fTransformPoint(&pos_max_ws, &((vmfloat3)pobj_data->aabb_os.pos_max), &matOS2WS);
+				fTransformPoint(&pos_min_ws, &((vmfloat3)pobj_data->aabb_os.pos_min), &matOS2WS);
+				dPointThickness = fLengthVector(&(pos_max_ws - pos_min_ws)) * 0.002f;
+			}
+		}
+		else
+		{
+			dPointThickness = default_point_thickness;
+			lobj->GetDstObjValue(pobj_id, "_double_PointThickness", &dPointThickness);
+		}
 		cb_polygon.pix_thickness = (float)(dPointThickness / 2.);
+	}
 	else if (pobj_data->ptype == PrimitiveTypeLINE)
+	{
+		double dLineThickness = default_line_thickness;
+		lobj->GetDstObjValue(pobj_id, "_double_LineThickness", &dLineThickness);
 		cb_polygon.pix_thickness = (float)(dLineThickness / 2.);
+	}
 }
 
 void grd_helper::SetCb_TMap(CB_TMAP& cb_tmap, VmTObject* tobj)

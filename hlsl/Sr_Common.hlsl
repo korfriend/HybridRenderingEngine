@@ -465,44 +465,17 @@ static float fThickness = 0.01f;
 //};
 
 [maxvertexcount(42)]
-void GS_ThickPoints___(point VS_OUTPUT input[1], inout PointStream<VS_OUTPUT> triangleStream)
+void GS_Surfels(point VS_OUTPUT input[1], inout TriangleStream<VS_OUTPUT> triangleStream)
 {
+	// later using hull shader...
 	const int nCountTriangles = 10;
 	VS_OUTPUT output = input[0];
 
 	float4 pos_center_ss = output.f4PosSS;
 	float3 pos_center_ws = output.f3PosWS;
 	float3 nrl_center_ws = output.f3VecNormalWS;
-	float3 up_center_ws = float3(1, 0, 0);
-	float3 right_center_ws = cross(nrl_center_ws, up_center_ws);
-	if (length(right_center_ws) < 0.0001f)
-	{
-		up_center_ws = float3(0, 1, 0);
-		right_center_ws = cross(nrl_center_ws, up_center_ws);
-	}
-	right_center_ws = normalize(right_center_ws);
-	up_center_ws = normalize(cross(right_center_ws, nrl_center_ws));
-
-	float4x4 mat_t_ori = m_translate(IDENTITY_MATRIX, -pos_center_ws);
-	float4x4 mat_t_cen = m_translate(IDENTITY_MATRIX, pos_center_ws);
-
-	float4x4 mat_ws2os = inverse(g_cbPobj.mat_os2ws);
-
-	float3 pos_os = TransformPoint(output.f3PosWS, mat_ws2os);
-	output.f4PosSS = mul(g_cbPobj.mat_os2ps, float4(pos_os, 1.f));
-	triangleStream.Append(output);
-	triangleStream.RestartStrip();
-}
-
-[maxvertexcount(42)]
-void GS_ThickPoints(point VS_OUTPUT input[1], inout PointStream<VS_OUTPUT> triangleStream)
-{
-	const int nCountTriangles = 10;
-	VS_OUTPUT output = input[0];
-
-	float4 pos_center_ss = output.f4PosSS;
-	float3 pos_center_ws = output.f3PosWS;
-	float3 nrl_center_ws = normalize(output.f3VecNormalWS);
+	if (length(nrl_center_ws) == 0) // no normals
+		nrl_center_ws = normalize(TransformPerspVector(float3(0, 0, 1), g_cbCamState.mat_ss2ws));
 	float3 up_center_ws = float3(1, 0, 0);
 	float3 right_center_ws = cross(nrl_center_ws, up_center_ws);
 	if (length(right_center_ws) < 0.0001f)
@@ -519,35 +492,27 @@ void GS_ThickPoints(point VS_OUTPUT input[1], inout PointStream<VS_OUTPUT> trian
 	float4x4 mat_ws2os = inverse(g_cbPobj.mat_os2ws);
 
 	float angle = 2.f * F_PI / nCountTriangles;
-	//nrl_center_ws = float3(0, 1, 0);
 	float4 qt = float4(sin(angle * 0.5f) * nrl_center_ws, cos(angle * 0.5f));
 	float4x4 mat_r = quaternion_to_matrix(qt);
-	float4x4 mat1 = m_translate(mat_r, -pos_center_ws);
-	//float4x4 mat = mul(mat_t_cen, mat_t_ori);
-	float4x4 mat = mul(mat_t_cen, mat1);
+	float4x4 mat = mul(mat_t_cen, mul(mat_r, mat_t_ori));
 
-	const float radii = 0.000;// g_cbPobj.pix_thickness;
+	const float radii = g_cbPobj.pix_thickness;
 	float3 pos_upr_ws = pos_center_ws + up_center_ws * radii;
 
-	for (int nI = 0; nI < 1; ++nI)
+	for (int nI = 0; nI < nCountTriangles; ++nI)
 	{
-		//output.f3PosWS = pos_center_ws;
-		//output.f4PosSS = pos_center_ss;
-		//triangleStream.Append(output);
+		output.f3PosWS = pos_center_ws;
+		output.f4PosSS = pos_center_ss;
+		triangleStream.Append(output);
 		
 		float3 pos_os;
-		//output.f3PosWS = pos_upr_ws;
 
-		//pos_os = TransformPoint(output.f3PosWS, mat_ws2os);
-		//output.f4PosSS = mul(g_cbPobj.mat_os2ps, float4(pos_os, 1.f));
-		//triangleStream.Append(output);
+		output.f3PosWS = pos_upr_ws;
+		pos_os = TransformPoint(output.f3PosWS, mat_ws2os);
+		output.f4PosSS = mul(g_cbPobj.mat_os2ps, float4(pos_os, 1.f));
+		triangleStream.Append(output);
 
-		float3 p0 = TransformPoint(pos_center_ws, mat_t_ori);
-		float3 p1 = TransformPoint(p0, mat_r);
-		float3 p2 = p1 + pos_center_ws;// TransformPoint(p1, mat_t_cen); // p1 + pos_center_ws;
-
-		output.f3PosWS = p2;
-
+		output.f3PosWS = pos_upr_ws = TransformPoint(pos_upr_ws, mat);
 		pos_os = TransformPoint(output.f3PosWS, mat_ws2os);
 		output.f4PosSS = mul(g_cbPobj.mat_os2ps, float4(pos_os, 1.f));
 		triangleStream.Append(output);
@@ -557,8 +522,7 @@ void GS_ThickPoints(point VS_OUTPUT input[1], inout PointStream<VS_OUTPUT> trian
 }
 
 [maxvertexcount(42)]
-//void GS_Surfels(point VS_OUTPUT input[1], inout TriangleStream<VS_OUTPUT> triangleStream)
-void GS_ThickPoints_(point VS_OUTPUT input[1], inout TriangleStream<VS_OUTPUT> triangleStream)
+void GS_ThickPoints_PixelSurfelSize(point VS_OUTPUT input[1], inout TriangleStream<VS_OUTPUT> triangleStream)
 {
 	float3 vec_up_ws = normalize(TransformPerspVector(float3(0, -1, 0), g_cbCamState.mat_ss2ws));
 	float3 vec_r_ws = normalize(TransformPerspVector(float3(1, 0, 0), g_cbCamState.mat_ss2ws));
@@ -574,7 +538,7 @@ void GS_ThickPoints_(point VS_OUTPUT input[1], inout TriangleStream<VS_OUTPUT> t
 	// note that input[0].f4PosSS (SV_POSITION) is for the rasterizer coordinate, whose range is [0, 1] different from the symentics of PS.
 	const float pixel_thicknessXss = abs(pos_w_ss.x - pos_o_ss.x);
 	const float pixel_thicknessYss = abs(pos_h_ss.y - pos_o_ss.y);
-	if (pixel_thicknessXss < 0.3 || pixel_thicknessYss < 0.3)
+	if (pixel_thicknessXss < 0.01 || pixel_thicknessYss < 0.01)
 		return;
 
 	const float pixel_thicknessX = pixel_thicknessXss / (float)g_cbCamState.rt_width * positionPointTransformed.w;
@@ -610,7 +574,7 @@ void GS_ThickPoints_(point VS_OUTPUT input[1], inout TriangleStream<VS_OUTPUT> t
 }
 
 [maxvertexcount(42)]
-void GS_ThickPoints__(point VS_OUTPUT input[1], inout TriangleStream<VS_OUTPUT> triangleStream)
+void GS_ThickPoints_Pixels(point VS_OUTPUT input[1], inout TriangleStream<VS_OUTPUT> triangleStream)
 {
 	float4 positionPointTransformed = input[0].f4PosSS;
 

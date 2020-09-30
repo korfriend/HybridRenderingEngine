@@ -695,7 +695,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	int num_moments_old = 8;
 	lobj->GetCustomParameter("_int_NumQueueLayers", data_type::dtype<int>(), &num_moments_old);
 	int num_moments = _fncontainer->GetParamValue("_int_NumQueueLayers", num_moments_old);
-	int num_safe_loopexit = _fncontainer->GetParamValue("_int_SpinLockSafeLoops", (int)100);
+	int num_safe_loopexit = _fncontainer->GetParamValue("_int_SpinLockSafeLoops", (int)1000);
 	bool is_final_renderer = _fncontainer->GetParamValue("_bool_IsFinalRenderer", true);
 	double v_thickness = _fncontainer->GetParamValue("_double_VZThickness", 0.003);
 	double v_copthickness = _fncontainer->GetParamValue("_double_CopVZThickness", 0.002);
@@ -721,6 +721,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	vmdouble4 ui_light_factors = _fncontainer->GetParamValue("_double4_ShadingFactorsForUiPrimitives", vmdouble4(0.4, 0.8, 0.2, 30)); // Emission, Diffusion, Specular, Specular Power
 
 	double default_point_thickness = _fncontainer->GetParamValue("_double_PointThickness", 3.0);
+	double default_surfel_size = _fncontainer->GetParamValue("_double_SurfelSize", 0.0);
 	double default_line_thickness = _fncontainer->GetParamValue("_double_LineThickness", 2.0);
 	vmdouble3 default_color_cmmobj = _fncontainer->GetParamValue("_double3_CmmGlobalColor", vmdouble3(-1, -1, -1));
 
@@ -770,11 +771,13 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		dx11CommonParams->dx11DeviceImmContext->CSSetShader(NULL, NULL, 0);
 
 #define VS_NUM 5
+#define GS_NUM 3
 #define PS_NUM 31
 #define CS_NUM 14
 #define SET_VS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(VERTEX_SHADER, NAME), __S, true)
 #define SET_PS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(PIXEL_SHADER, NAME), __S, true)
 #define SET_CS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(COMPUTE_SHADER, NAME), __S, true)
+#define SET_GS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GEOMETRY_SHADER, NAME), __S, true)
 		
 		string strNames_VS[VS_NUM] = {
 			   "SR_OIT_P_vs_5_0"
@@ -811,7 +814,40 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			}
 		}
 		/**/
-		
+
+		string strNames_GS[GS_NUM] = {
+			   "GS_ThickPoints_gs_5_0"
+			  ,"GS_SurfelPoints_gs_5_0"
+			  ,"GS_ThickLines_gs_5_0"
+		};
+
+		for (int i = 0; i < GS_NUM; i++)
+		{
+			string strName = strNames_GS[i];
+
+			FILE* pFile;
+			if (fopen_s(&pFile, (prefix_path + strName).c_str(), "rb") == 0)
+			{
+				fseek(pFile, 0, SEEK_END);
+				ullong ullFileSize = ftell(pFile);
+				fseek(pFile, 0, SEEK_SET);
+				byte* pyRead = new byte[ullFileSize];
+				fread(pyRead, sizeof(byte), ullFileSize, pFile);
+				fclose(pFile);
+
+				ID3D11GeometryShader* dx11GShader = NULL;
+				if (dx11CommonParams->dx11Device->CreateGeometryShader(pyRead, ullFileSize, NULL, &dx11GShader) != S_OK)
+				{
+					VMERRORMESSAGE("SHADER COMPILE FAILURE!");
+				}
+				else
+				{
+					SET_GS(strName, dx11GShader);
+				}
+				VMSAFE_DELETEARRAY(pyRead);
+			}
+		}
+
 		string strNames_PS[PS_NUM] = {
 			   "SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0"
 			  ,"SR_OIT_FILL_SKBTZ_DASHEDLINE_ps_5_0"
@@ -1443,19 +1479,19 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	double pcFreq;
 	auto DisplayTimes = [&print_out_routine_objs, &pcFreq](const __int64 CounterStart, const string& _test)
 	{
-		if (!print_out_routine_objs) return;
-
-		LARGE_INTEGER lIntCntEnd;
-		QueryPerformanceCounter(&lIntCntEnd);
-		double dRunTime1 = double(lIntCntEnd.QuadPart - CounterStart) / pcFreq;
-
-		cout << _test << " : " << dRunTime1 << " ms" << endl;
+		//if (!print_out_routine_objs) return;
+		//
+		//LARGE_INTEGER lIntCntEnd;
+		//QueryPerformanceCounter(&lIntCntEnd);
+		//double dRunTime1 = double(lIntCntEnd.QuadPart - CounterStart) / pcFreq;
+		//
+		//cout << _test << " : " << dRunTime1 << " ms" << endl;
 	};
 	auto GetCounter = []() -> __int64
 	{
-		LARGE_INTEGER lIntCntFreq;
-		QueryPerformanceCounter(&lIntCntFreq);
-		return lIntCntFreq.QuadPart;
+		//LARGE_INTEGER lIntCntFreq;
+		//QueryPerformanceCounter(&lIntCntFreq);
+		return 0;// lIntCntFreq.QuadPart;
 	};
 	//print_out_routine_objs = true;
 #pragma endregion // Presetting of VxObject
@@ -1719,7 +1755,7 @@ BEGIN_RENDERER_LOOP:
 		CB_PolygonObject cbPolygonObj;
 		cbPolygonObj.tex_map_enum = tex_map_enum;
 		vmmat44f matOS2WS = pobj->GetMatrixOS2WSf();
-		grd_helper::SetCb_PolygonObj(cbPolygonObj, pobj, lobj, matOS2WS, matWS2SS, matWS2PS, render_obj_info, default_point_thickness, default_line_thickness);
+		grd_helper::SetCb_PolygonObj(cbPolygonObj, pobj, lobj, matOS2WS, matWS2SS, matWS2PS, render_obj_info, default_point_thickness, default_line_thickness, default_surfel_size);
 		if (RENDERER_LOOP == 1 && render_obj_info.show_outline)
 		{
 			cbPolygonObj.depth_forward_bias = (float)v_discont_depth;
@@ -2138,7 +2174,7 @@ BEGIN_RENDERER_LOOP:
 
 	if (gpu_profile)
 	{
-		dx11DeviceImmContext->Flush();
+		//dx11DeviceImmContext->Flush();
 		if (is_frag_counter_buffer)
 		{
 			dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
@@ -2359,7 +2395,7 @@ BEGIN_RENDERER_LOOP:
 			
 			if (gpu_profile)
 			{
-				dx11DeviceImmContext->Flush();
+				//dx11DeviceImmContext->Flush();
 				dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
 				profile_map["end offset table generation"] = gpu_profilecount;
 				gpu_profilecount++;
@@ -2480,7 +2516,7 @@ RENDERER_LOOP_EXIT:
 
 		if (gpu_profile)
 		{
-			dx11DeviceImmContext->Flush();
+			//dx11DeviceImmContext->Flush();
 			dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
 			profile_map["end resolve pass"] = gpu_profilecount;
 			gpu_profilecount++;
@@ -2954,8 +2990,6 @@ RENDERER_LOOP_EXIT:
 	dx11DeviceImmContext->OMSetRenderTargets(1, &pdxRTVOld, pdxDSVOld);
 	VMSAFE_RELEASE(pdxRTVOld);
 	VMSAFE_RELEASE(pdxDSVOld);
-
-	//DisplayTimes("4");
 
 	iobj->SetDescriptor("vismtv_inbuilt_renderergpudx module");
 	
