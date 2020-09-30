@@ -689,6 +689,7 @@ void OIT_KDEPTH(__VS_OUT input)
 		//if(nor_len > 0)
 		//v_rgba.rgb = Ka;// float3(1, 0, 0);
 		//else
+		if (d <= 0.01) clip(-1);
 		v_rgba.a *= d;
 	}
 #else

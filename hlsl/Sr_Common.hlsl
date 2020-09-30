@@ -325,18 +325,31 @@ void TextureMaterialMap(inout float3 Ka, inout float3 Kd, inout float3 Ks, inout
     //Texture2D g_tex2D_Mat_NS : register(t13);
     //Texture2D g_tex2D_Mat_BUMP : register(t14);
     //Texture2D g_tex2D_Mat_D : register(t15);
-    if (tex_map_enum & (0x1 << 1))
-        Ka = g_tex2D_Mat_KA.SampleLevel(g_samplerLinear_wrap, pos_sample.xy, 0).bgr;
+	float alpha_wildcard = -1;
+	if (tex_map_enum & (0x1 << 1))
+	{
+		float4 load_tex = g_tex2D_Mat_KA.SampleLevel(g_samplerLinear_wrap, pos_sample.xy, 0).bgra;
+		Ka = load_tex.rgb;
+		alpha_wildcard = max(alpha_wildcard, load_tex.a);
+	}
 	if (tex_map_enum & (0x1 << 2))
-		Kd = g_tex2D_Mat_KD.SampleLevel(g_samplerLinear_wrap, pos_sample.xy, 0).bgr;
-    if (tex_map_enum & (0x1 << 3))
-        Ks = g_tex2D_Mat_KS.SampleLevel(g_samplerLinear_wrap, pos_sample.xy, 0).bgr;
-    if (tex_map_enum & (0x1 << 4))
-        Ns = g_tex2D_Mat_NS.SampleLevel(g_samplerLinear_wrap, pos_sample.xy, 0).r;
+	{
+		float4 load_tex = g_tex2D_Mat_KD.SampleLevel(g_samplerLinear_wrap, pos_sample.xy, 0).bgra;
+		Kd = load_tex.rgb;
+		alpha_wildcard = max(alpha_wildcard, load_tex.a);
+	}
+	if (tex_map_enum & (0x1 << 3))
+	{
+		Ks = g_tex2D_Mat_KS.SampleLevel(g_samplerLinear_wrap, pos_sample.xy, 0).bgr;
+	}
+	if (tex_map_enum & (0x1 << 4))
+		Ns = g_tex2D_Mat_NS.SampleLevel(g_samplerLinear_wrap, pos_sample.xy, 0).r;
 	if (tex_map_enum & (0x1 << 5))
 		bump = g_tex2D_Mat_BUMP.SampleLevel(g_samplerLinear_wrap, pos_sample.xy, 0).r;
     if (tex_map_enum & (0x1 << 6))
         d = g_tex2D_Mat_D.SampleLevel(g_samplerLinear_wrap, pos_sample.xy, 0).r;
+
+	if (alpha_wildcard >= 0) d = alpha_wildcard;
 }
 
 void MultiTextMapping(inout float4 v_rgba, inout float depthcs, float2 pos_sample, const in int letter_idx, const in float3 vec_width_ps, const in float3 vec_height_ps)

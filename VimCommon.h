@@ -1758,17 +1758,18 @@ namespace vmobjects
 		bool RemoveDstObjValue(const int dst_obj_id, const std::string& _key);
 
 		/*!
-		 * @brief dst_obj_id 단위로 저장된 parameter continer 에 값을 등록 
-		 * @param dst_obj_id [in] \n int \n parameter continer 의 Target 이 되는 Object ID
-		 * @param _key [in] \n string \n 해당 dst_obj_id 에 대해 저장되어 있는 map 의 Key
-		 * @param v_ptr [in] \n void \n dst_obj_id 의 parameter continer 에 저장할 Value 포인터
-		 * @param bytes_dstobj_value [in] \n int \n v_ptr 의 data size bytes 
-		 * @param dst_ptr [in] \n void* \n 해당 버퍼 포인터를 내부에서 관리, \n
-		 * 만약 buffer_ptr 과 같으면 allocate / copy 없이 포인트를 내부에서 사용 \n
-		 * NULL 이면 내부에서 버퍼를 할당하여 copy
-		 * @remarks 버퍼 구조체는 deallocator 가 별도로 정의되면 안 됨!!!
+		 * @brief dst_obj_id register a specific value to the parameter container
+		 * @param dst_obj_id [in] \n int \n object ID
+		 * @param _key [in] \n string \n container key
+		 * @param v_ptr [in] \n void \n value pointer
+		 * @param bytes_dstobj_value [in] \n int \n value data size bytes 
+		 * @param dst_ptr [in] \n void* \n the value pointer (allocated in memory) will be managed inside this VmLObject, \n
+		 * if the dst_ptr is the same as the buffer_ptr allocated in this VmLObject, the pointer will be used without 'allocate and copy' \n
+		 * if the dst_ptr is NULL, allocate and copy will be performed in this VmLObject
+		 * @remarks when using a user-defined data structure, do not use user-defined deallocator !!!
 		 */
 		void ReplaceOrAddDstObjValue(const int dst_obj_id, const std::string& _key, const void* v_ptr, const int bytes_dstobj_value, void* dst_ptr = NULL);
+		void ReplaceOrAddDstObjValue(const int dst_obj_id, const std::string& _key, const std::any& v, const int bytes_dstobj_value);
 
 		/*!
 		 * @brief dst_obj_id 단위로 저장된 parameter continer 의 값을 읽음
