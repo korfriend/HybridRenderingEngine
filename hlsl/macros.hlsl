@@ -209,7 +209,11 @@
 #define SET_FRAG(F_ADDR, K, F) {uint4 rb = uint4(F.i_vis, asuint(F.z), asuint(F.zthick), asuint(F.opacity_sum)); STORE4_KBUF(rb, F_ADDR, K);}
 #define SET_ZEROFRAG(F_ADDR, K) {STORE4_KBUF(0, F_ADDR, K);}
 #else
-#define NUM_ELES_PER_FRAG 2
+#if TAIL_HANDLING == 1
+#define NUM_ELES_PER_FRAG 3 // not optimal code
+#else
+#define NUM_ELES_PER_FRAG 2 // not optimal code
+#endif
 #define GET_FRAG(F, F_ADDR, K) {uint2 rb; LOAD2_KBUF(rb, F_ADDR, K); F.i_vis = rb.x; F.z = asfloat(rb.y);}
 #define SET_FRAG(F_ADDR, K, F) {uint2 rb = uint2(F.i_vis, asuint(F.z)); STORE2_KBUF(rb, F_ADDR, K);}
 #define SET_ZEROFRAG(F_ADDR, K) {STORE2_KBUF(0, F_ADDR, K);}
