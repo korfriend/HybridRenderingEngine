@@ -1600,8 +1600,8 @@ void grd_helper::SetCb_Camera(CB_CameraState& cb_cam, vmmat44f& matWS2PS, vmmat4
 	matWS2SS = dmatWS2PS * dmatPS2SS;
 	matSS2WS = (dmatSS2PS * dmatPS2CS) * dmatCS2WS;
 
-	cb_cam.mat_ss2ws = matSS2WS;
-	cb_cam.mat_ws2ss = matWS2SS;
+	cb_cam.mat_ss2ws = TRANSPOSE(matSS2WS);
+	cb_cam.mat_ws2ss = TRANSPOSE(matWS2SS);
 
 	vmfloat3 pos_cam, dir_cam;
 	ccobj->GetCameraExtStatef(&pos_cam, &dir_cam, NULL);
@@ -1684,7 +1684,7 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 	fMatrixScaling(&matScale, &vmfloat3(1.f / (float)(vol_data->vol_size.x + vol_data->vox_pitch.x * 0.00f),
 		1.f / (float)(vol_data->vol_size.y + vol_data->vox_pitch.z * 0.00f), 1.f / (float)(vol_data->vol_size.z + vol_data->vox_pitch.z * 0.00f)));
 	matVS2TS = matShift * matScale;
-	cb_volume.mat_ws2ts = vobj->GetMatrixWS2OSf() * matVS2TS;
+	cb_volume.mat_ws2ts = TRANSPOSE(vobj->GetMatrixWS2OSf() * matVS2TS);
 
 	const vmmat44f& matVS2WS = vobj->GetMatrixOS2WSf();
 
@@ -1704,7 +1704,7 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 	vmmat44f matWS2BS;
 	fMatrixWS2CS(&matWS2BS, (vmfloat3*)&fPosVObjectMinWS, (vmfloat3*)&fVecVObjectYWS, (vmfloat3*)&fVecVObjectZWS); // set
 	fTransformPoint((vmfloat3*)&cb_volume.pos_alignedvbox_max_bs, &(vmfloat3)aabb.pos_max, &(matVS2WS * matWS2BS)); // set
-	cb_volume.mat_alignedvbox_tr_ws2bs = matWS2BS;
+	cb_volume.mat_alignedvbox_tr_ws2bs = TRANSPOSE(matWS2BS);
 
 	if (vol_data->store_dtype.type_bytes == data_type::dtype<byte>().type_bytes) // char
 		cb_volume.value_range = 255.f;
@@ -1778,7 +1778,7 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 {
 	PrimitiveData* pobj_data = pobj->GetPrimitiveData();
 
-	cb_polygon.mat_os2ws = matOS2WS;
+	cb_polygon.mat_os2ws = TRANSPOSE(matOS2WS);
 
 	if (rendering_obj_info.is_annotation_obj)// && prim_data->texture_res)
 	{
@@ -1883,7 +1883,7 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 	cb_polygon.num_safe_loopexit = (uint)rendering_obj_info.num_safe_loopexit;
 
 	vmmat44f matOS2PS = matOS2WS * matWS2PS;
-	cb_polygon.mat_os2ps = matOS2PS;
+	cb_polygon.mat_os2ps = TRANSPOSE(matOS2PS);
 
 	bool is_forced_depth_front_bias = rendering_obj_info.is_wireframe;
 	pobj->GetCustomParameter("_bool_IsForcedDepthBias", data_type::dtype<bool>(), &is_forced_depth_front_bias);
@@ -2090,7 +2090,7 @@ void grd_helper::SetCb_ClipInfo(CB_ClipInfo& cb_clip, VmVObject* obj, VmLObject*
 			&& lobj->GetDstObjValue(obj_id, "_double3_PosClipBoxMaxWS", &dPosOrthoMaxBox))
 		{
 			TransformPoint(&dPosOrthoMaxBox, &dPosOrthoMaxBox, &dmatClipWS2BS);
-			cb_clip.mat_clipbox_ws2bs = (vmmat44f)dmatClipWS2BS;
+			cb_clip.mat_clipbox_ws2bs = TRANSPOSE((vmmat44f)dmatClipWS2BS);
 			cb_clip.pos_clipbox_max_bs = vmfloat3(dPosOrthoMaxBox);
 		}
 	}

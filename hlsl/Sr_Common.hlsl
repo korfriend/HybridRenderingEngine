@@ -68,8 +68,9 @@ struct PS_OUTPUT
 
 VS_OUTPUT CommonVS_P(float3 f3Pos : POSITION)
 {
-    VS_OUTPUT vout = (VS_OUTPUT) 0;
-    vout.f4PosSS = mul(float4(f3Pos, 1.f), g_cbPobj.mat_os2ps);
+	VS_OUTPUT vout = (VS_OUTPUT)0;
+	//vout.f4PosSS = mul(float4(f3Pos, 1.f), g_cbPobj.mat_os2ps);
+	vout.f4PosSS = mul(g_cbPobj.mat_os2ps, float4(f3Pos, 1.f));
     vout.f3PosWS = TransformPoint(f3Pos, g_cbPobj.mat_os2ws);
     vout.f3VecNormalWS = (float3) 0;
     vout.f3Custom = (float3) 0;//g_cbPobj.fcolor.rgb;
@@ -79,10 +80,11 @@ VS_OUTPUT CommonVS_P(float3 f3Pos : POSITION)
 
 VS_OUTPUT CommonVS_PN(VS_INPUT_PN input)
 {
-    VS_OUTPUT vout = (VS_OUTPUT) 0;
-    vout.f4PosSS = mul(float4(input.f3PosOS, 1.f), g_cbPobj.mat_os2ps);
+	VS_OUTPUT vout = (VS_OUTPUT)0;
+	//vout.f4PosSS = mul(float4(input.f3PosOS, 1.f), g_cbPobj.mat_os2ps);
+	vout.f4PosSS = mul(g_cbPobj.mat_os2ps, float4(input.f3PosOS, 1.f));
     vout.f3PosWS = TransformPoint(input.f3PosOS, g_cbPobj.mat_os2ws);
-    vout.f3VecNormalWS = normalize(TransformVector(input.f3VecNormalOS, g_cbPobj.mat_os2ws));
+	vout.f3VecNormalWS = normalize(TransformVector(input.f3VecNormalOS, g_cbPobj.mat_os2ws));
     vout.f3Custom = (float3) 0; //g_cbPobj.fcolor.rgb;
     //vout.f4PosSS.z -= g_cbPobj.depth_forward_bias;
     return vout;
@@ -90,8 +92,9 @@ VS_OUTPUT CommonVS_PN(VS_INPUT_PN input)
 
 VS_OUTPUT CommonVS_PT(VS_INPUT_PT input)
 {
-    VS_OUTPUT vout = (VS_OUTPUT) 0;
-    vout.f4PosSS = mul(float4(input.f3PosOS, 1.f), g_cbPobj.mat_os2ps);
+	VS_OUTPUT vout = (VS_OUTPUT)0;
+	//vout.f4PosSS = mul(float4(input.f3PosOS, 1.f), g_cbPobj.mat_os2ps);
+	vout.f4PosSS = mul(g_cbPobj.mat_os2ps, float4(input.f3PosOS, 1.f));
     vout.f3PosWS = TransformPoint(input.f3PosOS, g_cbPobj.mat_os2ws);
     vout.f3VecNormalWS = (float3) 0;
    // if (g_cbPobj.pobj_flag & (0x1 << 3))
@@ -105,7 +108,7 @@ VS_OUTPUT CommonVS_PT(VS_INPUT_PT input)
 VS_OUTPUT CommonVS_PNT(VS_INPUT_PNT input)
 {
     VS_OUTPUT vout = (VS_OUTPUT) 0;
-    vout.f4PosSS = mul(float4(input.f3PosOS, 1.f), g_cbPobj.mat_os2ps);
+    vout.f4PosSS = mul(g_cbPobj.mat_os2ps, float4(input.f3PosOS, 1.f));
     vout.f3PosWS = TransformPoint(input.f3PosOS, g_cbPobj.mat_os2ws);
     vout.f3VecNormalWS = normalize(TransformVector(input.f3VecNormalOS, g_cbPobj.mat_os2ws));
     //if (g_cbPobj.pobj_flag & (0x1 << 3))
@@ -119,7 +122,7 @@ VS_OUTPUT CommonVS_PNT(VS_INPUT_PNT input)
 VS_OUTPUT_TTT CommonVS_PTTT(VS_INPUT_PTTT input)
 {
     VS_OUTPUT_TTT vout = (VS_OUTPUT_TTT) 0;
-    vout.f4PosSS = mul(float4(input.f3PosOS, 1.f), g_cbPobj.mat_os2ps);
+    vout.f4PosSS = mul(g_cbPobj.mat_os2ps, float4(input.f3PosOS, 1.f));
     vout.f3PosWS = TransformPoint(input.f3PosOS, g_cbPobj.mat_os2ws);
     vout.f3Custom0 = input.f3Custom0;
     vout.f3Custom1 = TransformPerspVector(input.f3Custom1, g_cbPobj.mat_os2ps);
@@ -453,15 +456,133 @@ static const float PI = 3.1415926f;
 static const float fRatio = 2.0f;
 static float fThickness = 0.01f;
 
+//struct VS_OUTPUT
+//{
+//	float4 f4PosSS : SV_POSITION;
+//	float3 f3VecNormalWS : NORMAL;
+//	float3 f3PosWS : TEXCOORD0;
+//	float3 f3Custom : TEXCOORD1;
+//};
+
 [maxvertexcount(42)]
-void GS_ThickPoints(point VS_OUTPUT input[1], inout TriangleStream<VS_OUTPUT> triangleStream)
+void GS_ThickPoints___(point VS_OUTPUT input[1], inout PointStream<VS_OUTPUT> triangleStream)
 {
-    float4 positionPointTransformed = input[0].f4PosSS;
+	const int nCountTriangles = 10;
+	VS_OUTPUT output = input[0];
+
+	float4 pos_center_ss = output.f4PosSS;
+	float3 pos_center_ws = output.f3PosWS;
+	float3 nrl_center_ws = output.f3VecNormalWS;
+	float3 up_center_ws = float3(1, 0, 0);
+	float3 right_center_ws = cross(nrl_center_ws, up_center_ws);
+	if (length(right_center_ws) < 0.0001f)
+	{
+		up_center_ws = float3(0, 1, 0);
+		right_center_ws = cross(nrl_center_ws, up_center_ws);
+	}
+	right_center_ws = normalize(right_center_ws);
+	up_center_ws = normalize(cross(right_center_ws, nrl_center_ws));
+
+	float4x4 mat_t_ori = m_translate(IDENTITY_MATRIX, -pos_center_ws);
+	float4x4 mat_t_cen = m_translate(IDENTITY_MATRIX, pos_center_ws);
+
+	float4x4 mat_ws2os = inverse(g_cbPobj.mat_os2ws);
+
+	float3 pos_os = TransformPoint(output.f3PosWS, mat_ws2os);
+	output.f4PosSS = mul(g_cbPobj.mat_os2ps, float4(pos_os, 1.f));
+	triangleStream.Append(output);
+	triangleStream.RestartStrip();
+}
+
+[maxvertexcount(42)]
+void GS_ThickPoints(point VS_OUTPUT input[1], inout PointStream<VS_OUTPUT> triangleStream)
+{
+	const int nCountTriangles = 10;
+	VS_OUTPUT output = input[0];
+
+	float4 pos_center_ss = output.f4PosSS;
+	float3 pos_center_ws = output.f3PosWS;
+	float3 nrl_center_ws = normalize(output.f3VecNormalWS);
+	float3 up_center_ws = float3(1, 0, 0);
+	float3 right_center_ws = cross(nrl_center_ws, up_center_ws);
+	if (length(right_center_ws) < 0.0001f)
+	{
+		up_center_ws = float3(0, 1, 0);
+		right_center_ws = cross(nrl_center_ws, up_center_ws);
+	}
+	right_center_ws = normalize(right_center_ws);
+	up_center_ws = normalize(cross(right_center_ws, nrl_center_ws));
+
+	float4x4 mat_t_ori = m_translate(IDENTITY_MATRIX, -pos_center_ws);
+	float4x4 mat_t_cen = m_translate(IDENTITY_MATRIX, pos_center_ws);
+
+	float4x4 mat_ws2os = inverse(g_cbPobj.mat_os2ws);
+
+	float angle = 2.f * F_PI / nCountTriangles;
+	//nrl_center_ws = float3(0, 1, 0);
+	float4 qt = float4(sin(angle * 0.5f) * nrl_center_ws, cos(angle * 0.5f));
+	float4x4 mat_r = quaternion_to_matrix(qt);
+	float4x4 mat1 = m_translate(mat_r, -pos_center_ws);
+	//float4x4 mat = mul(mat_t_cen, mat_t_ori);
+	float4x4 mat = mul(mat_t_cen, mat1);
+
+	const float radii = 0.000;// g_cbPobj.pix_thickness;
+	float3 pos_upr_ws = pos_center_ws + up_center_ws * radii;
+
+	for (int nI = 0; nI < 1; ++nI)
+	{
+		//output.f3PosWS = pos_center_ws;
+		//output.f4PosSS = pos_center_ss;
+		//triangleStream.Append(output);
+		
+		float3 pos_os;
+		//output.f3PosWS = pos_upr_ws;
+
+		//pos_os = TransformPoint(output.f3PosWS, mat_ws2os);
+		//output.f4PosSS = mul(g_cbPobj.mat_os2ps, float4(pos_os, 1.f));
+		//triangleStream.Append(output);
+
+		float3 p0 = TransformPoint(pos_center_ws, mat_t_ori);
+		float3 p1 = TransformPoint(p0, mat_r);
+		float3 p2 = p1 + pos_center_ws;// TransformPoint(p1, mat_t_cen); // p1 + pos_center_ws;
+
+		output.f3PosWS = p2;
+
+		pos_os = TransformPoint(output.f3PosWS, mat_ws2os);
+		output.f4PosSS = mul(g_cbPobj.mat_os2ps, float4(pos_os, 1.f));
+		triangleStream.Append(output);
+		
+		triangleStream.RestartStrip();
+	}
+}
+
+[maxvertexcount(42)]
+//void GS_Surfels(point VS_OUTPUT input[1], inout TriangleStream<VS_OUTPUT> triangleStream)
+void GS_ThickPoints_(point VS_OUTPUT input[1], inout TriangleStream<VS_OUTPUT> triangleStream)
+{
+	float3 vec_up_ws = normalize(TransformPerspVector(float3(0, -1, 0), g_cbCamState.mat_ss2ws));
+	float3 vec_r_ws = normalize(TransformPerspVector(float3(1, 0, 0), g_cbCamState.mat_ss2ws));
+
+	float3 pos_w_ws = input[0].f3PosWS + vec_r_ws * g_cbPobj.pix_thickness;
+	float3 pos_h_ws = input[0].f3PosWS + vec_up_ws * g_cbPobj.pix_thickness;
+
+	float3 pos_o_ss = TransformPoint(input[0].f3PosWS, g_cbCamState.mat_ws2ss);
+	float3 pos_w_ss = TransformPoint(pos_w_ws, g_cbCamState.mat_ws2ss);
+	float3 pos_h_ss = TransformPoint(pos_h_ws, g_cbCamState.mat_ws2ss);
+
+	float4 positionPointTransformed = input[0].f4PosSS;
+	// note that input[0].f4PosSS (SV_POSITION) is for the rasterizer coordinate, whose range is [0, 1] different from the symentics of PS.
+	const float pixel_thicknessXss = abs(pos_w_ss.x - pos_o_ss.x);
+	const float pixel_thicknessYss = abs(pos_h_ss.y - pos_o_ss.y);
+	if (pixel_thicknessXss < 0.3 || pixel_thicknessYss < 0.3)
+		return;
+
+	const float pixel_thicknessX = pixel_thicknessXss / (float)g_cbCamState.rt_width * positionPointTransformed.w;
+	const float pixel_thicknessY = pixel_thicknessYss / (float)g_cbCamState.rt_height * positionPointTransformed.w;
 
     const int nCountTriangles = 10;
     VS_OUTPUT output = input[0];
-    const float pixel_thicknessX = g_cbPobj.pix_thickness / (float) g_cbCamState.rt_width * positionPointTransformed.w;
-    const float pixel_thicknessY = g_cbPobj.pix_thickness / (float) g_cbCamState.rt_height * positionPointTransformed.w;
+
     for (int nI = 0; nI < nCountTriangles; ++nI)
     {
         output.f4PosSS = positionPointTransformed;
@@ -486,6 +607,41 @@ void GS_ThickPoints(point VS_OUTPUT input[1], inout TriangleStream<VS_OUTPUT> tr
 
         triangleStream.RestartStrip();
     }
+}
+
+[maxvertexcount(42)]
+void GS_ThickPoints__(point VS_OUTPUT input[1], inout TriangleStream<VS_OUTPUT> triangleStream)
+{
+	float4 positionPointTransformed = input[0].f4PosSS;
+
+	const int nCountTriangles = 10;
+	VS_OUTPUT output = input[0];
+	const float pixel_thicknessX = g_cbPobj.pix_thickness / (float)g_cbCamState.rt_width * positionPointTransformed.w;
+	const float pixel_thicknessY = g_cbPobj.pix_thickness / (float)g_cbCamState.rt_height * positionPointTransformed.w;
+	for (int nI = 0; nI < nCountTriangles; ++nI)
+	{
+		output.f4PosSS = positionPointTransformed;
+		output.f4PosSS.x += cos(0 + (2 * PI / nCountTriangles * nI)) * pixel_thicknessX;
+		output.f4PosSS.y += sin(0 + (2 * PI / nCountTriangles * nI)) * pixel_thicknessY;
+		//output.f4PosSS.z = 0.0f;
+		//output.f4PosSS.w = 0.0f;
+		//output.f4PosSS += positionPointTransformed;
+		//output.f4PosSS *= positionPointTransformed.w;
+		triangleStream.Append(output);
+
+		output.f4PosSS = positionPointTransformed;
+		triangleStream.Append(output);
+
+		output.f4PosSS.x += cos(0 + (2 * PI / nCountTriangles * (nI + 1))) * pixel_thicknessX;
+		output.f4PosSS.y += sin(0 + (2 * PI / nCountTriangles * (nI + 1))) * pixel_thicknessY;
+		//output.f4PosSS.z = 0.0f;
+		//output.f4PosSS.w = 0.0f;
+		//output.f4PosSS += positionPointTransformed;
+		//output.f4PosSS *= positionPointTransformed.w;
+		triangleStream.Append(output);
+
+		triangleStream.RestartStrip();
+	}
 }
 
 void addHalfCircle(inout TriangleStream<VS_OUTPUT> triangleStream, VS_OUTPUT input, int nCountTriangles, float4 linePointToConnect, float fPointWComponent, float fAngle, float pixel_thicknessX, float pixel_thicknessY)

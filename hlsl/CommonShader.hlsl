@@ -1,4 +1,5 @@
 #include "macros.hlsl"
+#include "Matrix.hlsl"
 
 #define FLT_MAX 3.402823466e+38F
 #define FLT_COMP_MAX 3.402823466e+30F
@@ -275,27 +276,32 @@ cbuffer cbGlobalParams : register(b7)
 //=====================
 float3 TransformPoint(const in float3 pos_src, const in float4x4 matT)
 {
-    float4 pos_src_h = mul(float4(pos_src, 1.f), matT);
+	//float4 pos_src_h = mul(float4(pos_src, 1.f), matT);
+	float4 pos_src_h = mul(matT, float4(pos_src, 1.f));
     return pos_src_h.xyz / pos_src_h.w;
 }
 
 float3 TransformVector(const in float3 vec_src, const in float4x4 matT)
 {
-    return mul(vec_src, (float3x3) matT);
+	//return mul(vec_src, (float3x3) matT);
+	return mul((float3x3) matT, vec_src);
 }
 
 float3 TransformPerspVector(const in float3 vec_src, const in float4x4 matT)
 {
-    float4 f4PosOrigin = mul(float4(0, 0, 0, 1), matT);
+	//float4 f4PosOrigin = mul(float4(0, 0, 0, 1), matT);
+	float4 f4PosOrigin = mul(matT, float4(0, 0, 0, 1));
     float3 f3PosOrigin = f4PosOrigin.xyz / f4PosOrigin.w;
-    float4 f4PosDistance = mul(float4(vec_src, 1.f), matT);
+	//float4 f4PosDistance = mul(float4(vec_src, 1.f), matT);
+	float4 f4PosDistance = mul(matT, float4(vec_src, 1.f));
     float3 f3PosDistance = f4PosDistance.xyz / f4PosDistance.w;
     return f3PosDistance - f3PosOrigin;
 }
 
 float3 TransformVectorWoPerspective(const in float3 vec_src, const in float4x4 matT)
 {
-    return mul(vec_src, (float3x3)matT);
+	//return mul(vec_src, (float3x3)matT);
+	return mul((float3x3)matT, vec_src);
 }
 
 float4 BlendFloat4AndFloat4(const in float4 fColor1, const in float4 fColor2)

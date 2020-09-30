@@ -15,6 +15,7 @@ using namespace fncontainer;
 #define __ID3D11DeviceContext ID3D11DeviceContext
 #endif
 
+#define TRANSPOSE(A) glm::transpose(A)
 
 namespace grd_helper
 {
@@ -425,8 +426,8 @@ namespace grd_helper
 		vmfloat4 ltint_diffuse;
 		vmfloat4 ltint_spec;
 
-		vmmat44f	shadowmap_mat_ws2ls;	// for shadow : Sample Depth Map
-		vmmat44f	shadowmap_mat_ws2wls;	// for shadow : Depth Comparison And Storage
+		vmmat44f	mat_ws2ls_smap;	// for shadow : Sample Depth Map
+		vmmat44f	mat_ws2wls_smap;	// for shadow : Depth Comparison And Storage
 
 		float r_kernel_ao;
 		int num_dirs;
