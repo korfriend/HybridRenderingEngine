@@ -1894,11 +1894,10 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 	lobj->GetDstObjValue(pobj_id, "_bool_ForceToPointsetRender", &force_to_pointsetrender);
 	if (pobj_data->ptype == PrimitiveTypePOINT || force_to_pointsetrender)
 	{
-		bool is_surfel = true;
-		double dPointThickness = default_surfel_size;
-		lobj->GetDstObjValue(pobj_id, "_bool_PointToSurfel", &is_surfel);
-		if (is_surfel)
+		double dPointThickness = 0;
+		if (default_surfel_size >= 0)
 		{
+			dPointThickness = default_surfel_size;
 			lobj->GetDstObjValue(pobj_id, "_double_SurfelSize", &dPointThickness);
 			if (dPointThickness <= 0)
 			{

@@ -1662,15 +1662,17 @@ BEGIN_RENDERER_LOOP:
 		bool cull_off = false;
 		bool is_clip_free = false;
 		bool apply_shadingfactors = true;
+		bool is_surfel = true;
 		int vobj_id = 0, tobj_id = 0;
 		pobj->GetCustomParameter("_bool_IsForcedCullOff", data_type::dtype<bool>(), &cull_off);
 		lobj->GetDstObjValue(pobj_id, "_int_AssociatedVolumeID", &vobj_id);
 		lobj->GetDstObjValue(pobj_id, "_int_AssociatedTObjectID", &tobj_id);
+		lobj->GetDstObjValue(pobj_id, "_bool_PointToSurfel", &is_surfel);
 		bool with_vobj = false;
 		auto itrGpuVolume = mapGpuRes_VolumeAndTMap.find(vobj_id);
 		auto itrGpuTObject = mapGpuRes_VolumeAndTMap.find(tobj_id);
 		with_vobj = itrGpuVolume != mapGpuRes_VolumeAndTMap.end() && itrGpuTObject != mapGpuRes_VolumeAndTMap.end();
-		
+
 		if (with_vobj)
 		{
 			GpuRes& gres_vobj = itrGpuVolume->second;
@@ -1755,7 +1757,7 @@ BEGIN_RENDERER_LOOP:
 		CB_PolygonObject cbPolygonObj;
 		cbPolygonObj.tex_map_enum = tex_map_enum;
 		vmmat44f matOS2WS = pobj->GetMatrixOS2WSf();
-		grd_helper::SetCb_PolygonObj(cbPolygonObj, pobj, lobj, matOS2WS, matWS2SS, matWS2PS, render_obj_info, default_point_thickness, default_line_thickness, default_surfel_size);
+		grd_helper::SetCb_PolygonObj(cbPolygonObj, pobj, lobj, matOS2WS, matWS2SS, matWS2PS, render_obj_info, default_point_thickness, default_line_thickness, is_surfel? default_surfel_size : -1.0);
 		if (RENDERER_LOOP == 1 && render_obj_info.show_outline)
 		{
 			cbPolygonObj.depth_forward_bias = (float)v_discont_depth;
