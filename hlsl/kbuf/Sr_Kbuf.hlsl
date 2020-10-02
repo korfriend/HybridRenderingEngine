@@ -95,6 +95,15 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 	f_in.opacity_sum = v_rgba.a;
 #endif
 
+#if FRAG_MERGING == 0 && TAIL_HANDLING == 1
+	// bound + offset
+#if DYNAMIC_K_MODE == 1
+	uint addr_tail = (g_cbCamState.rt_width * g_cbCamState.rt_height * k_value * NUM_ELES_PER_FRAG) * 4 + addr_base / bytes_per_frag * 4;
+#else
+	uint addr_tail = (g_cbCamState.rt_width * g_cbCamState.rt_height * k_value * NUM_ELES_PER_FRAG) * 4 + addr_base / bytes_frags_per_pixel * 4;
+#endif
+#endif
+
 	// critical section
 	// pixel synchronization
 	// note that the quality is the same as the DFB-Abuffer if k equals max-frags
@@ -126,8 +135,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 	{
 		GET_FRAG(frag_tail, addr_base, k_value - 1);
 #if FRAG_MERGING == 0 && TAIL_HANDLING == 1
-		// +8 is okay because NUM_ELES_PER_FRAG is 3 when TAIL_HANDLING == 1
-		tail_opacity_sum = asfloat(deep_k_buf.Load(addr_base + (k_value - 1) * NUM_ELES_PER_FRAG * 4 + 8));
+		tail_opacity_sum = asfloat(deep_k_buf.Load(addr_tail));
 #endif
 	}
 	else
@@ -289,7 +297,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 
 #if FRAG_MERGING == 0 && TAIL_HANDLING == 1
 		if(store_index == (int)k_value - 1)
-			deep_k_buf.Store(addr_base + (k_value - 1) * NUM_ELES_PER_FRAG * 4 + 8, asuint(tail_opacity_sum));
+			deep_k_buf.Store(addr_tail, asuint(tail_opacity_sum));
 #endif
 	}
 
@@ -297,7 +305,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 	{
 		SET_FRAG(addr_base, k_value - 1, frag_tail);
 #if FRAG_MERGING == 0 && TAIL_HANDLING == 1
-		deep_k_buf.Store(addr_base + (k_value - 1) * NUM_ELES_PER_FRAG * 4 + 8, asuint(tail_opacity_sum));
+		deep_k_buf.Store(addr_tail, asuint(tail_opacity_sum));
 #endif
 	}
 
@@ -316,8 +324,12 @@ RWByteAddressBuffer deep_k_buf : register(u4);
 void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4 v_rgba, const in float z_depth, const in float z_thickness)
 {
 	if (z_depth > FLT_LARGE || v_rgba.a == 0)
+#if DO_NOT_USE_DISCARD
+		return;
+#else
 		clip(-1);
-	
+#endif
+
 	uint __dummy;
 	uint iv_rgba = ConvertFloat4ToUInt(v_rgba);
 
@@ -338,6 +350,15 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 #if FRAG_MERGING == 1
 	f_in.zthick = z_thickness;
 	f_in.opacity_sum = v_rgba.a;
+#endif
+
+#if FRAG_MERGING == 0 && TAIL_HANDLING == 1
+	// bound + offset
+#if DYNAMIC_K_MODE == 1
+	uint addr_tail = (g_cbCamState.rt_width * g_cbCamState.rt_height * k_value * NUM_ELES_PER_FRAG) * 4 + addr_base / bytes_per_frag * 4;
+#else
+	uint addr_tail = (g_cbCamState.rt_width * g_cbCamState.rt_height * k_value * NUM_ELES_PER_FRAG) * 4 + addr_base / bytes_frags_per_pixel * 4;
+#endif
 #endif
 
 #if STRICT_LOCKED == 1
@@ -400,10 +421,16 @@ __IES(ADDR + (K) * 4 * 4, 1, asuint(F.z)); }
 				Fragment f_coremax = (Fragment)0;
 
 				Fragment frag_tail;
+#if FRAG_MERGING == 0 && TAIL_HANDLING == 1
+				float tail_opacity_sum = 0;
+#endif
 
 				if (frag_cnt == k_value)
 				{
 					GET_FRAG(frag_tail, addr_base, k_value - 1);
+#if FRAG_MERGING == 0 && TAIL_HANDLING == 1
+					tail_opacity_sum = asfloat(deep_k_buf.Load(addr_tail));
+#endif
 				}
 				else
 				{
@@ -436,7 +463,11 @@ __IES(ADDR + (K) * 4 * 4, 1, asuint(F.z)); }
 					// this routine implies that frag_tail.i_vis > 0 and frag_tail.z is finite
 					// update the merging slot
 #if TAIL_HANDLING == 1
+#if FRAG_MERGING == 1
 					Fragment_OrderIndependentMerge(f_in, frag_tail);
+#else
+					Fragment_OrderIndependentMerge(f_in, tail_opacity_sum, frag_tail);
+#endif
 					store_index = k_value - 1;
 #else
 #if FRAG_MERGING == 1
@@ -507,7 +538,11 @@ __IES(ADDR + (K) * 4 * 4, 1, asuint(F.z)); }
 									frag_tail = f_coremax;
 								else
 #if TAIL_HANDLING == 1
+#if FRAG_MERGING == 1
 									Fragment_OrderIndependentMerge(frag_tail, f_coremax);
+#else
+									Fragment_OrderIndependentMerge(frag_tail, tail_opacity_sum, f_coremax);
+#endif
 #else
 								{
 #if FRAG_MERGING == 1
@@ -553,11 +588,21 @@ __IES(ADDR + (K) * 4 * 4, 1, asuint(F.z)); }
 				if (store_index >= 0)
 				{
 					__SET_FRAG(addr_base, store_index, f_in);
+
+#if FRAG_MERGING == 0 && TAIL_HANDLING == 1
+					if (store_index == (int)k_value - 1)
+						__IES(addr_tail, 0, asuint(tail_opacity_sum));
+#endif
 				}
 
 				if (core_max_idx >= 0) // replace
 				{
 					__SET_FRAG(addr_base, k_value - 1, frag_tail);
+
+#if FRAG_MERGING == 0 && TAIL_HANDLING == 1
+					if (store_index == (int)k_value - 1)
+						__IES(addr_tail, 0, asuint(tail_opacity_sum));
+#endif
 				}
 
 				if (count_frags)
