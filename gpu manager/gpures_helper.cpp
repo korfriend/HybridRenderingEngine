@@ -1041,7 +1041,7 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 	auto CheckReusability = [&pobj](GpuRes& gres, bool& update_data, bool& regen_data,
 		const std::map<std::string, double>& res_new_dvalues)
 	{
-		auto it = gres.res_dvalues.find("LASTEST_GENCALL_TIME");
+		auto it = gres.res_dvalues.find("LAST_UPDATE_TIME");
 		unsigned long long _gpu_gen_timg = 0;
 		if (it != gres.res_dvalues.end())
 			_gpu_gen_timg = *(unsigned long long*)&it->second;

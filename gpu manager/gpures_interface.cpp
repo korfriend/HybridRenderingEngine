@@ -268,11 +268,6 @@ bool __UpdateGpuResource(GpuRes& gres)
 	if (itrResDX11 == g_mapVmResources.end())
 		return false;
 	
-	itrResDX11->second.res_dvalues["LASTEST_GENCALL_TIME"] = 0;
-	unsigned long long _time = vmhelpers::GetCurrentTimePack();
-	double d_time;
-	memcpy(&d_time, &_time, sizeof(double));
-	itrResDX11->second.res_dvalues["LASTEST_GENCALL_TIME"] = d_time;
 	//gres.alloc_res_ptrs = itrResDX11->second.alloc_res_ptrs;
 	gres = itrResDX11->second;
 
@@ -309,15 +304,6 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 			return 0;
 		}
 		return it->second;
-	};
-
-	auto UpdateGenCallTime = [&]()
-	{
-		//gres.res_dvalues["LASTEST_GENCALL_TIME"] = 0;
-		unsigned long long _time = vmhelpers::GetCurrentTimePack();
-		double d_time;
-		memcpy(&d_time, &_time, sizeof(double));
-		gres.res_dvalues["LASTEST_GENCALL_TIME"] = d_time;
 	};
 
 	//if (gres.vm_src_id == 33554445)
@@ -559,8 +545,12 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		gres.alloc_res_ptrs[DTYPE_UAV] = (void*)pdx11View;
 	}
 
+	//gres.res_dvalues["LAST_UPDATE_TIME"] = 0;
+	unsigned long long _time = vmhelpers::GetCurrentTimePack();
+	double d_time;
+	memcpy(&d_time, &_time, sizeof(double));
+	gres.res_dvalues["LAST_UPDATE_TIME"] = d_time;
 	g_mapVmResources[RES_INDICATOR(gres)] = gres;
-	UpdateGenCallTime();
 
 	return true;
 }

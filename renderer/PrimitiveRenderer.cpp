@@ -1955,7 +1955,7 @@ BEGIN_RENDERER_LOOP:
 		case PrimitiveTypePOINT:
 			pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_POINTLIST;
 			if (cbPolygonObj.pix_thickness > 0)
-				dx11GS_Target = GETGS(GS_ThickPoints_gs_5_0);
+				dx11GS_Target = is_surfel? GETGS(GS_SurfelPoints_gs_5_0) : GETGS(GS_ThickPoints_gs_5_0);
 			break;
 		default:
 			continue;
@@ -1970,7 +1970,7 @@ BEGIN_RENDERER_LOOP:
 			dx11RState_TargetObj = GETRASTER(SOLID_NONE);
 			pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_POINTLIST;
 			if (cbPolygonObj.pix_thickness > 0)
-				dx11GS_Target = GETGS(GS_ThickPoints_gs_5_0);
+				dx11GS_Target = is_surfel ? GETGS(GS_SurfelPoints_gs_5_0) : GETGS(GS_ThickPoints_gs_5_0);
 		}
 
 		if (render_obj_info.is_wireframe)
