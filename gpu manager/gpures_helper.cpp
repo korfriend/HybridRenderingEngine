@@ -419,10 +419,19 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50000), "VR_RAYMAX_cs_5_0", "cs_5_0"), VR_RAYMAX_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50001), "VR_RAYMIN_cs_5_0", "cs_5_0"), VR_RAYMIN_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50002), "VR_RAYSUM_cs_5_0", "cs_5_0"), VR_RAYSUM_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50006), "VR_SURFACE_cs_5_0", "cs_5_0"), VR_SURFACE_cs_5_0);
+
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50003), "VR_DEFAULT_cs_5_0", "cs_5_0"), VR_DEFAULT_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50004), "VR_OPAQUE_cs_5_0", "cs_5_0"), VR_OPAQUE_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50005), "VR_CONTEXT_cs_5_0", "cs_5_0"), VR_CONTEXT_cs_5_0);
-		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50006), "VR_SURFACE_cs_5_0", "cs_5_0"), VR_SURFACE_cs_5_0);
+
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50020), "VR_DEFAULT_DKBZ_cs_5_0", "cs_5_0"), VR_DEFAULT_DKBZ_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50021), "VR_OPAQUE_DKBZ_cs_5_0", "cs_5_0"), VR_OPAQUE_DKBZ_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50022), "VR_CONTEXT_DKBZ_cs_5_0", "cs_5_0"), VR_CONTEXT_DKBZ_cs_5_0);
+
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50030), "VR_DEFAULT_DFB_cs_5_0", "cs_5_0"), VR_DEFAULT_DFB_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50031), "VR_OPAQUE_DFB_cs_5_0", "cs_5_0"), VR_OPAQUE_DFB_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50032), "VR_CONTEXT_DFB_cs_5_0", "cs_5_0"), VR_CONTEXT_DFB_cs_5_0);
 	}
 
 	g_pvmCommonParams->is_initialized = true;
@@ -1685,7 +1694,8 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 	fMatrixScaling(&matScale, &vmfloat3(1.f / (float)(vol_data->vol_size.x + vol_data->vox_pitch.x * 0.00f),
 		1.f / (float)(vol_data->vol_size.y + vol_data->vox_pitch.z * 0.00f), 1.f / (float)(vol_data->vol_size.z + vol_data->vox_pitch.z * 0.00f)));
 	matVS2TS = matShift * matScale;
-	cb_volume.mat_ws2ts = TRANSPOSE(vobj->GetMatrixWS2OSf() * matVS2TS);
+	vmmat44f mat_ws2ts = vobj->GetMatrixWS2OSf() * matVS2TS;
+	cb_volume.mat_ws2ts = TRANSPOSE(mat_ws2ts);
 
 	const vmmat44f& matVS2WS = vobj->GetMatrixOS2WSf();
 
@@ -1719,9 +1729,9 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 
 	float minDistSample = (float)min(min(vol_data->vox_pitch.x, vol_data->vox_pitch.y), vol_data->vox_pitch.z);
 	float grad_offset_dist = apply_samplerate2gradient? minDistSample / sample_rate : minDistSample;
-	fTransformVector((vmfloat3*)&cb_volume.vec_grad_x, &vmfloat3(grad_offset_dist, 0, 0), (vmmat44f*)&cb_volume.mat_ws2ts);
-	fTransformVector((vmfloat3*)&cb_volume.vec_grad_y, &vmfloat3(0, grad_offset_dist, 0), (vmmat44f*)&cb_volume.mat_ws2ts);
-	fTransformVector((vmfloat3*)&cb_volume.vec_grad_z, &vmfloat3(0, 0, grad_offset_dist), (vmmat44f*)&cb_volume.mat_ws2ts);
+	fTransformVector((vmfloat3*)&cb_volume.vec_grad_x, &vmfloat3(grad_offset_dist, 0, 0), &mat_ws2ts);
+	fTransformVector((vmfloat3*)&cb_volume.vec_grad_y, &vmfloat3(0, grad_offset_dist, 0), &mat_ws2ts);
+	fTransformVector((vmfloat3*)&cb_volume.vec_grad_z, &vmfloat3(0, 0, grad_offset_dist), &mat_ws2ts);
 	cb_volume.opacity_correction = 1.f;
 	if (high_samplerate)
 	{

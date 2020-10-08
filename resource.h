@@ -221,6 +221,13 @@
 #define IDR_RCDATA50009					  50009
 #define IDR_RCDATA50010					  50010
 
+#define IDR_RCDATA50020					  50020
+#define IDR_RCDATA50021					  50021
+#define IDR_RCDATA50022					  50022
+#define IDR_RCDATA50030					  50030
+#define IDR_RCDATA50031					  50031
+#define IDR_RCDATA50032					  50032
+
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED

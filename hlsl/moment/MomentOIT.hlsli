@@ -6,11 +6,23 @@
 */
 
 #define LOAD4_MMBUF(F_ADDR, K) moment_container_buf.Load4((F_ADDR + K) * 4)
-#define STORE4_MMBUF(V, F_ADDR, K) moment_container_buf.Store4((F_ADDR + K) * 4, V)
 #define LOAD2_MMBUF(F_ADDR, K) moment_container_buf.Load2((F_ADDR + K) * 4)
-#define STORE2_MMBUF(V, F_ADDR, K) moment_container_buf.Store2((F_ADDR + K) * 4, V)
 #define LOAD1_MMBUF(F_ADDR, K) moment_container_buf.Load((F_ADDR + K) * 4)
+#if STRICT_LOCKED == 1
+#define STORE4_MMBUF(V, F_ADDR, K) moment_container_buf.Store4((F_ADDR + K) * 4, V)
+#define STORE2_MMBUF(V, F_ADDR, K) moment_container_buf.Store2((F_ADDR + K) * 4, V)
 #define STORE1_MMBUF(V, F_ADDR, K) moment_container_buf.Store((F_ADDR + K) * 4, V)
+#else
+#define STORE4_MMBUF(V, F_ADDR, K) {moment_container_buf.InterlockedExchange((F_ADDR + K) * 4, V);\
+	moment_container_buf.InterlockedExchange((F_ADDR + K) * 4 + 4, V);\
+	moment_container_buf.InterlockedExchange((F_ADDR + K) * 4 + 8, V);\
+	moment_container_buf.InterlockedExchange((F_ADDR + K) * 4 + 12, V)}
+
+#define STORE2_MMBUF(V, F_ADDR, K) {moment_container_buf.Store2((F_ADDR + K) * 4, V);\
+	moment_container_buf.Store2((F_ADDR + K) * 4 + 4, V);}
+
+#define STORE1_MMBUF(V, F_ADDR, K) moment_container_buf.Store((F_ADDR + K) * 4, V)
+#endif
 
 
 #define LOAD22FF_MMB(V1, V2, F_ADDR, K) { uint4 mmi4 = LOAD4_MMBUF(F_ADDR, K); V1 = float2(asfloat(mmi4.x), asfloat(mmi4.y)); V2 = float2(asfloat(mmi4.z), asfloat(mmi4.w)); }
@@ -407,6 +419,7 @@ void Moment_GeneratePass(__VS_OUT input)
 	{
 		if (++safe_unlock_count > g_cbPobj.num_safe_loopexit)
 		{
+			InterlockedExchange(fragment_spinlock[tex2d_xy.xy], 0, __dummy);
 			keep_loop = false;
 		}
 		else
@@ -828,6 +841,7 @@ PS_OUT Moment_ResolvePass(__VS_OUT input)
 	{
 		if (++safe_unlock_count > g_cbPobj.num_safe_loopexit)
 		{
+			InterlockedExchange(fragment_spinlock[tex2d_xy.xy], 0, __dummy);
 			keep_loop = false;
 		}
 		else
@@ -858,7 +872,7 @@ PS_OUT Moment_ResolvePass(__VS_OUT input)
 					// to do 
 				}
 #if USE_ROV == 0
-					// always fragment_spinlock[tex2d_xy] is 1, thus use InterlockedExchange instead of InterlockedCompareExchange
+				// always fragment_spinlock[tex2d_xy] is 1, thus use InterlockedExchange instead of InterlockedCompareExchange
 				InterlockedExchange(fragment_spinlock[tex2d_xy], 0, spin_lock);
 				keep_loop = false;
 				//break;

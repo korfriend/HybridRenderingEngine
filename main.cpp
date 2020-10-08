@@ -62,6 +62,30 @@ void CallBackFunc_Mouse(int event, int x, int y, int flags, void* userdata)
 	//x_old = x;
 	//y_old = y;
 
+	if (flags & EVENT_FLAG_ALTKEY && event == EVENT_LBUTTONDOWN)
+	{
+		int oit_mode = 0;
+		vzm::GetRenderTestParam("_int_OitMode", &oit_mode, sizeof(int), 0, 0);
+
+		vzm::SetRenderTestParam("_double_TrInvterval", 0.002, sizeof(double), 0, 0);
+		vzm::SetRenderTestParam("_double_TrStartOffset", 2.0, sizeof(double), 0, 0);
+		vzm::SetRenderTestParam("_int2_PixelPos", glm::ivec2(x, y), sizeof(int) * 2, 0, 0);
+		vzm::SetRenderTestParam("_bool_PixelTransmittance", true, sizeof(bool), 0, 0);
+		vzm::SetRenderTestParam("_int_OitMode", (int)1, sizeof(int), 0, 0);
+		vzm::RenderScene(0, 0);
+		vzm::SetRenderTestParam("_int_OitMode", (int)0, sizeof(int), 0, 0);
+		vzm::RenderScene(0, 0);
+		vzm::SetRenderTestParam("_int_OitMode", (int)2, sizeof(int), 0, 0);
+		vzm::RenderScene(0, 0);
+		vzm::SetRenderTestParam("_int_OitMode", (int)4, sizeof(int), 0, 0);
+		vzm::SetRenderTestParam("_double_RobustRatio", 0.2, sizeof(double), 0, 0);
+		vzm::RenderScene(0, 0);
+
+		vzm::SetRenderTestParam("_bool_PixelTransmittance", false, sizeof(bool), 0, 0);
+		vzm::SetRenderTestParam("_int_OitMode", oit_mode, sizeof(int), 0, 0);
+		return;
+	}
+
 	vzm::CameraParameters cam_params;
 	vzm::GetCameraParameters(0, cam_params, 0);
 
@@ -82,9 +106,9 @@ void CallBackFunc_Mouse(int event, int x, int y, int flags, void* userdata)
 	else if (event == EVENT_MOUSEWHEEL && (flags & EVENT_FLAG_CTRLKEY))
 	{
 		if (getMouseWheelDelta(flags) > 0)
-			__cv3__ cam_params.pos += scene_stage_scale * 0.05f * (__cv3__ cam_params.view);
+			__cv3__ cam_params.pos += scene_stage_scale * 0.01f * (__cv3__ cam_params.view);
 		else
-			__cv3__ cam_params.pos -= scene_stage_scale * 0.05f * (__cv3__ cam_params.view);
+			__cv3__ cam_params.pos -= scene_stage_scale * 0.01f * (__cv3__ cam_params.view);
 		vzm::SetCameraParameters(0, cam_params, 0);
 	}
 	else if (event == EVENT_MOUSEMOVE)
@@ -168,33 +192,33 @@ void load_preset(const std::string& preset_file, const std::list<int>& obj_ids)
 		{
 			double v;
 			iss >> v;
-			vzm::DebugTestSet("_double_CopVZThickness", v, sizeof(double), 0, 0);
+			vzm::SetRenderTestParam("_double_CopVZThickness", v, sizeof(double), 0, 0);
 		}
 		else if (param_name == "z_thickenss_rp")
 		{
 			double v;
 			iss >> v;
-			vzm::DebugTestSet("_double_VZThickness", v, sizeof(double), 0, 0);
+			vzm::SetRenderTestParam("_double_VZThickness", v, sizeof(double), 0, 0);
 		}
 		else if (param_name == "beta")
 		{
 			double v;
 			iss >> v;
-			vzm::DebugTestSet("_double_MergingBeta", v, sizeof(double), 0, 0);
+			vzm::SetRenderTestParam("_double_MergingBeta", v, sizeof(double), 0, 0);
 		}
 		else if (param_name == "robustness_ratio")
 		{
 			double v;
 			iss >> v;
-			vzm::DebugTestSet("_double_RobustRatio", v, sizeof(double), 0, 0);
+			vzm::SetRenderTestParam("_double_RobustRatio", v, sizeof(double), 0, 0);
 		}
 		else if (param_name == "forced_shading")
 		{
 			glm::dvec4 v;
 			iss >> v.x >> v.y >> v.z >> v.w;
-			vzm::DebugTestSet("_double4_ShadingFactorsForGlobalPrimitives", v, sizeof(glm::dvec4), 0, 0);
+			vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", v, sizeof(glm::dvec4), 0, 0);
 		}
-		else if (param_name == "alpha")
+		else if (param_name == "alpha" && obj_ids.size() > 0)
 		{
 			double v;
 			iss >> v;
@@ -206,14 +230,14 @@ void load_preset(const std::string& preset_file, const std::list<int>& obj_ids)
 					vzm::ReplaceOrAddSceneObject(0, obj_id, _obj_state);
 			}
 		}
-		else if (param_name == "point_thickness")
+		else if (param_name == "surfel_size" && obj_ids.size() > 0)
 		{
 			double v;
 			iss >> v;
 			vzm::ObjStates _obj_state;
 			if (vzm::GetSceneObjectState(0, *obj_ids.begin(), _obj_state))
 			{
-				_obj_state.point_thickness = (float)v;
+				_obj_state.surfel_size = (float)v;
 				for (const int& obj_id : obj_ids)
 					vzm::ReplaceOrAddSceneObject(0, obj_id, _obj_state);
 			}
@@ -242,22 +266,22 @@ void store_preset(const std::string& preset_file, const std::list<int>& obj_ids)
 	double z_thickenss_sp, z_thickenss_rp, beta, Rh;
 	glm::dvec4 shading_param;
 
-	if (vzm::DebugTestGet("_double_CopVZThickness", &z_thickenss_sp, sizeof(double), 0, 0))
+	if (vzm::GetRenderTestParam("_double_CopVZThickness", &z_thickenss_sp, sizeof(double), 0, 0))
 		fileout << "z_thickenss_sp " << z_thickenss_sp << endl;
-	if (vzm::DebugTestGet("_double_VZThickness", &z_thickenss_rp, sizeof(double), 0, 0))
+	if (vzm::GetRenderTestParam("_double_VZThickness", &z_thickenss_rp, sizeof(double), 0, 0))
 		fileout << "z_thickenss_rp " << z_thickenss_rp << endl;
-	if (vzm::DebugTestGet("_double_MergingBeta", &beta, sizeof(double), 0, 0))
+	if (vzm::GetRenderTestParam("_double_MergingBeta", &beta, sizeof(double), 0, 0))
 		fileout << "beta " << beta << endl;
-	if (vzm::DebugTestGet("_double_RobustRatio", &Rh, sizeof(double), 0, 0))
+	if (vzm::GetRenderTestParam("_double_RobustRatio", &Rh, sizeof(double), 0, 0))
 		fileout << "robustness_ratio " << Rh << endl;
-	if (vzm::DebugTestGet("_double4_ShadingFactorsForGlobalPrimitives", &shading_param, sizeof(glm::dvec4), 0, 0))
+	if (vzm::GetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", &shading_param, sizeof(glm::dvec4), 0, 0))
 		fileout << "forced_shading " << __PR(((double*)&shading_param), " ") << " " << shading_param.w << endl;
 
 	vzm::ObjStates _obj_state;
 	if (vzm::GetSceneObjectState(0, *obj_ids.begin(), _obj_state))
 	{
 		fileout << "alpha " << _obj_state.color[3] << endl;
-		fileout << "point_thickness " << _obj_state.point_thickness << endl;
+		fileout << "surfel_size " << _obj_state.surfel_size << endl;
 	}
 
 	fileout.close();
@@ -269,12 +293,12 @@ void compute_difference(const std::string& out_file_prefix)
 	auto make_cvmat = [](int oit_mode, double rh = 0.5) -> cv::Mat
 	{
 		int ot_mode_original = 0;
-		vzm::DebugTestGet("_int_OitMode", &ot_mode_original, sizeof(int), 0, 0);
+		vzm::GetRenderTestParam("_int_OitMode", &ot_mode_original, sizeof(int), 0, 0);
 		double rh_original;
-		vzm::DebugTestGet("_double_RobustRatio", &rh_original, sizeof(double), 0, 0);
+		vzm::GetRenderTestParam("_double_RobustRatio", &rh_original, sizeof(double), 0, 0);
 
-		vzm::DebugTestSet("_int_OitMode", oit_mode, sizeof(int), 0, 0);
-		vzm::DebugTestSet("_double_RobustRatio", rh, sizeof(double), 0, 0);
+		vzm::SetRenderTestParam("_int_OitMode", oit_mode, sizeof(int), 0, 0);
+		vzm::SetRenderTestParam("_double_RobustRatio", rh, sizeof(double), 0, 0);
 		vzm::RenderScene(0, 0);
 		unsigned char* ptr_rgba;
 		float* ptr_zdepth;
@@ -283,23 +307,21 @@ void compute_difference(const std::string& out_file_prefix)
 		cv::Mat cvmat(h, w, CV_8UC4);
 		memcpy(cvmat.data, ptr_rgba, sizeof(unsigned char) * 4 * w * h);
 
-		vzm::DebugTestSet("_int_OitMode", ot_mode_original, sizeof(int), 0, 0);
-		vzm::DebugTestSet("_double_RobustRatio", &rh_original, sizeof(double), 0, 0);
+		vzm::SetRenderTestParam("_int_OitMode", ot_mode_original, sizeof(int), 0, 0);
+		vzm::SetRenderTestParam("_double_RobustRatio", rh_original, sizeof(double), 0, 0);
 		return cvmat;
 	};
 
 	bool profiling_original = false;
-	vzm::DebugTestGet("_bool_GpuProfile", &profiling_original, sizeof(bool), 0, 0);
-	vzm::DebugTestSet("_bool_PrintOutRoutineObjs", true, sizeof(bool), 0, 0);
-	vzm::DebugTestSet("_bool_GpuProfile", true, sizeof(bool), 0, 0);
+	vzm::GetRenderTestParam("_bool_GpuProfile", &profiling_original, sizeof(bool), 0, 0);
+	vzm::SetRenderTestParam("_bool_GpuProfile", true, sizeof(bool), 0, 0);
 	cv::Mat cvmat_DFB = make_cvmat(1);
 	cv::Mat cvmat_MBT = make_cvmat(2);
 	cv::Mat cvmat_DKBT_highRh = make_cvmat(4, high_Rh);
 	cv::Mat cvmat_DKBT_lowRh = make_cvmat(4, low_Rh);
 	cv::Mat cvmat_DKBTZ_lowRh = make_cvmat(3, low_Rh);
 	cv::Mat cvmat_SKBTZ = make_cvmat(0);
-	vzm::DebugTestSet("_bool_PrintOutRoutineObjs", profiling_original, sizeof(bool), 0, 0);
-	vzm::DebugTestSet("_bool_GpuProfile", profiling_original, sizeof(bool), 0, 0);
+	vzm::SetRenderTestParam("_bool_GpuProfile", profiling_original, sizeof(bool), 0, 0);
 
 	cv::Mat cvmat_DFB_rgb;
 	cv::cvtColor(cvmat_DFB, cvmat_DFB_rgb, cv::COLOR_BGRA2BGR);
@@ -382,126 +404,121 @@ std::string GetSolutionPath()
 # this program uses C++ standard ver 17
 #endif
 
-int main__()
+void key_actions(const int key, const std::string& preset_file, const std::list<int>& loaded_obj_ids, bool& write_img_file)
 {
-	vzm::InitEngineLib();
-
-	int loaded_obj_id = 0;
-
-	std::string model_file = GetSolutionPath() + ".\\data\\Bunny70k.ply";
-	vzm::LoadModelFile(model_file, loaded_obj_id, true);
-
-	vzm::CameraParameters cam_params;
-	__cv3__ cam_params.pos = glm::fvec3(0, 0, 300);
-	__cv3__ cam_params.up = glm::fvec3(0, 1.f, 0);
-	__cv3__ cam_params.view = glm::fvec3(0, 0, -1.f);
-	cam_params.fov_y = 3.141592654f / 4.f;
-	cam_params.aspect_ratio = 640.f / 480.f;
-	cam_params.projection_mode = 2;
-	cam_params.w = 1280;
-	cam_params.h = 1024;
-
-	vzm::SceneEnvParameters scn_env_params;
-	scn_env_params.is_on_camera = true;
-	scn_env_params.is_pointlight = true;
-	__cv3__ scn_env_params.pos_light = __cv3__ cam_params.pos;
-	__cv3__ scn_env_params.dir_light = __cv3__ cam_params.view;
-
-	vzm::ObjStates obj_state;
-	obj_state.emission = 0.3f;
-	obj_state.diffusion = 0.5f;
-	obj_state.specular = 0.2f;
-	obj_state.sp_pow = 30.f;
-	obj_state.point_thickness = 20.f; // control for visible point size
-	__cv4__ obj_state.color = glm::fvec4(0.8f, 1.f, 1.f, 1.f); 
-	obj_state.color[3] = 0.9f; // control for transparency
-	__cm4__ obj_state.os2ws = glm::fmat4x4(); // identity
-
-	scene_name[0] = "3d view";
-
-	std::map<std::string, std::list<int>> prim_ids = { 
-		{scene_name[0], {loaded_obj_id}} ,
-		//{scene_name[1], {id1, id1, ...}} ,
-	};
-
-	for (int i = 0; i < (int)scene_name.size(); i++)
+	switch (key)
 	{
-		// (int)i is scene_id
-		vzm::SetSceneEnvParameters(i, scn_env_params);
-		vzm::SetCameraParameters(i, cam_params, 0);
-
-		auto it = prim_ids.find(scene_name[i]);
-		for (int& obj_id : it->second)
-			vzm::ReplaceOrAddSceneObject(i, obj_id, obj_state);
-
-		cv::namedWindow(scene_name[i], cv::WINDOW_AUTOSIZE);
-		cv::setMouseCallback(scene_name[i], CallBackFunc_Mouse, NULL);// &scenes[i]);
-		//show_window(scene_name[i], i, 0);
-	}
-
-	align_obj_to_world_center(0, { loaded_obj_id });
-
-	int key = -1;
-	while (key != 'q')
+	case 'g':
 	{
-		for (auto& it : scene_name)
-		{
-			show_window(it.second, it.first, 0, false, model_file);
-		}
-		key = cv::waitKey(1);
+		// (de)activate GPU profiling
+		static bool gpu_profile = false;
+		gpu_profile = !gpu_profile;
+		vzm::SetRenderTestParam("_bool_GpuProfile", gpu_profile, sizeof(bool), 0, 0);
+		std::cout << "gpu profiling : " << (gpu_profile ? "ON" : "OFF") << std::endl;
+		break;
 	}
-
-	vzm::DeinitEngineLib();
-	return 0;
+	case 'w':
+	{
+		write_img_file = true;
+		std::cout << "write result image into a file" << std::endl;
+		break;
+	}
+	case 'r':
+	{
+		vzm::SetRenderTestParam("_bool_ReloadHLSLObjFiles", true, sizeof(bool), 0, 0);
+		std::cout << "reload hlsl objs" << std::endl;
+		break;
+	}
+	case 's':
+	{
+		store_preset(preset_file, loaded_obj_ids);
+		std::cout << "store preset" << std::endl;
+		break;
+	}
+	case 'l':
+	{
+		load_preset(preset_file, loaded_obj_ids);
+		std::cout << "load preset" << std::endl;
+		break;
+	}
+	case '`':
+	case '0':
+	{
+		vzm::SetRenderTestParam("_int_OitMode", (int)0, sizeof(int), 0, 0);
+		std::cout << "oit mode : SK+BTZ" << std::endl;
+		break;
+	}
+	case '1':
+	{
+		vzm::SetRenderTestParam("_int_OitMode", (int)1, sizeof(int), 0, 0);
+		std::cout << "oit mode : DFB" << std::endl;
+		break;
+	}
+	case '2':
+	{
+		vzm::SetRenderTestParam("_int_OitMode", (int)2, sizeof(int), 0, 0);
+		std::cout << "oit mode : MBT" << std::endl;
+		break;
+	}
+	case '3':
+	{
+		vzm::SetRenderTestParam("_int_OitMode", (int)3, sizeof(int), 0, 0);
+		vzm::SetRenderTestParam("_double_RobustRatio", low_Rh, sizeof(double), 0, 0);
+		std::cout << "oit mode : DK+BTZ with Rh (" << low_Rh << ")" << std::endl;
+		break;
+	}
+	case '4':
+	{
+		vzm::SetRenderTestParam("_int_OitMode", (int)3, sizeof(int), 0, 0);
+		vzm::SetRenderTestParam("_double_RobustRatio", high_Rh, sizeof(double), 0, 0);
+		std::cout << "oit mode : DK+BTZ with Rh (" << high_Rh << ")" << std::endl;
+		break;
+	}
+	case '5':
+	{
+		vzm::SetRenderTestParam("_int_OitMode", (int)4, sizeof(int), 0, 0);
+		vzm::SetRenderTestParam("_double_RobustRatio", low_Rh, sizeof(double), 0, 0);
+		std::cout << "oit mode : DK+BT with Rh (" << low_Rh << ")" << std::endl;
+		break;
+	}
+	case '6':
+	{
+		vzm::SetRenderTestParam("_int_OitMode", (int)4, sizeof(int), 0, 0);
+		vzm::SetRenderTestParam("_double_RobustRatio", high_Rh, sizeof(double), 0, 0);
+		std::cout << "oit mode : DK+BT with Rh (" << high_Rh << ")" << std::endl;
+		break;
+	}
+	case 'c':
+	{
+		size_t lastindex = preset_file.find_last_of(".");
+		std::string rawname = preset_file.substr(0, lastindex);
+		compute_difference(rawname + "_");
+		std::cout << "compute difference" << std::endl;
+		break;
+	}
+	default:
+		break;
+	}
 }
 
-int main()
+int Fig_Absorbance()
 {
-	// OIT test 1
-	vzm::InitEngineLib();
-
 	std::list<int> loaded_obj_ids;
-	
+
 	vzm::CameraParameters cam_params;
 	vzm::ObjStates obj_state;
-#define __OBJ3
-#ifdef __OBJ1
-	high_Rh = 0.7, low_Rh = 0.2, diff_amp = 5.0;
-	scene_stage_scale = 5.f;
-
-	std::string preset_file = GetSolutionPath() + ".\\data\\preset_oit1_sportscar.txt";
-	vzm::LoadMultipleModelsFile(GetSolutionPath() + ".\\data\\sportsCar.obj", loaded_obj_ids, true);
-	__cv3__ cam_params.pos = glm::fvec3(0, 0, scene_stage_scale);
-	__cv3__ cam_params.up = glm::fvec3(0, 1.f, 0);
-	__cv3__ cam_params.view = glm::fvec3(0, 0, -1.f);
-	cam_params.np = 0.01f;
-	cam_params.fp = 20.f;
-	// obj file includes material info, which is prior shading option for rendering; therefore, wildcard setting is required to change shading.
-
-#elif defined(__OBJ2)
-	high_Rh = 0.7, low_Rh = 0.2, diff_amp = 10.0;
-	scene_stage_scale = 15.f;
-
-	std::string preset_file = GetSolutionPath() + ".\\data\\preset_oit1_hairball.txt";
-	vzm::LoadMultipleModelsFile(GetSolutionPath() + ".\\data\\hairball_colored.ply", loaded_obj_ids, true);
-	__cv3__ cam_params.pos = glm::fvec3(0, 0, scene_stage_scale);
-	__cv3__ cam_params.up = glm::fvec3(0, 1.f, 0);
-	__cv3__ cam_params.view = glm::fvec3(0, 0, -1.f);
-	cam_params.np = 0.01f;
-	cam_params.fp = 100.f;
-#elif defined(__OBJ3)
-	high_Rh = 0.7, low_Rh = 0.2, diff_amp = 10.0;
+	high_Rh = 0.75, low_Rh = 0.2, diff_amp = 5.0;
 	scene_stage_scale = 50.f;
 
-	std::string preset_file = GetSolutionPath() + ".\\data\\preset_oit1_floor.txt";
+	std::string preset_file = GetSolutionPath() + ".\\data\\preset_floor_absorbance.txt";
 	vzm::LoadMultipleModelsFile(GetSolutionPath() + ".\\data\\densepoints_floor.ply", loaded_obj_ids, true);
 	__cv3__ cam_params.pos = glm::fvec3(0, 0, scene_stage_scale);
 	__cv3__ cam_params.up = glm::fvec3(0, 1.f, 0);
 	__cv3__ cam_params.view = glm::fvec3(0, 0, -1.f);
 	cam_params.np = 0.1f;
 	cam_params.fp = 500.f;
-	obj_state.point_thickness = 15.f; // control for visible point size
-#endif
+	obj_state.represent_points_to_surfels = true;
+	obj_state.surfel_size = 0.1f; // control for visible point size
 
 	cam_params.fov_y = 3.141592654f / 4.f;
 	cam_params.projection_mode = 2;
@@ -542,12 +559,13 @@ int main()
 
 	align_obj_to_world_center(0, loaded_obj_ids);
 
-	vzm::DebugTestSet("_double_CopVZThickness", 0.002, sizeof(double), 0, 0);
-	vzm::DebugTestSet("_double_VZThickness", 0.0, sizeof(double), 0, 0);
-	vzm::DebugTestSet("_double_MergingBeta", 0.5, sizeof(double), 0, 0);
-	vzm::DebugTestSet("_double_RobustRatio", 0.5, sizeof(double), 0, 0);
-	vzm::DebugTestSet("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), 0, 0);
-	// after presetting of DebugTestSets
+	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), 0, 0);
+	vzm::SetRenderTestParam("_double_CopVZThickness", 0.002, sizeof(double), 0, 0);
+	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), 0, 0);
+	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), 0, 0);
+	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), 0, 0);
+	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), 0, 0);
+	// after presetting of SetRenderTestParams
 	load_preset(preset_file, loaded_obj_ids);
 	std::cout << "oit mode : SK+BTZ" << std::endl;
 
@@ -556,83 +574,173 @@ int main()
 	while (key != 'q')
 	{
 		bool write_img_file = false;
-		switch (key)
+		key_actions(key, preset_file, loaded_obj_ids, write_img_file);
+
+		for (auto& it : scene_name)
 		{
-		case 'g':
-		{
-			// (de)activate GPU profiling
-			static bool gpu_profile = false;
-			gpu_profile = !gpu_profile;
-			vzm::DebugTestSet("_bool_PrintOutRoutineObjs", gpu_profile, sizeof(bool), 0, 0);
-			vzm::DebugTestSet("_bool_GpuProfile", gpu_profile, sizeof(bool), 0, 0);
-			std::cout << "gpu profiling : " << (gpu_profile? "ON" : "OFF") << std::endl;
-			break;
+			show_window(it.second, it.first, 0, write_img_file, preset_file);
 		}
-		case 'w':
+
+		vzm::SetRenderTestParam("_bool_ReloadHLSLObjFiles", false, sizeof(bool), 0, 0);
+		key = cv::waitKey(1);
+	}
+
+	return 0;
+}
+
+int Fig_OitIntersection()
+{
+	int loaded_obj_id = 0;
+
+	std::string preset_file = GetSolutionPath() + ".\\data\\preset_oitsection_bunny.txt";
+	std::string model_file = GetSolutionPath() + ".\\data\\Bunny70k.ply";
+	vzm::LoadModelFile(model_file, loaded_obj_id, true);
+
+	vzm::CameraParameters cam_params;
+	__cv3__ cam_params.pos = glm::fvec3(0, 0, 300);
+	__cv3__ cam_params.up = glm::fvec3(0, 1.f, 0);
+	__cv3__ cam_params.view = glm::fvec3(0, 0, -1.f);
+	cam_params.fov_y = 3.141592654f / 4.f;
+	cam_params.aspect_ratio = 1.f;
+	cam_params.projection_mode = 2;
+	cam_params.w = 1024;
+	cam_params.h = 1024;
+	cam_params.np = 1.f;
+	cam_params.fp = 1000.f;
+
+	vzm::SceneEnvParameters scn_env_params;
+	scn_env_params.is_on_camera = true;
+	scn_env_params.is_pointlight = true;
+	__cv3__ scn_env_params.pos_light = __cv3__ cam_params.pos;
+	__cv3__ scn_env_params.dir_light = __cv3__ cam_params.view;
+
+	vzm::ObjStates obj_state;
+	obj_state.emission = 0.3f;
+	obj_state.diffusion = 0.5f;
+	obj_state.specular = 0.2f;
+	obj_state.sp_pow = 30.f;
+	obj_state.surfel_size = 5.f; // control for visible point size
+	__cv4__ obj_state.color = glm::fvec4(0.8f, 1.f, 1.f, 1.f); 
+	obj_state.color[3] = 0.2f; // control for transparency
+	__cm4__ obj_state.os2ws = glm::fmat4x4(); // identity
+
+	scene_name[0] = "3d view";
+
+	std::map<std::string, std::list<int>> prim_ids = { 
+		{scene_name[0], {loaded_obj_id}} ,
+		//{scene_name[1], {id1, id1, ...}} ,
+	};
+
+	for (int i = 0; i < (int)scene_name.size(); i++)
+	{
+		// (int)i is scene_id
+		vzm::SetSceneEnvParameters(i, scn_env_params);
+		vzm::SetCameraParameters(i, cam_params, 0);
+
+		auto it = prim_ids.find(scene_name[i]);
+ 		for (int& obj_id : it->second)
+ 			vzm::ReplaceOrAddSceneObject(i, obj_id, obj_state);
+
+		cv::namedWindow(scene_name[i], cv::WINDOW_AUTOSIZE);
+		cv::setMouseCallback(scene_name[i], CallBackFunc_Mouse, NULL);
+	}
+
+	align_obj_to_world_center(0, { loaded_obj_id });
+
+	int plane_ids[3] = { 0, 0, 0 };
+	int lines_ids[3] = { 0, 0, 0 };
+	glm::fvec3* pos_vtx = new glm::fvec3[4];
+	glm::fvec3* nrl_vtx = new glm::fvec3[4];
+	uint* idx_prims = new uint[6];
+	idx_prims[0] = 0;
+	idx_prims[1] = 1;
+	idx_prims[2] = 2;
+	idx_prims[3] = 1;
+	idx_prims[4] = 3;
+	idx_prims[5] = 2;
+	uint* idx_lines = new uint[8];
+	idx_lines[0] = 0;
+	idx_lines[1] = 1;
+	idx_lines[2] = 1;
+	idx_lines[3] = 3;
+	idx_lines[4] = 3;
+	idx_lines[5] = 2;
+	idx_lines[6] = 2;
+	idx_lines[7] = 0;
+
+	pos_vtx[0] = glm::fvec3(0, -75, -75);
+	pos_vtx[1] = glm::fvec3(0, +75, -75);
+	pos_vtx[2] = glm::fvec3(0, -75, +75);
+	pos_vtx[3] = glm::fvec3(0, +75, +75);
+	nrl_vtx[0] = nrl_vtx[1] = nrl_vtx[2] = nrl_vtx[3] = glm::fvec3(1, 0, 0);
+	vzm::GeneratePrimitiveObject((float*)pos_vtx, (float*)nrl_vtx, NULL, NULL, 4, idx_prims, 2, 3, plane_ids[0]);
+	vzm::GeneratePrimitiveObject((float*)pos_vtx, NULL, NULL, NULL, 4, idx_lines, 4, 2, lines_ids[0]);
+	pos_vtx[0] = glm::fvec3(-75, 0, -75);
+	pos_vtx[1] = glm::fvec3(+75, 0, -75);
+	pos_vtx[2] = glm::fvec3(-75, 0, +75);
+	pos_vtx[3] = glm::fvec3(+75, 0, +75);
+	nrl_vtx[0] = nrl_vtx[1] = nrl_vtx[2] = nrl_vtx[3] = glm::fvec3(0, 1, 0);
+	vzm::GeneratePrimitiveObject((float*)pos_vtx, (float*)nrl_vtx, NULL, NULL, 4, idx_prims, 2, 3, plane_ids[1]);
+	vzm::GeneratePrimitiveObject((float*)pos_vtx, NULL, NULL, NULL, 4, idx_lines, 4, 2, lines_ids[1]);
+	pos_vtx[0] = glm::fvec3(-75, -75, 0);
+	pos_vtx[1] = glm::fvec3(+75, -75, 0);
+	pos_vtx[2] = glm::fvec3(-75, +75, 0);
+	pos_vtx[3] = glm::fvec3(+75, +75, 0);
+	nrl_vtx[0] = nrl_vtx[1] = nrl_vtx[2] = nrl_vtx[3] = glm::fvec3(0, 0, 1);
+	vzm::GeneratePrimitiveObject((float*)pos_vtx, (float*)nrl_vtx, NULL, NULL, 4, idx_prims, 2, 3, plane_ids[2]);
+	vzm::GeneratePrimitiveObject((float*)pos_vtx, NULL, NULL, NULL, 4, idx_lines, 4, 2, lines_ids[2]);
+
+	obj_state.line_thickness = 5;
+
+	__cv4__ obj_state.color = glm::fvec4(1, 0, 0, 0.6);
+	vzm::ReplaceOrAddSceneObject(0, plane_ids[0], obj_state);
+	__cv4__ obj_state.color = glm::fvec4(1, 0, 0, 1);
+	vzm::ReplaceOrAddSceneObject(0, lines_ids[0], obj_state);
+	__cv4__ obj_state.color = glm::fvec4(0, 1, 0, 0.6);
+	vzm::ReplaceOrAddSceneObject(0, plane_ids[1], obj_state);
+	__cv4__ obj_state.color = glm::fvec4(0, 1, 0, 1);
+	vzm::ReplaceOrAddSceneObject(0, lines_ids[1], obj_state);
+	__cv4__ obj_state.color = glm::fvec4(0, 0, 1, 0.6);
+	vzm::ReplaceOrAddSceneObject(0, plane_ids[2], obj_state);
+	__cv4__ obj_state.color = glm::fvec4(0, 0, 1, 1);
+	vzm::ReplaceOrAddSceneObject(0, lines_ids[2], obj_state);
+
+	delete[] pos_vtx;
+	delete[] nrl_vtx;
+	delete[] idx_prims;
+	delete[] idx_lines;
+
+	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), 0, 0);
+	vzm::SetRenderTestParam("_double_CopVZThickness", 0.002, sizeof(double), 0, 0);
+	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), 0, 0);
+	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), 0, 0);
+	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), 0, 0);
+	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), 0, 0);
+	// after presetting of SetRenderTestParams
+	load_preset(preset_file, {loaded_obj_id});
+	std::cout << "oit mode : SK+BTZ" << std::endl;
+
+	int oit_mode = 0;
+	int key = -1;
+	while (key != 'q')
+	{
+		bool write_img_file = false;
+
+		key_actions(key, preset_file, { loaded_obj_id }, write_img_file);
+
+		if (key == 'e')
 		{
-			write_img_file = true;
-			std::cout << "write result image into a file" << std::endl;
-			break;
-		}
-		case 'r':
-		{
-			vzm::DebugTestSet("_bool_ReloadHLSLObjFiles", true, sizeof(bool), 0, 0);
-			std::cout << "reload hlsl objs" << std::endl;
-			break;
-		}
-		case 's':
-		{
-			store_preset(preset_file, loaded_obj_ids);
-			std::cout << "store preset" << std::endl;
-			break;
-		}
-		case 'l':
-		{
-			load_preset(preset_file, loaded_obj_ids);
-			std::cout << "load preset" << std::endl;
-			break;
-		}
-		case '`':
-		case '0':
-		{
-			vzm::DebugTestSet("_int_OitMode", (int)0, sizeof(int), 0, 0);
-			std::cout << "oit mode : SK+BTZ" << std::endl;
-			break;
-		}
-		case '1':
-		{
-			vzm::DebugTestSet("_int_OitMode", (int)1, sizeof(int), 0, 0);
-			std::cout << "oit mode : DFB" << std::endl;
-			break;
-		}
-		case '2':
-		{
-			vzm::DebugTestSet("_int_OitMode", (int)2, sizeof(int), 0, 0);
-			std::cout << "oit mode : MBT" << std::endl;
-			break;
-		}
-		case '3':
-		{
-			vzm::DebugTestSet("_int_OitMode", (int)3, sizeof(int), 0, 0);
-			std::cout << "oit mode : DK+BTZ" << std::endl;
-			break;
-		}
-		case '4':
-		{
-			vzm::DebugTestSet("_int_OitMode", (int)4, sizeof(int), 0, 0);
-			std::cout << "oit mode : DK+BT" << std::endl;
-			break;
-		}
-		case 'c':
-		{
-			size_t lastindex = preset_file.find_last_of(".");
-			std::string rawname = preset_file.substr(0, lastindex);
-			compute_difference(rawname + "_");
-			std::cout << "compute difference" << std::endl;
-			break;
-		}
-		default:
-			break;
+			static int eg1_obj = 0, eg2_obj = 0, eg3_obj = 0;
+			//vzm::DeleteObject(eg1_obj);
+			//vzm::DeleteObject(eg2_obj);
+			//vzm::DeleteObject(eg3_obj);
+			vzm::LoadModelFile(GetSolutionPath() + ".\\data\\EG1.obj", eg1_obj, true);
+			vzm::LoadModelFile(GetSolutionPath() + ".\\data\\EG2.obj", eg2_obj, true);
+			vzm::LoadModelFile(GetSolutionPath() + ".\\data\\EG3.obj", eg3_obj, true);
+			obj_state.color[3] = 0.7f;
+			vzm::ReplaceOrAddSceneObject(0, eg1_obj, obj_state);
+			vzm::ReplaceOrAddSceneObject(0, eg2_obj, obj_state);
+			vzm::ReplaceOrAddSceneObject(0, eg3_obj, obj_state);
 		}
 
 		for (auto& it : scene_name)
@@ -640,10 +748,442 @@ int main()
 			show_window(it.second, it.first, 0, write_img_file, preset_file);
 		}
 
-		vzm::DebugTestSet("_bool_ReloadHLSLObjFiles", false, sizeof(bool), 0, 0);
+		vzm::SetRenderTestParam("_bool_ReloadHLSLObjFiles", false, sizeof(bool), 0, 0);
 		key = cv::waitKey(1);
 	}
 
+	return 0;
+}
+
+int Fig_OitPerformance()
+{
+	// OIT test 1
+	std::list<int> loaded_obj_ids;
+	
+	vzm::CameraParameters cam_params;
+	vzm::ObjStates obj_state;
+	int w = 1024, h = 1024;
+	if(w > 1024 && h > 1024)
+		vzm::SetRenderTestParam("_int_BufExScale", (int)4, sizeof(int), 0, 0); // set this when the resolution 2048x2048 (NVIDIA GTX 1080)
+#define __OBJ3
+#ifdef __OBJ1
+	high_Rh = 0.75, low_Rh = 0.2, diff_amp = 10.0;
+	scene_stage_scale = 5.f;
+
+	std::string preset_file = GetSolutionPath() + ".\\data\\preset_oit1_sportscar.txt";
+	vzm::LoadMultipleModelsFile(GetSolutionPath() + ".\\data\\sportsCar.obj", loaded_obj_ids, true);
+	__cv3__ cam_params.pos = glm::fvec3(0, 0, scene_stage_scale);
+	__cv3__ cam_params.up = glm::fvec3(0, 1.f, 0);
+	__cv3__ cam_params.view = glm::fvec3(0, 0, -1.f);
+	cam_params.np = 0.01f;
+	cam_params.fp = 20.f;
+	// obj file includes material info, which is prior shading option for rendering; therefore, wildcard setting is required to change shading.
+
+#elif defined(__OBJ2)
+	high_Rh = 0.75, low_Rh = 0.2, diff_amp = 10.0;
+	scene_stage_scale = 15.f;
+
+	std::string preset_file = GetSolutionPath() + ".\\data\\preset_oit1_hairball.txt";
+	vzm::LoadMultipleModelsFile(GetSolutionPath() + ".\\data\\hairball_colored.ply", loaded_obj_ids, true);
+	__cv3__ cam_params.pos = glm::fvec3(0, 0, scene_stage_scale);
+	__cv3__ cam_params.up = glm::fvec3(0, 1.f, 0);
+	__cv3__ cam_params.view = glm::fvec3(0, 0, -1.f);
+	cam_params.np = 0.01f;
+	cam_params.fp = 100.f;
+#elif defined(__OBJ3)
+	high_Rh = 0.75, low_Rh = 0.2, diff_amp = 7.0;
+	scene_stage_scale = 50.f;
+
+	std::string preset_file = GetSolutionPath() + ".\\data\\preset_oit1_floor.txt";
+	vzm::LoadMultipleModelsFile(GetSolutionPath() + ".\\data\\densepoints_floor.ply", loaded_obj_ids, true);
+	__cv3__ cam_params.pos = glm::fvec3(0, 0, scene_stage_scale);
+	__cv3__ cam_params.up = glm::fvec3(0, 1.f, 0);
+	__cv3__ cam_params.view = glm::fvec3(0, 0, -1.f);
+	cam_params.np = 0.1f;
+	cam_params.fp = 500.f;
+	obj_state.surfel_size = 0.02f; // control for visible point size
+#endif
+
+	cam_params.fov_y = 3.141592654f / 4.f;
+	cam_params.projection_mode = 2;
+	cam_params.w = w;
+	cam_params.h = h;
+	cam_params.aspect_ratio = (float)cam_params.w / (float)cam_params.h;
+
+	vzm::SceneEnvParameters scn_env_params;
+	scn_env_params.is_on_camera = true;
+	scn_env_params.is_pointlight = true;
+	__cv3__ scn_env_params.pos_light = __cv3__ cam_params.pos;
+	__cv3__ scn_env_params.dir_light = __cv3__ cam_params.view;
+
+	__cv4__ obj_state.color = glm::fvec4(0.8f, 1.f, 1.f, 1.f);
+	obj_state.color[3] = 0.9f; // control for transparency
+	__cm4__ obj_state.os2ws = glm::fmat4x4(); // identity
+
+	scene_name[0] = "OIT";
+
+	std::map<std::string, std::list<int>> prim_ids = {
+		{scene_name[0], loaded_obj_ids} ,
+		//{scene_name[1], {id1, id1, ...}} ,
+	};
+
+	for (int i = 0; i < (int)scene_name.size(); i++)
+	{
+		// (int)i is scene_id
+		vzm::SetSceneEnvParameters(i, scn_env_params);
+		vzm::SetCameraParameters(i, cam_params, 0);
+
+		auto it = prim_ids.find(scene_name[i]);
+		for (int& obj_id : it->second)
+			vzm::ReplaceOrAddSceneObject(i, obj_id, obj_state);
+
+		cv::namedWindow(scene_name[i], cv::WINDOW_AUTOSIZE);
+		cv::setMouseCallback(scene_name[i], CallBackFunc_Mouse, NULL);// &scenes[i]);
+	}
+
+	align_obj_to_world_center(0, loaded_obj_ids);
+
+	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), 0, 0);
+	vzm::SetRenderTestParam("_double_CopVZThickness", 0.002, sizeof(double), 0, 0);
+	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), 0, 0);
+	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), 0, 0);
+	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), 0, 0);
+	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), 0, 0);
+	// after presetting of SetRenderTestParams
+	load_preset(preset_file, loaded_obj_ids);
+	std::cout << "oit mode : SK+BTZ" << std::endl;
+
+	int oit_mode = 0;
+	int key = -1;
+	while (key != 'q')
+	{
+		bool write_img_file = false;
+		key_actions(key, preset_file, loaded_obj_ids, write_img_file);
+
+		for (auto& it : scene_name)
+		{
+			show_window(it.second, it.first, 0, write_img_file, preset_file);
+		}
+
+		vzm::SetRenderTestParam("_bool_ReloadHLSLObjFiles", false, sizeof(bool), 0, 0);
+		key = cv::waitKey(1);
+	}
+
+	return 0;
+}
+
+int Fig_ShallowDepthBlending()
+{
+	// OIT test 1
+	std::list<int> loaded_obj_ids;
+
+	vzm::CameraParameters cam_params;
+	vzm::ObjStates obj_state;
+	high_Rh = 0.75, low_Rh = 0.2, diff_amp = 5.0;
+	scene_stage_scale = 50.f;
+
+	std::string preset_file = GetSolutionPath() + ".\\data\\preset_shallowdepth_floor.txt";
+	vzm::LoadMultipleModelsFile(GetSolutionPath() + ".\\data\\densepoints_floor.ply", loaded_obj_ids, true);
+	__cv3__ cam_params.pos = glm::fvec3(0, 0, scene_stage_scale);
+	__cv3__ cam_params.up = glm::fvec3(0, 1.f, 0);
+	__cv3__ cam_params.view = glm::fvec3(0, 0, -1.f);
+	cam_params.np = 0.1f;
+	cam_params.fp = 500.f;
+	obj_state.surfel_size = 0.02f; // control for visible point size
+
+	cam_params.fov_y = 3.141592654f / 4.f;
+	cam_params.projection_mode = 2;
+	cam_params.w = 1024;
+	cam_params.h = 1024;
+	cam_params.aspect_ratio = (float)cam_params.w / (float)cam_params.h;
+
+	vzm::SceneEnvParameters scn_env_params;
+	scn_env_params.is_on_camera = true;
+	scn_env_params.is_pointlight = true;
+	__cv3__ scn_env_params.pos_light = __cv3__ cam_params.pos;
+	__cv3__ scn_env_params.dir_light = __cv3__ cam_params.view;
+
+	__cv4__ obj_state.color = glm::fvec4(0.8f, 1.f, 1.f, 1.f);
+	obj_state.color[3] = 1.0f; // control for transparency
+	__cm4__ obj_state.os2ws = glm::fmat4x4(); // identity
+
+	scene_name[0] = "Sallow Depth Blending";
+
+	std::map<std::string, std::list<int>> prim_ids = {
+		{scene_name[0], loaded_obj_ids} ,
+		//{scene_name[1], {id1, id1, ...}} ,
+	};
+
+	for (int i = 0; i < (int)scene_name.size(); i++)
+	{
+		// (int)i is scene_id
+		vzm::SetSceneEnvParameters(i, scn_env_params);
+		vzm::SetCameraParameters(i, cam_params, 0);
+
+		auto it = prim_ids.find(scene_name[i]);
+		for (int& obj_id : it->second)
+			vzm::ReplaceOrAddSceneObject(i, obj_id, obj_state);
+
+		cv::namedWindow(scene_name[i], cv::WINDOW_AUTOSIZE);
+		cv::setMouseCallback(scene_name[i], CallBackFunc_Mouse, NULL);// &scenes[i]);
+	}
+
+	align_obj_to_world_center(0, loaded_obj_ids);
+
+	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), 0, 0);
+	vzm::SetRenderTestParam("_double_CopVZThickness", 0.002, sizeof(double), 0, 0);
+	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), 0, 0);
+	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), 0, 0);
+	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), 0, 0);
+	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), 0, 0);
+	// after presetting of SetRenderTestParams
+	load_preset(preset_file, loaded_obj_ids);
+	std::cout << "oit mode : SK+BTZ" << std::endl;
+
+	int oit_mode = 0;
+	int key = -1;
+	while (key != 'q')
+	{
+		bool write_img_file = false;
+		key_actions(key, preset_file, loaded_obj_ids, write_img_file);
+
+		for (auto& it : scene_name)
+		{
+			show_window(it.second, it.first, 0, write_img_file, preset_file);
+		}
+
+		vzm::SetRenderTestParam("_bool_ReloadHLSLObjFiles", false, sizeof(bool), 0, 0);
+		key = cv::waitKey(1);
+	}
+
+	return 0;
+}
+
+int Fig_HybridVR()
+{
+	int loaded_vol_id = 0;
+	std::string preset_file = GetSolutionPath() + ".\\data\\preset_hybrid_backpack.txt";
+	vzm::LoadModelFile(GetSolutionPath() + ".\\data\\backpack16_512x512x373_0.0039064x0.0039064x0.005_ushort.den", loaded_vol_id, true);
+	int loaded_mesh_id = 0;
+	vzm::LoadModelFile(GetSolutionPath() + ".\\data\\hairball_colored.ply", loaded_mesh_id, true);
+	int loaded_surfel_id= 0;
+	vzm::LoadModelFile(GetSolutionPath() + ".\\data\\densepoints_floor.ply", loaded_surfel_id, true);
+
+	int vr_tmap_id = 0;
+	std::vector<glm::fvec2> alpha_ctrs;
+	alpha_ctrs.push_back(glm::fvec2(0, 50));
+	alpha_ctrs.push_back(glm::fvec2(1.0, 60));
+	alpha_ctrs.push_back(glm::fvec2(1.0, 65536));
+	alpha_ctrs.push_back(glm::fvec2(0, 65537));
+	std::vector<glm::fvec4> rgb_ctrs;
+	rgb_ctrs.push_back(glm::fvec4(1, 0.31, 0.78, 0));
+	rgb_ctrs.push_back(glm::fvec4(1, 0.31, 0.78, 30));
+	rgb_ctrs.push_back(glm::fvec4(0.51, 1, 0.49, 130));
+	rgb_ctrs.push_back(glm::fvec4(1, 0.31, 0.78, 200));
+	rgb_ctrs.push_back(glm::fvec4(1, 1, 1, 65536));
+	vzm::GenerateMappingTable(65537, alpha_ctrs.size(), (float*)&alpha_ctrs[0], rgb_ctrs.size(), (float*)&rgb_ctrs[0], vr_tmap_id);
+
+	vzm::ObjStates volume_state;
+	volume_state.associated_obj_ids[vzm::ObjStates::VR_OTF] = vr_tmap_id;
+	double vol_scale = 1.0;// 0.02f * 0.2f;
+	volume_state.is_visible = false;
+	__cm4__ volume_state.os2ws = glm::translate(glm::fvec3(-4.37, 8.71, 0)) * glm::scale(glm::fvec3(vol_scale));
+
+	vzm::ReplaceOrAddSceneObject(0, loaded_vol_id, volume_state);
+	vzm::ObjStates obj_state;
+	obj_state.color[3] = 0.1f; // control for transparency
+	obj_state.surfel_size = 0.12f;
+	vzm::ReplaceOrAddSceneObject(0, loaded_surfel_id, obj_state);
+	align_obj_to_world_center(0, { loaded_surfel_id });
+
+	obj_state.color[3] = 0.1f;
+	__cm4__ obj_state.os2ws = glm::translate(glm::fvec3(-4.37, 8.71, 0)) * glm::scale(glm::fvec3(0.2));
+	vzm::ReplaceOrAddSceneObject(0, loaded_mesh_id, obj_state);
+
+	vzm::SetRenderTestParam("_double_UserSampleRate", 1.0 / vol_scale, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_bool_ApplySampleRateToGradient", false, sizeof(bool), -1, -1);
+	vzm::SetRenderTestParam("_int_RendererType", (int)3, sizeof(int), 0, 0, loaded_vol_id);
+
+	vzm::CameraParameters cam_params;
+	high_Rh = 0.75, low_Rh = 0.2, diff_amp = 5.0;
+	scene_stage_scale = 50.f;
+
+	__cv3__ cam_params.pos = glm::fvec3(-3.7116, 2.22519, 0.150089);
+	__cv3__ cam_params.up = glm::fvec3(-0.0210909, 0.0635336, 0.997757);
+	__cv3__ cam_params.view = glm::fvec3(-0.0798922, 0.99468, -0.0650266);
+	cam_params.np = 0.10f;
+	cam_params.fp = 1000.f;
+
+	cam_params.fov_y = 3.141592654f / 4.f;
+	cam_params.projection_mode = 2;
+	cam_params.w = 1024;
+	cam_params.h = 1024;
+	cam_params.aspect_ratio = (float)cam_params.w / (float)cam_params.h;
+
+	vzm::SceneEnvParameters scn_env_params;
+	scn_env_params.is_on_camera = true;
+	scn_env_params.is_pointlight = true;
+	__cv3__ scn_env_params.pos_light = __cv3__ cam_params.pos;
+	__cv3__ scn_env_params.dir_light = __cv3__ cam_params.view;
+
+	scene_name[0] = "Hybrid Objects Scene";
+
+	std::map<std::string, std::list<int>> prim_ids = {
+		{scene_name[0], {loaded_vol_id, loaded_mesh_id, loaded_surfel_id}} ,
+	};
+
+	for (int i = 0; i < (int)scene_name.size(); i++)
+	{
+		// (int)i is scene_id
+		vzm::SetSceneEnvParameters(i, scn_env_params);
+		vzm::SetCameraParameters(i, cam_params, 0);
+
+		//auto it = prim_ids.find(scene_name[i]);
+
+		cv::namedWindow(scene_name[i], cv::WINDOW_AUTOSIZE);
+		cv::setMouseCallback(scene_name[i], CallBackFunc_Mouse, NULL);// &scenes[i]);
+	}
+
+	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), 0, 0);
+	vzm::SetRenderTestParam("_double_CopVZThickness", 0.00002, sizeof(double), 0, 0);
+	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), 0, 0);
+	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), 0, 0);
+	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), 0, 0);
+	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), 0, 0);
+	// after presetting of SetRenderTestParams
+	load_preset(preset_file, { });
+	std::cout << "oit mode : SK+BTZ" << std::endl;
+
+	int oit_mode = 0;
+	int key = -1;
+	while (key != 'q')
+	{
+		bool write_img_file = false;
+		key_actions(key, preset_file, { }, write_img_file);
+
+		for (auto& it : scene_name)
+		{
+			show_window(it.second, it.first, 0, write_img_file, preset_file);
+		}
+
+		vzm::SetRenderTestParam("_bool_ReloadHLSLObjFiles", false, sizeof(bool), 0, 0);
+		key = cv::waitKey(1);
+	}
+
+	return 0;
+}
+
+int Test()
+{
+	// OIT test 1
+	std::list<int> loaded_obj_ids;
+
+	vzm::CameraParameters cam_params;
+	vzm::ObjStates obj_state;
+	int w = 1024, h = 1024;
+	if (w > 1024 && h > 1024)
+		vzm::SetRenderTestParam("_int_BufExScale", (int)4, sizeof(int), 0, 0); // set this when the resolution 2048x2048 (NVIDIA GTX 1080)
+
+	high_Rh = 0.75, low_Rh = 0.2, diff_amp = 10.0;
+	scene_stage_scale = 100.f;
+
+	std::string preset_file = GetSolutionPath() + ".\\data\\preset_test_ellipsoidal_spheres.txt";
+	int obj_loaded_id = 0;
+	vzm::LoadModelFile(GetSolutionPath() + ".\\data\\ellipsoidal_spheres.stl", obj_loaded_id, true);
+	loaded_obj_ids.push_back(obj_loaded_id);
+	obj_loaded_id = 0;
+	vzm::LoadModelFile(GetSolutionPath() + ".\\data\\ellipsoidal_spheres.stl", obj_loaded_id, true);
+	loaded_obj_ids.push_back(obj_loaded_id);
+	obj_loaded_id = 0;
+	vzm::LoadModelFile(GetSolutionPath() + ".\\data\\ellipsoidal_spheres.stl", obj_loaded_id, true);
+	loaded_obj_ids.push_back(obj_loaded_id);
+	__cv3__ cam_params.pos = glm::fvec3(0, 0, scene_stage_scale);
+	__cv3__ cam_params.up = glm::fvec3(0, 1.f, 0);
+	__cv3__ cam_params.view = glm::fvec3(0, 0, -1.f);
+	cam_params.np = 0.10f;
+	cam_params.fp = 1000.f;
+	// obj file includes material info, which is prior shading option for rendering; therefore, wildcard setting is required to change shading.
+
+
+	cam_params.fov_y = 3.141592654f / 4.f;
+	cam_params.projection_mode = 2;
+	cam_params.w = w;
+	cam_params.h = h;
+	cam_params.aspect_ratio = (float)cam_params.w / (float)cam_params.h;
+
+	vzm::SceneEnvParameters scn_env_params;
+	scn_env_params.is_on_camera = true;
+	scn_env_params.is_pointlight = true;
+	__cv3__ scn_env_params.pos_light = __cv3__ cam_params.pos;
+	__cv3__ scn_env_params.dir_light = __cv3__ cam_params.view;
+
+	__cv4__ obj_state.color = glm::fvec4(0.8f, 1.f, 1.f, 1.f);
+	obj_state.color[3] = 0.9f; // control for transparency
+	__cm4__ obj_state.os2ws = glm::fmat4x4(); // identity
+
+	scene_name[0] = "OIT";
+
+	std::map<std::string, std::list<int>> prim_ids = {
+		{scene_name[0], loaded_obj_ids} ,
+		//{scene_name[1], {id1, id1, ...}} ,
+	};
+
+	for (int i = 0; i < (int)scene_name.size(); i++)
+	{
+		// (int)i is scene_id
+		vzm::SetSceneEnvParameters(i, scn_env_params);
+		vzm::SetCameraParameters(i, cam_params, 0);
+
+		auto it = prim_ids.find(scene_name[i]);
+		for (int& obj_id : it->second)
+			vzm::ReplaceOrAddSceneObject(i, obj_id, obj_state);
+
+		cv::namedWindow(scene_name[i], cv::WINDOW_AUTOSIZE);
+		cv::setMouseCallback(scene_name[i], CallBackFunc_Mouse, NULL);// &scenes[i]);
+	}
+
+	align_obj_to_world_center(0, loaded_obj_ids);
+
+	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), 0, 0);
+	vzm::SetRenderTestParam("_double_CopVZThickness", 0.002, sizeof(double), 0, 0);
+	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), 0, 0);
+	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), 0, 0);
+	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), 0, 0);
+	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), 0, 0);
+	// after presetting of SetRenderTestParams
+	load_preset(preset_file, loaded_obj_ids);
+	std::cout << "oit mode : SK+BTZ" << std::endl;
+
+	int oit_mode = 0;
+	int key = -1;
+	while (key != 'q')
+	{
+		bool write_img_file = false;
+		key_actions(key, preset_file, loaded_obj_ids, write_img_file);
+
+		for (auto& it : scene_name)
+		{
+			show_window(it.second, it.first, 0, write_img_file, preset_file);
+		}
+
+		vzm::SetRenderTestParam("_bool_ReloadHLSLObjFiles", false, sizeof(bool), 0, 0);
+		key = cv::waitKey(1);
+	}
+
+	return 0;
+}
+
+int main()
+{
+	vzm::InitEngineLib();
+
+	//Fig_Absorbance();
+	//Fig_OitIntersection();
+	//Test();
+	Fig_OitPerformance();
+	//Fig_ShallowDepthBlending();
+	//Fig_HybridVR();
+	
 	vzm::DeinitEngineLib();
 	return 0;
 }

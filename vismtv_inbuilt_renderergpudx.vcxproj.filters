@@ -5,26 +5,11 @@
     <ClCompile Include="renderer\RendererHeader.cpp">
       <Filter>renderer</Filter>
     </ClCompile>
-    <ClCompile Include="renderer\DVR_Common_CS_legacy.cpp">
-      <Filter>renderer\legacy</Filter>
-    </ClCompile>
-    <ClCompile Include="renderer\RendererHeader_legacy.cpp">
-      <Filter>renderer\legacy</Filter>
-    </ClCompile>
-    <ClCompile Include="renderer\SR_Common_CS_legacy.cpp">
-      <Filter>renderer\legacy</Filter>
-    </ClCompile>
-    <ClCompile Include="renderer\SR_Plane_legacy.cpp">
-      <Filter>renderer\legacy</Filter>
-    </ClCompile>
     <ClCompile Include="gpu manager\gpures_helper.cpp">
       <Filter>gpu manager</Filter>
     </ClCompile>
     <ClCompile Include="gpu manager\gpures_interface.cpp">
       <Filter>gpu manager</Filter>
-    </ClCompile>
-    <ClCompile Include="gpu manager\gpures_helper_old.cpp">
-      <Filter>gpu manager\legacy</Filter>
     </ClCompile>
     <ClCompile Include="renderer\PrimitiveRenderer.cpp">
       <Filter>renderer</Filter>
@@ -44,24 +29,15 @@
     <ClInclude Include="renderer\Sampler.h">
       <Filter>renderer</Filter>
     </ClInclude>
-    <ClInclude Include="renderer\RendererHeader_legacy.h">
-      <Filter>renderer\legacy</Filter>
-    </ClInclude>
     <ClInclude Include="gpu manager\gpures_helper.h">
       <Filter>gpu manager</Filter>
     </ClInclude>
     <ClInclude Include="gpu manager\gpures_interface.h">
       <Filter>gpu manager</Filter>
     </ClInclude>
-    <ClInclude Include="gpu manager\gpures_helper_old.h">
-      <Filter>gpu manager\legacy</Filter>
-    </ClInclude>
     <ClInclude Include="gpu_common_res.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="hlsl\moment\TrigonometricMomentMath.hlsli">
-      <Filter>hlsl source code\Moment</Filter>
-    </None>
     <None Include="hlsl\moment\ComplexAlgebra.hlsli">
       <Filter>hlsl source code\Moment</Filter>
     </None>
@@ -71,14 +47,14 @@
     <None Include="hlsl\moment\MomentOIT.hlsli">
       <Filter>hlsl source code\Moment</Filter>
     </None>
-    <None Include="ShaderCompile_legacy.bat">
-      <Filter>bat</Filter>
-    </None>
     <None Include="ShaderCompile.bat">
       <Filter>bat</Filter>
     </None>
     <None Include="ex_ShaderCompile.bat">
       <Filter>bat</Filter>
+    </None>
+    <None Include="hlsl\moment\TrigonometricMomentMath.hlsli">
+      <Filter>hlsl source code\ssao</Filter>
     </None>
   </ItemGroup>
   <ItemGroup>
@@ -94,14 +70,8 @@
     <Filter Include="gpu manager">
       <UniqueIdentifier>{3027d6e8-88c4-411c-a3dc-83750d779504}</UniqueIdentifier>
     </Filter>
-    <Filter Include="hlsl source code\legacy">
-      <UniqueIdentifier>{91725d9b-ae3f-4196-98a7-dc8380d75870}</UniqueIdentifier>
-    </Filter>
     <Filter Include="gpu manager\legacy">
       <UniqueIdentifier>{5c3050f7-28fb-43a2-aeda-6c506b4fe8ef}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="renderer\legacy">
-      <UniqueIdentifier>{2aa97e01-6f22-459e-a3d6-489b3f4da6b7}</UniqueIdentifier>
     </Filter>
     <Filter Include="hlsl source code\Moment">
       <UniqueIdentifier>{3d60a282-de0d-4f81-971e-a82270d4889c}</UniqueIdentifier>
@@ -128,21 +98,6 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="hlsl\legacy\VRShader_Common.hlsl">
-      <Filter>hlsl source code\legacy</Filter>
-    </FxCompile>
-    <FxCompile Include="hlsl\legacy\VRShader_Shadow.hlsl">
-      <Filter>hlsl source code\legacy</Filter>
-    </FxCompile>
-    <FxCompile Include="hlsl\legacy\MergeMultipleLayers.hlsl">
-      <Filter>hlsl source code\legacy</Filter>
-    </FxCompile>
-    <FxCompile Include="hlsl\legacy\SRShader_Common.hlsl">
-      <Filter>hlsl source code\legacy</Filter>
-    </FxCompile>
-    <FxCompile Include="hlsl\legacy\ShaderCommonHeader.hlsl">
-      <Filter>hlsl source code\legacy</Filter>
-    </FxCompile>
     <FxCompile Include="hlsl\kbuf\Sr_Kbuf.hlsl">
       <Filter>hlsl source code\k buf</Filter>
     </FxCompile>
@@ -172,6 +127,9 @@
     </FxCompile>
     <FxCompile Include="hlsl\dx_abuf\DxABuf_Sort.hlsl">
       <Filter>hlsl source code\DxABuf</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\Matrix.hlsl">
+      <Filter>hlsl source code</Filter>
     </FxCompile>
   </ItemGroup>
 </Project>

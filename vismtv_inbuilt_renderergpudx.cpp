@@ -1,7 +1,5 @@
 #include "vismtv_inbuilt_renderergpudx.h"
 //#include "VXDX11Helper.h"
-#include "gpures_helper_old.h"
-#include "RendererHeader_legacy.h"
 #include "RendererHeader.h"
 
 #include <iostream>
@@ -12,15 +10,7 @@
 
 double g_dProgress = 0;
 double g_dRunTimeVRs = 0;
-
-#define ENABLE_LEGACY
-#define ENABLE_NEWOIT
-#ifdef ENABLE_LEGACY
-grd_helper_legacy::GpuDX11CommonParametersOld g_vmCommonParams_legacy;
-#endif
-#ifdef ENABLE_NEWOIT
 grd_helper::GpuDX11CommonParameters g_vmCommonParams;
-#endif
 LocalProgress g_LocalProgress;
 
 VmGpuManager* g_pCGpuManager = NULL;
@@ -49,22 +39,12 @@ bool InitModule(fncontainer::VmFnContainer& _fncontainer)
 	if(g_pCGpuManager == NULL)
 		g_pCGpuManager = new VmGpuManager(GpuSdkTypeDX11, "vismtv_inbuilt_renderergpudx.dll");
 
-#ifdef ENABLE_LEGACY
-	if (grd_helper_legacy::InitializePresettings(g_pCGpuManager, &g_vmCommonParams_legacy) == -1)
-	{
-		std::cout << "failure legacy initializer!" << std::endl;
-		DeInitModule(fncontainer::VmFnContainer());
-		return false;
-	}
-#endif
-#ifdef ENABLE_NEWOIT
 	if (grd_helper::InitializePresettings(g_pCGpuManager, &g_vmCommonParams) == -1)
 	{
 		std::cout << "failure new initializer!" << std::endl;
 		DeInitModule(fncontainer::VmFnContainer());
 		return false;
 	}
-#endif
 
 	return true;
 }
@@ -76,17 +56,6 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		return false;
 	}
 
-#ifdef ENABLE_LEGACY
-	if (g_vmCommonParams_legacy.pdx11Device == NULL || g_vmCommonParams_legacy.pdx11DeviceImmContext == NULL)
-	{
-		if (grd_helper_legacy::InitializePresettings(g_pCGpuManager, &g_vmCommonParams_legacy) == -1)
-		{
-			DeInitModule(fncontainer::VmFnContainer());
-			return false;
-		}
-	}
-#endif
-#ifdef ENABLE_NEWOIT
 	if (g_vmCommonParams.dx11Device == NULL || g_vmCommonParams.dx11DeviceImmContext == NULL)
 	{
 		if (grd_helper::InitializePresettings(g_pCGpuManager, &g_vmCommonParams) == -1)
@@ -95,7 +64,6 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 			return false;
 		}
 	}
-#endif
 
 	g_LocalProgress.start = 0;
 	g_LocalProgress.range = 100;
@@ -118,11 +86,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	// 100 means 50%
 	double dResourceRatioForVolume = dSizeGpuResourceForVolume * 0.5 * 0.01;
 	uint uiDedicatedGpuMemoryKB = 
-#if defined(ENABLE_LEGACY)
-		(uint)(g_vmCommonParams_legacy.stDx11Adapter.DedicatedVideoMemory / 1024);
-#elif defined(ENABLE_NEWOIT)
-		(uint)(g_vmCommonParams.stDx11Adapter.DedicatedVideoMemory / 1024);
-#endif
+		(uint)(g_vmCommonParams.dx11_adapter.DedicatedVideoMemory / 1024);
 	double dHalfCriterionKB = uiDedicatedGpuMemoryKB * dResourceRatioForVolume;
 	dHalfCriterionKB = _fncontainer.GetParamValue("_double_GpuVolumeMaxSizeKB", 256.0 * 1024.0);
 	// In CPU VR mode, Recommend to set dHalfCriterionKB = 16;
@@ -133,89 +97,19 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 #pragma endregion
 
 	string strRendererSourceType = _fncontainer.GetParamValue("_string_RenderingSourceType", string("MESH"));
-	bool test_oit = _fncontainer.GetParamValue("_bool_TestOit", true);
 	//test_oit = true;
 	bool is_shadow = _fncontainer.GetParamValue("_bool_IsShadow", false);
-
-#if defined(ENABLE_LEGACY)
-	bool generate_shadowmap = _fncontainer.GetParamValue("_bool_GenerateShadowMap", false);
-
-	// ID3D11PixelShader
-	ID3D11PixelShader** ppdx11PSs[NUMSHADERS_SR_PS];
-	for (int i = 0; i < NUMSHADERS_SR_PS; i++)
-		ppdx11PSs[i] = &g_vmCommonParams_legacy.pdx11PS_SR_Shaders[i];
-
-	// ID3D11GeometryShader
-	ID3D11GeometryShader** ppdx11GSs[NUMSHADERS_GS];
-	for (int i = 0; i < NUMSHADERS_GS; i++)
-		ppdx11GSs[i] = &g_vmCommonParams_legacy.pdx11GS_Shaders[i];
-
-	// ID3D11ComputeShader
-	ID3D11ComputeShader** ppdx11CS_VRs[NUMSHADERS_VR_CS];
-	for (int i = 0; i < NUMSHADERS_VR_CS; i++)
-		ppdx11CS_VRs[i] = &g_vmCommonParams_legacy.pdx11CS_VR_Shaders[i];
-	ID3D11ComputeShader** ppdx11CS_MERGEs[NUMSHADERS_MERGE_CS];
-	for (int i = 0; i < NUMSHADERS_MERGE_CS; i++)
-		ppdx11CS_MERGEs[i] = &g_vmCommonParams_legacy.pdx11CS_MergeTextures[i];
-
-	// ID3D11VertexShader
-	ID3D11VertexShader** ppdx11VSs[NUMSHADERS_SR_VS];
-	for (int i = 0; i < NUMSHADERS_SR_VS; i++)
-		ppdx11VSs[i] = &g_vmCommonParams_legacy.pdx11VS_SR_Shaders[i];
-	ID3D11VertexShader** ppdx11PlaneVSs[NUMSHADERS_PLANE_SR_VS];
-	for (int i = 0; i < NUMSHADERS_PLANE_SR_VS; i++)
-		ppdx11PlaneVSs[i] = &g_vmCommonParams_legacy.pdx11VS_PLANE_SR_Shaders[i];
-	ID3D11VertexShader** ppdx11FBiasVSs[NUMSHADERS_BIASZ_SR_VS];
-	for (int i = 0; i < NUMSHADERS_BIASZ_SR_VS; i++)
-		ppdx11FBiasVSs[i] = &g_vmCommonParams_legacy.pdx11VS_FBIAS_SR_Shaders[i];
-
-	// ID3D11InputLayout
-	ID3D11InputLayout* pdx11ILs[NUMINPUTLAYOUTS];
-	for (int i = 0; i < NUMINPUTLAYOUTS; i++)
-		pdx11ILs[i] = g_vmCommonParams_legacy.pdx11IinputLayouts[i];
-#endif
 
 	if (strRendererSourceType.compare("VOLUME") == 0)
 	{
 		double dRuntime = 0;
-		if (!test_oit)
-		{
-#if defined(ENABLE_LEGACY)
-			if (is_shadow)
-				RenderVrCommonCS(&_fncontainer, g_pCGpuManager, &g_vmCommonParams_legacy,
-					ppdx11CS_VRs, ppdx11CS_MERGEs, *ppdx11VSs[__VS_PROXY], pdx11ILs[0],
-					g_vmCommonParams_legacy.pdx11BufProxyVertice, true, &g_LocalProgress, &dRuntime);
-			RenderVrCommonCS(&_fncontainer, g_pCGpuManager, &g_vmCommonParams_legacy,
-				ppdx11CS_VRs, ppdx11CS_MERGEs, *ppdx11VSs[__VS_PROXY], pdx11ILs[0],
-				g_vmCommonParams_legacy.pdx11BufProxyVertice, false, &g_LocalProgress, &dRuntime);
-#endif
-		}
-		else
-		{
-#if defined(ENABLE_NEWOIT)
-			RenderVrDLS(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
-#endif
-		}
-
+		RenderVrDLS(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
 		g_dRunTimeVRs += dRuntime;
 	}
 	else if (strRendererSourceType.compare("MESH") == 0) // MESH
 	{
 		double dRuntime = 0;
-		if (!test_oit)
-		{
-#if defined(ENABLE_LEGACY)
-			RenderSrCommonCS(&_fncontainer, g_pCGpuManager, &g_vmCommonParams_legacy,
-				pdx11ILs, ppdx11VSs, ppdx11FBiasVSs, ppdx11PSs, ppdx11GSs, ppdx11CS_MERGEs, &g_vmCommonParams_legacy.pdx11CS_Outline,
-				g_vmCommonParams_legacy.pdx11BufProxyVertice, &g_LocalProgress, &dRuntime);
-#endif
-		}
-		else
-		{
-#if defined(ENABLE_NEWOIT)
-			RenderSrOIT(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
-#endif
-		}
+		RenderSrOIT(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
 		g_dRunTimeVRs += dRuntime;
 	}
 	else if (strRendererSourceType.compare("SECTIONAL_MESH") == 0)
@@ -236,7 +130,6 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 void DeInitModule(fncontainer::VmFnContainer& _fncontainer)
 {
 	// ORDER!!
-	grd_helper_legacy::DeinitializePresettings();
 	grd_helper::DeinitializePresettings();
 	VMSAFE_DELETE(g_pCGpuManager);
 }
@@ -264,22 +157,13 @@ void InteropCustomWork(fncontainer::VmFnContainer& _fncontainer)
 		if (g_pCGpuManager == NULL)
 			g_pCGpuManager = new VmGpuManager(GpuSdkTypeDX11, "vismtv_inbuilt_renderergpudx.dll");
 
-#if defined(ENABLE_LEGACY)
-		*piGpuState = grd_helper_legacy::InitializePresettings(g_pCGpuManager, &g_vmCommonParams_legacy);
-#endif
-#if defined(ENABLE_NEWOIT)
 		*piGpuState = grd_helper::InitializePresettings(g_pCGpuManager, &g_vmCommonParams);
-#endif
 
 		int* piFeatureLevel = (int*)_fncontainer.ReadRmwBufferPtr("_out_int_FeatureLevelDX11", (int*)NULL);
 		if(piFeatureLevel)
 		{
 			*piFeatureLevel = 
-#if defined(ENABLE_LEGACY)
-				g_vmCommonParams_legacy.eDx11FeatureLevel;
-#elif defined(ENABLE_NEWOIT)
 				g_vmCommonParams.dx11_featureLevel;
-#endif
 			// 0x10DE : NVIDIA
 			// 0x1002, 0x1022 : AMD ATI
 		}
@@ -291,12 +175,8 @@ void InteropCustomWork(fncontainer::VmFnContainer& _fncontainer)
 	{
 		if (g_pCGpuManager == NULL)
 			g_pCGpuManager = new VmGpuManager(GpuSdkTypeDX11, "vismtv_inbuilt_renderergpudx.dll");
-#if defined(ENABLE_LEGACY)
-		grd_helper_legacy::InitializePresettings(g_pCGpuManager, &g_vmCommonParams_legacy);
-#endif
-#if defined(ENABLE_NEWOIT)
+
 		grd_helper::InitializePresettings(g_pCGpuManager, &g_vmCommonParams);
-#endif
 		*ppCGpuManager = g_pCGpuManager;
 	}
 
@@ -308,11 +188,7 @@ void InteropCustomWork(fncontainer::VmFnContainer& _fncontainer)
 	//	*ppvRendererMerger = HDx11MixOut;
 	//}
 
-#if defined(ENABLE_LEGACY)
-	if (g_vmCommonParams_legacy.pdx11Device == NULL || g_vmCommonParams_legacy.pdx11DeviceImmContext == NULL)
-#elif defined(ENABLE_NEWOIT)
 	if (g_vmCommonParams.dx11Device == NULL || g_vmCommonParams.dx11DeviceImmContext == NULL)
-#endif
 	{
 		bool* pbIsGpuLoaded = (bool*)_fncontainer.ReadRmwBufferPtr("_out_bool_IsLoadedVolume0", (int*)NULL);
 		if(pbIsGpuLoaded != NULL)
@@ -399,13 +275,13 @@ void InteropCustomWork(fncontainer::VmFnContainer& _fncontainer)
 						g_LocalProgress.range = 100;
 						g_LocalProgress.progress_ptr = &g_dProgress;
 
-						grd_helper_legacy::UpdateVolumeModel(gres_main_vol, main_vol_obj, render_type == 5 /*__RM_SURFACECCF*/, &g_LocalProgress);
+						grd_helper::UpdateVolumeModel(gres_main_vol, main_vol_obj, render_type == 5 /*__RM_SURFACECCF*/, &g_LocalProgress);
 
 						g_LocalProgress.start = 0;
 						g_LocalProgress.range = 100;
 						g_LocalProgress.progress_ptr = &g_dProgress;
 
-						grd_helper_legacy::UpdateVolumeModel(gres_mask_vol, mask_vol_obj, true, &g_LocalProgress);
+						grd_helper::UpdateVolumeModel(gres_mask_vol, mask_vol_obj, true, &g_LocalProgress);
 					}
 				}
 				g_dProgress = 100;
@@ -432,7 +308,7 @@ void InteropCustomWork(fncontainer::VmFnContainer& _fncontainer)
 
 				map<int, GpuRes> mapGpuRes_Vtx;
 				map<int, GpuRes> mapGpuRes_Idx;
-				map<int, GpuRes> mapGpuRes_Tex;
+				map<int, map<string, GpuRes>> mapGpuRes_Tex;
 				map<int, GpuRes> mapGpuRes_VolumeAndTMap;
 				vector<VmObject*> vtrInputPrimitives;
 				int num_prim_objs = _fncontainer.GetVmObjectList(&vtrInputPrimitives, VmObjKey(ObjectTypePRIMITIVE, true));
@@ -454,20 +330,21 @@ void InteropCustomWork(fncontainer::VmFnContainer& _fncontainer)
 					g_LocalProgress.start = 0;
 					g_LocalProgress.range = 100;
 					g_LocalProgress.progress_ptr = &g_dProgress;
-					RegisterVolumeRes(vol_obj, tobj, lobj, g_pCGpuManager, g_vmCommonParams_legacy.pdx11DeviceImmContext, mapAssociatedObjects,
+					RegisterVolumeRes(vol_obj, tobj, lobj, g_pCGpuManager, g_vmCommonParams.dx11DeviceImmContext, mapAssociatedObjects,
 						mapGpuRes_VolumeAndTMap, &g_LocalProgress);
 
 					g_LocalProgress.start = 0;
 					g_LocalProgress.range = 100;
 					g_LocalProgress.progress_ptr = &g_dProgress;
-					GpuRes gres_vtx, gres_idx, gres_tex;
-					grd_helper_legacy::UpdatePrimitiveModel(gres_vtx, gres_idx, gres_tex, prim_obj, &g_LocalProgress);
+					GpuRes gres_vtx, gres_idx;
+					map<string, GpuRes> map_gres_texs;
+					grd_helper::UpdatePrimitiveModel(gres_vtx, gres_idx, map_gres_texs, prim_obj, &g_LocalProgress);
 					if (gres_vtx.alloc_res_ptrs.size() > 0)
 						mapGpuRes_Vtx.insert(pair<int, GpuRes>(prim_obj_id, gres_vtx));
 					if (gres_idx.alloc_res_ptrs.size() > 0)
 						mapGpuRes_Idx.insert(pair<int, GpuRes>(prim_obj_id, gres_idx));
-					if (gres_tex.alloc_res_ptrs.size() > 0)
-						mapGpuRes_Tex.insert(pair<int, GpuRes>(prim_obj_id, gres_tex));
+					if (map_gres_texs.size() > 0)
+						mapGpuRes_Tex.insert(pair<int, map<string, GpuRes>>(prim_obj_id, map_gres_texs));
 				}
 			}
 		}

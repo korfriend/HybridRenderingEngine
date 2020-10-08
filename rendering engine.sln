@@ -6,6 +6,9 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "vismtv_inbuilt_renderergpudx", "vismtv_inbuilt_renderergpudx.vcxproj", "{BD108E48-5831-4F89-8E39-5662EBDB276A}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ExecutableSample", "ExecutableSample.vcxproj", "{08EBF6A5-8B97-467A-B3F1-B639BDBD6C2F}"
+	ProjectSection(ProjectDependencies) = postProject
+		{BD108E48-5831-4F89-8E39-5662EBDB276A} = {BD108E48-5831-4F89-8E39-5662EBDB276A}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

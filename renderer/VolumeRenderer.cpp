@@ -49,13 +49,6 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			cout << _message << endl;
 	};
 
-	bool print_out_routine_objs = _fncontainer->GetParamValue("_bool_PrintOutRoutineObjs", false);
-	bool gpu_profile = false;
-	if (print_out_routine_objs)
-	{
-		gpu_profile = _fncontainer->GetParamValue("_bool_GpuProfile", false);
-	}
-
 #define __DTYPE(type) data_type::dtype<type>()
 	auto Get_LCParam = [&lobj](const string& name, data_type dtype, auto default_value)
 	{
@@ -68,7 +61,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	int k_value = _fncontainer->GetParamValue("_int_NumK", k_value_old);
 	lobj->RegisterCustomParameter("_int_NumK", k_value);
 	MFR_MODE mode_OIT = (MFR_MODE)_fncontainer->GetParamValue("_int_OitMode", (int)0);
-	int buf_ex_scale = _fncontainer->GetParamValue("_int_BufExScale", (int)4); // 32 layers
+	int buf_ex_scale = _fncontainer->GetParamValue("_int_BufExScale", (int)8); // 32 layers
 	int num_moments_old = 8;
 	lobj->GetCustomParameter("_int_NumQueueLayers", data_type::dtype<int>(), &num_moments_old);
 	int num_moments = _fncontainer->GetParamValue("_int_NumQueueLayers", num_moments_old);
@@ -100,7 +93,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 		string prefix_path = hlslobj_path;
 
-#define CS_NUM 7
+#define CS_NUM 13
 #define SET_CS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(COMPUTE_SHADER, NAME), dx11CShader, true)
 
 		string strNames_CS[CS_NUM] = {
@@ -110,6 +103,12 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			  ,"VR_DEFAULT_cs_5_0"
 			  ,"VR_OPAQUE_cs_5_0"
 			  ,"VR_CONTEXT_cs_5_0"
+			  ,"VR_DEFAULT_DKBZ_cs_5_0"
+			  ,"VR_OPAQUE_DKBZ_cs_5_0"
+			  ,"VR_CONTEXT_DKBZ_cs_5_0"
+			  ,"VR_DEFAULT_DFB_cs_5_0"
+			  ,"VR_OPAQUE_DFB_cs_5_0"
+			  ,"VR_CONTEXT_DFB_cs_5_0"
 			  ,"VR_SURFACE_cs_5_0"
 		};
 
@@ -169,6 +168,12 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	{
 		gpu_manager->ReleaseGpuResourcesBySrcID(iobj->GetObjectID());	// System Out Æ÷ÇÔ //
 		iobj->RegisterCustomParameter("_int2_PreviousScreenSize", fb_size_cur);
+	}
+
+	bool gpu_profile = false;
+	if (fb_size_cur.x > 200 && fb_size_cur.y > 200)
+	{
+		gpu_profile = _fncontainer->GetParamValue("_bool_GpuProfile", false);
 	}
 
 	GpuRes gres_fb_rgba, gres_fb_depthcs;
@@ -343,7 +348,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 // 	const int __BLOCKSIZE = 8;
 // 	uint num_grid_x = (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
 // 	uint num_grid_y = (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
-	const int __BLOCKSIZE = _fncontainer->GetParamValue("_int_GpuThreadBlockSize", (int)1);
+	const int __BLOCKSIZE = _fncontainer->GetParamValue("_int_GpuThreadBlockSize", (int)8);
 	uint num_grid_x = __BLOCKSIZE == 1 ? fb_size_cur.x : (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
 	uint num_grid_y = __BLOCKSIZE == 1 ? fb_size_cur.y : (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
 
@@ -738,11 +743,11 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		case __RM_RAYMAX: cshader = GETCS(VR_RAYMAX_cs_5_0); break;
 		case __RM_RAYSUM: cshader = GETCS(VR_RAYSUM_cs_5_0); break;
 		case __RM_CLIPOPAQUE:
-		case __RM_OPAQUE: cshader = GETCS(VR_OPAQUE_cs_5_0); break;
-		case __RM_MODULATION: cshader = GETCS(VR_CONTEXT_cs_5_0); break;
+		case __RM_OPAQUE: cshader = mode_OIT == MFR_MODE::SKBTZ ? GETCS(VR_OPAQUE_cs_5_0) : mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBT ? GETCS(VR_OPAQUE_DFB_cs_5_0) : GETCS(VR_OPAQUE_DKBZ_cs_5_0); break;
+		case __RM_MODULATION: cshader = mode_OIT == MFR_MODE::SKBTZ ? GETCS(VR_CONTEXT_cs_5_0) : mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBT ? GETCS(VR_CONTEXT_DFB_cs_5_0) : GETCS(VR_CONTEXT_DKBZ_cs_5_0); break;
 		case __RM_DEFAULT:
 		case __RM_SCULPTMASK: 
-		default: cshader = GETCS(VR_DEFAULT_cs_5_0); break;
+		default: cshader = mode_OIT == MFR_MODE::SKBTZ ? GETCS(VR_DEFAULT_cs_5_0) : mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBT ? GETCS(VR_DEFAULT_DFB_cs_5_0) : GETCS(VR_DEFAULT_DKBZ_cs_5_0); break;
 		}
 
 		ID3D11UnorderedAccessView* dx11UAVs[4] = {
@@ -769,7 +774,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		if (i == num_main_vrs - 1 && cbEnvState.r_kernel_ao > 0)
 		{
 			is_performed_ssao = true;
-			dx11DeviceImmContext->Flush();
+			//dx11DeviceImmContext->Flush();
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 			ComputeSSAO(dx11DeviceImmContext, dx11CommonParams, num_grid_x, num_grid_y,
 				gres_fb_counter, gres_fb_deep_k_buffer, gres_fb_rgba, blur_SSAO,
@@ -793,7 +798,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		}
 
 		dx11DeviceImmContext->CSSetShader(cshader, NULL, 0);
-		dx11DeviceImmContext->Flush();
+		//dx11DeviceImmContext->Flush();
 		dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
 #ifdef __DX_DEBUG_QUERY
 		dx11CommonParams->debug_info_queue->PushEmptyStorageFilter();
@@ -814,7 +819,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
 		};
 		is_performed_ssao = true;
-		dx11DeviceImmContext->Flush();
+		//dx11DeviceImmContext->Flush();
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 		ComputeSSAO(dx11DeviceImmContext, dx11CommonParams, num_grid_x, num_grid_y,
 			gres_fb_counter, gres_fb_deep_k_buffer, gres_fb_rgba, blur_SSAO,
@@ -837,7 +842,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		}
 	}
 
-	dx11DeviceImmContext->Flush();
+	//dx11DeviceImmContext->Flush();
 	//printf("# Textures : %d, # Drawing : %d, # RTBuffer Change : %d, # Merging : %d\n", iNumTexureLayers, iCountRendering, iCountRTBuffers, iCountMerging);
 	
 	if (gpu_profile)
@@ -1007,7 +1012,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				if (tsS == 0 || tsE == 0) return;
 				cout << _test << " : " << float(tsE - tsS) / float(tsDisjoint.Frequency) * 1000.0f << " ms" << endl;
 			};
-			DisplayDuration(tsBeginFrame, tsEndFrame, "#GPU# Total (including copyback) Time");
+			//DisplayDuration(tsBeginFrame, tsEndFrame, "#GPU# Total (including copyback) Time");
 			DisplayDuration(tsBeginFrame, tsEndDVR, "#GPU# Direct Volume Render Time");
 			DisplayDuration(tsEndDVR, tsEndFrame, "#GPU# CopyBack Time");
 		}

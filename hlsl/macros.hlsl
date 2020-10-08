@@ -88,7 +88,7 @@
 		sort_shell(num, fragments, FRAG)\
 }
 
-#define INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, thick_sample, fs, merging_beta) {\
+#define INTERMIX_OLD(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, thick_sample, fs, merging_beta) {\
     if (idx_dlayer >= num_frags)\
     {\
         vis_out += vis_sample * (1.f - vis_out.a);\
@@ -146,7 +146,80 @@
     }\
 }
 
-// no ZTE
+// optimized
+#define INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, thick_sample, fs, merging_beta) {\
+    if (idx_dlayer >= num_frags)\
+    {\
+        vis_out += vis_sample * (1.f - vis_out.a);\
+    }\
+    else\
+    {\
+        Fragment f_cur;\
+        f_cur.i_vis = ConvertFloat4ToUInt(vis_sample);\
+        f_cur.z = depth_sample;\
+        f_cur.zthick = thick_sample;\
+		f_cur.opacity_sum = vis_sample.a;\
+        [loop]\
+        while (idx_dlayer < num_frags && (f_cur.i_vis >> 24) != 0)\
+        {\
+            if (vis_out.a > ERT_ALPHA)\
+            {\
+                idx_dlayer = num_frags;\
+				i = num_ray_samples;\
+                break;\
+            }\
+			if (f_cur.z < f_dly.z - f_dly.zthick)\
+            {\
+				vis_out += ConvertUIntToFloat4(f_cur.i_vis) * (1.f - vis_out.a);\
+				f_cur.i_vis = 0;\
+                break;\
+            }\
+			else if (f_dly.z < f_cur.z - f_cur.zthick)\
+            {\
+				vis_out += ConvertUIntToFloat4(f_dly.i_vis) * (1.f - vis_out.a);\
+				f_dly = fs[++idx_dlayer];\
+            }\
+			else\
+			{\
+				Fragment f_prior, f_posterior; \
+				if (f_cur.z > f_dly.z)\
+				{\
+					f_prior = f_dly; \
+					f_posterior = f_cur; \
+				}\
+				else\
+				{\
+					f_prior = f_cur; \
+					f_posterior = f_dly; \
+				}\
+				Fragment_OUT fs_out = MergeFrags(f_prior, f_posterior, merging_beta);\
+				vis_out += ConvertUIntToFloat4(fs_out.f_prior.i_vis) * (1.f - vis_out.a);\
+				if (f_cur.z > f_dly.z)\
+				{\
+					f_cur = fs_out.f_posterior;\
+					f_dly = fs[++idx_dlayer];\
+				}\
+				else\
+				{\
+					f_cur.i_vis = 0; \
+					if ((fs_out.f_posterior.i_vis >> 24) == 0)\
+					{\
+						f_dly = fs[++idx_dlayer]; \
+					}\
+					else\
+						f_dly = fs_out.f_posterior;\
+					break;\
+				}\
+			}\
+        } \
+		if (f_cur.i_vis != 0)\
+		{\
+			vis_out += ConvertUIntToFloat4(f_cur.i_vis) * (1.f - vis_out.a); \
+		}\
+    }\
+}
+
+// without zthickness blending
 #define INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, fs) {\
     if (idx_dlayer >= num_frags)\
     {\
@@ -155,7 +228,7 @@
     else\
     {\
 		[loop]\
-        for (int k = idx_dlayer; k < num_frags; k++)\
+        for (uint k = idx_dlayer; k < num_frags; k++)\
         {\
             Fragment f_dly = fs[k];\
             float depth_diff = depth_sample - f_dly.z;\
@@ -165,12 +238,12 @@
                 float4 vis_dly = ConvertUIntToFloat4(f_dly.i_vis); \
                 if (depth_diff < g_cbVobj.sample_dist)\
                     /*vix_mix = BlendFloat4AndFloat4(vis_sample, vis_dly);*/\
-					vix_mix = MixOpt(vis_sample, vis_sample.a, vis_dly, f_dly.opacity_sum);\
+					vix_mix = MixOpt(vis_sample, vis_sample.a, vis_dly, vis_dly.a);\
                 else\
                     vix_mix = vis_dly;\
                 vis_out += vix_mix * (1.f - vis_out.a);\
                 idx_dlayer++;\
-                /*이것은 없애도 될 듯.*/if (vis_out.a > ERT_ALPHA)\
+                /*maybe removable*/if (vis_out.a > ERT_ALPHA)\
                 {\
                     idx_dlayer = num_frags; \
                     k = num_frags;\
@@ -209,7 +282,7 @@
 #define SET_FRAG(F_ADDR, K, F) {uint4 rb = uint4(F.i_vis, asuint(F.z), asuint(F.zthick), asuint(F.opacity_sum)); STORE4_KBUF(rb, F_ADDR, K);}
 #define SET_ZEROFRAG(F_ADDR, K) {STORE4_KBUF(0, F_ADDR, K);}
 #else
-#define NUM_ELES_PER_FRAG 2 // not optimal code
+#define NUM_ELES_PER_FRAG 2
 #define GET_FRAG(F, F_ADDR, K) {uint2 rb; LOAD2_KBUF(rb, F_ADDR, K); F.i_vis = rb.x; F.z = asfloat(rb.y);}
 #define SET_FRAG(F_ADDR, K, F) {uint2 rb = uint2(F.i_vis, asuint(F.z)); STORE2_KBUF(rb, F_ADDR, K);}
 #define SET_ZEROFRAG(F_ADDR, K) {STORE2_KBUF(0, F_ADDR, K);}

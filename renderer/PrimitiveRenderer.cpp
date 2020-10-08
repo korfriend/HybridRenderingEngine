@@ -695,7 +695,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	int num_moments_old = 8;
 	lobj->GetCustomParameter("_int_NumQueueLayers", data_type::dtype<int>(), &num_moments_old);
 	int num_moments = _fncontainer->GetParamValue("_int_NumQueueLayers", num_moments_old);
-	int num_safe_loopexit = _fncontainer->GetParamValue("_int_SpinLockSafeLoops", (int)1000);
+	int num_safe_loopexit = _fncontainer->GetParamValue("_int_SpinLockSafeLoops", (int)5000000);
 	bool is_final_renderer = _fncontainer->GetParamValue("_bool_IsFinalRenderer", true);
 	double v_thickness = _fncontainer->GetParamValue("_double_VZThickness", 0.003);
 	double v_copthickness = _fncontainer->GetParamValue("_double_CopVZThickness", 0.002);
@@ -709,13 +709,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	//bool is_moment_oit = is_a_buffer ? false : _fncontainer->GetParamValue("_bool_MomentOIT", false);
 	MFR_MODE mode_OIT = (MFR_MODE)_fncontainer->GetParamValue("_int_OitMode", (int)0);
 
-	int buf_ex_scale = _fncontainer->GetParamValue("_int_BufExScale", (int)4); // 32 layers
-	bool show_maxlayers_a_buffer_ = _fncontainer->GetParamValue("_bool_ShowMaxLayersAbuffer", false);
+	int buf_ex_scale = _fncontainer->GetParamValue("_int_BufExScale", (int)8); // 64 layers
 	bool use_blending_option_MomentOIT = _fncontainer->GetParamValue("_bool_UseBlendingOptionMomentOIT", false);
 	bool check_pixel_transmittance = _fncontainer->GetParamValue("_bool_PixelTransmittance", false);
-	vmint2 pixel_pos = _fncontainer->GetParamValue("_int2_PixelPos", vmint2(0));
-	double tr_interval = _fncontainer->GetParamValue("_double_TrInvterval", (double)0.01);
-	double tr_startoffset = _fncontainer->GetParamValue("_double_TrStartOffset", (double)1.00);
 	//vr_level = 2;
 	vmdouble4 global_light_factors = _fncontainer->GetParamValue("_double4_ShadingFactorsForGlobalPrimitives", vmdouble4(0.2, 1.0, 0.5, 5)); // Emission, Diffusion, Specular, Specular Power
 	vmdouble4 ui_light_factors = _fncontainer->GetParamValue("_double4_ShadingFactorsForUiPrimitives", vmdouble4(0.4, 0.8, 0.2, 30)); // Emission, Diffusion, Specular, Specular Power
@@ -726,7 +722,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	vmdouble3 default_color_cmmobj = _fncontainer->GetParamValue("_double3_CmmGlobalColor", vmdouble3(-1, -1, -1));
 
 	bool is_ghost_mode = _fncontainer->GetParamValue("_bool_GhostEffect", false);
-	bool use_spinlock_pixsynch = _fncontainer->GetParamValue("_bool_UseSpinLock", false);
+	bool use_spinlock_pixsynch = _fncontainer->GetParamValue("_bool_UseSpinLock", true);
 
 	bool is_rgba = _fncontainer->GetParamValue("_bool_IsRGBA", false); // false means bgra
 
@@ -1022,9 +1018,11 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	GpuRes gres_fb_ao_texs[2], gres_fb_ao_blf_texs[2], gres_fb_mip_a_halftexs[2], gres_fb_mip_z_halftexs[2]; // max_layers
 	GpuRes gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex;
 	GpuRes gres_fb_ref_pidx;
-	// A buffers... for test
-	GpuRes gres_fb_sys_rgba, gres_fb_sys_depthcs, gres_fb_sys_deep_k, gres_fb_sys_ref_pidx;
+	GpuRes gres_fb_sys_rgba, gres_fb_sys_depthcs;
 	GpuRes gres_fb_moment_rgba;
+
+	// check_pixel_transmittance
+	GpuRes gres_fb_sys_deep_k, gres_fb_sys_ref_pidx, gres_fb_sys_counter;
 	// Ghost effect mode
 	//GpuRes gres_fb_mask_hotspot;
 	grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D,
@@ -1078,11 +1076,15 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 	if (check_pixel_transmittance)
 	{
+		cout << "*********************************************************" << endl;
+		cout << "check_pixel_transmittance : ON!! performance downgrade!" << endl;
+
 		grd_helper::UpdateFrameBuffer(gres_fb_sys_deep_k, iobj, "SYSTEM_OUT_K_BUF", RTYPE_BUFFER,
 			NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT, num_frags_perpixel);
-		if (mode_OIT == MFR_MODE::DXAB)
-			grd_helper::UpdateFrameBuffer(gres_fb_sys_ref_pidx, iobj, "SYSTEM_OUT_REF_PIDX_BUF", RTYPE_BUFFER,
-				NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT);
+		grd_helper::UpdateFrameBuffer(gres_fb_sys_ref_pidx, iobj, "SYSTEM_OUT_REF_PIDX_BUF", RTYPE_BUFFER,
+			NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT);
+		grd_helper::UpdateFrameBuffer(gres_fb_sys_counter, iobj, "SYSTEM_OUT_COUNTER", RTYPE_TEXTURE2D,
+			NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT);
 	}
 	if (is_ghost_mode)
 	{
@@ -1211,7 +1213,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		cbCamState.iSrCamDummy__0 = *(uint*)&merging_beta;
 	if (mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::DKBT)
 		cbCamState.cam_flag |= (0x1 << 2);
-	if (!is_final_renderer) // which means the k-buffer can be used for the following renderer
+	if (!is_final_renderer || check_pixel_transmittance) // which means the k-buffer can be used for the following renderer
 		cbCamState.cam_flag |= (0x1 << 3);
 	D3D11_MAPPED_SUBRESOURCE mappedResCamState;
 	dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
@@ -1362,7 +1364,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		vmmat44f matOS2SS = matOS2WS * matWS2SS;
 		int w, h;
 		__compute_computespace_screen(w, h, matOS2SS, prim_data->aabb_os);
-		bool is_wildcard_Candidate = w * h < minimum_oit_area;
+		bool is_wildcard_Candidate = false;// w * h < minimum_oit_area;
 		_w_max = max(_w_max, w);
 		_h_max = max(_h_max, h);
 
@@ -1466,20 +1468,22 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		else general_oit_routine_objs.push_back(render_obj_info);
 	}
 
-	bool print_out_routine_objs = _fncontainer->GetParamValue("_bool_PrintOutRoutineObjs", false) && fb_size_cur.x > 200 && fb_size_cur.y > 200;
 	bool gpu_profile = false;
-	if (print_out_routine_objs)
+	if (fb_size_cur.x > 200 && fb_size_cur.y > 200)
 	{
-		cout << "  ** general_oit_routine_objs    : " << general_oit_routine_objs.size() << endl;
-		cout << "  ** special_effect_routine_objs : " << single_layer_routine_objs.size() << endl;
-		cout << "  ** foremost_sr_routine_objs : " << foremost_surfaces_routine_objs.size() << endl;
 		gpu_profile = _fncontainer->GetParamValue("_bool_GpuProfile", false);
+		if(gpu_profile)
+		{
+			cout << "  ** general_oit_routine_objs    : " << general_oit_routine_objs.size() << endl;
+			cout << "  ** special_effect_routine_objs : " << single_layer_routine_objs.size() << endl;
+			cout << "  ** foremost_sr_routine_objs : " << foremost_surfaces_routine_objs.size() << endl;
+		}
 	}
 
 	double pcFreq;
-	auto DisplayTimes = [&print_out_routine_objs, &pcFreq](const __int64 CounterStart, const string& _test)
+	auto DisplayTimes = [&gpu_profile, &pcFreq](const __int64 CounterStart, const string& _test)
 	{
-		//if (!print_out_routine_objs) return;
+		//if (!gpu_profile) return;
 		//
 		//LARGE_INTEGER lIntCntEnd;
 		//QueryPerformanceCounter(&lIntCntEnd);
@@ -1493,7 +1497,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		//QueryPerformanceCounter(&lIntCntFreq);
 		return 0;// lIntCntFreq.QuadPart;
 	};
-	//print_out_routine_objs = true;
 #pragma endregion // Presetting of VxObject
 
 #pragma region // FrameBuffer Setting
@@ -2189,12 +2192,6 @@ BEGIN_RENDERER_LOOP:
 			profile_map["end gen moment"] = gpu_profilecount;
 			gpu_profilecount++;
 		}
-		else if (RENDERER_LOOP == 2)
-		{
-			dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
-			profile_map["end geometry shader"] = gpu_profilecount;
-			gpu_profilecount++;
-		}
 	}
 
 #define NUM_UAVs_2ND 4
@@ -2340,7 +2337,7 @@ BEGIN_RENDERER_LOOP:
 			// here, we assign this w.r.t. our z-thickness model (rgba, depth, thickness, opacity_sum), i.e., 16 bytes per fragment
 			const double size_k_buf_mb = (double)(16 * k_value * buffer_ex) * ((double)fb_size_cur.x * (double)fb_size_cur.y / (1024.0 * 1024.0));
 
-			double min_diff_sq = 1.0;
+			double min_diff = 1.0;
 			for (; dyn_k_value >= 8; dyn_k_value--)
 			{
 				uint miss_frags = 0;
@@ -2352,9 +2349,9 @@ BEGIN_RENDERER_LOOP:
 				double diff = (1. - (double)miss_frags / (double)totol_num_frags) - Rh;
 				if ((double)bytes_per_f * (double)(totol_num_frags - miss_frags) / (1024.0 * 1024.0) < size_k_buf_mb)
 				{
-					if (min_diff_sq >= diff * diff)
+					if (min_diff * min_diff >= diff * diff)
 					{
-						min_diff_sq = diff * diff;
+						min_diff = diff;
 						k_value = dyn_k_value;
 					}
 					else 
@@ -2366,10 +2363,10 @@ BEGIN_RENDERER_LOOP:
 
 			if (gpu_profile)
 			{
-				cout << "----> total frag : " << totol_num_frags << endl;
-				cout << "----> max layers : " << max_layers << endl;
-				cout << "----> min diff   : " << min_diff_sq << " (" << Rh << ")" << endl;
-				cout << "----> dynamic k  : " << k_value << endl;
+				cout << "----> total frag    : " << totol_num_frags << endl;
+				cout << "----> max layers    : " << max_layers << endl;
+				cout << "----> Processing Rh : " << Rh - min_diff << " (" << Rh << ")" << endl;
+				cout << "----> dynamic k     : " << k_value << endl;
 
 				dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
 				profile_map["end histogram analysis"] = gpu_profilecount;
@@ -2629,6 +2626,9 @@ RENDERER_LOOP_EXIT:
 #else
 			}
 #endif
+			dx11DeviceImmContext->Unmap((ID3D11Texture2D*)gres_fb_sys_rgba.alloc_res_ptrs[DTYPE_RES], 0);
+			dx11DeviceImmContext->Unmap((ID3D11Texture2D*)gres_fb_sys_depthcs.alloc_res_ptrs[DTYPE_RES], 0);
+
 			if (gpu_profile)
 			{
 				dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
@@ -2637,268 +2637,260 @@ RENDERER_LOOP_EXIT:
 
 				DisplayTimes(__CounterStart, "CopyBack");
 			}
-			// TEST //
-			if (print_out_routine_objs && show_maxlayers_a_buffer_ && mode_OIT == MFR_MODE::DXAB)
+
+			if (check_pixel_transmittance)
 			{
-				uint max_layers = 0;
-				double avr_layers_sum = 0;
-				uint pix_cnt = 0;
-				for (int i = 0; i < fb_size_cur.y; i++)
-					for (int j = 0; j < fb_size_cur.x; j++)
-					{
-						vmbyte4 rgba = rgba_gpu_buf[j + i * buf_row_pitch];
-						max_layers = max(max_layers, (uint)depth_gpu_buf[j + i * buf_row_pitch]);
-						if (rgba.a > 0)
+#define __SORT(num, fragments, FRAG) {	   				\
+	for (int j = 1; j < num; ++j)						\
+	{													\
+		FRAG key = fragments[j];						\
+		int i = j - 1;									\
+														\
+		while (i >= 0 && fragments[i].z > key.z)		\
+		{												\
+			fragments[i + 1] = fragments[i];			\
+			--i;										\
+		}												\
+		fragments[i + 1] = key;							\
+	}}	
+				//if (check_pixel_transmittance)
+				{
+					dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_fb_sys_counter.alloc_res_ptrs[DTYPE_RES],
+						(ID3D11Texture2D*)gres_fb_counter.alloc_res_ptrs[DTYPE_RES]);
+
+					D3D11_MAPPED_SUBRESOURCE mappedResSysCounter;
+					HRESULT hr = dx11DeviceImmContext->Map((ID3D11Texture2D*)gres_fb_sys_counter.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysCounter);
+					int buf_row_pitch = mappedResSysCounter.RowPitch / 4;
+					uint* cnt_buf = (uint*)mappedResSysCounter.pData;
+					uint max_layers = 0;
+					double avr_layers_sum = 0;
+					uint pix_cnt = 0;
+					for (int i = 0; i < fb_size_cur.y; i++)
+						for (int j = 0; j < fb_size_cur.x; j++)
 						{
-							pix_cnt++;
-							avr_layers_sum += (double)max_layers;
+							uint cnt = cnt_buf[j + i * buf_row_pitch];
+							max_layers = max(max_layers, cnt);
+							avr_layers_sum += cnt;
 						}
-					}
-				cout << "******************" << endl;
-				cout << "MAX LAYERS : " << max_layers << endl;
-				cout << "AVR LAYERS : " << avr_layers_sum / pix_cnt << ", pixels : " << pix_cnt << endl;
-				cout << "******************" << endl;
-			}
-			// TEST //
-			if (print_out_routine_objs && check_pixel_transmittance)
-			{
-				cout << "******************" << endl;
-				cout << "pixel pos : " << pixel_pos.x << ", " << pixel_pos.y << endl;
+					cout << "--------------" << endl;
+					cout << "TOTAL LAYERS : " << avr_layers_sum << ", MAX LAYERS : " << max_layers << endl;
+					cout << "AVR LAYERS : " << avr_layers_sum / (fb_size_cur.x*fb_size_cur.y) << endl;
+					cout << "--------------" << endl;
+
+					dx11DeviceImmContext->Unmap((ID3D11Texture2D*)gres_fb_sys_counter.alloc_res_ptrs[DTYPE_RES], 0);
+				}
+
+				vmint2 pixel_pos = _fncontainer->GetParamValue("_int2_PixelPos", vmint2(0));
+				double tr_interval = _fncontainer->GetParamValue("_double_TrInvterval", (double)0.01);
+				double tr_startoffset = _fncontainer->GetParamValue("_double_TrStartOffset", (double)1.00);
+
+				cout << "-------------" << endl;
 				cout << "interval : " << tr_interval << endl;
-				cout << "******************" << endl;
 
 				dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_fb_sys_deep_k.alloc_res_ptrs[DTYPE_RES],
 					(ID3D11Buffer*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_RES]);
 
-				D3D11_MAPPED_SUBRESOURCE mappedResSysDeepK, mappedResSysPrefixLL;
-				hr |= dx11DeviceImmContext->Map((ID3D11Buffer*)gres_fb_sys_deep_k.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysDeepK);
-				if (mode_OIT == MFR_MODE::DXAB)
+				string __METHODS[5] = { "SKBTZ" , "DXAB" , "MOMENT" , "DKBTZ" , "DKBT" };
+				if (mode_OIT == MFR_MODE::MOMENT)
 				{
-					dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_fb_sys_ref_pidx.alloc_res_ptrs[DTYPE_RES],
-						(ID3D11Buffer*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_RES]);
-					hr |= dx11DeviceImmContext->Map((ID3D11Buffer*)gres_fb_sys_ref_pidx.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysPrefixLL);
-
-					// to do //
-					uint pixel_prefix = ((uint*)mappedResSysPrefixLL.pData)[max(pixel_pos.y * fb_size_cur.x + pixel_pos.x - 1, 0)];
-					uint* deep_buffer = (uint*)mappedResSysDeepK.pData;
-					uint num_layers = (uint)depth_gpu_buf[pixel_pos.x + pixel_pos.y * buf_row_pitch];
-					cout << "num_layers : " << num_layers << endl;
-
-					float* depth_array = new float[num_layers * 2];
-					float* alpha_array = new float[num_layers];
-					int* nIndex = new int[num_layers * 2];
-
-					for (int i = 0; i < num_layers; i++)
+					string refdepthrangePath = ".\\data\\absorbance_depth_ref_range.txt";
+					ifstream openFile(refdepthrangePath.data());
+					if (openFile.is_open())
 					{
-						nIndex[i] = i;
-						depth_array[i] = *(float*)&deep_buffer[2 * (pixel_prefix + i) + 1];
-						alpha_array[i] = (deep_buffer[2 * (pixel_prefix + i) + 0] >> 24) / 255.f;
-					}
-					for (int i = num_layers; i < num_layers * 2; i++)
-					{
-						nIndex[i] = i;
-						depth_array[i] = FLT_MAX;
-					}
-					// bitonic sort
-					uint N2 = 1 << (int)(ceil(log2(num_layers)));
-					for (uint k = 2; k <= N2; k = 2 * k)
-					{
-						for (uint j = k >> 1; j > 0; j = j >> 1)
+						// see Section 3.3 Warping Depth in Mement-based OIT
+						auto __warp_depth = [&mot_nf](float z_depth_cs) -> float
 						{
-							for (uint i = 0; i < N2; i++)
-							{
-								float di = depth_array[nIndex[i]];
-								uint ixj = i ^ j;
-								if ((ixj) > i)
-								{
-									float dixj = depth_array[nIndex[ixj]];
-									if ((i & k) == 0 && di > dixj)
-									{
-										int temp = nIndex[i];
-										nIndex[i] = nIndex[ixj];
-										nIndex[ixj] = temp;
-									}
-									if ((i & k) != 0 && di < dixj)
-									{
-										int temp = nIndex[i];
-										nIndex[i] = nIndex[ixj];
-										nIndex[ixj] = temp;
-									}
-								}
-							}
+							const float z_min = (float)mot_nf.x;
+							const float z_max = (float)mot_nf.y;
+							return (log(max(min(z_depth_cs, z_max), z_min)) - log(z_min)) / (log(z_max) - log(z_min)) * 2.f - 1.f;
+						};
+
+						cout << "warp min/max : " << mot_nf.x << ", " << mot_nf.y << endl;
+
+						vector<float> depth_range_info;
+						string line;
+						while (getline(openFile, line)) {
+							depth_range_info.push_back(stof(line));
 						}
-					}
+						openFile.close();
 
-					string refdepthPath = "d:\\depth_ref.txt";
-					ofstream refwriteFile_depth(refdepthPath.data());
-					if (refwriteFile_depth.is_open()) {
-						for (int i = 0; i < num_layers; i++)
-							refwriteFile_depth << to_string(depth_array[nIndex[i]]) + "\n";
-						float d_range = depth_array[nIndex[num_layers - 1]] - depth_array[nIndex[0]];
-						depth_array[nIndex[num_layers]] = depth_array[nIndex[num_layers - 1]] + d_range * 0.05f;
-						refwriteFile_depth << to_string(depth_array[nIndex[num_layers]]) + "\n";
-						refwriteFile_depth.close();
-					}
+						string depthPath = ".\\data\\absorbance_depth_" + __METHODS[(int)mode_OIT] + ".txt";
+						string alphaPath = ".\\data\\absorbance_alpha_" + __METHODS[(int)mode_OIT] + ".txt";
 
-					string depthPath = "d:\\depth_LL.txt";
-					ofstream writeFile_depth(depthPath.data());
-					string filePath = "d:\\absorbance_LL.txt";
-					ofstream writeFile_absorb(filePath.data());
-					if (writeFile_depth.is_open() && writeFile_absorb.is_open()) {
-						int hit_count = 0;
-						float d_s = depth_array[nIndex[0]] - tr_startoffset;
-						float depth_range = depth_array[nIndex[num_layers]] - d_s;
+						ofstream writeFile_depth(depthPath.data());
+						ofstream writeFile_absorb(alphaPath.data());
+
+						float d_s = depth_range_info[0];
+						float depth_range = depth_range_info[1];
 						int num_intervals = (int)(depth_range / tr_interval) + 2;
 
-						float absorb = 0;
+						D3D11_MAPPED_SUBRESOURCE mappedResSysDeepK;
+						hr |= dx11DeviceImmContext->Map((ID3D11Buffer*)gres_fb_sys_deep_k.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysDeepK);
+						uint* mc_buffer = (uint*)mappedResSysDeepK.pData;
 						for (int i = 0; i < num_intervals; i++)
 						{
 							float d_cur = d_s + (float)i * tr_interval;
+							float warp_d = __warp_depth(d_cur);
+							float transmittance_at_depth, total_transmittance;
 
-							if (hit_count < num_layers)
-							{
-								while (d_cur > depth_array[nIndex[hit_count]])
-								{
-									absorb += (1 - absorb) * alpha_array[nIndex[hit_count]];
-									hit_count++;
-								}
-							}
-							writeFile_absorb << to_string(absorb) + "\n";
+							moment_lib::resolveMoments(transmittance_at_depth, total_transmittance, warp_d, pixel_pos, fb_size_cur.x, 8 * 4, mc_buffer, num_moments, false, cb_moment);
+							writeFile_absorb << to_string(1.f - transmittance_at_depth) + "\n";
 							writeFile_depth << to_string(d_cur) + "\n";
 						}
+						dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_fb_sys_deep_k.alloc_res_ptrs[DTYPE_RES], 0);
+
 						writeFile_depth.close();
 						writeFile_absorb.close();
 					}
-
-					dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_fb_sys_ref_pidx.alloc_res_ptrs[DTYPE_RES], 0);
-					VMSAFE_DELETEARRAY(depth_array);
-					VMSAFE_DELETEARRAY(alpha_array);
-					VMSAFE_DELETEARRAY(nIndex);
+					else
+					{
+						cout << "NO REF DEPTH!" << endl;
+					}
 				}
 				else
 				{
-					string refdepthPath = "d:\\depth_ref.txt";
-					ifstream openFile(refdepthPath.data());
-					if (openFile.is_open())
+					uint pixel_offset = (pixel_pos.x + pixel_pos.y * fb_size_cur.x) * 8;
+					if (mode_OIT != MFR_MODE::SKBTZ)
 					{
-						vector<float> depth_array;
-						string line;
-						while (getline(openFile, line)) {
-							depth_array.push_back(stof(line));
-						}
-						openFile.close();
-						uint num_layers = (uint)depth_array.size();
+						dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_fb_sys_ref_pidx.alloc_res_ptrs[DTYPE_RES],
+							(ID3D11Buffer*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_RES]);
 
-						if (mode_OIT == MFR_MODE::MOMENT)
+						D3D11_MAPPED_SUBRESOURCE mappedResSysRefPIdx;
+						hr |= dx11DeviceImmContext->Map((ID3D11Buffer*)gres_fb_sys_ref_pidx.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysRefPIdx);
+						pixel_offset = ((uint*)mappedResSysRefPIdx.pData)[pixel_pos.x + pixel_pos.y * fb_size_cur.x];
+						dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_fb_sys_ref_pidx.alloc_res_ptrs[DTYPE_RES], 0);
+					}
+
+					D3D11_MAPPED_SUBRESOURCE mappedResSysDeepK, mappedResSysCounter;
+					hr |= dx11DeviceImmContext->Map((ID3D11Buffer*)gres_fb_sys_deep_k.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysDeepK);
+					hr |= dx11DeviceImmContext->Map((ID3D11Texture2D*)gres_fb_sys_counter.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysCounter);
+
+					uint* deep_buffer = (uint*)mappedResSysDeepK.pData;
+					uint num_layers = ((uint*)mappedResSysCounter.pData)[pixel_pos.x + pixel_pos.y * buf_row_pitch];
+					cout << "num_layers : " << num_layers << " at (" << pixel_pos.x << ", " << pixel_pos.y << ")" << endl;
+
+					struct Fragment
+					{
+						float alpha;
+						float z;
+						float thick;
+					};
+
+					uint element_size = (mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::SKBTZ) ? 4 : 2;
+					Fragment* fs = new Fragment[num_layers];
+
+					for (int i = 0; i < num_layers; i++)
+					{
+						fs[i].z = *(float*)&deep_buffer[element_size * (pixel_offset + i) + 1];
+						fs[i].alpha = (deep_buffer[element_size * (pixel_offset + i) + 0] >> 24) / 255.f;
+						if (mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::SKBTZ)
+							fs[i].thick = *(float*)&deep_buffer[element_size * (pixel_offset + i) + 2];
+					}
+					dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_fb_sys_deep_k.alloc_res_ptrs[DTYPE_RES], 0);
+					dx11DeviceImmContext->Unmap((ID3D11Texture2D*)gres_fb_sys_counter.alloc_res_ptrs[DTYPE_RES], 0);
+
+					__SORT(num_layers, fs, Fragment);
+					/**/
+
+					string refdepthrangePath = ".\\data\\absorbance_depth_ref_range.txt";
+					if (mode_OIT == MFR_MODE::DXAB)
+					{
+						ofstream refwriteFile_depth_range(refdepthrangePath.data());
+						if (refwriteFile_depth_range.is_open())
 						{
-							// see Section 3.3 Warping Depth in Mement-based OIT
-							auto __warp_depth = [&mot_nf](float z_depth_cs) -> float
-							{
-								const float z_min = (float)mot_nf.x;
-								const float z_max = (float)mot_nf.y;
-								return (log(max(min(z_depth_cs, z_max), z_min)) - log(z_min)) / (log(z_max) - log(z_min)) * 2.f - 1.f;
-							};
-
-							cout << "MOMENT OIT!!" << endl;
-							cout << "warp min/max : " << mot_nf.x << ", " << mot_nf.y << endl;
-
-							uint* mc_buffer = (uint*)mappedResSysDeepK.pData;
-
-							string depthPath = "d:\\depth_MOT.txt";
-							ofstream writeFile_depth(depthPath.data());
-							string filePath = "d:\\absorbance_MOT.txt";
-							ofstream writeFile_absorb(filePath.data());
-							if (writeFile_depth.is_open() && writeFile_absorb.is_open()) {
-								int hit_count = 0;
-								float d_s = depth_array[0] - tr_startoffset;
-								float depth_range = depth_array[num_layers - 1] - d_s;
-								int num_intervals = (int)(depth_range / tr_interval) + 2;
-
-								for (int i = 0; i < num_intervals; i++)
-								{
-									float d_cur = d_s + (float)i * tr_interval;
-									float warp_d = __warp_depth(d_cur);
-									float transmittance_at_depth, total_transmittance;
-
-									moment_lib::resolveMoments(transmittance_at_depth, total_transmittance, warp_d, pixel_pos, fb_size_cur.x, 8 * 3, mc_buffer, num_moments, false, cb_moment);
-									writeFile_absorb << to_string(1.f - transmittance_at_depth) + "\n";
-									writeFile_depth << to_string(d_cur) + "\n";
-								}
-								writeFile_depth.close();
-								writeFile_absorb.close();
-							}
-							//void resolveMoments(float& transmittance_at_depth, float& total_transmittance, const float depth, const vmint2 sv_pos,
-							//	const int rt_width, const int buf_stride, const uint* moment_container_buf,
-							//	const int num_moment, const bool is_trigonometric, const MomentOIT& mo)
-						}
-						else
-						{
-							cout << "KB OIT!!" << endl;
-
-							uint* deep_buffer = (uint*)mappedResSysDeepK.pData;
-							const int num_kb_layers = 8;
-							float fr_alpha[8];
-							float fr_depth[8];
-							float fr_thick[8];
-							int addr_base = (pixel_pos.x + pixel_pos.y * fb_size_cur.x) * num_kb_layers * 3;
-							for (int i = 0; i < 8; i++)
-							{
-								fr_alpha[i] = (deep_buffer[addr_base + 3 * i + 0] >> 24) / 255.f;
-								fr_depth[i] = *(float*)&deep_buffer[addr_base + 3 * i + 1];
-								fr_thick[i] = *(float*)&deep_buffer[addr_base + 3 * i + 2];
-
-								cout << to_string(i) << "==> " << fr_alpha[i] << ", " << fr_depth[i] << ", " << fr_thick[i] << endl;
-							}
-
-							string depthPath = "d:\\depth_KB.txt";
-							ofstream writeFile_depth(depthPath.data());
-							string filePath = "d:\\absorbance_KB.txt";
-							ofstream writeFile_absorb(filePath.data());
-							if (writeFile_depth.is_open() && writeFile_absorb.is_open()) {
-								int hit_count = 0;
-								float d_s = depth_array[0] - tr_startoffset;
-								float depth_range = depth_array[num_layers - 1] - d_s;
-								int num_intervals = (int)(depth_range / tr_interval) + 2;
-
-								float absorb = 0;
-								for (int i = 0; i < num_intervals; i++)
-								{
-									float d_cur = d_s + (float)i * tr_interval;
-									if (hit_count < num_kb_layers)
-									{
-										while (d_cur > fr_depth[hit_count] - fr_thick[hit_count])
-										{
-											if (d_cur >= fr_depth[hit_count])
-											{
-												absorb += (1 - absorb) * fr_alpha[hit_count];
-												hit_count++;
-											}
-											else
-											{
-												float sub_thick_f = d_cur - (fr_depth[hit_count] - fr_thick[hit_count]);
-												float sub_alpha_f = fr_alpha[hit_count] * sub_thick_f / fr_thick[hit_count];
-												absorb += (1 - absorb) * sub_alpha_f;
-
-												fr_thick[hit_count] = fr_thick[hit_count] - sub_thick_f;
-												fr_alpha[hit_count] = (fr_alpha[hit_count] - sub_alpha_f) / (1.f - sub_alpha_f);
-											}
-										}
-									}
-									writeFile_absorb << to_string(absorb) + "\n";
-									writeFile_depth << to_string(d_cur) + "\n";
-								}
-								writeFile_depth.close();
-								writeFile_absorb.close();
-							}
+							refwriteFile_depth_range << to_string(fs[0].z - tr_startoffset) + "\n";
+							float d_range = fs[num_layers - 1].z - fs[0].z;
+							refwriteFile_depth_range << to_string(d_range + tr_startoffset * 2) + "\n";
+							refwriteFile_depth_range.close();
 						}
 					}
+
+					ifstream openFile(refdepthrangePath.data());
+					if (openFile.is_open())
+					{
+						vector<float> depth_range_info;
+						string line;
+						while (getline(openFile, line)) {
+							depth_range_info.push_back(stof(line));
+						}
+						openFile.close();
+
+						string depthPath = ".\\data\\absorbance_depth_" + __METHODS[(int)mode_OIT] + ".txt";
+						string alphaPath = ".\\data\\absorbance_alpha_" + __METHODS[(int)mode_OIT] + ".txt";
+
+						ofstream writeFile_depth(depthPath.data());
+						ofstream writeFile_absorb(alphaPath.data());
+
+						assert(writeFile_depth.is_open() && writeFile_absorb.is_open());
+
+						float d_s = depth_range_info[0];
+						float depth_range = depth_range_info[1];
+						int num_intervals = (int)(depth_range / tr_interval) + 2;
+
+						int hit_count = 0;
+						float absorb = 0;
+						if (mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBT)
+						{
+							for (int i = 0; i < num_intervals; i++)
+							{
+								float d_cur = d_s + (float)i * tr_interval;
+
+								if (hit_count < num_layers)
+								{
+									while (d_cur > fs[hit_count].z)
+									{
+										absorb += (1 - absorb) * fs[hit_count].alpha;
+										hit_count++;
+										if (hit_count >= num_layers) break;
+									}
+								}
+								writeFile_absorb << to_string(absorb) + "\n";
+								writeFile_depth << to_string(d_cur) + "\n";
+							}
+						}
+						else if (mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::SKBTZ)
+						{
+							for (int i = 0; i < num_intervals; i++)
+							{
+								float d_cur = d_s + (float)i * tr_interval;
+								if (hit_count < num_layers)
+								{
+									while (d_cur > fs[hit_count].z - fs[hit_count].thick)
+									{
+										if (d_cur >= fs[hit_count].z)
+										{
+											absorb += (1 - absorb) * fs[hit_count].alpha;
+											hit_count++;
+											if (hit_count >= num_layers) break;
+										}
+										else
+										{
+											float sub_thick_f = d_cur - (fs[hit_count].z - fs[hit_count].thick);
+											float sub_alpha_f = fs[hit_count].alpha * sub_thick_f / fs[hit_count].thick;
+											absorb += (1 - absorb) * sub_alpha_f;
+
+											fs[hit_count].thick = fs[hit_count].thick - sub_thick_f;
+											fs[hit_count].alpha = (fs[hit_count].alpha - sub_alpha_f) / (1.f - sub_alpha_f);
+										}
+									}
+								}
+								writeFile_absorb << to_string(absorb) + "\n";
+								writeFile_depth << to_string(d_cur) + "\n";
+							}
+						}
+
+						writeFile_depth.close();
+						writeFile_absorb.close();
+					}
+					else
+					{
+						cout << "NO REF DEPTH!" << endl;
+					}
+					delete[] fs;
 				}
-				dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_fb_sys_deep_k.alloc_res_ptrs[DTYPE_RES], 0);
 			}
 
 
-			dx11DeviceImmContext->Unmap((ID3D11Texture2D*)gres_fb_sys_rgba.alloc_res_ptrs[DTYPE_RES], 0);
-			dx11DeviceImmContext->Unmap((ID3D11Texture2D*)gres_fb_sys_depthcs.alloc_res_ptrs[DTYPE_RES], 0);
 #pragma endregion
 		}	// if (iCountDrawing == 0)
 	}
@@ -2929,7 +2921,7 @@ RENDERER_LOOP_EXIT:
 		if (!tsDisjoint.Disjoint)
 		{
 			UINT64 tsBeginFrame = 0, tsBeginOffsetTable = 0, tsEndOffsetTable = 0, tsEndGeoPass = 0,
-				tsBeginCounter = 0, tsEndCounter = 0, tsBeginGenMM = 0, tsEndGenMM = 0, tsBeginGeoShader = 0, tsEndGeoShader = 0,
+				tsBeginCounter = 0, tsEndCounter = 0, tsBeginGenMM = 0, tsEndGenMM = 0, tsBeginGeoShader = 0, 
 				tsEndResolvePass = 0, tsEndRender = 0, tsBeginCopyBack = 0, tsEndCopyRes = 0, tsEndCopyBack = 0, tsEndFrame = 0,
 				tsBeginHisto = 0, tsEndHisto = 0;
 
@@ -2953,7 +2945,6 @@ RENDERER_LOOP_EXIT:
 			GetTimeGpuProfile("begin gen moment", tsBeginGenMM);
 			GetTimeGpuProfile("end gen moment", tsEndGenMM);
 			GetTimeGpuProfile("begin geometry shader", tsBeginGeoShader);
-			GetTimeGpuProfile("end geometry shader", tsEndGeoShader);
 			GetTimeGpuProfile("end geometry pass", tsEndGeoPass);
 			GetTimeGpuProfile("end resolve pass", tsEndResolvePass);
 			GetTimeGpuProfile("end render", tsEndRender);
@@ -2974,16 +2965,16 @@ RENDERER_LOOP_EXIT:
 			};
 			//DisplayDuration(tsBeginFrame, tsEndFrame, "#GPU# Total (including copyback) Time");
 			DisplayDuration(tsBeginFrame, tsEndRender, "#GPU# Render Time");
-			DisplayDuration(tsBeginOffsetTable, tsEndOffsetTable, "#GPU# Offset Table Time");
-			DisplayDuration(tsBeginHisto, tsEndHisto, "#GPU# Histogram Analysis Time");
-			DisplayDuration(tsEndHisto, tsEndOffsetTable, "#GPU# Offset Table (DK+B) Time");
-			DisplayDuration(tsBeginFrame, tsEndGeoPass, "#GPU# Geometry Rendering Time");
+			//DisplayDuration(tsBeginOffsetTable, tsEndOffsetTable, "#GPU# Offset Table Time");
+			//DisplayDuration(tsBeginHisto, tsEndHisto, "#GPU# Histogram Analysis Time");
+			//DisplayDuration(tsEndHisto, tsEndOffsetTable, "#GPU# Offset Table (DK+B) Time");
+			//DisplayDuration(tsBeginFrame, tsEndGeoPass, "#GPU# Geometry Rendering Time");
 			DisplayDuration(tsBeginCounter, tsEndCounter, "#GPU# Fragment Counting Time");
 			DisplayDuration(tsBeginGenMM, tsEndGenMM, "#GPU# Moment Generating Time");
-			DisplayDuration(tsBeginGeoShader, tsEndGeoShader, "#GPU# Geometry Shader Time");
+			DisplayDuration(tsBeginGeoShader, tsEndGeoPass, "#GPU# Geometry Pass Time");
 			DisplayDuration(tsEndGeoPass, tsEndResolvePass, "#GPU# Resolve Pass Time");
-			DisplayDuration(tsBeginCopyBack, tsEndCopyRes, "#GPU# CopyResource Time");
-			DisplayDuration(tsEndCopyRes, tsEndCopyBack, "#GPU# CopyBack Time");
+			//DisplayDuration(tsBeginCopyBack, tsEndCopyRes, "#GPU# CopyResource Time");
+			//DisplayDuration(tsEndCopyRes, tsEndCopyBack, "#GPU# CopyBack Time");
 		}
 	}
 

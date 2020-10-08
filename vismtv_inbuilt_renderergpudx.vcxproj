@@ -20,24 +20,17 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="gpu manager\gpures_helper.cpp" />
-    <ClCompile Include="gpu manager\gpures_helper_old.cpp" />
     <ClCompile Include="gpu manager\gpures_interface.cpp" />
-    <ClCompile Include="renderer\DVR_Common_CS_legacy.cpp" />
     <ClCompile Include="renderer\RendererHeader.cpp" />
-    <ClCompile Include="renderer\RendererHeader_legacy.cpp" />
-    <ClCompile Include="renderer\SR_Common_CS_legacy.cpp" />
     <ClCompile Include="renderer\PrimitiveRenderer.cpp" />
-    <ClCompile Include="renderer\SR_Plane_legacy.cpp" />
     <ClCompile Include="renderer\VolumeRenderer.cpp" />
     <ClCompile Include="vismtv_inbuilt_renderergpudx.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="gpu manager\gpures_helper.h" />
-    <ClInclude Include="gpu manager\gpures_helper_old.h" />
     <ClInclude Include="gpu manager\gpures_interface.h" />
     <ClInclude Include="gpu_common_res.h" />
     <ClInclude Include="renderer\RendererHeader.h" />
-    <ClInclude Include="renderer\RendererHeader_legacy.h" />
     <ClInclude Include="renderer\Sampler.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="vismtv_inbuilt_renderergpudx.h" />
@@ -67,10 +60,6 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </None>
     <None Include="hlsl\moment\TrigonometricMomentMath.hlsli">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </None>
-    <None Include="ShaderCompile_legacy.bat">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </None>
@@ -104,27 +93,11 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
-    <FxCompile Include="hlsl\legacy\MergeMultipleLayers.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="hlsl\legacy\ShaderCommonHeader.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="hlsl\legacy\SRShader_Common.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="hlsl\legacy\VRShader_Common.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="hlsl\legacy\VRShader_Shadow.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
     <FxCompile Include="hlsl\macros.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="hlsl\Matrix.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>

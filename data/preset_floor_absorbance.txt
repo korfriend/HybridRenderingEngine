@@ -1,0 +1,10 @@
+cam_pos 1.55047 -29.9634 0.169804
+cam_up -0.00392592 0.0112315 0.999929
+cam_view -0.0667614 0.997703 -0.0114693
+z_thickenss_sp 0.002
+z_thickenss_rp 0
+beta 0.5
+robustness_ratio 0.2
+forced_shading 0.4 0.6 0.2 30
+alpha 0.05
+surfel_size 0.12

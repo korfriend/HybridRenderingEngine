@@ -1181,11 +1181,11 @@ Fragment_OUT MergeFrags(Fragment f_prior, Fragment f_posterior, const in float b
 			//fs_out.f_prior.zthick = max(zfront_posterior_rs - zfront_prior_rs, 0); // to avoid computational precision error (0 or small minus)
 			fs_out.f_prior.zthick = zfront_posterior_rs - zfront_prior_rs;
 			fs_out.f_prior.z = zfront_posterior_rs;
-			// if simple linear mode
+#if LINEAR_MODE == 1
 			{
-				//fs_out_prior_vis = f_prior_vis * (fs_out.f_prior.zthick / f_prior.zthick); 
+				fs_out_prior_vis = f_prior_vis * (fs_out.f_prior.zthick / f_prior.zthick);
 			}
-			// else
+#else
 			{
 				float zd_ratio = fs_out.f_prior.zthick / f_prior.zthick;
 				float Ad = f_prior_vis.a;
@@ -1203,6 +1203,7 @@ Fragment_OUT MergeFrags(Fragment f_prior, Fragment f_posterior, const in float b
 				float3 Cz = Id * Az;
 				fs_out_prior_vis = float4(Cz, Az);
 			}
+#endif
 
 			float old_alpha = f_prior_vis.a;
 			f_prior.zthick -= fs_out.f_prior.zthick;
@@ -1218,11 +1219,11 @@ Fragment_OUT MergeFrags(Fragment f_prior, Fragment f_posterior, const in float b
 			fs_out.f_prior.zthick = zfront_prior_rs - zfront_posterior_rs;
 			fs_out.f_prior.z = zfront_prior_rs;
 
-			// if simple linear mode
+#if LINEAR_MODE == 1
 			{
-				//fs_out_prior_vis = f_posterior_vis * (fs_out.f_prior.zthick / f_posterior.zthick); 
+				fs_out_prior_vis = f_posterior_vis * (fs_out.f_prior.zthick / f_posterior.zthick); 
 			}
-			// else
+#else
 			{
 				float zd_ratio = fs_out.f_prior.zthick / f_posterior.zthick;
 				float Ad = f_posterior_vis.a;
@@ -1240,6 +1241,7 @@ Fragment_OUT MergeFrags(Fragment f_prior, Fragment f_posterior, const in float b
 				float3 Cz = Id * Az;
 				fs_out_prior_vis = float4(Cz, Az);
 			}
+#endif
 
 			float old_alpha = f_posterior_vis.a;
 			f_posterior.zthick -= fs_out.f_prior.zthick;
