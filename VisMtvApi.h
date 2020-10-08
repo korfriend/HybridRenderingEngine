@@ -202,10 +202,11 @@ namespace vzm
 	__dojostatic bool GetCamProjMatrix(const int scene_id, const int cam_id, float* mat_ws2ss, float* mat_ss2ws = NULL, bool is_col_major = true);
 
 	__dojostatic bool RenderScene(const int scene_id, const int cam_id = 0);
-	__dojostatic bool GetRenderBufferPtrs(const int scene_id, unsigned char** ptr_rgba, float** ptr_zdepth, int* fbuf_w, int* fbuf_h, const int cam_id = 0);
+	__dojostatic bool GetRenderBufferPtrs(const int scene_id, unsigned char** ptr_rgba, float** ptr_zdepth, int* fbuf_w, int* fbuf_h, const int cam_id = 0, size_t* render_count = NULL);
 
 	// etc
 	__dojostatic bool GetPModelData(const int obj_id, float** pos_vtx, float** nrl_vtx, float** rgb_vtx, float** tex_vtx, int& num_vtx, unsigned int** idx_prims, int& num_prims, int& stride_prim_idx);
+	__dojostatic bool GetVolumeInfo(const int obj_id, void*** vol_slices_2darray_pointer, int* size_xyz, float* pitch_xyz, int* stride_bytes);
 
 	// picking
 	__dojostatic bool ValidatePickTarget(const int obj_id);
