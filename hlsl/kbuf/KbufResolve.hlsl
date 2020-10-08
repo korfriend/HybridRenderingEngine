@@ -149,6 +149,7 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 	}
 #endif
 
+	//sort((int)frag_cnt, fs, Fragment);
 	float merging_beta = asfloat(g_cbCamState.iSrCamDummy__0);
 
 	float4 fmix_vis = (float4) 0;

@@ -7,4 +7,4 @@ beta 0.5
 robustness_ratio 0.2
 forced_shading 0.4 2 0.2 30
 alpha 0.05
-surfel_size 0.12
+surfel_size 0.10
