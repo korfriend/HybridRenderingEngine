@@ -1,0 +1,21 @@
+# Blender v2.82 (sub 7) OBJ File: ''
+# www.blender.org
+mtllib EG.mtl
+o node_id31_mesh_id32
+v 0 0 0
+v -75 0 0
+v -75 0 75
+v 0 0 75
+vt 1.0 1.0
+vt 0.0 1.0
+vt 0.0 0.0
+vt 1.0 0.0
+vn 1 0 0
+vn 1 0 0
+vn 1 0 0
+vn 1 0 0
+usemtl 49
+s 1
+f 1/1/1 2/2/2 3/3/3
+f 1/1/1 3/3/3 4/4/4
+
