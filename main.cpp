@@ -413,7 +413,7 @@ void key_actions(const int key, const std::string& preset_file, const std::list<
 		// (de)activate GPU profiling
 		static bool gpu_profile = false;
 		gpu_profile = !gpu_profile;
-		vzm::SetRenderTestParam("_bool_GpuProfile", gpu_profile, sizeof(bool), 0, 0);
+		vzm::SetRenderTestParam("_bool_GpuProfile", gpu_profile, sizeof(bool), -1, -1);
 		std::cout << "gpu profiling : " << (gpu_profile ? "ON" : "OFF") << std::endl;
 		break;
 	}
@@ -425,18 +425,20 @@ void key_actions(const int key, const std::string& preset_file, const std::list<
 	}
 	case 'r':
 	{
-		vzm::SetRenderTestParam("_bool_ReloadHLSLObjFiles", true, sizeof(bool), 0, 0);
+		vzm::SetRenderTestParam("_bool_ReloadHLSLObjFiles", true, sizeof(bool), -1, -1);
 		std::cout << "reload hlsl objs" << std::endl;
 		break;
 	}
 	case 's':
 	{
+		if (preset_file == "") break;
 		store_preset(preset_file, loaded_obj_ids);
 		std::cout << "store preset" << std::endl;
 		break;
 	}
 	case 'l':
 	{
+		if (preset_file == "") break;
 		load_preset(preset_file, loaded_obj_ids);
 		std::cout << "load preset" << std::endl;
 		break;
@@ -444,52 +446,53 @@ void key_actions(const int key, const std::string& preset_file, const std::list<
 	case '`':
 	case '0':
 	{
-		vzm::SetRenderTestParam("_int_OitMode", (int)0, sizeof(int), 0, 0);
+		vzm::SetRenderTestParam("_int_OitMode", (int)0, sizeof(int), -1, -1);
 		std::cout << "oit mode : SK+BTZ" << std::endl;
 		break;
 	}
 	case '1':
 	{
-		vzm::SetRenderTestParam("_int_OitMode", (int)1, sizeof(int), 0, 0);
+		vzm::SetRenderTestParam("_int_OitMode", (int)1, sizeof(int), -1, -1);
 		std::cout << "oit mode : DFB" << std::endl;
 		break;
 	}
 	case '2':
 	{
-		vzm::SetRenderTestParam("_int_OitMode", (int)2, sizeof(int), 0, 0);
+		vzm::SetRenderTestParam("_int_OitMode", (int)2, sizeof(int), -1, -1);
 		std::cout << "oit mode : MBT" << std::endl;
 		break;
 	}
 	case '3':
 	{
-		vzm::SetRenderTestParam("_int_OitMode", (int)3, sizeof(int), 0, 0);
-		vzm::SetRenderTestParam("_double_RobustRatio", low_Rh, sizeof(double), 0, 0);
+		vzm::SetRenderTestParam("_int_OitMode", (int)3, sizeof(int), -1, -1);
+		vzm::SetRenderTestParam("_double_RobustRatio", low_Rh, sizeof(double), -1, -1);
 		std::cout << "oit mode : DK+BTZ with Rh (" << low_Rh << ")" << std::endl;
 		break;
 	}
 	case '4':
 	{
-		vzm::SetRenderTestParam("_int_OitMode", (int)3, sizeof(int), 0, 0);
-		vzm::SetRenderTestParam("_double_RobustRatio", high_Rh, sizeof(double), 0, 0);
+		vzm::SetRenderTestParam("_int_OitMode", (int)3, sizeof(int), -1, -1);
+		vzm::SetRenderTestParam("_double_RobustRatio", high_Rh, sizeof(double), -1, -1);
 		std::cout << "oit mode : DK+BTZ with Rh (" << high_Rh << ")" << std::endl;
 		break;
 	}
 	case '5':
 	{
-		vzm::SetRenderTestParam("_int_OitMode", (int)4, sizeof(int), 0, 0);
-		vzm::SetRenderTestParam("_double_RobustRatio", low_Rh, sizeof(double), 0, 0);
+		vzm::SetRenderTestParam("_int_OitMode", (int)4, sizeof(int), -1, -1);
+		vzm::SetRenderTestParam("_double_RobustRatio", low_Rh, sizeof(double), -1, -1);
 		std::cout << "oit mode : DK+BT with Rh (" << low_Rh << ")" << std::endl;
 		break;
 	}
 	case '6':
 	{
 		vzm::SetRenderTestParam("_int_OitMode", (int)4, sizeof(int), 0, 0);
-		vzm::SetRenderTestParam("_double_RobustRatio", high_Rh, sizeof(double), 0, 0);
+		vzm::SetRenderTestParam("_double_RobustRatio", high_Rh, sizeof(double), -1, -1);
 		std::cout << "oit mode : DK+BT with Rh (" << high_Rh << ")" << std::endl;
 		break;
 	}
 	case 'c':
 	{
+		if (preset_file == "") break;
 		size_t lastindex = preset_file.find_last_of(".");
 		std::string rawname = preset_file.substr(0, lastindex);
 		compute_difference(rawname + "_");
@@ -1144,7 +1147,7 @@ int Fig_GhostedIllustration()
 	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.0, 1.5, 2.0, 100.0), sizeof(glm::dvec4), -1, -1);
 	// after presetting of SetRenderTestParams
-	load_preset(preset_file, loaded_obj_ids);
+	//load_preset(preset_file, loaded_obj_ids);
 	std::cout << "oit mode : SK+BTZ" << std::endl;
 
 	int control_value = 250;
@@ -1165,7 +1168,7 @@ int Fig_GhostedIllustration()
 	while (key != 'q')
 	{
 		bool write_img_file = false;
-		key_actions(key, preset_file, loaded_obj_ids, write_img_file);
+		key_actions(key, "", loaded_obj_ids, write_img_file);
 
 		vzm::GetCameraParameters(0, cam_params, 0);
 		glm::fmat4x4 r = glm::rotate(glm::pi<float>() * 0.001f, glm::fvec3(__cv3__ cam_params.up));
