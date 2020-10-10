@@ -65,24 +65,24 @@ void CallBackFunc_Mouse(int event, int x, int y, int flags, void* userdata)
 	if (flags & EVENT_FLAG_ALTKEY && event == EVENT_LBUTTONDOWN)
 	{
 		int oit_mode = 0;
-		vzm::GetRenderTestParam("_int_OitMode", &oit_mode, sizeof(int), 0, 0);
+		vzm::GetRenderTestParam("_int_OitMode", &oit_mode, sizeof(int), -1, -1);
 
-		vzm::SetRenderTestParam("_double_TrInvterval", 0.002, sizeof(double), 0, 0);
-		vzm::SetRenderTestParam("_double_TrStartOffset", 2.0, sizeof(double), 0, 0);
-		vzm::SetRenderTestParam("_int2_PixelPos", glm::ivec2(x, y), sizeof(int) * 2, 0, 0);
-		vzm::SetRenderTestParam("_bool_PixelTransmittance", true, sizeof(bool), 0, 0);
-		vzm::SetRenderTestParam("_int_OitMode", (int)1, sizeof(int), 0, 0);
+		vzm::SetRenderTestParam("_double_TrInvterval", 0.002, sizeof(double), -1, -1);
+		vzm::SetRenderTestParam("_double_TrStartOffset", 2.0, sizeof(double), -1, -1);
+		vzm::SetRenderTestParam("_int2_PixelPos", glm::ivec2(x, y), sizeof(int) * 2, -1, -1);
+		vzm::SetRenderTestParam("_bool_PixelTransmittance", true, sizeof(bool), -1, -1);
+		vzm::SetRenderTestParam("_int_OitMode", (int)1, sizeof(int), -1, -1);
 		vzm::RenderScene(0, 0);
-		vzm::SetRenderTestParam("_int_OitMode", (int)0, sizeof(int), 0, 0);
+		vzm::SetRenderTestParam("_int_OitMode", (int)0, sizeof(int), -1, -1);
 		vzm::RenderScene(0, 0);
-		vzm::SetRenderTestParam("_int_OitMode", (int)2, sizeof(int), 0, 0);
+		vzm::SetRenderTestParam("_int_OitMode", (int)2, sizeof(int), -1, -1);
 		vzm::RenderScene(0, 0);
-		vzm::SetRenderTestParam("_int_OitMode", (int)4, sizeof(int), 0, 0);
-		vzm::SetRenderTestParam("_double_RobustRatio", 0.2, sizeof(double), 0, 0);
+		vzm::SetRenderTestParam("_int_OitMode", (int)4, sizeof(int), -1, -1);
+		vzm::SetRenderTestParam("_double_RobustRatio", 0.2, sizeof(double), -1, -1);
 		vzm::RenderScene(0, 0);
 
-		vzm::SetRenderTestParam("_bool_PixelTransmittance", false, sizeof(bool), 0, 0);
-		vzm::SetRenderTestParam("_int_OitMode", oit_mode, sizeof(int), 0, 0);
+		vzm::SetRenderTestParam("_bool_PixelTransmittance", false, sizeof(bool), -1, -1);
+		vzm::SetRenderTestParam("_int_OitMode", oit_mode, sizeof(int), -1, -1);
 		return;
 	}
 
@@ -192,31 +192,31 @@ void load_preset(const std::string& preset_file, const std::list<int>& obj_ids)
 		{
 			double v;
 			iss >> v;
-			vzm::SetRenderTestParam("_double_CopVZThickness", v, sizeof(double), 0, 0);
+			vzm::SetRenderTestParam("_double_CopVZThickness", v, sizeof(double), -1, -1);
 		}
 		else if (param_name == "z_thickenss_rp")
 		{
 			double v;
 			iss >> v;
-			vzm::SetRenderTestParam("_double_VZThickness", v, sizeof(double), 0, 0);
+			vzm::SetRenderTestParam("_double_VZThickness", v, sizeof(double), -1, -1);
 		}
 		else if (param_name == "beta")
 		{
 			double v;
 			iss >> v;
-			vzm::SetRenderTestParam("_double_MergingBeta", v, sizeof(double), 0, 0);
+			vzm::SetRenderTestParam("_double_MergingBeta", v, sizeof(double), -1, -1);
 		}
 		else if (param_name == "robustness_ratio")
 		{
 			double v;
 			iss >> v;
-			vzm::SetRenderTestParam("_double_RobustRatio", v, sizeof(double), 0, 0);
+			vzm::SetRenderTestParam("_double_RobustRatio", v, sizeof(double), -1, -1);
 		}
 		else if (param_name == "forced_shading")
 		{
 			glm::dvec4 v;
 			iss >> v.x >> v.y >> v.z >> v.w;
-			vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", v, sizeof(glm::dvec4), 0, 0);
+			vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", v, sizeof(glm::dvec4), -1, -1);
 		}
 		else if (param_name == "alpha" && obj_ids.size() > 0)
 		{
@@ -293,12 +293,12 @@ void compute_difference(const std::string& out_file_prefix)
 	auto make_cvmat = [](int oit_mode, double rh = 0.5) -> cv::Mat
 	{
 		int ot_mode_original = 0;
-		vzm::GetRenderTestParam("_int_OitMode", &ot_mode_original, sizeof(int), 0, 0);
+		vzm::GetRenderTestParam("_int_OitMode", &ot_mode_original, sizeof(int), -1, -1);
 		double rh_original;
-		vzm::GetRenderTestParam("_double_RobustRatio", &rh_original, sizeof(double), 0, 0);
+		vzm::GetRenderTestParam("_double_RobustRatio", &rh_original, sizeof(double), -1, -1);
 
-		vzm::SetRenderTestParam("_int_OitMode", oit_mode, sizeof(int), 0, 0);
-		vzm::SetRenderTestParam("_double_RobustRatio", rh, sizeof(double), 0, 0);
+		vzm::SetRenderTestParam("_int_OitMode", oit_mode, sizeof(int), -1, -1);
+		vzm::SetRenderTestParam("_double_RobustRatio", rh, sizeof(double), -1, -1);
 		vzm::RenderScene(0, 0);
 		unsigned char* ptr_rgba;
 		float* ptr_zdepth;
@@ -307,21 +307,21 @@ void compute_difference(const std::string& out_file_prefix)
 		cv::Mat cvmat(h, w, CV_8UC4);
 		memcpy(cvmat.data, ptr_rgba, sizeof(unsigned char) * 4 * w * h);
 
-		vzm::SetRenderTestParam("_int_OitMode", ot_mode_original, sizeof(int), 0, 0);
-		vzm::SetRenderTestParam("_double_RobustRatio", rh_original, sizeof(double), 0, 0);
+		vzm::SetRenderTestParam("_int_OitMode", ot_mode_original, sizeof(int), -1, -1);
+		vzm::SetRenderTestParam("_double_RobustRatio", rh_original, sizeof(double), -1, -1);
 		return cvmat;
 	};
 
 	bool profiling_original = false;
-	vzm::GetRenderTestParam("_bool_GpuProfile", &profiling_original, sizeof(bool), 0, 0);
-	vzm::SetRenderTestParam("_bool_GpuProfile", true, sizeof(bool), 0, 0);
+	vzm::GetRenderTestParam("_bool_GpuProfile", &profiling_original, sizeof(bool), -1, -1);
+	vzm::SetRenderTestParam("_bool_GpuProfile", true, sizeof(bool), -1, -1);
 	cv::Mat cvmat_DFB = make_cvmat(1);
 	cv::Mat cvmat_MBT = make_cvmat(2);
 	cv::Mat cvmat_DKBT_highRh = make_cvmat(4, high_Rh);
 	cv::Mat cvmat_DKBT_lowRh = make_cvmat(4, low_Rh);
 	cv::Mat cvmat_DKBTZ_lowRh = make_cvmat(3, low_Rh);
 	cv::Mat cvmat_SKBTZ = make_cvmat(0);
-	vzm::SetRenderTestParam("_bool_GpuProfile", profiling_original, sizeof(bool), 0, 0);
+	vzm::SetRenderTestParam("_bool_GpuProfile", profiling_original, sizeof(bool), -1, -1);
 
 	cv::Mat cvmat_DFB_rgb;
 	cv::cvtColor(cvmat_DFB, cvmat_DFB_rgb, cv::COLOR_BGRA2BGR);
@@ -485,7 +485,7 @@ void key_actions(const int key, const std::string& preset_file, const std::list<
 	}
 	case '6':
 	{
-		vzm::SetRenderTestParam("_int_OitMode", (int)4, sizeof(int), 0, 0);
+		vzm::SetRenderTestParam("_int_OitMode", (int)4, sizeof(int), -1, -1);
 		vzm::SetRenderTestParam("_double_RobustRatio", high_Rh, sizeof(double), -1, -1);
 		std::cout << "oit mode : DK+BT with Rh (" << high_Rh << ")" << std::endl;
 		break;
@@ -562,12 +562,12 @@ int Fig_Absorbance()
 
 	align_obj_to_world_center(0, loaded_obj_ids);
 
-	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), 0, 0);
-	vzm::SetRenderTestParam("_double_CopVZThickness", 0.002, sizeof(double), 0, 0);
-	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), 0, 0);
-	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), 0, 0);
-	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), 0, 0);
-	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), 0, 0);
+	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), -1, -1);
+	vzm::SetRenderTestParam("_double_CopVZThickness", 0.002, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), -1, -1);
 	// after presetting of SetRenderTestParams
 	load_preset(preset_file, loaded_obj_ids);
 	std::cout << "oit mode : SK+BTZ" << std::endl;
@@ -584,7 +584,7 @@ int Fig_Absorbance()
 			show_window(it.second, it.first, 0, write_img_file, preset_file);
 		}
 
-		vzm::SetRenderTestParam("_bool_ReloadHLSLObjFiles", false, sizeof(bool), 0, 0);
+		vzm::SetRenderTestParam("_bool_ReloadHLSLObjFiles", false, sizeof(bool), -1, -1);
 		key = cv::waitKey(1);
 	}
 
@@ -713,12 +713,12 @@ int Fig_OitIntersection()
 	delete[] idx_prims;
 	delete[] idx_lines;
 
-	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), 0, 0);
-	vzm::SetRenderTestParam("_double_CopVZThickness", 0.002, sizeof(double), 0, 0);
-	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), 0, 0);
-	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), 0, 0);
-	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), 0, 0);
-	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), 0, 0);
+	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), -1, -1);
+	vzm::SetRenderTestParam("_double_CopVZThickness", 0.002, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), -1, -1);
 	// after presetting of SetRenderTestParams
 	load_preset(preset_file, {loaded_obj_id});
 	std::cout << "oit mode : SK+BTZ" << std::endl;
@@ -751,7 +751,7 @@ int Fig_OitIntersection()
 			show_window(it.second, it.first, 0, write_img_file, preset_file);
 		}
 
-		vzm::SetRenderTestParam("_bool_ReloadHLSLObjFiles", false, sizeof(bool), 0, 0);
+		vzm::SetRenderTestParam("_bool_ReloadHLSLObjFiles", false, sizeof(bool), -1, -1);
 		key = cv::waitKey(1);
 	}
 
@@ -767,7 +767,7 @@ int Fig_OitPerformance()
 	vzm::ObjStates obj_state;
 	int w = 1024, h = 1024;
 	if(w > 1024 && h > 1024)
-		vzm::SetRenderTestParam("_int_BufExScale", (int)4, sizeof(int), 0, 0); // set this when the resolution 2048x2048 (NVIDIA GTX 1080)
+		vzm::SetRenderTestParam("_int_BufExScale", (int)4, sizeof(int), -1, -1); // set this when the resolution 2048x2048 (NVIDIA GTX 1080)
 #define __OBJ3
 #ifdef __OBJ1
 	high_Rh = 0.75, low_Rh = 0.2, diff_amp = 10.0;
@@ -846,12 +846,12 @@ int Fig_OitPerformance()
 
 	align_obj_to_world_center(0, loaded_obj_ids);
 
-	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), 0, 0);
-	vzm::SetRenderTestParam("_double_CopVZThickness", 0.002, sizeof(double), 0, 0);
-	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), 0, 0);
-	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), 0, 0);
-	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), 0, 0);
-	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), 0, 0);
+	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), -1, -1);
+	vzm::SetRenderTestParam("_double_CopVZThickness", 0.002, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), -1, -1);
 	// after presetting of SetRenderTestParams
 	load_preset(preset_file, loaded_obj_ids);
 	std::cout << "oit mode : SK+BTZ" << std::endl;
@@ -868,7 +868,7 @@ int Fig_OitPerformance()
 			show_window(it.second, it.first, 0, write_img_file, preset_file);
 		}
 
-		vzm::SetRenderTestParam("_bool_ReloadHLSLObjFiles", false, sizeof(bool), 0, 0);
+		vzm::SetRenderTestParam("_bool_ReloadHLSLObjFiles", false, sizeof(bool), -1, -1);
 		key = cv::waitKey(1);
 	}
 
@@ -933,12 +933,12 @@ int Fig_LocalDepthBlending()
 
 	align_obj_to_world_center(0, loaded_obj_ids);
 
-	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), 0, 0);
-	vzm::SetRenderTestParam("_double_CopVZThickness", 0.002, sizeof(double), 0, 0);
-	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), 0, 0);
-	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), 0, 0);
-	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), 0, 0);
-	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), 0, 0);
+	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), -1, -1);
+	vzm::SetRenderTestParam("_double_CopVZThickness", 0.002, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), -1, -1);
 	// after presetting of SetRenderTestParams
 	load_preset(preset_file, loaded_obj_ids);
 	std::cout << "oit mode : SK+BTZ" << std::endl;
@@ -955,7 +955,7 @@ int Fig_LocalDepthBlending()
 			show_window(it.second, it.first, 0, write_img_file, preset_file);
 		}
 
-		vzm::SetRenderTestParam("_bool_ReloadHLSLObjFiles", false, sizeof(bool), 0, 0);
+		vzm::SetRenderTestParam("_bool_ReloadHLSLObjFiles", false, sizeof(bool), -1, -1);
 		key = cv::waitKey(1);
 	}
 
@@ -1047,12 +1047,12 @@ int Fig_HybridVR()
 		cv::setMouseCallback(scene_name[i], CallBackFunc_Mouse, NULL);// &scenes[i]);
 	}
 
-	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), 0, 0);
-	vzm::SetRenderTestParam("_double_CopVZThickness", 0.00002, sizeof(double), 0, 0);
-	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), 0, 0);
-	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), 0, 0);
-	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), 0, 0);
-	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), 0, 0);
+	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), -1, -1);
+	vzm::SetRenderTestParam("_double_CopVZThickness", 0.00002, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), -1, -1);
 	// after presetting of SetRenderTestParams
 	load_preset(preset_file, { });
 	std::cout << "oit mode : SK+BTZ" << std::endl;
@@ -1069,7 +1069,7 @@ int Fig_HybridVR()
 			show_window(it.second, it.first, 0, write_img_file, preset_file);
 		}
 
-		vzm::SetRenderTestParam("_bool_ReloadHLSLObjFiles", false, sizeof(bool), 0, 0);
+		vzm::SetRenderTestParam("_bool_ReloadHLSLObjFiles", false, sizeof(bool), -1, -1);
 		key = cv::waitKey(1);
 	}
 
@@ -1084,7 +1084,7 @@ int Fig_GhostedIllustration()
 	vzm::ObjStates obj_state;
 	int w = 1024, h = 1024;
 	if (w > 1024 && h > 1024)
-		vzm::SetRenderTestParam("_int_BufExScale", (int)4, sizeof(int), 0, 0); // set this when the resolution 2048x2048 (NVIDIA GTX 1080)
+		vzm::SetRenderTestParam("_int_BufExScale", (int)4, sizeof(int), -1, -1); // set this when the resolution 2048x2048 (NVIDIA GTX 1080)
 
 	high_Rh = 0.75, low_Rh = 0.2, diff_amp = 10.0;
 	scene_stage_scale = 1.f;
@@ -1185,12 +1185,12 @@ int Fig_GhostedIllustration()
 			vzm::ReplaceOrAddSceneObject(1, obj_id, obj_state);
 		}
 
-		vzm::SetRenderTestParam("_double_VZThickness", control_value * 2.0 / 1000.0, sizeof(double), 0, 0);
+		vzm::SetRenderTestParam("_double_VZThickness", control_value * 2.0 / 1000.0, sizeof(double), -1, -1);
 		show_window(scene_name[0], 0, 0, write_img_file, GetSolutionPath() + ".\\data\\GI_crab_thickness");
-		vzm::SetRenderTestParam("_double_VZThickness", 0.0002, sizeof(double), 0, 0);
+		vzm::SetRenderTestParam("_double_VZThickness", 0.0002, sizeof(double), -1, -1);
 		show_window(scene_name[1], 1, 0, write_img_file, GetSolutionPath() + ".\\data\\GI_crab_alpha");
 
-		vzm::SetRenderTestParam("_bool_ReloadHLSLObjFiles", false, sizeof(bool), 0, 0);
+		vzm::SetRenderTestParam("_bool_ReloadHLSLObjFiles", false, sizeof(bool), -1, -1);
 		key = cv::waitKey(1);
 	}
 
@@ -1206,7 +1206,7 @@ int Test()
 	vzm::ObjStates obj_state;
 	int w = 1024, h = 1024;
 	if (w > 1024 && h > 1024)
-		vzm::SetRenderTestParam("_int_BufExScale", (int)4, sizeof(int), 0, 0); // set this when the resolution 2048x2048 (NVIDIA GTX 1080)
+		vzm::SetRenderTestParam("_int_BufExScale", (int)4, sizeof(int), -1, -1); // set this when the resolution 2048x2048 (NVIDIA GTX 1080)
 
 	high_Rh = 0.75, low_Rh = 0.2, diff_amp = 10.0;
 	scene_stage_scale = 100.f;
@@ -1268,12 +1268,12 @@ int Test()
 
 	align_obj_to_world_center(0, loaded_obj_ids);
 
-	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), 0, 0);
-	vzm::SetRenderTestParam("_double_CopVZThickness", 0.002, sizeof(double), 0, 0);
-	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), 0, 0);
-	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), 0, 0);
-	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), 0, 0);
-	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), 0, 0);
+	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), -1, -1);
+	vzm::SetRenderTestParam("_double_CopVZThickness", 0.002, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), -1, -1);
 	// after presetting of SetRenderTestParams
 	load_preset(preset_file, loaded_obj_ids);
 	std::cout << "oit mode : SK+BTZ" << std::endl;
@@ -1290,7 +1290,7 @@ int Test()
 			show_window(it.second, it.first, 0, write_img_file, preset_file);
 		}
 
-		vzm::SetRenderTestParam("_bool_ReloadHLSLObjFiles", false, sizeof(bool), 0, 0);
+		vzm::SetRenderTestParam("_bool_ReloadHLSLObjFiles", false, sizeof(bool), -1, -1);
 		key = cv::waitKey(1);
 	}
 
@@ -1305,8 +1305,8 @@ int main()
 	//Fig_OitIntersection();
 	//Test();
 	//Fig_OitPerformance();
-	//Fig_LocalDepthBlending();
-	Fig_GhostedIllustration();
+	Fig_LocalDepthBlending();
+	//Fig_GhostedIllustration();
 	//Fig_HybridVR();
 	
 	vzm::DeinitEngineLib();
