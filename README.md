@@ -44,5 +44,13 @@ build folders (e.g., X64_Debug and X64_Release) should include the following dll
 - CommonUnits.dll
 - GpuManager.dll
 
+### Tips for example code
+- Set ExecutableSample project as a startup project
+- Modify GetSolutionPath() in 'main.cpp' according to your own environment (folder names e.g., 'External Projects' and 'HybridRenderingEngine')
+
+Should you have any questions, please do not hesitate to contact me. 
+
 ### What Next?!
-- Sample code for "get started" will be available via VisMotive framework.
+- Detailed explanation for "get started" will be prepared.
+- Python wrapper and dotnet wrapper will be available. (VisMotive framework)
+- Preparing version 3 of VisMotive framework providing more intuitive interfaces and functions
