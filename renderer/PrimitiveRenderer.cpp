@@ -768,7 +768,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 #define VS_NUM 5
 #define GS_NUM 3
-#define PS_NUM 31
+#define PS_NUM 54
 #define CS_NUM 14
 #define SET_VS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(VERTEX_SHADER, NAME), __S, true)
 #define SET_PS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(PIXEL_SHADER, NAME), __S, true)
@@ -851,17 +851,35 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			  ,"SR_OIT_FILL_SKBTZ_TEXTMAPPING_ps_5_0"
 			  ,"SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ps_5_0"
 
+			   "SR_OIT_FILL_SKBTZ_PHONGBLINN_ROV_ps_5_0"
+			  ,"SR_OIT_FILL_SKBTZ_DASHEDLINE_ROV_ps_5_0"
+			  ,"SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ROV_ps_5_0"
+			  ,"SR_OIT_FILL_SKBTZ_TEXTMAPPING_ROV_ps_5_0"
+			  ,"SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ROV_ps_5_0"
+
 			  ,"SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0"
 			  ,"SR_OIT_FILL_DKBTZ_DASHEDLINE_ps_5_0"
 			  ,"SR_OIT_FILL_DKBTZ_MULTITEXTMAPPING_ps_5_0"
 			  ,"SR_OIT_FILL_DKBTZ_TEXTMAPPING_ps_5_0"
 			  ,"SR_OIT_FILL_DKBTZ_TEXTUREIMGMAP_ps_5_0"
 
+			  ,"SR_OIT_FILL_DKBTZ_PHONGBLINN_ROV_ps_5_0"
+			  ,"SR_OIT_FILL_DKBTZ_DASHEDLINE_ROV_ps_5_0"
+			  ,"SR_OIT_FILL_DKBTZ_MULTITEXTMAPPING_ROV_ps_5_0"
+			  ,"SR_OIT_FILL_DKBTZ_TEXTMAPPING_ROV_ps_5_0"
+			  ,"SR_OIT_FILL_DKBTZ_TEXTUREIMGMAP_ROV_ps_5_0"
+
 			  ,"SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0"
 			  ,"SR_OIT_FILL_DKBT_DASHEDLINE_ps_5_0"
 			  ,"SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ps_5_0"
 			  ,"SR_OIT_FILL_DKBT_TEXTMAPPING_ps_5_0"
 			  ,"SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ps_5_0"
+
+			  ,"SR_OIT_FILL_DKBT_PHONGBLINN_ROV_ps_5_0"
+			  ,"SR_OIT_FILL_DKBT_DASHEDLINE_ROV_ps_5_0"
+			  ,"SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ROV_ps_5_0"
+			  ,"SR_OIT_FILL_DKBT_TEXTMAPPING_ROV_ps_5_0"
+			  ,"SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ROV_ps_5_0"
 
 			  ,"SR_SINGLE_LAYER_ps_5_0"
 			  //,"SR_OIT_KDEPTH_NPRGHOST_ps_5_0"
@@ -882,6 +900,15 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			  ,"SR_MOMENT_OIT_MULTITEXTMAPPING_ps_5_0"
 			  ,"SR_MOMENT_OIT_TEXTMAPPING_ps_5_0"
 			  ,"SR_MOMENT_OIT_TEXTUREIMGMAP_ps_5_0"
+
+			  ,"SR_MOMENT_GEN_ROV_ps_5_0"
+			  ,"SR_MOMENT_GEN_TEXT_ROV_ps_5_0"
+			  ,"SR_MOMENT_GEN_MTT_ROV_ps_5_0"
+			  ,"SR_MOMENT_OIT_PHONGBLINN_ROV_ps_5_0"
+			  ,"SR_MOMENT_OIT_DASHEDLINE_ROV_ps_5_0"
+			  ,"SR_MOMENT_OIT_MULTITEXTMAPPING_ROV_ps_5_0"
+			  ,"SR_MOMENT_OIT_TEXTMAPPING_ROV_ps_5_0"
+			  ,"SR_MOMENT_OIT_TEXTUREIMGMAP_ROV_ps_5_0"
 		};
 
 		for (int i = 0; i < PS_NUM; i++)
@@ -1811,31 +1838,31 @@ BEGIN_RENDERER_LOOP:
 				switch (mode_OIT)
 				{
 				case MFR_MODE::DXAB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0); break;
-				case MFR_MODE::MOMENT: dx11PS_Target = GETPS(SR_MOMENT_OIT_TEXTMAPPING_ps_5_0); break;
-				case MFR_MODE::DKBTZ: dx11PS_Target = GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ps_5_0); break;
-				case MFR_MODE::DKBT: dx11PS_Target = GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ps_5_0); break;
+				case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_MOMENT_OIT_TEXTMAPPING_ps_5_0) : GETPS(SR_MOMENT_OIT_TEXTMAPPING_ROV_ps_5_0); break;
+				case MFR_MODE::DKBTZ: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ROV_ps_5_0q); break;
+				case MFR_MODE::DKBT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ROV_ps_5_0); break;
 				case MFR_MODE::SKBTZ:
-				default: dx11PS_Target = GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ps_5_0); break;
+				default: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ROV_ps_5_0); break;
 				}
 			else if(render_obj_info.has_texture_img && dx11InputLayer_Target == dx11LI_PNT)
 				switch (mode_OIT)
 				{
 				case MFR_MODE::DXAB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0); break;
-				case MFR_MODE::MOMENT: dx11PS_Target = GETPS(SR_MOMENT_OIT_TEXTUREIMGMAP_ps_5_0); break;
-				case MFR_MODE::DKBTZ: dx11PS_Target = GETPS(SR_OIT_FILL_DKBTZ_TEXTUREIMGMAP_ps_5_0); break;
-				case MFR_MODE::DKBT: dx11PS_Target = GETPS(SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ps_5_0); break;
+				case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_MOMENT_OIT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_MOMENT_OIT_TEXTUREIMGMAP_ROV_ps_5_0); break;
+				case MFR_MODE::DKBTZ: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBTZ_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_TEXTUREIMGMAP_ROV_ps_5_0); break;
+				case MFR_MODE::DKBT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ROV_ps_5_0); break;
 				case MFR_MODE::SKBTZ:
-				default: dx11PS_Target = GETPS(SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ps_5_0); break;
+				default: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ROV_ps_5_0); break;
 				}
 			else
 				switch (mode_OIT)
 				{
 				case MFR_MODE::DXAB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
-				case MFR_MODE::MOMENT: dx11PS_Target = GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0); break;
-				case MFR_MODE::DKBTZ: dx11PS_Target = GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0); break;
-				case MFR_MODE::DKBT: dx11PS_Target = GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0); break;
+				case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0) : GETPS(SR_MOMENT_OIT_PHONGBLINN_ROV_ps_5_0); break;
+				case MFR_MODE::DKBTZ: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ROV_ps_5_0); break;
+				case MFR_MODE::DKBT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ROV_ps_5_0); break;
 				case MFR_MODE::SKBTZ:
-				default: dx11PS_Target = GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0); break;
+				default: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ROV_ps_5_0); break;
 				}
 		}
 		else if (prim_data->GetVerticeDefinition("TEXCOORD0"))
@@ -1851,11 +1878,11 @@ BEGIN_RENDERER_LOOP:
 				switch (mode_OIT)
 				{
 				case MFR_MODE::DXAB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_MULTITEXTMAPPING_ps_5_0); break;
-				case MFR_MODE::MOMENT: dx11PS_Target = GETPS(SR_MOMENT_OIT_MULTITEXTMAPPING_ps_5_0); break;
-				case MFR_MODE::DKBTZ: dx11PS_Target = GETPS(SR_OIT_FILL_DKBTZ_MULTITEXTMAPPING_ps_5_0); break;
-				case MFR_MODE::DKBT: dx11PS_Target = GETPS(SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ps_5_0); break;
+				case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_MOMENT_OIT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_MOMENT_OIT_MULTITEXTMAPPING_ROV_ps_5_0); break;
+				case MFR_MODE::DKBTZ: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBTZ_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_MULTITEXTMAPPING_ROV_ps_5_0); break;
+				case MFR_MODE::DKBT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ROV_ps_5_0); break;
 				case MFR_MODE::SKBTZ:
-				default: dx11PS_Target = GETPS(SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ps_5_0); break;
+				default: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ROV_ps_5_0); break;
 				}
 			}
 			else
@@ -1869,31 +1896,31 @@ BEGIN_RENDERER_LOOP:
 					switch (mode_OIT)
 					{
 					case MFR_MODE::DXAB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0); break;
-					case MFR_MODE::MOMENT: dx11PS_Target = GETPS(SR_MOMENT_OIT_TEXTMAPPING_ps_5_0); break;
-					case MFR_MODE::DKBTZ: dx11PS_Target = GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ps_5_0); break;
-					case MFR_MODE::DKBT: dx11PS_Target = GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ps_5_0); break;
+					case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_TEXTMAPPING_ps_5_0) : GETPS(SR_MOMENT_OIT_TEXTMAPPING_ROV_ps_5_0); break;
+					case MFR_MODE::DKBTZ: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ROV_ps_5_0); break;
+					case MFR_MODE::DKBT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ROV_ps_5_0); break;
 					case MFR_MODE::SKBTZ:
-					default: dx11PS_Target = GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ps_5_0); break;
+					default: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ROV_ps_5_0); break;
 					}
 				else if ((cbPolygonObj.pobj_flag & (0x1 << 19)) && prim_data->ptype == PrimitiveTypeLINE)
 					switch (mode_OIT)
 					{
 					case MFR_MODE::DXAB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_DASHEDLINE_ps_5_0); break;
-					case MFR_MODE::MOMENT: dx11PS_Target = GETPS(SR_MOMENT_OIT_DASHEDLINE_ps_5_0); break;
-					case MFR_MODE::DKBTZ: dx11PS_Target = GETPS(SR_OIT_FILL_DKBTZ_DASHEDLINE_ps_5_0); break;
-					case MFR_MODE::DKBT: dx11PS_Target = GETPS(SR_OIT_FILL_DKBT_DASHEDLINE_ps_5_0); break;
+					case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_MOMENT_OIT_DASHEDLINE_ps_5_0) : GETPS(SR_MOMENT_OIT_DASHEDLINE_ROV_ps_5_0); break;
+					case MFR_MODE::DKBTZ: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBTZ_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_DASHEDLINE_ROV_ps_5_0); break;
+					case MFR_MODE::DKBT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBT_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_DASHEDLINE_ROV_ps_5_0); break;
 					case MFR_MODE::SKBTZ:
-					default: dx11PS_Target = GETPS(SR_OIT_FILL_SKBTZ_DASHEDLINE_ps_5_0); break;
+					default: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_SKBTZ_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_DASHEDLINE_ROV_ps_5_0); break;
 					}
 				else
 					switch (mode_OIT)
 					{
 					case MFR_MODE::DXAB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
-					case MFR_MODE::MOMENT: dx11PS_Target = GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0); break;
-					case MFR_MODE::DKBTZ: dx11PS_Target = GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0); break;
-					case MFR_MODE::DKBT: dx11PS_Target = GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0); break;
+					case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0) : GETPS(SR_MOMENT_OIT_PHONGBLINN_ROV_ps_5_0); break;
+					case MFR_MODE::DKBTZ: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ROV_ps_5_0); break;
+					case MFR_MODE::DKBT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ROV_ps_5_0); break;
 					case MFR_MODE::SKBTZ:
-					default: dx11PS_Target = GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0); break;
+					default: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ROV_ps_5_0); break;
 					}
 			}
 		}
@@ -1905,11 +1932,11 @@ BEGIN_RENDERER_LOOP:
 			switch (mode_OIT)
 			{
 			case MFR_MODE::DXAB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
-			case MFR_MODE::MOMENT: dx11PS_Target = GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0); break;
-			case MFR_MODE::DKBTZ: dx11PS_Target = GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0); break;
-			case MFR_MODE::DKBT: dx11PS_Target = GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0); break;
+			case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0) : GETPS(SR_MOMENT_OIT_PHONGBLINN_ROV_ps_5_0); break;
+			case MFR_MODE::DKBTZ: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ROV_ps_5_0); break;
+			case MFR_MODE::DKBT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ROV_ps_5_0); break;
 			case MFR_MODE::SKBTZ:
-			default: dx11PS_Target = GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0); break;
+			default: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ROV_ps_5_0); break;
 			}
 		}
 
@@ -1930,12 +1957,12 @@ BEGIN_RENDERER_LOOP:
 			else if (is_MOMENT_gen_buffer)
 			{
 				if (dx11InputLayer_Target == dx11LI_PTTT)
-					dx11PS_Target = GETPS(SR_MOMENT_GEN_MTT_ps_5_0);
+					dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_MOMENT_GEN_MTT_ps_5_0) : GETPS(SR_MOMENT_GEN_MTT_ROV_ps_5_0);
 				else if ((dx11InputLayer_Target == dx11LI_PT || dx11InputLayer_Target == dx11LI_PT) 
 					&& render_obj_info.is_annotation_obj)
-					dx11PS_Target = GETPS(SR_MOMENT_GEN_TEXT_ps_5_0);
+					dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_MOMENT_GEN_TEXT_ps_5_0) : GETPS(SR_MOMENT_GEN_TEXT_ROV_ps_5_0);
 				else
-					dx11PS_Target = GETPS(SR_MOMENT_GEN_ps_5_0);
+					dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_MOMENT_GEN_ps_5_0) : GETPS(SR_MOMENT_GEN_ROV_ps_5_0);
 			}
 		}
 

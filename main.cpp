@@ -408,6 +408,15 @@ void key_actions(const int key, const std::string& preset_file, const std::list<
 {
 	switch (key)
 	{
+	case 'o':
+	{
+		static bool use_spinlock = true;
+		use_spinlock = !use_spinlock;
+		vzm::SetRenderTestParam("_bool_UseSpinLock", use_spinlock, sizeof(bool), -1, -1);
+		if(use_spinlock) std::cout << "Pixel Synchronization by Spinlock" << std::endl;
+		else std::cout << "Pixel Synchronization by ROV" << std::endl;
+		break;
+	}
 	case 'g':
 	{
 		// (de)activate GPU profiling
@@ -768,7 +777,7 @@ int Fig_OitPerformance()
 	int w = 1024, h = 1024;
 	if(w > 1024 && h > 1024)
 		vzm::SetRenderTestParam("_int_BufExScale", (int)4, sizeof(int), -1, -1); // set this when the resolution 2048x2048 (NVIDIA GTX 1080)
-#define __OBJ3
+#define __OBJ1
 #ifdef __OBJ1
 	high_Rh = 0.75, low_Rh = 0.2, diff_amp = 10.0;
 	scene_stage_scale = 5.f;
@@ -1304,8 +1313,8 @@ int main()
 	//Fig_Absorbance();
 	//Fig_OitIntersection();
 	//Test();
-	//Fig_OitPerformance();
-	Fig_LocalDepthBlending();
+	Fig_OitPerformance();
+	//Fig_LocalDepthBlending();
 	//Fig_GhostedIllustration();
 	//Fig_HybridVR();
 	

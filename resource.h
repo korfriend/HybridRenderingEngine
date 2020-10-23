@@ -228,6 +228,36 @@
 #define IDR_RCDATA50031					  50031
 #define IDR_RCDATA50032					  50032
 
+#define IDR_RCDATA11050					  11050
+#define IDR_RCDATA11051					  11051
+#define IDR_RCDATA11052					  11052
+#define IDR_RCDATA11053					  11053
+#define IDR_RCDATA11054					  11054
+		
+#define IDR_RCDATA11150					  11150
+#define IDR_RCDATA11151					  11151
+#define IDR_RCDATA11152					  11152
+#define IDR_RCDATA11153					  11153
+#define IDR_RCDATA11154					  11154
+
+#define IDR_RCDATA11170					  11170
+#define IDR_RCDATA11171					  11171
+#define IDR_RCDATA11172					  11172
+#define IDR_RCDATA11173					  11173
+#define IDR_RCDATA11174					  11174
+
+#define IDR_RCDATA21007					  21007
+
+#define IDR_RCDATA11070					  11070
+#define IDR_RCDATA11077					  11077
+#define IDR_RCDATA11076					  11076
+#define IDR_RCDATA11071					  11071
+#define IDR_RCDATA11072					  11072
+#define IDR_RCDATA11073					  11073
+#define IDR_RCDATA11074					  11074
+#define IDR_RCDATA11075					  11075
+
+
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
