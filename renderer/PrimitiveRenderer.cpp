@@ -2428,13 +2428,15 @@ BEGIN_RENDERER_LOOP:
 		dx11DeviceImmContext->CSSetShaderResources(10, 2, dx11SRVs_1st_pass);
 
 		UINT UAVInitialCounts = 0;
-		if (mode_OIT == MFR_MODE::SKBTZ)
-			dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_SKBTZ_cs_5_0), NULL, 0);
-		if (mode_OIT == MFR_MODE::DKBTZ)
-			dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_SKBTZ_cs_5_0), NULL, 0);
-		else if (mode_OIT == MFR_MODE::DKBT)
-			dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_DKBT_cs_5_0), NULL, 0);
-		else assert(0);
+		switch (mode_OIT)
+		{
+		case MFR_MODE::SKBTZ: dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_SKBTZ_cs_5_0), NULL, 0); break;
+		case MFR_MODE::DKBTZ: dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_DKBTZ_cs_5_0), NULL, 0); break;
+		case MFR_MODE::DKBT: dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_DKBT_cs_5_0), NULL, 0); break;
+		default:
+			cout << mode_OIT << endl;
+			assert(0);
+		}
 
 		//dx11DeviceImmContext->Flush();
 		dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
