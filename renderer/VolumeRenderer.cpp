@@ -37,6 +37,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	bool force_to_update_otf = _fncontainer->GetParamValue("_bool_ForceToUpdateOtf", false);
 	bool show_block_test = _fncontainer->GetParamValue("_bool_IsShowBlock", false);
 	double v_thickness = _fncontainer->GetParamValue("_double_VZThickness", 0.0);
+	v_thickness = 0;
+
 	float merging_beta = (float)_fncontainer->GetParamValue("_double_MergingBeta", 0.5);
 	bool is_rgba = _fncontainer->GetParamValue("_bool_IsRGBA", false); // false means bgra
 	bool is_ghost_mode = _fncontainer->GetParamValue("_bool_GhostEffect", false);
@@ -382,7 +384,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		D3D11_MAPPED_SUBRESOURCE mappedResHSMask;
 		dx11DeviceImmContext->Map(cbuf_hsmask, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResHSMask);
 		CB_HotspotMask* cbHSMaskData = (CB_HotspotMask*)mappedResHSMask.pData;
-		grd_helper::SetCb_HotspotMask(*cbHSMaskData, _fncontainer, fb_size_old);
+		grd_helper::SetCb_HotspotMask(*cbHSMaskData, _fncontainer, matWS2SS);
 		dx11DeviceImmContext->Unmap(cbuf_hsmask, 0);
 		dx11DeviceImmContext->CSSetConstantBuffers(9, 1, &cbuf_hsmask);
 	}

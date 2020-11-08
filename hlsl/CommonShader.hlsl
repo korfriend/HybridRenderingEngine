@@ -221,6 +221,14 @@ struct HotspotMask
 	float kappa_t;
 	float kappa_s;
 	float bnd_thick;
+
+	int flag;
+	float3 pos_spotcenter;
+
+	float in_depth_vis;
+	int __dummy0;
+	int __dummy1;
+	int __dummy2;
 };
 
 struct HxCB_HotspotMask
@@ -1299,11 +1307,13 @@ float GetHotspotMaskWeightIdx(inout int out_lined, in int2 pos_xy, in int i, in 
 	//out_lined = 0;
 	float weight = 0;
 	//float count = 0;
-	float smoothness = (g_cbHSMask.mask_info_[i].smoothness & 0xFFFF) * 0.01f;
+	float smoothness = (g_cbHSMask.mask_info_[i].smoothness & 0xFFFF);
 	bool silhouette = (g_cbHSMask.mask_info_[i].smoothness >> 16) > 0;
 	if (smoothness > 0 && (silhouette || !check_silhouete))
 	{
-		float sm_v_max = atan(smoothness);
+		const float MAX_X = 100.f;
+		const float MAX_ATAN = 1.56079666011;// acos(MAX_X);
+		float coeff_atan = 1. / smoothness;
 		int2 vdiff = pos_xy - g_cbHSMask.mask_info_[i].pos_center;
 		float leng = length(vdiff);
 		if (abs(leng - g_cbHSMask.mask_info_[i].radius) < g_cbHSMask.mask_info_[i].bnd_thick)
@@ -1316,8 +1326,13 @@ float GetHotspotMaskWeightIdx(inout int out_lined, in int2 pos_xy, in int i, in 
 				out_lined--;
 		}
 		//count++;
-		float arc_x = max((g_cbHSMask.mask_info_[i].radius - leng), 0) / g_cbHSMask.mask_info_[i].radius * 2.f - 1.f; // [-1 (outside), 1 (inside)]
-		weight = (atan(arc_x * smoothness) + sm_v_max) / (2.f * sm_v_max); // [0, 1]
+		float r = g_cbHSMask.mask_info_[i].radius - leng;
+		if (r > 0)
+		{
+			float arc_x = max(r, 0) / g_cbHSMask.mask_info_[i].radius * 2.f * MAX_X - MAX_X; // [-MAX_X (outside), MAX_X (inside)]
+			//if(arc_x > 0)
+			weight = saturate((atan(arc_x * coeff_atan) + MAX_ATAN) / (2. * MAX_ATAN)); // [0, 1]
+		}
 	}
 	//if (count > 0)
 	//	weight /= count;

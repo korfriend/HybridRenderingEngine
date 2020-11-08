@@ -698,11 +698,17 @@ void OIT_KDEPTH(__VS_OUT input)
 #endif
 
 #if __RENDERING_MODE == 1
-	DashedLine(v_rgba, z_depth, input.f3Custom.x, g_cbPobj.dash_interval, g_cbPobj.pobj_flag & (0x1 << 19), g_cbPobj.pobj_flag & (0x1 << 20));
+	if ((g_cbPobj.pobj_flag & (0x1 << 3)) == 0)
+		v_rgba.rgb = input.f3Custom;
+	int max_c = g_cbPobj.pobj_flag >> 30;
+	float line_pos = max_c == 0 ? input.f3PosWS.x : max_c == 1 ? input.f3PosWS.y : input.f3PosWS.z;
+	DashedLine(v_rgba, z_depth, line_pos, g_cbPobj.dash_interval, g_cbPobj.pobj_flag & (0x1 << 19), g_cbPobj.pobj_flag & (0x1 << 20));
 #elif __RENDERING_MODE == 2
 	MultiTextMapping(v_rgba, z_depth, input.f3Custom0.xy, (int)(input.f3Custom0.z + 0.5f), input.f3Custom1, input.f3Custom2);
+	if (v_rgba.a <= 0.01) clip(-1);
 #elif __RENDERING_MODE == 3
 	TextMapping(v_rgba, z_depth, input.f3Custom.xy, g_cbPobj.pobj_flag & (0x1 << 9), g_cbPobj.pobj_flag & (0x1 << 10));
+	if (v_rgba.a <= 0.01) clip(-1);
 #elif __RENDERING_MODE == 4
 	if (g_cbPobj.tex_map_enum == 1)
 	{
@@ -803,6 +809,43 @@ void OIT_KDEPTH(__VS_OUT input)
 
 		// mask value compute
 		int out_lined = 0;
+		float weight = GetHotspotMaskWeightIdx(out_lined, tex2d_xy, 0, false);
+		if (out_lined > 0)
+		{
+			v_rgba = float4(1, 1, 0, 1);
+		}
+		else
+		{
+			if (BitCheck(g_cbHSMask.mask_info_[0].flag, 0))
+			{
+				float3 pos_tip3d_ws = g_cbHSMask.mask_info_[0].pos_spotcenter;
+				float3 vec_pos_tip3d2frag = input.f3PosWS - pos_tip3d_ws;
+				float dot_vec = dot(vec_pos_ip2frag, vec_pos_tip3d2frag);
+				if (dot_vec > 0)
+				{
+					const float depth_transparency = g_cbHSMask.mask_info_[0].in_depth_vis; // ws unit
+					// view_dir
+					float depth_w = saturate(-(dot_vec - depth_transparency) / depth_transparency);
+					weight *= depth_w;// depth_w;
+				}
+			}
+
+			float kappa_t = g_cbHSMask.mask_info_[0].kappa_t * weight;
+			float kappa_s = g_cbHSMask.mask_info_[0].kappa_s * weight;
+
+			//v_rgba.rgba = float4((float3)0.0, 1);
+			if (weight > 0)
+			{
+				float s = saturate(abs(dot(nor / nor_len, view_dir))); // [0, 1]
+				//float a_w = saturate(1.f - kappa_t) * pow(min(max(saturate(1.f - s), 0.01f), 1.f), kappa_s);
+				float a_w = (1.f - kappa_t) * pow(1.f - s, kappa_s);
+				v_rgba *= saturate(a_w);
+				//v_rgba.rgba = float4((float3)max(w, 0.0), 1);
+			}
+			if (v_rgba.a <= 0.01) clip(-1);
+		}
+
+		/*
 		float weight_[2] = { GetHotspotMaskWeightIdx(out_lined, tex2d_xy, 0, false) , GetHotspotMaskWeightIdx(out_lined, tex2d_xy, 1, false) };
 		if (out_lined > 0)
 		{
@@ -843,7 +886,7 @@ void OIT_KDEPTH(__VS_OUT input)
 	//v_rgba.rgba = float4(0.5, 0.5, 0.5, 1);// saturate((z_depth - 500) / 1000);
 
 	// add opacity culling with biased z depth
-	// to do : SS-based LAO 에서는 z-culling 안 되도록.
+	// to do : no z-culling when SS-based LAO
 	//if (v_rgba.a > 0.99f)
 	//    out_ps.ds_z = input.f4PosSS.z + 0.00f; // to do : bias z
 	// FillFill_kBuffer

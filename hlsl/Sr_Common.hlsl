@@ -259,7 +259,7 @@ void DashedLine(inout float4 v_rgba, inout float depthcs, const in float line_po
 	// Parameter [bIsDashed]
     if (is_dashed)
     {
-        if ((uint) (line_pos / dash_interval) % 2 == 1)
+		if ((uint) (abs(line_pos) / dash_interval) % 2 == 1)
         {
             if (traparent_interval)
             {

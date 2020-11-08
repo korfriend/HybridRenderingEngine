@@ -1903,19 +1903,35 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 	if (!rendering_obj_info.abs_diffuse)
 		cb_polygon.pobj_flag |= (0x1 << 5);
 
+	int pobj_id = pobj->GetObjectID();
 	bool is_dashed_line = false;
-	pobj->GetCustomParameter("_bool_IsDashed", data_type::dtype<bool>(), &is_dashed_line);
+	pobj->GetCustomParameter("_bool_IsDashed", data_type::dtype<bool>(), &is_dashed_line); // Legacy (will be deprecated)
+	lobj->GetDstObjValue(pobj_id, "_bool_IsDashed", &is_dashed_line);
 	if (is_dashed_line)
 	{
 		cb_polygon.pobj_flag |= (0x1 << 19);
 
 		bool dashed_line_option_invclrs = false;
-		pobj->GetCustomParameter("_bool_IsInvertColorDashLine", data_type::dtype<bool>(), &dashed_line_option_invclrs);
+		pobj->GetCustomParameter("_bool_IsInvertColorDashLine", data_type::dtype<bool>(), &dashed_line_option_invclrs);  // Legacy (will be deprecated)
+		lobj->GetDstObjValue(pobj_id, "_bool_IsInvertColorDashLine", &dashed_line_option_invclrs);
 		if (dashed_line_option_invclrs)
 			cb_polygon.pobj_flag |= (0x1 << 20);
+
+		vmfloat3 pos_max_ws, pos_min_ws;
+		fTransformPoint(&pos_max_ws, &vmfloat3(pobj_data->aabb_os.pos_max), &matOS2WS);
+		fTransformPoint(&pos_min_ws, &vmfloat3(pobj_data->aabb_os.pos_min), &matOS2WS);
+		vmfloat3 diff = pos_max_ws - pos_min_ws;
+		diff.x = fabs(diff.x);
+		diff.y = fabs(diff.y);
+		diff.z = fabs(diff.z);
+		float max_v = max(max(diff.x, diff.y), diff.z);
+		int max_c_flag = 0;
+		if (max_v == diff.y) max_c_flag = 1;
+		else if (max_v == diff.z) max_c_flag = 2;
+
+		cb_polygon.pobj_flag |= (max_c_flag << 30);
 	}
 
-	int pobj_id = pobj->GetObjectID();
 	double dashed_line_interval = 1.0;
 	lobj->GetDstObjValue(pobj_id, "_double_LineDashInterval", &dashed_line_interval);
 
@@ -2157,35 +2173,43 @@ void grd_helper::SetCb_ClipInfo(CB_ClipInfo& cb_clip, VmVObject* obj, VmLObject*
 	}
 }
 
-void grd_helper::SetCb_HotspotMask(CB_HotspotMask& cb_hsmask, VmFnContainer* _fncontainer, vmint2 fb_size)
+void grd_helper::SetCb_HotspotMask(CB_HotspotMask& cb_hsmask, VmFnContainer* _fncontainer, const vmmat44f& matWS2SS)
 {
-	vmint4 mask_center_rs_0 = _fncontainer->GetParamValue("_int4_MaskCenterRadius0", vmint4(fb_size / 2, fb_size.x / 5, 5));
-	vmint4 mask_center_rs_1 = _fncontainer->GetParamValue("_int4_MaskCenterRadius1", vmint4(fb_size / 4, fb_size.x / 5, 3));
+	vmfloat3 pos_3dtip_ws = _fncontainer->GetParamValue("_double3_3DTipPos", vmdouble3());
+	bool use_mask_3dtip = _fncontainer->GetParamValue("_bool_UseMask3DTip", false);
+
+	vmdouble4 mask_center_rs_0 = _fncontainer->GetParamValue("_double4_MaskCenterRadius0", vmdouble4(150, 150, 200, 0.5f));
+	//vmdouble3 mask_center_rs_1 = _fncontainer->GetParamValue("_double4_MaskCenterRadius1", vmdouble3(fb_size / 4, fb_size.x / 5, 150, 3));
 	vmdouble3 hotspot_params_0 = _fncontainer->GetParamValue("_double3_HotspotParamsTKtKs0", vmdouble3(1.));
-	vmdouble3 hotspot_params_1 = _fncontainer->GetParamValue("_double3_HotspotParamsTKtKs1", vmdouble3(1.));
+	//vmdouble3 hotspot_params_1 = _fncontainer->GetParamValue("_double3_HotspotParamsTKtKs1", vmdouble3(1.));
 	bool show_silhuette_edge_0 = _fncontainer->GetParamValue("_bool_HotspotSilhuette0", false);
-	bool show_silhuette_edge_1 = _fncontainer->GetParamValue("_bool_HotspotSilhuette1", false);
+	//bool show_silhuette_edge_1 = _fncontainer->GetParamValue("_bool_HotspotSilhuette1", false);
 	float mask_bnd = (float)_fncontainer->GetParamValue("_double_MaskBndDisplay", (double)1.0);
-	auto __set_params = [&cb_hsmask](int idx, vmint4 mask_center_rs, vmdouble3 hotspot_params, bool show_silhuette_edge, float mask_bnd)
+	float inDepthVis = (float)_fncontainer->GetParamValue("_double_InDepthVis", (double)0.01);
+	auto __set_params = [&cb_hsmask, &matWS2SS, &pos_3dtip_ws, &use_mask_3dtip, &inDepthVis](int idx, const vmdouble4& mask_center_rs_0, const vmdouble3& hotspot_params, bool show_silhuette_edge, float mask_bnd)
 	{
-		//cbHSMaskData->pos_centerx_[idx] = mask_center_rs.x;
-		//cbHSMaskData->pos_centery_[idx] = mask_center_rs.y;
-		//cbHSMaskData->radius_[idx] = mask_center_rs.z;
-		//cbHSMaskData->smoothness_[idx] = mask_center_rs.w | ((int)show_silhuette_edge << 16);
-		//cbHSMaskData->thick_[idx] = (float)hotspot_params.x;
-		//cbHSMaskData->kappa_s_[idx] = (float)hotspot_params.y;
-		//cbHSMaskData->kappa_t_[idx] = (float)hotspot_params.z;
-		//cbHSMaskData->bnd_thick_[idx] = mask_bnd;
-		cb_hsmask.mask_info_[idx].pos_center = vmint2(mask_center_rs.x, mask_center_rs.y);
-		cb_hsmask.mask_info_[idx].radius = mask_center_rs.z;
-		cb_hsmask.mask_info_[idx].smoothness = mask_center_rs.w | ((int)show_silhuette_edge << 16);
+		const double max_smoothness = 30.;
+		cb_hsmask.mask_info_[idx].pos_center = vmint2(mask_center_rs_0.x, mask_center_rs_0.y);
+		cb_hsmask.mask_info_[idx].radius = mask_center_rs_0.z;
+		cb_hsmask.mask_info_[idx].smoothness = (int)(max(min(mask_center_rs_0.w * max_smoothness, max_smoothness), 0)) | ((int)show_silhuette_edge << 16);
 		cb_hsmask.mask_info_[idx].thick = (float)hotspot_params.x;
 		cb_hsmask.mask_info_[idx].kappa_t = (float)hotspot_params.y;
 		cb_hsmask.mask_info_[idx].kappa_s = (float)hotspot_params.z;
 		cb_hsmask.mask_info_[idx].bnd_thick = mask_bnd;
+		cb_hsmask.mask_info_[idx].flag = 0;
+		cb_hsmask.mask_info_[idx].in_depth_vis = inDepthVis;
+
+		if (use_mask_3dtip)
+		{
+			cb_hsmask.mask_info_[idx].flag = 1;
+			cb_hsmask.mask_info_[idx].pos_spotcenter = pos_3dtip_ws;
+			vmfloat3 pos_3dtip_ss;
+			fTransformPoint(&pos_3dtip_ss, &pos_3dtip_ws, &matWS2SS);
+			cb_hsmask.mask_info_[idx].pos_center = vmint2(pos_3dtip_ss.x, pos_3dtip_ss.y);
+		}
 	};
 	__set_params(0, mask_center_rs_0, hotspot_params_0, show_silhuette_edge_0, mask_bnd);
-	__set_params(1, mask_center_rs_1, hotspot_params_1, show_silhuette_edge_1, mask_bnd);
+	//__set_params(1, mask_center_rs_1, hotspot_params_1, show_silhuette_edge_1, mask_bnd);
 }
 
 std::wstring s2ws(const std::string& s)

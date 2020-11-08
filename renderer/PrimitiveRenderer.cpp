@@ -695,12 +695,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	int num_moments_old = 8;
 	lobj->GetCustomParameter("_int_NumQueueLayers", data_type::dtype<int>(), &num_moments_old);
 	int num_moments = _fncontainer->GetParamValue("_int_NumQueueLayers", num_moments_old);
-	int num_safe_loopexit = _fncontainer->GetParamValue("_int_SpinLockSafeLoops", (int)5000000);
+	int num_safe_loopexit = _fncontainer->GetParamValue("_int_SpinLockSafeLoops", (int)1000000000);
 	bool is_final_renderer = _fncontainer->GetParamValue("_bool_IsFinalRenderer", true);
-	double v_thickness = _fncontainer->GetParamValue("_double_VZThickness", 0.003);
-	double v_copthickness = _fncontainer->GetParamValue("_double_CopVZThickness", 0.002);
-	if (v_copthickness <= 0) v_copthickness = 0.002;
-	if (v_thickness <= 0) v_thickness = v_copthickness * 1.5;
 	double v_discont_depth = _fncontainer->GetParamValue("_double_DiscontDepth", -1.0);
 	float merging_beta = (float)_fncontainer->GetParamValue("_double_MergingBeta", 0.5);
 	bool blur_SSAO = _fncontainer->GetParamValue("_bool_BlurSSAO", true);
@@ -1113,78 +1109,79 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		grd_helper::UpdateFrameBuffer(gres_fb_sys_counter, iobj, "SYSTEM_OUT_COUNTER", RTYPE_TEXTURE2D,
 			NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT);
 	}
-	if (is_ghost_mode)
-	{
-		// do 'dynamic'
-		auto UpdateMaskFB = [&_fncontainer, &gpu_manager, &dx11CommonParams](GpuRes& gres, const VmIObject* iobj, const string& res_name, bool updatemask)
-		{
-			gres.vm_src_id = iobj->GetObjectID();
-			gres.res_name = res_name;
-			vmint2 fb_size;
-			((VmIObject*)iobj)->GetFrameBufferInfo(&fb_size);
-			if (!gpu_manager->UpdateGpuResource(gres))
-			{
-				gres.rtype = RTYPE_BUFFER;
-				gres.options["USAGE"] = D3D11_USAGE_DYNAMIC;
-				gres.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
-				gres.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
-				gres.options["FORMAT"] = DXGI_FORMAT_R32_FLOAT;
-				gres.res_dvalues["NUM_ELEMENTS"] = fb_size.x * fb_size.y * 4;
-				gres.res_dvalues["STRIDE_BYTES"] = sizeof(float);
-				gpu_manager->GenerateGpuResource(gres);
-				updatemask = true;
-			}
-			if (updatemask)
-			{
-				vmint4 mask_center_rs_0 = _fncontainer->GetParamValue("_int4_MaskCenterRadius0", vmint4(fb_size / 2, fb_size.x / 5, 5));
-				vmint4 mask_center_rs_1 = _fncontainer->GetParamValue("_int4_MaskCenterRadius1", vmint4(fb_size / 2, 0, 5));
-				vmdouble4 hotspot_params_0 = _fncontainer->GetParamValue("_double4_HotspotParamsTKtKsV0", vmdouble4(1., 1., 1., 1.));
-				vmdouble4 hotspot_params_1 = _fncontainer->GetParamValue("_double4_HotspotParamsTKtKsV1", vmdouble4(1., 1., 1., 1.));
-				float mask_bnd = (float)_fncontainer->GetParamValue("_double_MaskBndDisplay", (double)1.0);
-
-				D3D11_MAPPED_SUBRESOURCE d11MappedRes;
-				HRESULT hr = dx11CommonParams->dx11DeviceImmContext->Map((ID3D11Buffer*)gres.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes);
-				if (hr != S_OK) cout << "ERROR HOTSPOT" << endl;
-				float sm_v_max_0 = atan((float)mask_center_rs_0.w);
-				vmfloat4* mask_buf = (vmfloat4*)d11MappedRes.pData;
-				for (int y = 0; y < fb_size.y; y++ )
-					for (int x = 0; x < fb_size.x; x++)
-					{
-						vmfloat4 mask_v = vmfloat4(0);
-						vmfloat2 vdiff = vmfloat2(x, y) - vmfloat2(mask_center_rs_0.x, mask_center_rs_0.y);
-
-						float length = glm::length(vdiff);
-						float arc_x = max((mask_center_rs_0.z - length), 0) / mask_center_rs_0.z * 2.f - 1.f; // [-1 (outside), 1 (inside)]
-						float value = (atan(arc_x * mask_center_rs_0.w) + sm_v_max_0) / (2.f * sm_v_max_0); // [0, 1]
-						mask_v.w = value;
-						mask_v.x = max(hotspot_params_0.x * value, 0.00001f); // thickness
-						mask_v.y = max(hotspot_params_0.y - 1.f, 0) * value + 1.f;
-						mask_v.z = hotspot_params_0.z * value;
-
-						if(abs(length - mask_center_rs_0.z) < mask_bnd)
-							mask_v.w = -1.f;
-
-						//float value = (atan((length / mask_center_rs_0.z) * mask_center_rs_0.w) + sm_v_max_0) / (2.f * sm_v_max_0);
-						//if (length <= mask_center_rs_0.z)
-						//{
-						//	mask_v = (vmfloat4)hotspot_params_0 * value;
-						//}
-						mask_buf[x + y * fb_size.x] = mask_v;
-					}
-				dx11CommonParams->dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres.alloc_res_ptrs[DTYPE_RES], 0);
-			}
-		};
-		//UpdateMaskFB(gres_fb_mask_hotspot, iobj, "BUFFER_MASK_HOTSPOT", true);
-
-		
-		D3D11_MAPPED_SUBRESOURCE mappedResHSMask;
-		dx11DeviceImmContext->Map(cbuf_hsmask, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResHSMask);
-		CB_HotspotMask* cbHSMaskData = (CB_HotspotMask*)mappedResHSMask.pData;
-		grd_helper::SetCb_HotspotMask(*cbHSMaskData, _fncontainer, fb_size_old);
-		dx11DeviceImmContext->Unmap(cbuf_hsmask, 0);
-		dx11DeviceImmContext->PSSetConstantBuffers(9, 1, &cbuf_hsmask);
-		dx11DeviceImmContext->CSSetConstantBuffers(9, 1, &cbuf_hsmask);
-	}
+	//if (is_ghost_mode)
+	//{
+	//	// do 'dynamic'
+	//	// current version does not use buffer-based mask
+	//	auto UpdateMaskFB = [&_fncontainer, &gpu_manager, &dx11CommonParams](GpuRes& gres, const VmIObject* iobj, const string& res_name, bool updatemask)
+	//	{
+	//		gres.vm_src_id = iobj->GetObjectID();
+	//		gres.res_name = res_name;
+	//		vmint2 fb_size;
+	//		((VmIObject*)iobj)->GetFrameBufferInfo(&fb_size);
+	//		if (!gpu_manager->UpdateGpuResource(gres))
+	//		{
+	//			gres.rtype = RTYPE_BUFFER;
+	//			gres.options["USAGE"] = D3D11_USAGE_DYNAMIC;
+	//			gres.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
+	//			gres.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
+	//			gres.options["FORMAT"] = DXGI_FORMAT_R32_FLOAT;
+	//			gres.res_dvalues["NUM_ELEMENTS"] = fb_size.x * fb_size.y * 4;
+	//			gres.res_dvalues["STRIDE_BYTES"] = sizeof(float);
+	//			gpu_manager->GenerateGpuResource(gres);
+	//			updatemask = true;
+	//		}
+	//		if (updatemask)
+	//		{
+	//			vmdouble4 mask_center_rs_0 = _fncontainer->GetParamValue("_double4_MaskCenterRadius0", vmdouble4(fb_size / 2, fb_size.x / 5, 5));
+	//			//vmdouble4 mask_center_rs_1 = _fncontainer->GetParamValue("_double4_MaskCenterRadius1", vmdouble4(fb_size / 2, 0, 5));
+	//			vmdouble4 hotspot_params_0 = _fncontainer->GetParamValue("_double4_HotspotParamsTKtKsV0", vmdouble4(1., 1., 1., 1.));
+	//			//vmdouble4 hotspot_params_1 = _fncontainer->GetParamValue("_double4_HotspotParamsTKtKsV1", vmdouble4(1., 1., 1., 1.));
+	//			float mask_bnd = (float)_fncontainer->GetParamValue("_double_MaskBndDisplay", (double)1.0);
+	//
+	//			D3D11_MAPPED_SUBRESOURCE d11MappedRes;
+	//			HRESULT hr = dx11CommonParams->dx11DeviceImmContext->Map((ID3D11Buffer*)gres.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes);
+	//			if (hr != S_OK) cout << "ERROR HOTSPOT" << endl;
+	//			float sm_v_max_0 = atan((float)mask_center_rs_0.w);
+	//			vmfloat4* mask_buf = (vmfloat4*)d11MappedRes.pData;
+	//			for (int y = 0; y < fb_size.y; y++ )
+	//				for (int x = 0; x < fb_size.x; x++)
+	//				{
+	//					vmfloat4 mask_v = vmfloat4(0);
+	//					vmfloat2 vdiff = vmfloat2(x, y) - vmfloat2(mask_center_rs_0.x, mask_center_rs_0.y);
+	//
+	//					float length = glm::length(vdiff);
+	//					float arc_x = max((mask_center_rs_0.z - length), 0) / mask_center_rs_0.z * 2.f - 1.f; // [-1 (outside), 1 (inside)]
+	//					float value = (atan(arc_x * mask_center_rs_0.w) + sm_v_max_0) / (2.f * sm_v_max_0); // [0, 1]
+	//					mask_v.w = value;
+	//					mask_v.x = max(hotspot_params_0.x * value, 0.00001f); // thickness
+	//					mask_v.y = max(hotspot_params_0.y - 1.f, 0) * value + 1.f;
+	//					mask_v.z = hotspot_params_0.z * value;
+	//
+	//					if(abs(length - mask_center_rs_0.z) < mask_bnd)
+	//						mask_v.w = -1.f;
+	//
+	//					//float value = (atan((length / mask_center_rs_0.z) * mask_center_rs_0.w) + sm_v_max_0) / (2.f * sm_v_max_0);
+	//					//if (length <= mask_center_rs_0.z)
+	//					//{
+	//					//	mask_v = (vmfloat4)hotspot_params_0 * value;
+	//					//}
+	//					mask_buf[x + y * fb_size.x] = mask_v;
+	//				}
+	//			dx11CommonParams->dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres.alloc_res_ptrs[DTYPE_RES], 0);
+	//		}
+	//	};
+	//	//UpdateMaskFB(gres_fb_mask_hotspot, iobj, "BUFFER_MASK_HOTSPOT", true);
+	//
+	//	
+	//	D3D11_MAPPED_SUBRESOURCE mappedResHSMask;
+	//	dx11DeviceImmContext->Map(cbuf_hsmask, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResHSMask);
+	//	CB_HotspotMask* cbHSMaskData = (CB_HotspotMask*)mappedResHSMask.pData;
+	//	grd_helper::SetCb_HotspotMask(*cbHSMaskData, _fncontainer, fb_size_old);
+	//	dx11DeviceImmContext->Unmap(cbuf_hsmask, 0);
+	//	dx11DeviceImmContext->PSSetConstantBuffers(9, 1, &cbuf_hsmask);
+	//	dx11DeviceImmContext->CSSetConstantBuffers(9, 1, &cbuf_hsmask);
+	//}
 
 #pragma endregion // IOBJECT GPU
 
@@ -1231,7 +1228,18 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		v_discont_depth = len_diagonal_max * 0.1;
 	iobj->RegisterCustomParameter("_double_ploygonobjs_diagonallenth", (double)len_diagonal_max);
 
-	float fv_thickness = (float)len_diagonal_max * v_thickness;
+	double v_copthickness = _fncontainer->GetParamValue("_double_CopVZThickness", 0.002);
+	double v_thickness = _fncontainer->GetParamValue("_double_VZThickness", 0.003);
+	if (v_copthickness <= 0) v_copthickness = 0.002;
+	if (v_thickness <= 0) v_thickness = v_copthickness * 1.5;
+
+	double v_copthickness_abs = _fncontainer->GetParamValue("_double_AbsCopVZThickness", 0.0);
+	double v_thickness_abs = _fncontainer->GetParamValue("_double_AbsVZThickness", 0.0);
+	//cout << v_copthickness_abs << endl;
+
+	float fv_copthickness = v_copthickness_abs <= 0 ? (float)(len_diagonal_max * v_copthickness) : (float)v_copthickness_abs;
+	float fv_thickness = v_thickness_abs <= 0 ? v_copthickness_abs <= 0 ? (float)(len_diagonal_max * v_thickness) : fv_copthickness * v_thickness / v_copthickness : (float)v_thickness_abs;
+
 	VmCObject* cam_obj = iobj->GetCameraObject();
 	vmmat44f matWS2SS, matWS2PS, matSS2WS;
 	CB_CameraState cbCamState;
@@ -1252,6 +1260,19 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	dx11DeviceImmContext->PSSetConstantBuffers(0, 1, &cbuf_cam_state);
 	dx11DeviceImmContext->CSSetConstantBuffers(0, 1, &cbuf_cam_state);
 
+	// ghost
+
+	if (is_ghost_mode)
+	{
+		// do 'dynamic'
+		D3D11_MAPPED_SUBRESOURCE mappedResHSMask;
+		dx11DeviceImmContext->Map(cbuf_hsmask, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResHSMask);
+		CB_HotspotMask* cbHSMaskData = (CB_HotspotMask*)mappedResHSMask.pData;
+		grd_helper::SetCb_HotspotMask(*cbHSMaskData, _fncontainer, matWS2SS);
+		dx11DeviceImmContext->Unmap(cbuf_hsmask, 0);
+		dx11DeviceImmContext->PSSetConstantBuffers(9, 1, &cbuf_hsmask);
+		dx11DeviceImmContext->CSSetConstantBuffers(9, 1, &cbuf_hsmask);
+	}
 	//
 	MomentOIT cb_moment;
 	vmdouble2 mot_nf;
@@ -1437,20 +1458,15 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		bool is_foremost_surfaces = false;
 		pobj->GetCustomParameter("_bool_OnlyForemostSurfaces", data_type::dtype<bool>(), &is_foremost_surfaces);
 		lobj->GetDstObjValue(pobj_id, "_bool_OnlyForemostSurfaces", &is_foremost_surfaces);
-		//double pobj_vzthickness = -1.0;
-		//lobj->GetDstObjValue(pobj_id, "_double_VzThickness", &pobj_vzthickness);
-		//if (pobj_vzthickness <= 0)
-		//	pobj_vzthickness = v_thickness;
 
 		RenderObjInfo render_obj_info;
 		render_obj_info.pobj = pobj;
-		render_obj_info.vzthickness = len_diagonal_max * (float)v_copthickness; //(float)pobj_vzthickness;
+		render_obj_info.vzthickness = fv_copthickness; //(float)pobj_vzthickness;
 
 		render_obj_info.num_safe_loopexit = num_safe_loopexit;
 		lobj->GetDstObjValue(pobj_id, "_int_SpinLockSafeLoops", &render_obj_info.num_safe_loopexit);
 		if (is_wildcard_Candidate) render_obj_info.num_safe_loopexit = 10;
 
-		//if (render_obj_info.fColor.a > 0.99f && render_obj_info.vzthickness <= fv_thickness)
 		lobj->GetDstObjValue(pobj_id, "_bool_AbsDiffuse", &render_obj_info.abs_diffuse);
 
 		if (is_wire && prim_data->ptype == PrimitiveTypeTRIANGLE)
@@ -1460,10 +1476,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			//render_obj_info.fColor.w = 1.f;
 			lobj->GetDstObjValue(pobj_id, "_bool_UseVertexWireColor", &render_obj_info.use_vertex_color);
 
-			//if ((render_obj_info.fColor.a < 0.99f || force_to_oitpass || pobj_vzthickness > v_thickness) && !is_wildcard_Candidate)
-			//	general_oit_routine_objs.push_back(render_obj_info);
-			//else
-			//	opaque_wildcard_objs.push_back(render_obj_info);
 			if(is_foremost_surfaces) foremost_surfaces_routine_objs.push_back(render_obj_info);
 			else general_oit_routine_objs.push_back(render_obj_info);
 			//single_layer_routine_objs.push_back(render_obj_info);
@@ -1795,7 +1807,11 @@ BEGIN_RENDERER_LOOP:
 		}
 
 		if (is_ghost_mode && !IS_SAFE_OBJ(pobj_id))
-			cbPolygonObj.pobj_flag |= 0x1 << 22;
+		{
+			bool is_ghost_surface = false;
+			lobj->GetDstObjValue(pobj_id, "_bool_IsGhostSurface", &is_ghost_surface);
+			if(is_ghost_surface) cbPolygonObj.pobj_flag |= 0x1 << 22;
+		}
 		D3D11_MAPPED_SUBRESOURCE mappedResPobjData;
 		dx11DeviceImmContext->Map(cbuf_pobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResPobjData);
 		CB_PolygonObject* cbPolygonObjData = (CB_PolygonObject*)mappedResPobjData.pData;
@@ -2928,7 +2944,7 @@ RENDERER_LOOP_EXIT:
 	{
 		if (mode_OIT == MFR_MODE::SKBTZ || mode_OIT == MFR_MODE::DKBTZ)
 		{
-			cout << "z_thickness used in store pass   : " << len_diagonal_max * (float)v_copthickness << endl;
+			cout << "z_thickness used in store pass   : " << fv_copthickness << endl;
 			cout << "z_thickness used in resolve pass : " << fv_thickness << endl; // len_diagonal_max * (float)v_thickness 
 		}
 

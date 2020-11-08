@@ -183,7 +183,7 @@ namespace vzm
 	__dojostatic bool GeneratePrimitiveObject(const float* xyz_list, const float* nrl_list, const float* rgb_list, const float* tex_list, const int num_vtx, const unsigned int* idx_prims, const int num_prims, const int stride_prim_idx, int& obj_id);
 	// optional : nrl_list, rgb_list (if NULL, this is not used)
 	__dojostatic bool GeneratePointCloudObject(const float* xyz_list, const float* nrl_list, const float* rgb_list, const int num_points, int& obj_id);
-	__dojostatic bool GenerateTextObject(const float* xyz_LT_view_up, const std::string& text, const float font_height, bool bold, bool italic, int& obj_id);
+	__dojostatic bool GenerateTextObject(const float* xyz_LT_view_up, const std::string& text, const float font_height, const bool bold, const bool italic, int& obj_id, const bool center_aligned = false);
 	__dojostatic bool GenerateMappingTable(const int table_size, const int num_alpha_ctrs, const float* ctr_alpha_idx_list, const int num_rgb_ctrs, const float* ctr_rgb_idx_list, int& tmap_id);
 	__dojostatic bool GenerateCopiedObject(const int obj_src_id, int& obj_id);
 
@@ -212,6 +212,7 @@ namespace vzm
 	__dojostatic bool ValidatePickTarget(const int obj_id);
 	__dojostatic bool PickObject(int& pick_obj_id, float* pos_pick, const int x, const int y, const int scene_id, const int cam_id = 0);
 	__dojostatic bool Pick1stHitSurfaceUsingDepthMap(float* pos_pick, const int x, const int y, const float valid_depth_range, const int scene_id, const int cam_id);
+	__dojostatic bool PickObjectAlongRay(float* pos_pick, const int pick_obj_id, const float* pos_ray, const float* dir_ray, const int scene_id);
 
 	// only for the contributor's (by DongJoon Kim) test info.
 	__dojostatic void SetRenderTestParam(const std::string& _script, const std::any& value, const size_t size_bytes, const int scene_id, const int cam_id, const int obj_id = -1);

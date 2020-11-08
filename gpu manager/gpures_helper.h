@@ -482,6 +482,7 @@ namespace grd_helper
 		// 20th bit : 0 (No Dashed Line) 1 (Dashed Line)
 		// 21th bit : 0 (Transparent Dash) 1 (Dash As Color Inverted)
 		// 23th bit : 0 (static alpha) 1 (dynamic alpha using mask t50)
+		// 31~32th bit : max components for dashed line : 0 ==> x, 1 ==> y, 2 ==> z
 		uint pobj_flag;
 		uint num_letters;
 		float dash_interval;
@@ -605,6 +606,14 @@ namespace grd_helper
 		float kappa_t;
 		float kappa_s;
 		float bnd_thick;
+
+		int flag;
+		vmfloat3 pos_spotcenter;
+
+		float in_depth_vis;
+		int __dummy0;
+		int __dummy1;
+		int __dummy2;
 	};
 	struct CB_HotspotMask
 	{
@@ -634,7 +643,7 @@ namespace grd_helper
 	void SetCb_RenderingEffect(CB_RenderingEffect& cb_reffect, VmVObject* obj, VmLObject* lobj, const RenderObjInfo& rendering_obj_info);
 	void SetCb_VolumeRenderingEffect(CB_VolumeRenderingEffect& cb_vreffect, VmVObjectVolume* vobj, VmLObject* lobj);
 	
-	void SetCb_HotspotMask(CB_HotspotMask& cb_hsmask, VmFnContainer* _fncontainer, vmint2 fb_size);
+	void SetCb_HotspotMask(CB_HotspotMask& cb_hsmask, VmFnContainer* _fncontainer, const vmmat44f& matWS2SS);
 
 	bool Compile_Hlsl(const string& str, const string& entry_point, const string& shader_model, D3D10_SHADER_MACRO* defines, void** sm);
 

@@ -15,9 +15,21 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/vector_angle.hpp>
 
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
+
+#include <sstream>
+#include <iomanip>
+
+template <typename T>
+std::string to_string_with_precision(const T a_value, const int n = 6)
+{
+	std::ostringstream out;
+	out << std::setprecision(n) << a_value;
+	return out.str();
+}
 
 #define __cv3__ *(glm::fvec3*)
 #define __cv4__ *(glm::fvec4*)
@@ -129,6 +141,58 @@ void CallBackFunc_Mouse(int event, int x, int y, int flags, void* userdata)
 			{
 				vzm::SetCameraParameters(it.first, cam_params);
 			}
+		}
+	}
+}
+
+void CallBackFunc_CamMouse(int event, int x, int y, int flags, void* userdata)
+{
+	std::lock_guard<std::mutex> guard(the_mutex);
+	using namespace cv;
+
+	static int x_old = x;
+	static int y_old = y;
+
+	vzm::CameraParameters cam_params;
+	vzm::GetCameraParameters(1, cam_params, 0);
+
+	static helpers::arcball aball_vr;
+	if (event == EVENT_LBUTTONDOWN || event == EVENT_RBUTTONDOWN)
+	{
+		aball_vr.intializer((float*)&scene_stage_center, scene_stage_scale);
+
+		helpers::cam_pose arc_cam_pose;
+		glm::fvec3 pos = __cv3__ arc_cam_pose.pos = __cv3__ cam_params.pos;
+		__cv3__ arc_cam_pose.up = __cv3__ cam_params.up;
+		__cv3__ arc_cam_pose.view = __cv3__ cam_params.view;
+		aball_vr.start((int*)&glm::ivec2(x, y), (float*)&glm::fvec2(cam_params.w / 2, cam_params.h / 2), arc_cam_pose);
+	}
+	else if (event == EVENT_MBUTTONDOWN)
+	{
+	}
+	else if (event == EVENT_MOUSEWHEEL && (flags & EVENT_FLAG_CTRLKEY))
+	{
+		if (getMouseWheelDelta(flags) > 0)
+			__cv3__ cam_params.pos += scene_stage_scale * 0.01f * (__cv3__ cam_params.view);
+		else
+			__cv3__ cam_params.pos -= scene_stage_scale * 0.01f * (__cv3__ cam_params.view);
+		vzm::SetCameraParameters(1, cam_params, 0);
+	}
+	else if (event == EVENT_MOUSEMOVE)
+	{
+		if ((flags & EVENT_FLAG_LBUTTON) || (flags & EVENT_FLAG_RBUTTON))
+		{
+			helpers::cam_pose arc_cam_pose;
+			if (flags & EVENT_FLAG_LBUTTON)
+				aball_vr.pan_move((int*)&glm::ivec2(x, y), arc_cam_pose);
+			else if (flags & EVENT_FLAG_RBUTTON)
+				aball_vr.move((int*)&glm::ivec2(x, y), arc_cam_pose);
+
+			__cv3__ cam_params.pos = __cv3__ arc_cam_pose.pos;
+			__cv3__ cam_params.up = __cv3__ arc_cam_pose.up;
+			__cv3__ cam_params.view = __cv3__ arc_cam_pose.view;
+
+			vzm::SetCameraParameters(1, cam_params);
 		}
 	}
 }
@@ -1306,14 +1370,319 @@ int Test()
 	return 0;
 }
 
+int Test2()
+{
+	// OIT test 1
+	std::list<int> loaded_obj_ids;
+
+	vzm::CameraParameters cam_params;
+	int w = 1024, h = 1024;
+	if (w > 1024 && h > 1024)
+		vzm::SetRenderTestParam("_int_BufExScale", (int)4, sizeof(int), -1, -1); // set this when the resolution 2048x2048 (NVIDIA GTX 1080)
+
+	high_Rh = 0.75, low_Rh = 0.2, diff_amp = 10.0;
+	scene_stage_scale = 500.f;
+
+	std::string preset_file = GetSolutionPath() + ".\\data\\preset_test2_head.txt";
+	std::string prepath = "D:\\Data\\K-AR_Data\\brain\\1";
+	int obj_head_skin_id = 0, obj_head_brain_id = 0, obj_head_ventricle_id = 0;
+	vzm::LoadModelFile(prepath + "\\skin_c_output.obj", obj_head_skin_id, true);
+	vzm::LoadModelFile(prepath + "\\brain_c_output.obj", obj_head_brain_id, true);
+	vzm::LoadModelFile(prepath + "\\ventricle_c_output.obj", obj_head_ventricle_id, true);
+	vzm::ObjStates obj_state_skin, obj_state_brain, obj_state_ventricle;
+	__cv4__ obj_state_skin.color = glm::fvec4(0.8f, 1.f, 1.f, 1.0f);
+	//__cm4__ obj_state_skin.os2ws = glm::fmat4x4(); // identity
+	__cv4__ obj_state_brain.color = glm::fvec4(1.0f, 0.8f, 1.f, 1.0f);
+	__cv4__ obj_state_ventricle.color = glm::fvec4(1.0f, 1.f, 0.8f, 1.f);
+
+	__cv3__ cam_params.pos = glm::fvec3(scene_stage_scale, 0, 0);
+	__cv3__ cam_params.up = glm::fvec3(0, 1.f, 0);
+	__cv3__ cam_params.view = glm::fvec3(-1.f, 0, 0);
+	cam_params.np = 0.10f;
+	cam_params.fp = 10000.f;
+	// obj file includes material info, which is prior shading option for rendering; therefore, wildcard setting is required to change shading.
+
+	int obj_line_guide_id = 0;
+	glm::fvec3 pos_01[2] = { glm::fvec3(-11,20,50), glm::fvec3(-5,250,230) };
+	glm::fvec3 vec_dir = glm::normalize(pos_01[1] - pos_01[0]);
+	pos_01[1] = pos_01[0] + vec_dir * 10000.f;
+	glm::fvec3 clr_01[2] = { glm::fvec3(1), glm::fvec3(1) };
+	vzm::GenerateLinesObject(__FP pos_01, __FP clr_01, 1, obj_line_guide_id);
+	vzm::ObjStates obj_state_line_guide;
+	obj_state_line_guide.line_thickness = 5;
+
+	cam_params.fov_y = 3.141592654f / 4.f;
+	cam_params.projection_mode = 2;
+	cam_params.w = w;
+	cam_params.h = h;
+	cam_params.aspect_ratio = (float)cam_params.w / (float)cam_params.h;
+
+	vzm::SceneEnvParameters scn_env_params;
+	scn_env_params.is_on_camera = true;
+	scn_env_params.is_pointlight = true;
+	__cv3__ scn_env_params.pos_light = __cv3__ cam_params.pos;
+	__cv3__ scn_env_params.dir_light = __cv3__ cam_params.view;
+	
+	vzm::SetSceneEnvParameters(0, scn_env_params);
+	vzm::SetCameraParameters(0, cam_params, 0);
+	vzm::SetSceneEnvParameters(1, scn_env_params);
+	vzm::SetCameraParameters(1, cam_params, 0);
+
+	vzm::ReplaceOrAddSceneObject(0, obj_head_skin_id, obj_state_skin);
+	vzm::ReplaceOrAddSceneObject(0, obj_head_brain_id, obj_state_brain);
+	vzm::ReplaceOrAddSceneObject(0, obj_head_ventricle_id, obj_state_ventricle);
+	vzm::ReplaceOrAddSceneObject(0, obj_line_guide_id, obj_state_line_guide);
+
+	vzm::ReplaceOrAddSceneObject(1, obj_head_skin_id, obj_state_skin);
+	vzm::ReplaceOrAddSceneObject(1, obj_head_brain_id, obj_state_brain);
+	vzm::ReplaceOrAddSceneObject(1, obj_head_ventricle_id, obj_state_ventricle);
+
+	vzm::SetRenderTestParam("_bool_IsDashed", true, sizeof(bool), 0, 0, obj_line_guide_id);
+	vzm::SetRenderTestParam("_bool_IsInvertColorDashLine", false, sizeof(bool), 0, 0, obj_line_guide_id);
+	vzm::SetRenderTestParam("_double_LineDashInterval", 2.0, sizeof(double), 0, 0, obj_line_guide_id);
+
+	scene_name[0] = "AR SCENE";
+	cv::namedWindow(scene_name[0], cv::WINDOW_AUTOSIZE);
+	cv::setMouseCallback(scene_name[0], CallBackFunc_Mouse, NULL);// &scenes[i]);
+	
+	cv::namedWindow("CAM_SCENE", cv::WINDOW_AUTOSIZE);
+	cv::setMouseCallback("CAM_SCENE", CallBackFunc_CamMouse, NULL);// &scenes[i]);
+
+	align_obj_to_world_center(0, loaded_obj_ids);
+	align_obj_to_world_center(1, loaded_obj_ids);
+
+	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), -1, -1);
+	vzm::SetRenderTestParam("_double_CopVZThickness", 0.002, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double_AbsCopVZThickness", 0.2, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), -1, -1);
+	// after presetting of SetRenderTestParams
+	load_preset(preset_file, loaded_obj_ids);
+	std::cout << "oit mode : SK+BTZ" << std::endl;
+
+	vzm::ObjStates obj_state_index_sphere;
+
+	glm::fvec3 tool_pos_01[2] = { glm::fvec3(-200,140,70), glm::fvec3(-290,230,170)};
+	glm::fvec3 tool_dir = glm::normalize(tool_pos_01[1] - tool_pos_01[0]);
+	tool_pos_01[1] = tool_pos_01[0] + tool_dir * 100.f;
+	glm::fvec3 tool_clr_01[2] = { glm::fvec3(0, 1, 0), glm::fvec3(0, 1, 0) };
+	int obj_tool_id = 0, tool_tip_sphere_id = 0;
+	vzm::GenerateLinesObject(__FP tool_pos_01, __FP tool_clr_01, 1, obj_tool_id);
+	vzm::GenerateSpheresObject(__FP glm::fvec4(tool_pos_01[0], 1), __FP glm::fvec3(1, 0, 0), 1, tool_tip_sphere_id);
+	vzm::ReplaceOrAddSceneObject(0, obj_tool_id, obj_state_line_guide);
+	vzm::ReplaceOrAddSceneObject(0, tool_tip_sphere_id, obj_state_index_sphere);
+
+	auto compute_closestpos_btw_line_point = [](const glm::fvec3& pos_line, const glm::fvec3& dir_line, const glm::fvec3& pos_point, glm::fvec3& pos_closest_point)
+	{
+		float len = glm::length(dir_line);
+		if (len <= 0.000001f) return;
+		//http://math.stackexchange.com/questions/748315/finding-the-coordinates-of-a-point-on-a-line-that-produces-the-shortest-distance
+		float t = ((pos_point.x * dir_line.x + pos_point.y * dir_line.y + pos_point.z * dir_line.z) - (pos_line.x * dir_line.x + pos_line.y * dir_line.y + pos_line.z * dir_line.z)) / len;
+		pos_closest_point = pos_line + dir_line * t;
+	};
+
+	vzm::SetRenderTestParam("_bool_GhostEffect", true, sizeof(bool), -1, -1);
+	vzm::SetRenderTestParam("_bool_UseMask3DTip", true, sizeof(bool), -1, -1);
+	vzm::SetRenderTestParam("_double4_MaskCenterRadius0", glm::dvec4(100, 100, 150, 1.0), sizeof(glm::dvec4), -1, -1);
+	vzm::SetRenderTestParam("_double3_HotspotParamsTKtKs0", glm::dvec3(1, 0.5, 1.5), sizeof(glm::dvec3), -1, -1);
+	vzm::SetRenderTestParam("_double_InDepthVis", 10.00, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_bool_IsGhostSurface", true, sizeof(bool), 0, 0, obj_head_skin_id);
+	vzm::SetRenderTestParam("_bool_IsGhostSurface", true, sizeof(bool), 0, 0, obj_head_brain_id);
+	vzm::ValidatePickTarget(obj_head_skin_id);
+	vzm::ValidatePickTarget(obj_head_brain_id);
+
+	int oit_mode = 0;
+	int key = -1;
+	while (key != 'q')
+	{
+		bool write_img_file = false;
+		key_actions(key, preset_file, loaded_obj_ids, write_img_file);
+		if (key == '-')
+		{
+			tool_pos_01[0] = glm::fvec3(-200, 140, 70);
+			tool_pos_01[1] = glm::fvec3(-290, 230, 170);
+			glm::fvec3 tool_dir = glm::normalize(tool_pos_01[1] - tool_pos_01[0]);
+			tool_pos_01[1] = tool_pos_01[0] + tool_dir * 100.f;
+		}
+
+		glm::fvec3 pos_closest_point;
+		compute_closestpos_btw_line_point(pos_01[0], vec_dir, tool_pos_01[0], pos_closest_point);
+		static int closest_sphere_id = 0;
+		vzm::GenerateSpheresObject(__FP glm::fvec4(pos_closest_point, 1), __FP glm::fvec3(1, 0, 0), 1, closest_sphere_id);
+		vzm::ReplaceOrAddSceneObject(0, closest_sphere_id, obj_state_index_sphere);
+
+		if(1)
+		{
+			glm::fvec3 diff = (pos_closest_point - tool_pos_01[0]);
+			if (glm::length(diff) > 2)
+			{
+				tool_pos_01[0] += diff / 100.f;
+				tool_pos_01[1] += diff / 100.f;
+			}
+			else
+			{
+				diff = (pos_01[0] - tool_pos_01[0]) / 100.f;
+				glm::fvec3 diff2 = (pos_01[1] - tool_pos_01[1]) / 1000.f;
+				tool_pos_01[0] += diff;
+				tool_pos_01[1] += diff2;
+			}
+			tool_dir = glm::normalize(tool_pos_01[1] - tool_pos_01[0]);
+			tool_pos_01[1] = tool_pos_01[0] + tool_dir * 100.f;
+			vzm::GenerateLinesObject(__FP tool_pos_01, __FP tool_clr_01, 1, obj_tool_id);
+			vzm::GenerateSpheresObject(__FP glm::fvec4(tool_pos_01[0], 1), __FP glm::fvec3(1, 0, 0), 1, tool_tip_sphere_id);
+		}
+
+		// hit test
+		{
+			auto get_temp_up = [](const glm::fvec3& v, glm::fvec3& u)
+			{
+				glm::fvec3 r = glm::cross(v, glm::fvec3(0, 1, 0));
+				if (glm::length(r) < 0.00000001f)
+				{
+					r = glm::cross(v, glm::fvec3(0, 0, 1));
+				}
+				u = glm::normalize(glm::cross(r, v));
+			};
+
+			static int hit_mark_skin_id = 0, hit_mark_brain_id = 0;
+			glm::fvec3 pos_hit_skin, pos_hit_brain;
+			vzm::ObjStates obj_state_hit_sphere_skin, obj_state_hit_sphere_brain;
+			if (vzm::PickObjectAlongRay((float*)&pos_hit_skin, obj_head_skin_id, (float*)&tool_pos_01[1], (float*)&(-tool_dir), 0))
+			{
+				//vzm::GenerateSpheresObject(__FP glm::fvec4(pos_hit_skin, 1), __FP glm::fvec3(1, 1, 1), 1, hit_mark_skin_id);
+				glm::fvec3 test_up;
+				get_temp_up(tool_dir, test_up);
+
+				__cv4__ obj_state_hit_sphere_skin.color = glm::fvec4(0, 0, 1, 1);
+				glm::fvec3 xyz_LT_view_up[3] = { pos_hit_skin, tool_dir, test_up };
+				vzm::GenerateTextObject(__FP xyz_LT_view_up, "  ¢Â", 15.f, true, false, hit_mark_skin_id, true);
+			}
+			else
+				obj_state_hit_sphere_skin.is_visible = false;
+			if (vzm::PickObjectAlongRay((float*)&pos_hit_brain, obj_head_brain_id, (float*)&tool_pos_01[1], (float*)&(-tool_dir), 0))
+			{
+				glm::fvec3 test_up;
+				get_temp_up(tool_dir, test_up);
+
+				__cv4__ obj_state_hit_sphere_brain.color = glm::fvec4(1, 0, 0, 1);
+				glm::fvec3 xyz_LT_view_up[3] = { pos_hit_brain, tool_dir, test_up };
+				vzm::GenerateTextObject(__FP xyz_LT_view_up, "  ¢Ã", 15.f, true, false, hit_mark_brain_id, true);
+			}
+			else
+				obj_state_hit_sphere_brain.is_visible = false;
+
+			vzm::ReplaceOrAddSceneObject(0, hit_mark_skin_id, obj_state_hit_sphere_skin);
+			vzm::ReplaceOrAddSceneObject(0, hit_mark_brain_id, obj_state_hit_sphere_brain);
+		}
+
+		{
+			const float font_size = 30.f;
+			static int closest_point_line_id = 0, dist_text_id = 0;
+			glm::fvec3 pos_closest_line[2] = { tool_pos_01[0], pos_closest_point };
+			glm::fvec3 clr_closest_line[2] = { glm::fvec3(1, 1, 0), glm::fvec3(1, 1, 0) };
+			vzm::GenerateLinesObject(__FP pos_closest_line, __FP clr_closest_line, 1, closest_point_line_id);
+			vzm::ObjStates obj_state_closest_point_line;
+			obj_state_closest_point_line.line_thickness = 2;
+			vzm::ReplaceOrAddSceneObject(0, closest_point_line_id, obj_state_closest_point_line);
+			vzm::SetRenderTestParam("_bool_IsDashed", true, sizeof(bool), 0, 0, closest_point_line_id);
+			vzm::SetRenderTestParam("_bool_IsInvertColorDashLine", true, sizeof(bool), 0, 0, closest_point_line_id);
+			vzm::SetRenderTestParam("_double_LineDashInterval", 2.0, sizeof(double), 0, 0, closest_point_line_id);
+
+			vzm::CameraParameters cam_params;
+			vzm::GetCameraParameters(0, cam_params, 0);
+			glm::fvec3 xyz_LT_view_up[3] = { (pos_closest_line[0] + pos_closest_line[1]) * 0.5f, __cv3__ cam_params.view, __cv3__ cam_params.up };
+			float dist = glm::length(pos_closest_line[0] - pos_closest_line[1]);
+			if (dist < 0.001f) dist = 0;
+			vzm::GenerateTextObject(__FP xyz_LT_view_up, to_string_with_precision(dist, 3) + "mm", font_size, true, false, dist_text_id);
+			vzm::ReplaceOrAddSceneObject(0, dist_text_id, obj_state_closest_point_line);
+		}
+
+		{
+			const float font_size = 30.f;
+			const int num_angle_tris = 10;
+			const float angle_tris_length = 50.f;
+			glm::fvec3 vec_ref = glm::normalize(glm::cross(vec_dir, tool_dir));
+			float angle = glm::orientedAngle(vec_dir, tool_dir, vec_ref);
+			std::cout << angle << std::endl;
+			std::vector<glm::fvec3> anlge_polygon_pos(num_angle_tris + 2);
+			std::vector<glm::fvec3> anlge_polygon_clr(num_angle_tris + 2);
+			anlge_polygon_pos[0] = pos_closest_point;
+			anlge_polygon_clr[0] = glm::fvec3(1);
+			std::vector<unsigned int> idx_prims(num_angle_tris * 3);
+			for (int i = 0; i < num_angle_tris + 1; i++)
+			{
+				glm::fvec3 r_vec = glm::rotate(vec_dir, angle / (float)num_angle_tris * (float)i, vec_ref);
+				anlge_polygon_pos[1 + i] = pos_closest_point + r_vec * angle_tris_length;
+				anlge_polygon_clr[1 + i] = glm::fvec3((float)i / (float)num_angle_tris, 0, 1.f - (float)i / (float)num_angle_tris);
+				if (i < num_angle_tris)
+				{
+					idx_prims[3 * i + 0] = 0;
+					idx_prims[3 * i + 1] = i + 1;
+					idx_prims[3 * i + 2] = i + 2;
+				}
+			}
+			static int angle_tris_id = 0, angle_text_id = 0;
+			vzm::GeneratePrimitiveObject(__FP anlge_polygon_pos[0], NULL, __FP anlge_polygon_clr[0], NULL, num_angle_tris + 2, (unsigned int*)&idx_prims[0], num_angle_tris, 3, angle_tris_id);
+			vzm::ObjStates obj_state_angle_tris;
+			obj_state_angle_tris.color[3] = 0.5f;
+			vzm::ReplaceOrAddSceneObject(0, angle_tris_id, obj_state_angle_tris);
+
+			vzm::CameraParameters cam_params;
+			vzm::GetCameraParameters(0, cam_params, 0);
+			glm::fvec3 xyz_LT_view_up[3] = { anlge_polygon_pos[1], __cv3__ cam_params.view, __cv3__ cam_params.up };
+			if (angle * 180.f / glm::pi<float>() < 0.1) angle = 0;
+			vzm::GenerateTextObject(__FP xyz_LT_view_up, to_string_with_precision(angle * 180.f / glm::pi<float>(), 3) + "¢ª", font_size, true, false, angle_text_id);
+			vzm::ObjStates obj_state_angle_text;
+			vzm::ReplaceOrAddSceneObject(0, angle_text_id, obj_state_angle_text);
+		}
+
+		{
+			const int track_fade_num = 100;
+			static int track_spheres_id = 0;
+			static std::vector<glm::fvec3> track_points;
+			if (track_points.size() == 0 || glm::length(track_points[0] - tool_pos_01[0]) > 0.5)
+			{
+				if (track_points.size() < track_fade_num)
+				{
+					track_points.push_back(tool_pos_01[0]);
+				}
+				else
+				{
+					memcpy(&track_points[0], &track_points[1], sizeof(glm::fvec3) * (track_fade_num - 1));
+					track_points[track_fade_num - 1] = tool_pos_01[0];
+				}
+				std::vector<glm::fvec4> trackspheres(track_points.size());
+				for (int i = 0; i < (int)track_points.size(); i++)
+				{
+					trackspheres[i] = glm::fvec4(track_points[i], 0.5f + i * 1.f / track_fade_num);
+				}
+				vzm::GenerateSpheresObject(__FP trackspheres[0], NULL, track_points.size(), track_spheres_id);
+				vzm::ObjStates obj_state_track_spheres;
+				vzm::ReplaceOrAddSceneObject(0, track_spheres_id, obj_state_track_spheres);
+			}
+		}
+		vzm::SetRenderTestParam("_double3_3DTipPos", glm::dvec3(tool_pos_01[0]), sizeof(glm::dvec3), -1, -1);
+
+		show_window(scene_name[0], 0, 0, write_img_file, preset_file);
+		//show_window("CAM_SCENE", 1, 0, write_img_file, preset_file);
+
+		vzm::SetRenderTestParam("_bool_ReloadHLSLObjFiles", false, sizeof(bool), -1, -1);
+		key = cv::waitKey(1);
+	}
+
+	return 0;
+}
+
 int main()
 {
 	vzm::InitEngineLib();
 
 	//Fig_Absorbance();
 	//Fig_OitIntersection();
-	//Test();
-	Fig_OitPerformance();
+	Test2();
+	//Fig_OitPerformance();
 	//Fig_LocalDepthBlending();
 	//Fig_GhostedIllustration();
 	//Fig_HybridVR();
