@@ -1384,7 +1384,7 @@ int Test2()
 	scene_stage_scale = 500.f;
 
 	std::string preset_file = GetSolutionPath() + ".\\data\\preset_test2_head.txt";
-	std::string prepath = "D:\\Data\\K-AR_Data\\brain\\1";
+	std::string prepath = ".\\data";
 	int obj_head_skin_id = 0, obj_head_brain_id = 0, obj_head_ventricle_id = 0;
 	vzm::LoadModelFile(prepath + "\\skin_c_output.obj", obj_head_skin_id, true);
 	vzm::LoadModelFile(prepath + "\\brain_c_output.obj", obj_head_brain_id, true);
