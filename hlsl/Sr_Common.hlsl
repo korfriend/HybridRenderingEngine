@@ -165,7 +165,7 @@ Texture2D<float> sr_fragment_zdepth : register(t11);
 
 float4 OutlineTest(const in int2 tex2d_xy, const in float depth_c, const in float discont_depth_criterion)
 {
-	const float3 edge_color = float3(0, 0, 0);
+	const float3 edge_color = float3(1, 0, 0);
 	float4 vout = (float4) 0;
 	if (depth_c < 1000000)
 	{
@@ -410,6 +410,9 @@ PS_FILL_OUTPUT SINGLE_LAYER(VS_OUTPUT input)
     out_ps.depthcs = FLT_MAX;
 	POBJ_PRE_CONTEXT;
 
+	float3 nor = (float3)0;
+	float nor_len = 0;
+
 	float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
 	//if (g_cbPobj.alpha == 0) clip(-1);
 	if (!BitCheck(g_cbPobj.pobj_flag, 0))
@@ -417,8 +420,8 @@ PS_FILL_OUTPUT SINGLE_LAYER(VS_OUTPUT input)
 		float3 light_dirinv = -g_cbEnv.dir_light_ws;
 		if (g_cbEnv.env_flag & 0x1)
 			light_dirinv = -normalize(input.f3PosWS - g_cbEnv.pos_light_ws);
-		float3 nor = input.f3VecNormalWS;
-		float nor_len = length(nor);
+		nor = input.f3VecNormalWS;
+		nor_len = length(nor);
 		float shade = 1.f;
 	
 		float3 Ka, Kd, Ks;
@@ -451,10 +454,31 @@ PS_FILL_OUTPUT SINGLE_LAYER(VS_OUTPUT input)
 	}
 	else
 	{
-		float3 nor = input.f3VecNormalWS;
-		float nor_len = length(nor);
+		nor = input.f3VecNormalWS;
+		nor_len = length(nor);
 		v_rgba = float4(nor / nor_len, g_cbPobj.alpha);
 		v_rgba.rgb = (v_rgba.rgb + (float3)1.f) / 2.f;
+	}
+
+	// dynamic opacity modulation
+	//if (BitCheck(g_cbPobj.pobj_flag, 22) || BitCheck(g_cbPobj.pobj_flag, 23))
+	//	GhostedEffect(v_rgba, input.f3PosWS, view_dir, nor, nor_len);
+	bool is_dynamic_transparency = BitCheck(g_cbPobj.pobj_flag, 22);
+	bool is_mask_transparency = BitCheck(g_cbPobj.pobj_flag, 23);
+	if (is_dynamic_transparency || is_mask_transparency)
+	{
+		float mask_weight = 1, dynamic_alpha_weight = 1;
+		int out_lined = GhostedEffect(mask_weight, dynamic_alpha_weight, input.f3PosWS, view_dir, nor, nor_len, is_dynamic_transparency);
+		if (out_lined > 0)
+			v_rgba = float4(1, 1, 0, 1);
+		else
+		{
+			if (is_dynamic_transparency)
+				v_rgba.rgba *= dynamic_alpha_weight;
+			if (is_mask_transparency)
+				v_rgba.rgba *= mask_weight;
+			if (v_rgba.a <= 0.01) clip(-1);
+		}
 	}
     
     out_ps.ds_z = input.f4PosSS.z;

@@ -171,7 +171,7 @@ namespace vzm
 	// data_type "CHAR" "BYTE" "SHORT" "USHORT" "INT" "FLOAT"
 	__dojostatic bool GenerateEmptyVolume(int& vol_id, const int ref_vol_id = 0, const std::string& data_type = "", const double min_v = 0, const double max_v = 0, const double fill_v = 0);
 	__dojostatic bool GenerateEmptyPrimitive(int& prim_id);
-	__dojostatic bool GenerateArrowObject(const float* pos_s, const float* pos_e, const float radius, int& obj_id);
+	__dojostatic bool GenerateArrowObject(const float* pos_s, const float* pos_e, const float radius_body, const float radius_head, int& obj_id);
 	// optional : rgb_list (if NULL, this is not used)
 	__dojostatic bool GenerateSpheresObject(const float* xyzr_list, const float* rgb_list, const int num_spheres, int& obj_id);
 	__dojostatic bool GenerateCylindersObject(const float* xyz_01_list, const float* radius_list, const float* rgb_list, const int num_cylinders, int& obj_id);

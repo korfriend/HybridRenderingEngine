@@ -481,7 +481,8 @@ namespace grd_helper
 		// 11th bit : 0 (No XFlip) 1 (YFlip)
 		// 20th bit : 0 (No Dashed Line) 1 (Dashed Line)
 		// 21th bit : 0 (Transparent Dash) 1 (Dash As Color Inverted)
-		// 23th bit : 0 (static alpha) 1 (dynamic alpha using mask t50)
+		// 23th bit : 0 (static alpha) 1 (dynamic alpha using mask t50) ... mode 1
+		// 24th bit : 0 (static alpha) 1 (dynamic alpha using mask t50) ... mode 2
 		// 31~32th bit : max components for dashed line : 0 ==> x, 1 ==> y, 2 ==> z
 		uint pobj_flag;
 		uint num_letters;
@@ -600,7 +601,7 @@ namespace grd_helper
 	struct HotspotMask
 	{
 		vmint2 pos_center;
-		int radius;
+		float radius;
 		int smoothness;
 		float thick;
 		float kappa_t;

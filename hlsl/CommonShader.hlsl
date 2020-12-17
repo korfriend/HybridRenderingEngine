@@ -107,7 +107,9 @@ struct HxCB_PolygonObject
 	// 11th bit : 0 (No XFlip) 1 (YFlip)
 	// 20th bit : 0 (No Dashed Line) 1 (Dashed Line)
 	// 21th bit : 0 (Transparent Dash) 1 (Dash As Color Inverted)
-	// 23th bit : 0 (static alpha) 1 (dynamic alpha using mask t50)
+	// 23th bit : 0 (static alpha) 1 (dynamic alpha using mask t50) ... mode 1
+	// 24th bit : 0 (static alpha) 1 (dynamic alpha using mask t50) ... mode 2
+	// 31~32th bit : max components for dashed line : 0 ==> x, 1 ==> y, 2 ==> z
     uint pobj_flag;
     uint num_letters;
     float dash_interval;
@@ -128,6 +130,8 @@ struct HxCB_VolumeObject
 
     float3 pos_alignedvbox_max_bs;
 	// 1st bit : 0 (use the input normal) 1 (invert the input normal)
+	// 20th bit : 0 (static alpha) 1 (dynamic alpha using mask t50) ... mode 1
+	// 21th bit : 0 (static alpha) 1 (dynamic alpha using mask t50) ... mode 2
 	// 24~31bit : Sculpt Mask Value (1 byte)
     uint vobj_flag;
 
@@ -215,7 +219,7 @@ struct HxCB_TMAP
 struct HotspotMask
 {
 	int2 pos_center;
-	int radius;
+	float radius;
 	int smoothness;
 	float thick;
 	float kappa_t;
@@ -1337,6 +1341,90 @@ float GetHotspotMaskWeightIdx(inout int out_lined, in int2 pos_xy, in int i, in 
 	//if (count > 0)
 	//	weight /= count;
 	return weight;
+}
+
+float Get3DHotspotMaskWeightIdx(inout int out_lined, in float3 pos_frag, in float3 view_eye_probe, in int i, in bool check_silhouete)
+{
+	// use 'radius' and 'bnd_thick' by world space units
+
+	//out_lined = 0;
+	float weight = 0;
+	//float count = 0;
+	float smoothness = (g_cbHSMask.mask_info_[i].smoothness & 0xFFFF);
+	bool silhouette = (g_cbHSMask.mask_info_[i].smoothness >> 16) > 0;
+	if (smoothness > 0 && (silhouette || !check_silhouete))
+	{
+		// g_cbCamState.pos_cam_ws
+		float3 pos_spotcenter = g_cbHSMask.mask_info_[i].pos_spotcenter;
+		//const float MAX_X = 100.f;
+		//const float MAX_ATAN = 1.40079666011;// acos(MAX_X);
+		//float coeff_atan = 1. / smoothness;
+		float3 vdiff = pos_frag - pos_spotcenter;
+		float vdot = dot(view_eye_probe, vdiff);
+		float3 v_pos = pos_spotcenter + view_eye_probe * vdot;
+		float leng = length(v_pos - pos_frag);
+		//float leng = length(vdiff);
+		//if (abs(leng - g_cbHSMask.mask_info_[i].radius) < g_cbHSMask.mask_info_[i].bnd_thick)
+		//{
+		//	out_lined++;
+		//}
+		//else
+		//{
+		//	if (leng < g_cbHSMask.mask_info_[i].radius)
+		//		out_lined--;
+		//}
+		//count++;
+		float mask_max_r = g_cbHSMask.mask_info_[i].radius;
+		float mask_r = min(mask_max_r, leng);
+		float g_r = mask_r / mask_max_r * 3.f;
+		weight = exp(-g_r * g_r / (2.f * 0.8 * 0.8));
+	}
+	//if (count > 0)
+	//	weight /= count;
+	return weight;
+}
+
+int GhostedEffect(out float mask_weight, out float dynamic_alpha_weight, 
+	const in float3 pos_frag_ws, const in float3 view_dir, const in float3 nor, const in float nor_len,
+	const in bool is_dynamic_transparency)
+{
+	// mask value compute
+	int out_lined = 0;
+	float3 pos_spotcenter = g_cbHSMask.mask_info_[0].pos_spotcenter;
+	float3 view_eye_probe = normalize(pos_spotcenter - g_cbCamState.pos_cam_ws);
+	dynamic_alpha_weight = 1.f;
+	mask_weight = Get3DHotspotMaskWeightIdx(out_lined, pos_frag_ws, view_eye_probe, 0, false);
+	if (out_lined <= 0)
+	{
+		float dynamic_kappa_w = mask_weight;
+		if (BitCheck(g_cbHSMask.mask_info_[0].flag, 0))
+		{
+			float3 vec_pos_probe2frag = pos_frag_ws - pos_spotcenter;
+			float dot_vec = dot(view_eye_probe, vec_pos_probe2frag);
+
+			if (dot_vec > 0)
+			{
+				const float depth_transparency = g_cbHSMask.mask_info_[0].in_depth_vis; // ws unit
+				// view_dir
+				float depth_w = saturate(-(dot_vec - depth_transparency) / depth_transparency);
+				//dynamic_kappa_w *= depth_w;// depth_w;
+				mask_weight *= depth_w;// depth_w;
+			}
+		}
+
+		float kappa_t = g_cbHSMask.mask_info_[0].kappa_t * dynamic_kappa_w;
+		float kappa_s = g_cbHSMask.mask_info_[0].kappa_s * dynamic_kappa_w;
+
+		//v_rgba.rgba = float4((float3)0.0, 1);
+		if (dynamic_kappa_w > 0 && is_dynamic_transparency)
+		{
+			float s = 1.f;
+			if (nor_len > 0) 
+				s = saturate(abs(dot(nor / nor_len, view_dir))); // [0, 1]
+			dynamic_alpha_weight = saturate((1.f - kappa_t) * pow(1.f - s, kappa_s));
+		}
+	}
+	return out_lined;
 }
 
 float GetHotspotThickness(in int2 pos_xy)

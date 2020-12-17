@@ -343,13 +343,34 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	float3 vbos_hit_start_pos = pos_ip_ws;
 #if RAYMODE == 0 // DVR
 	depth_out = fragment_zdepth[DTid.xy];
+	vbos_hit_start_pos = pos_ip_ws + dir_sample_unit_ws * depth_out;
 	fragment_zdepth[tex2d_xy] = fs[0].z;
+
+	//bool is_dynamic_transparency = false;// BitCheck(g_cbPobj.pobj_flag, 19);
+	//bool is_mask_transparency = true;// BitCheck(g_cbPobj.pobj_flag, 20);
+	//float mask_weight = 1.f;
+	//if (1)//(is_mask_transparency)// || is_dynamic_transparency)
+	//{
+	//	float dynamic_alpha_weight = 1;
+	//	int out_lined = GhostedEffect(mask_weight, dynamic_alpha_weight, vbos_hit_start_pos, dir_sample_unit_ws, (float3)1, 1, false);
+	//	if (is_mask_transparency)
+	//		vis_out.rgba *= mask_weight;
+	//	//if (out_lined > 0)
+	//	//	v_rgba = float4(1, 1, 0, 1);
+	//	//else
+	//	//{
+	//	//if (is_mask_transparency && mask_weight < 0.001f)
+	//	//	return;
+	//	//		v_rgba.rgba *= mask_weight;
+	//	//	if (v_rgba.a <= 0.01) return;
+	//	fragment_vis[tex2d_xy] = vis_out;
+	//}
+
 	if (vr_hit_enc == 0)//depth_out > FLT_LARGE)
 	{
 		//fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
 		return;
 	}
-	vbos_hit_start_pos = pos_ip_ws + dir_sample_unit_ws * depth_out;
 #endif
 	// Ray Intersection for Clipping Box //
     float2 hits_t = ComputeVBoxHits(vbos_hit_start_pos, dir_sample_unit_ws, g_cbVobj.pos_alignedvbox_max_bs, g_cbVobj.mat_alignedvbox_tr_ws2bs, g_cbClipInfo);
@@ -359,6 +380,8 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
         return;
     float3 pos_ray_start_ws = vbos_hit_start_pos + dir_sample_unit_ws * hits_t.x;
     // recompute the vis result  
+
+	// temp
 
 	// DVR ray-casting core part
 	{
@@ -408,6 +431,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 				float modulator = min(grad_len * grad_scale / grad_max, 1.f);
 				vis_sample *= modulator;
 #endif
+				//vis_sample *= mask_weight;
 #if FRAG_MERGING == 1
 				INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, sample_dist, fs, merging_beta);
 #else
@@ -446,6 +470,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 						float modulator = min(grad_len * grad_scale / grad_max, 1.f);
 						vis_sample *= modulator;
 #endif
+						//vis_sample *= mask_weight;
 #if FRAG_MERGING == 1
 						INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, sample_dist, fs, merging_beta);
 #else

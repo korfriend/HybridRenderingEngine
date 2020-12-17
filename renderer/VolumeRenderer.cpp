@@ -381,6 +381,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 	if (is_ghost_mode)
 	{
+		// do 'dynamic'
 		D3D11_MAPPED_SUBRESOURCE mappedResHSMask;
 		dx11DeviceImmContext->Map(cbuf_hsmask, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResHSMask);
 		CB_HotspotMask* cbHSMaskData = (CB_HotspotMask*)mappedResHSMask.pData;
@@ -660,6 +661,18 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		int iso_value = GET_LDVALUE("_int_Isovalue", main_tobj->GetTMapData()->valid_min_idx.x);
 		grd_helper::SetCb_VolumeObj(cbVolumeObj, main_vol_obj, lobj, _fncontainer, high_samplerate, vol_sampled_size, iso_value, gres_volblk_otf.options["FORMAT"] == DXGI_FORMAT_R16_UNORM ? 65535.f : 1.f, sculpt_index);
 		cbVolumeObj.pb_shading_factor = global_light_factors;
+
+		// ghosted
+		if (is_ghost_mode)
+		{
+			bool is_ghost_surface = false;
+			lobj->GetDstObjValue(vobj_id, "_bool_IsGhostSurface", &is_ghost_surface);
+			bool is_only_hotspot_visible = false;
+			lobj->GetDstObjValue(vobj_id, "_bool_IsOnlyHotSpotVisible", &is_only_hotspot_visible);
+			if (is_ghost_surface) cbVolumeObj.vobj_flag |= 0x1 << 19;
+			if (is_only_hotspot_visible) cbVolumeObj.vobj_flag |= 0x1 << 20;
+			//cout << "TEST : " << is_ghost_surface << ", " << is_only_hotspot_visible << endl;
+		}
 
 		D3D11_MAPPED_SUBRESOURCE mappedResVolObj;
 		dx11DeviceImmContext->Map(cbuf_vobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResVolObj);

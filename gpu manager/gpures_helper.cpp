@@ -2190,7 +2190,7 @@ void grd_helper::SetCb_HotspotMask(CB_HotspotMask& cb_hsmask, VmFnContainer* _fn
 	{
 		const double max_smoothness = 30.;
 		cb_hsmask.mask_info_[idx].pos_center = vmint2(mask_center_rs_0.x, mask_center_rs_0.y);
-		cb_hsmask.mask_info_[idx].radius = mask_center_rs_0.z;
+		cb_hsmask.mask_info_[idx].radius = (float)mask_center_rs_0.z;
 		cb_hsmask.mask_info_[idx].smoothness = (int)(max(min(mask_center_rs_0.w * max_smoothness, max_smoothness), 0)) | ((int)show_silhuette_edge << 16);
 		cb_hsmask.mask_info_[idx].thick = (float)hotspot_params.x;
 		cb_hsmask.mask_info_[idx].kappa_t = (float)hotspot_params.y;
@@ -2198,7 +2198,7 @@ void grd_helper::SetCb_HotspotMask(CB_HotspotMask& cb_hsmask, VmFnContainer* _fn
 		cb_hsmask.mask_info_[idx].bnd_thick = mask_bnd;
 		cb_hsmask.mask_info_[idx].flag = 0;
 		cb_hsmask.mask_info_[idx].in_depth_vis = inDepthVis;
-
+		
 		if (use_mask_3dtip)
 		{
 			cb_hsmask.mask_info_[idx].flag = 1;

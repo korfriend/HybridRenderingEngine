@@ -650,24 +650,8 @@ void OIT_PRESET(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		v_rgba = OutlineTest(tex2d_xy, depthcs, g_cbPobj.depth_forward_bias);
 	else
 		v_rgba = sr_fragment_vis[tex2d_xy.xy];
-	if(v_rgba.a == 0)
-		v_rgba = float4(1, 0, 0, 1);
-
-	if (BitCheck(g_cbPobj.pobj_flag, 22))
-	{
-		int out_lined = 0;
-		float weight = 0;
-		float sum_w = 0;
-		for (int i = 0; i < 2; i++)
-		{
-			float w = GetHotspotMaskWeightIdx(out_lined, tex2d_xy, i, true);
-			weight += w * w;
-			sum_w += w;
-			//if (weight > 0) count++;
-		}
-		if (sum_w > 0) weight /= sum_w;
-		v_rgba *= weight;
-	}
+	//if(v_rgba.a == 0)
+	//	v_rgba = float4(1, 0, 0, 1);
 
 	if (v_rgba.a == 0)
 		return;
@@ -788,101 +772,29 @@ void OIT_KDEPTH(__VS_OUT input)
 	// as a color component is stored into 8 bit channel, the alpha-multiplied precision must be determined in this stage.
 	// unless, noise dots appear.
 	v_rgba.rgb *= v_rgba.a;
+	//v_rgba.rgb = float3(1, 0, 0);
 
 	int2 tex2d_xy = int2(input.f4PosSS.xy);
 	// dynamic opacity modulation
-	if (BitCheck(g_cbPobj.pobj_flag, 22) && nor_len > 0)//&& g_cbPobj.dash_interval != 77.77f)
+	bool is_dynamic_transparency = BitCheck(g_cbPobj.pobj_flag, 22);
+	bool is_mask_transparency = BitCheck(g_cbPobj.pobj_flag, 23);
+	if (is_dynamic_transparency || is_mask_transparency)
 	{
-		//int addr_base = (tex2d_xy.y * g_cbCamState.rt_width + tex2d_xy.x) * 4;
-		//float mask_v = g_bufHotSpotMask[addr_base + 3];
-		//if (mask_v >= 0)
-		//{
-		//	float kappa_t = g_bufHotSpotMask[addr_base + 1];
-		//	float kappa_s = g_bufHotSpotMask[addr_base + 2];
-		//	//float omega_d = g_bufHotSpotMask[addr_base + 0];
-		//	float s = abs(dot(nor / nor_len, view_dir)); // [0, 1]
-		//	float a_w = (1.f / kappa_t) * pow(saturate(1.f - s), kappa_s);
-		//	v_rgba *= a_w;
-		//}
-		//else
-		//	v_rgba = float4(0, 0, 0, 1);
-
-		// mask value compute
-		int out_lined = 0;
-		float weight = GetHotspotMaskWeightIdx(out_lined, tex2d_xy, 0, false);
+		float mask_weight = 1, dynamic_alpha_weight = 1;
+		int out_lined = GhostedEffect(mask_weight, dynamic_alpha_weight, input.f3PosWS, view_dir, nor, nor_len, is_dynamic_transparency);
 		if (out_lined > 0)
-		{
 			v_rgba = float4(1, 1, 0, 1);
-		}
 		else
 		{
-			if (BitCheck(g_cbHSMask.mask_info_[0].flag, 0))
-			{
-				float3 pos_tip3d_ws = g_cbHSMask.mask_info_[0].pos_spotcenter;
-				float3 vec_pos_tip3d2frag = input.f3PosWS - pos_tip3d_ws;
-				float dot_vec = dot(vec_pos_ip2frag, vec_pos_tip3d2frag);
-				if (dot_vec > 0)
-				{
-					const float depth_transparency = g_cbHSMask.mask_info_[0].in_depth_vis; // ws unit
-					// view_dir
-					float depth_w = saturate(-(dot_vec - depth_transparency) / depth_transparency);
-					weight *= depth_w;// depth_w;
-				}
-			}
-
-			float kappa_t = g_cbHSMask.mask_info_[0].kappa_t * weight;
-			float kappa_s = g_cbHSMask.mask_info_[0].kappa_s * weight;
-
-			//v_rgba.rgba = float4((float3)0.0, 1);
-			if (weight > 0)
-			{
-				float s = saturate(abs(dot(nor / nor_len, view_dir))); // [0, 1]
-				//float a_w = saturate(1.f - kappa_t) * pow(min(max(saturate(1.f - s), 0.01f), 1.f), kappa_s);
-				float a_w = (1.f - kappa_t) * pow(1.f - s, kappa_s);
-				v_rgba *= saturate(a_w);
-				//v_rgba.rgba = float4((float3)max(w, 0.0), 1);
-			}
+			if (is_dynamic_transparency)
+				v_rgba.rgba *= dynamic_alpha_weight;
+			if (is_mask_transparency)
+				v_rgba.rgba *= mask_weight;
 			if (v_rgba.a <= 0.01) clip(-1);
 		}
-
-		/*
-		float weight_[2] = { GetHotspotMaskWeightIdx(out_lined, tex2d_xy, 0, false) , GetHotspotMaskWeightIdx(out_lined, tex2d_xy, 1, false) };
-		if (out_lined > 0)
-		{
-			v_rgba = float4(1, 1, 0, 1);
-		}
-		else
-		{
-			float kappa_t = 0.f, kappa_s = 0;
-			float w = 0;
-			for (int i = 0; i < 2; i++)
-			{
-				if (weight_[i] > 0)
-				{
-					w += weight_[i];
-					kappa_t += g_cbHSMask.mask_info_[i].kappa_t * weight_[i] * weight_[i];
-					kappa_s += g_cbHSMask.mask_info_[i].kappa_s * weight_[i] * weight_[i];
-				}
-			}
-			//v_rgba.rgba = float4((float3)0.0, 1);
-			if (w > 0)
-			{
-				kappa_t /= w;
-				kappa_s /= w;
-
-				float s = saturate(abs(dot(nor / nor_len, view_dir))); // [0, 1]
-				//float a_w = saturate(1.f - kappa_t) * pow(min(max(saturate(1.f - s), 0.01f), 1.f), kappa_s);
-				float a_w = (1.f - kappa_t) * pow(1.f - s, kappa_s);
-				v_rgba *= saturate(a_w);
-				//v_rgba.rgba = float4((float3)max(w, 0.0), 1);
-			}
-		}/**/
-		{ // for Figure
-			//float s = saturate(abs(dot(nor / nor_len, view_dir))); // [0, 1]
-			//float a_w = (1.f - g_cbHSMask.mask_info_[0].kappa_t) * pow(1.f - s, g_cbHSMask.mask_info_[0].kappa_s);
-			//v_rgba *= saturate(a_w);
-		}
 	}
+
+
 	//v_rgba.rgba = float4(0.5, 0.5, 0.5, 1);// saturate((z_depth - 500) / 1000);
 
 	// add opacity culling with biased z depth

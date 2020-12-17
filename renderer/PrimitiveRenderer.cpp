@@ -847,7 +847,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			  ,"SR_OIT_FILL_SKBTZ_TEXTMAPPING_ps_5_0"
 			  ,"SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ps_5_0"
 
-			   "SR_OIT_FILL_SKBTZ_PHONGBLINN_ROV_ps_5_0"
+			  ,"SR_OIT_FILL_SKBTZ_PHONGBLINN_ROV_ps_5_0"
 			  ,"SR_OIT_FILL_SKBTZ_DASHEDLINE_ROV_ps_5_0"
 			  ,"SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ROV_ps_5_0"
 			  ,"SR_OIT_FILL_SKBTZ_TEXTMAPPING_ROV_ps_5_0"
@@ -1810,7 +1810,11 @@ BEGIN_RENDERER_LOOP:
 		{
 			bool is_ghost_surface = false;
 			lobj->GetDstObjValue(pobj_id, "_bool_IsGhostSurface", &is_ghost_surface);
-			if(is_ghost_surface) cbPolygonObj.pobj_flag |= 0x1 << 22;
+			bool is_only_hotspot_visible = false;
+			lobj->GetDstObjValue(pobj_id, "_bool_IsOnlyHotSpotVisible", &is_only_hotspot_visible);
+			if (is_ghost_surface) cbPolygonObj.pobj_flag |= 0x1 << 22;
+			if (is_only_hotspot_visible) cbPolygonObj.pobj_flag |= 0x1 << 23;
+			//cout << "TEST : " << is_ghost_surface << ", " << is_only_hotspot_visible << endl;
 		}
 		D3D11_MAPPED_SUBRESOURCE mappedResPobjData;
 		dx11DeviceImmContext->Map(cbuf_pobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResPobjData);

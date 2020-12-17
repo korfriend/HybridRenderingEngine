@@ -1381,7 +1381,8 @@ int Test2()
 		vzm::SetRenderTestParam("_int_BufExScale", (int)4, sizeof(int), -1, -1); // set this when the resolution 2048x2048 (NVIDIA GTX 1080)
 
 	high_Rh = 0.75, low_Rh = 0.2, diff_amp = 10.0;
-	scene_stage_scale = 500.f;
+	const float scale_factor = 0.001f;
+	scene_stage_scale = 500.f * scale_factor;
 
 	std::string preset_file = GetSolutionPath() + ".\\data\\preset_test2_head.txt";
 	std::string prepath = ".\\data";
@@ -1390,22 +1391,25 @@ int Test2()
 	vzm::LoadModelFile(prepath + "\\brain_c_output.obj", obj_head_brain_id, true);
 	vzm::LoadModelFile(prepath + "\\ventricle_c_output.obj", obj_head_ventricle_id, true);
 	vzm::ObjStates obj_state_skin, obj_state_brain, obj_state_ventricle;
-	__cv4__ obj_state_skin.color = glm::fvec4(0.8f, 1.f, 1.f, 1.0f);
-	//__cm4__ obj_state_skin.os2ws = glm::fmat4x4(); // identity
+	__cv4__ obj_state_skin.color = glm::fvec4(0.8f, 1.f, 1.f, 0.1f);
+	__cm4__ obj_state_skin.os2ws = glm::scale(glm::fvec3(scale_factor)); // identity
+	obj_state_skin.show_outline = true;
 	__cv4__ obj_state_brain.color = glm::fvec4(1.0f, 0.8f, 1.f, 1.0f);
+	__cm4__ obj_state_brain.os2ws = glm::scale(glm::fvec3(scale_factor)); // identity
 	__cv4__ obj_state_ventricle.color = glm::fvec4(1.0f, 1.f, 0.8f, 1.f);
+	__cm4__ obj_state_ventricle.os2ws = glm::scale(glm::fvec3(scale_factor)); // identity
 
 	__cv3__ cam_params.pos = glm::fvec3(scene_stage_scale, 0, 0);
 	__cv3__ cam_params.up = glm::fvec3(0, 1.f, 0);
 	__cv3__ cam_params.view = glm::fvec3(-1.f, 0, 0);
-	cam_params.np = 0.10f;
-	cam_params.fp = 10000.f;
+	cam_params.np = 0.10f * scale_factor;
+	cam_params.fp = 10000.f * scale_factor;
 	// obj file includes material info, which is prior shading option for rendering; therefore, wildcard setting is required to change shading.
 
 	int obj_line_guide_id = 0;
-	glm::fvec3 pos_01[2] = { glm::fvec3(-11,20,50), glm::fvec3(-5,250,230) };
+	glm::fvec3 pos_01[2] = { glm::fvec3(-11,20,50) * scale_factor, glm::fvec3(-5,250,230) * scale_factor };
 	glm::fvec3 vec_dir = glm::normalize(pos_01[1] - pos_01[0]);
-	pos_01[1] = pos_01[0] + vec_dir * 10000.f;
+	pos_01[1] = pos_01[0] + vec_dir * 10000.f * scale_factor;
 	glm::fvec3 clr_01[2] = { glm::fvec3(1), glm::fvec3(1) };
 	vzm::GenerateLinesObject(__FP pos_01, __FP clr_01, 1, obj_line_guide_id);
 	vzm::ObjStates obj_state_line_guide;
@@ -1451,10 +1455,9 @@ int Test2()
 	align_obj_to_world_center(0, loaded_obj_ids);
 	align_obj_to_world_center(1, loaded_obj_ids);
 
-	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), -1, -1);
-	vzm::SetRenderTestParam("_double_CopVZThickness", 0.002, sizeof(double), -1, -1);
-	vzm::SetRenderTestParam("_double_AbsCopVZThickness", 0.2, sizeof(double), -1, -1);
-	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_bool_UseSpinLock", false, sizeof(bool), -1, -1);
+	vzm::SetRenderTestParam("_double_AbsVZThickness", 0.002, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double_AbsCopVZThickness", 0.001, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), -1, -1);
@@ -1464,13 +1467,13 @@ int Test2()
 
 	vzm::ObjStates obj_state_index_sphere;
 
-	glm::fvec3 tool_pos_01[2] = { glm::fvec3(-200,140,70), glm::fvec3(-290,230,170)};
+	glm::fvec3 tool_pos_01[2] = { glm::fvec3(-200,140,70) * scale_factor, glm::fvec3(-290,230,170) * scale_factor };
 	glm::fvec3 tool_dir = glm::normalize(tool_pos_01[1] - tool_pos_01[0]);
-	tool_pos_01[1] = tool_pos_01[0] + tool_dir * 100.f;
+	tool_pos_01[1] = tool_pos_01[0] + tool_dir * 100.f * scale_factor;
 	glm::fvec3 tool_clr_01[2] = { glm::fvec3(0, 1, 0), glm::fvec3(0, 1, 0) };
 	int obj_tool_id = 0, tool_tip_sphere_id = 0;
 	vzm::GenerateLinesObject(__FP tool_pos_01, __FP tool_clr_01, 1, obj_tool_id);
-	vzm::GenerateSpheresObject(__FP glm::fvec4(tool_pos_01[0], 1), __FP glm::fvec3(1, 0, 0), 1, tool_tip_sphere_id);
+	vzm::GenerateSpheresObject(__FP glm::fvec4(tool_pos_01[0], 1 * scale_factor), __FP glm::fvec3(1, 0, 0), 1, tool_tip_sphere_id);
 	vzm::ReplaceOrAddSceneObject(0, obj_tool_id, obj_state_line_guide);
 	vzm::ReplaceOrAddSceneObject(0, tool_tip_sphere_id, obj_state_index_sphere);
 
@@ -1485,11 +1488,16 @@ int Test2()
 
 	vzm::SetRenderTestParam("_bool_GhostEffect", true, sizeof(bool), -1, -1);
 	vzm::SetRenderTestParam("_bool_UseMask3DTip", true, sizeof(bool), -1, -1);
-	vzm::SetRenderTestParam("_double4_MaskCenterRadius0", glm::dvec4(100, 100, 150, 1.0), sizeof(glm::dvec4), -1, -1);
-	vzm::SetRenderTestParam("_double3_HotspotParamsTKtKs0", glm::dvec3(1, 0.5, 1.5), sizeof(glm::dvec3), -1, -1);
-	vzm::SetRenderTestParam("_double_InDepthVis", 10.00, sizeof(double), -1, -1);
+	//vzm::SetRenderTestParam("_double4_MaskCenterRadius0", glm::dvec4(100, 100, 150, 1.0), sizeof(glm::dvec4), -1, -1);
+	vzm::SetRenderTestParam("_double4_MaskCenterRadius0", glm::dvec4(-100, -100, 50.0 * scale_factor, 0.5), sizeof(glm::dvec4), -1, -1);
+	vzm::SetRenderTestParam("_double_MaskBndDisplay", 0.1, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double3_HotspotParamsTKtKs0", glm::dvec3(0.2 * scale_factor, 0.5, 1.5), sizeof(glm::dvec3), -1, -1);
+	vzm::SetRenderTestParam("_double_InDepthVis", 10.0 * scale_factor, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_bool_IsGhostSurface", true, sizeof(bool), 0, 0, obj_head_skin_id);
 	vzm::SetRenderTestParam("_bool_IsGhostSurface", true, sizeof(bool), 0, 0, obj_head_brain_id);
+	//vzm::SetRenderTestParam("_bool_IsOnlyHotSpotVisible", true, sizeof(bool), 0, 0, obj_head_skin_id);
+	vzm::SetRenderTestParam("_bool_IsOnlyHotSpotVisible", true, sizeof(bool), 0, 0, obj_head_brain_id);
+	vzm::SetRenderTestParam("_bool_IsOnlyHotSpotVisible", true, sizeof(bool), 0, 0, obj_head_ventricle_id);
 	vzm::ValidatePickTarget(obj_head_skin_id);
 	vzm::ValidatePickTarget(obj_head_brain_id);
 
@@ -1501,22 +1509,22 @@ int Test2()
 		key_actions(key, preset_file, loaded_obj_ids, write_img_file);
 		if (key == '-')
 		{
-			tool_pos_01[0] = glm::fvec3(-200, 140, 70);
-			tool_pos_01[1] = glm::fvec3(-290, 230, 170);
+			tool_pos_01[0] = glm::fvec3(-200, 140, 70) * scale_factor;
+			tool_pos_01[1] = glm::fvec3(-290, 230, 170) * scale_factor;
 			glm::fvec3 tool_dir = glm::normalize(tool_pos_01[1] - tool_pos_01[0]);
-			tool_pos_01[1] = tool_pos_01[0] + tool_dir * 100.f;
+			tool_pos_01[1] = tool_pos_01[0] + tool_dir * 100.f * scale_factor;
 		}
 
 		glm::fvec3 pos_closest_point;
 		compute_closestpos_btw_line_point(pos_01[0], vec_dir, tool_pos_01[0], pos_closest_point);
 		static int closest_sphere_id = 0;
-		vzm::GenerateSpheresObject(__FP glm::fvec4(pos_closest_point, 1), __FP glm::fvec3(1, 0, 0), 1, closest_sphere_id);
+		vzm::GenerateSpheresObject(__FP glm::fvec4(pos_closest_point, 1 * scale_factor), __FP glm::fvec3(1, 0, 0), 1, closest_sphere_id);
 		vzm::ReplaceOrAddSceneObject(0, closest_sphere_id, obj_state_index_sphere);
 
 		if(1)
 		{
 			glm::fvec3 diff = (pos_closest_point - tool_pos_01[0]);
-			if (glm::length(diff) > 2)
+			if (glm::length(diff) > 2 * scale_factor)
 			{
 				tool_pos_01[0] += diff / 100.f;
 				tool_pos_01[1] += diff / 100.f;
@@ -1529,9 +1537,9 @@ int Test2()
 				tool_pos_01[1] += diff2;
 			}
 			tool_dir = glm::normalize(tool_pos_01[1] - tool_pos_01[0]);
-			tool_pos_01[1] = tool_pos_01[0] + tool_dir * 100.f;
+			tool_pos_01[1] = tool_pos_01[0] + tool_dir * 100.f * scale_factor;
 			vzm::GenerateLinesObject(__FP tool_pos_01, __FP tool_clr_01, 1, obj_tool_id);
-			vzm::GenerateSpheresObject(__FP glm::fvec4(tool_pos_01[0], 1), __FP glm::fvec3(1, 0, 0), 1, tool_tip_sphere_id);
+			vzm::GenerateSpheresObject(__FP glm::fvec4(tool_pos_01[0], 1 * scale_factor), __FP glm::fvec3(1, 0, 0), 1, tool_tip_sphere_id);
 		}
 
 		// hit test
@@ -1557,7 +1565,7 @@ int Test2()
 
 				__cv4__ obj_state_hit_sphere_skin.color = glm::fvec4(0, 0, 1, 1);
 				glm::fvec3 xyz_LT_view_up[3] = { pos_hit_skin, tool_dir, test_up };
-				vzm::GenerateTextObject(__FP xyz_LT_view_up, "  ¢Â", 15.f, true, false, hit_mark_skin_id, true);
+				vzm::GenerateTextObject(__FP xyz_LT_view_up, "  ¢Â", 15.f * scale_factor, true, false, hit_mark_skin_id, true);
 			}
 			else
 				obj_state_hit_sphere_skin.is_visible = false;
@@ -1568,7 +1576,7 @@ int Test2()
 
 				__cv4__ obj_state_hit_sphere_brain.color = glm::fvec4(1, 0, 0, 1);
 				glm::fvec3 xyz_LT_view_up[3] = { pos_hit_brain, tool_dir, test_up };
-				vzm::GenerateTextObject(__FP xyz_LT_view_up, "  ¢Ã", 15.f, true, false, hit_mark_brain_id, true);
+				vzm::GenerateTextObject(__FP xyz_LT_view_up, "  ¢Ã", 15.f * scale_factor, true, false, hit_mark_brain_id, true);
 			}
 			else
 				obj_state_hit_sphere_brain.is_visible = false;
@@ -1578,7 +1586,7 @@ int Test2()
 		}
 
 		{
-			const float font_size = 30.f;
+			const float font_size = 30.f * scale_factor;
 			static int closest_point_line_id = 0, dist_text_id = 0;
 			glm::fvec3 pos_closest_line[2] = { tool_pos_01[0], pos_closest_point };
 			glm::fvec3 clr_closest_line[2] = { glm::fvec3(1, 1, 0), glm::fvec3(1, 1, 0) };
@@ -1588,7 +1596,7 @@ int Test2()
 			vzm::ReplaceOrAddSceneObject(0, closest_point_line_id, obj_state_closest_point_line);
 			vzm::SetRenderTestParam("_bool_IsDashed", true, sizeof(bool), 0, 0, closest_point_line_id);
 			vzm::SetRenderTestParam("_bool_IsInvertColorDashLine", true, sizeof(bool), 0, 0, closest_point_line_id);
-			vzm::SetRenderTestParam("_double_LineDashInterval", 2.0, sizeof(double), 0, 0, closest_point_line_id);
+			vzm::SetRenderTestParam("_double_LineDashInterval", 0.02, sizeof(double), 0, 0, closest_point_line_id);
 
 			vzm::CameraParameters cam_params;
 			vzm::GetCameraParameters(0, cam_params, 0);
@@ -1600,9 +1608,9 @@ int Test2()
 		}
 
 		{
-			const float font_size = 30.f;
+			const float font_size = 30.f * scale_factor;
 			const int num_angle_tris = 10;
-			const float angle_tris_length = 50.f;
+			const float angle_tris_length = 50.f * scale_factor;
 			glm::fvec3 vec_ref = glm::normalize(glm::cross(vec_dir, tool_dir));
 			float angle = glm::orientedAngle(vec_dir, tool_dir, vec_ref);
 			std::cout << angle << std::endl;
@@ -1642,7 +1650,7 @@ int Test2()
 			const int track_fade_num = 100;
 			static int track_spheres_id = 0;
 			static std::vector<glm::fvec3> track_points;
-			if (track_points.size() == 0 || glm::length(track_points[0] - tool_pos_01[0]) > 0.5)
+			if (track_points.size() == 0 || glm::length(track_points[0] - tool_pos_01[0]) > 0.5 * scale_factor)
 			{
 				if (track_points.size() < track_fade_num)
 				{
@@ -1656,7 +1664,7 @@ int Test2()
 				std::vector<glm::fvec4> trackspheres(track_points.size());
 				for (int i = 0; i < (int)track_points.size(); i++)
 				{
-					trackspheres[i] = glm::fvec4(track_points[i], 0.5f + i * 1.f / track_fade_num);
+					trackspheres[i] = glm::fvec4(track_points[i], (0.5f + i * 1.f / track_fade_num) * scale_factor);
 				}
 				vzm::GenerateSpheresObject(__FP trackspheres[0], NULL, track_points.size(), track_spheres_id);
 				vzm::ObjStates obj_state_track_spheres;
