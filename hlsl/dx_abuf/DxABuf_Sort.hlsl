@@ -1,14 +1,15 @@
 #include "../CommonShader.hlsl"
 
-RWByteAddressBuffer deep_DxA_buf : register(u1);
+RWByteAddressBuffer deep_k_buf : register(u1);
 RWTexture2D<float4> fragment_blendout : register(u2);
 RWTexture2D<float> fragment_zdepth : register(u3);
-RWBuffer<uint> offsettable_buf : register(u4); // gres_fb_ref_pidx
+RWBuffer<uint> offsettable_buf : register(u4); // gres_fb_ref_pidx // only for the count pass
+RWByteAddressBuffer deep_ubk_buf : register(u5); // only for the resolve pass
 
 Texture2D<uint> sr_fragment_counter : register(t0);
 
-#define LOAD1_RBB(ADDR) deep_DxA_buf.Load((ADDR) * 4)
-#define STORE1_RBB(V, ADDR) deep_DxA_buf.Store((ADDR) * 4, V)
+#define LOAD1_UBKB(ADDR) deep_ubk_buf.Load((ADDR) * 4)
+#define STORE1_KB(V, ADDR) deep_k_buf.Store((ADDR) * 4, V)
 
 ///////////////////////////////////////////
 // GPU-accelerated A-buffer algorithm
@@ -76,16 +77,42 @@ void CreateOffsetTable_CS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThre
 #if DX_11_OIT==0
 #include "../macros.hlsl"
 #define MAX_ARRAY_SIZE 1024
-#define MAX_ARRAY_SIZE_1n MAX_ARRAY_SIZE - 1
-#define MAX_ARRAY_SIZE_2d MAX_ARRAY_SIZE >> 1
 struct FragmentVD
 {
-	uint ivis;
+	uint i_vis;
 	float z;
 };
 
-//static FragmentVD fragments[MAX_ARRAY_SIZE];
-//static FragmentVD leftArray[MAX_ARRAY_SIZE_2d];
+#if FRAG_MERGING == 0
+#define FRAG FragmentVD
+#else
+#define FRAG Fragment
+
+// these following two functions are the same as in Sr_KBuf.hlsl
+int Fragment_OrderIndependentMerge(inout Fragment f_buf, const in Fragment f_in)
+{
+	float4 f_buf_fvis = ConvertUIntToFloat4(f_buf.i_vis);
+	float4 f_in_fvis = ConvertUIntToFloat4(f_in.i_vis);
+
+	float4 f_mix_vis = MixOpt(f_buf_fvis, f_buf.opacity_sum, f_in_fvis, f_in.opacity_sum);
+	f_buf.i_vis = ConvertFloat4ToUInt(f_mix_vis);
+	f_buf.opacity_sum = f_buf.opacity_sum + f_in.opacity_sum;
+	float z_front = min(f_buf.z - f_buf.zthick, f_in.z - f_in.zthick);
+	f_buf.z = max(f_buf.z, f_in.z);
+	f_buf.zthick = f_buf.z - z_front;
+
+	return 0;
+}
+
+bool OverlapTest(const in Fragment f_1, const in Fragment f_2)
+{
+	float diff_z1 = f_1.z - (f_2.z - f_2.zthick);
+	float diff_z2 = (f_1.z - f_1.zthick) - f_2.z;
+	return diff_z1 * diff_z2 < 0;
+}
+
+#endif
+
 #endif
 
 Buffer<uint> sr_offsettable_buf : register(t50); // gres_fb_ref_pidx
@@ -93,7 +120,7 @@ Buffer<uint> sr_offsettable_buf : register(t50); // gres_fb_ref_pidx
 [numthreads(GRIDSIZE, GRIDSIZE, 1)]
 void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID, uint3 nGTid : SV_GroupThreadID)
 {
-	uint nThreadNum = nDTid.y * g_cbCamState.rt_width + nDTid.x; // nDTid
+	uint nThreadNum = nDTid.y * g_cbCamState.rt_width + nDTid.x; // pixel_id
 	if (nThreadNum == 0) // we used 0th pixel for temporal synch //
 		return;
 
@@ -113,48 +140,139 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 	for (int i = 0; i < N; i++)
 	{
 		FragmentVD f;
-		f.ivis = LOAD1_RBB(2 * (offset + i) + 0);
-		f.z = asfloat(LOAD1_RBB(2 * (offset + i) + 1));
+		f.i_vis = LOAD1_UBKB(2 * (offset + i) + 0);
+		f.z = asfloat(LOAD1_UBKB(2 * (offset + i) + 1));
 		fragments[i] = f;
 	}
 
 	//const int test_idx = 0;
 	//if (N <= test_idx + 1) return;
-	//fragment_blendout[nDTid.xy] = ConvertUIntToFloat4(fragments[test_idx].ivis);
+	//fragment_blendout[nDTid.xy] = ConvertUIntToFloat4(fragments[test_idx].i_vis);
 	//return;
 
 	sort(N, fragments, FragmentVD);
 
+#if FRAG_MERGING == 1
+	float merging_beta = asfloat(g_cbCamState.iSrCamDummy__0);
+	Fragment f_tail = (Fragment)0;
+
+	const uint k_value = g_cbCamState.k_value;
+	uint bytes_per_frag = 4 * NUM_ELES_PER_FRAG;
+	uint bytes_frags_per_pixel = k_value * bytes_per_frag; // to do : consider the dynamic scheme. (4 bytes unit)
+	uint addr_base = nThreadNum * bytes_frags_per_pixel;
+#define NUM_K 8
+#endif
 	bool store_to_kbuf = BitCheck(g_cbCamState.cam_flag, 3);
-	float4 result = (float4) 0.0f;
+	float4 vis_out = (float4) 0.0f;
+#if FRAG_MERGING == 0
+	[loop]
 	for (i = 0; i < N; i++)
 	{
-		uint bufferValue = fragments[i].ivis;
-		float4 color = ConvertUIntToFloat4(bufferValue);
-		result += color * (1 - result.a);
+		uint ivis = fragments[i].i_vis;
+		float4 color = ConvertUIntToFloat4(ivis);
+		vis_out += color * (1 - vis_out.a);
 
 		if (store_to_kbuf)
 		{
-			STORE1_RBB(bufferValue, 2 * (offset + i) + 0);
-			STORE1_RBB(asuint(fragments[i].z), 2 * (offset + i) + 1);
+			STORE1_KB(ivis, 2 * (offset + i) + 0);
+			STORE1_KB(asuint(fragments[i].z), 2 * (offset + i) + 1);
 		}
 	}
-	fragment_blendout[nDTid.xy] = result;
+#else
+	int cnt_stored_fs = 0;
+	Fragment f_1, f_2;
+	f_1.i_vis = fragments[0].i_vis;
+	f_1.z = fragments[0].z;
+	f_1.zthick = GetVZThickness(f_1.z, g_cbCamState.cam_vz_thickness);
+	f_1.opacity_sum = ConvertUIntToFloat4(f_1.i_vis).a;
+	// use the SFM
+	[loop]
+	for (i = 0; i < N; i++)
+	{
+		f_2 = (Fragment)0;
+		int inext = i + 1;
+		if (inext < N)
+		{
+			f_2.i_vis = fragments[inext].i_vis;
+			f_2.z = fragments[inext].z;
+			f_2.zthick = GetVZThickness(f_2.z, g_cbCamState.cam_vz_thickness);
+			f_2.opacity_sum = ConvertUIntToFloat4(f_2.i_vis).a;
+		}
+
+		Fragment f_merge = MergeFrags_ver2(f_1, f_2, merging_beta);
+		if (f_merge.i_vis == 0)
+		{
+			if (cnt_stored_fs < NUM_K - 1)
+			{
+				cnt_stored_fs++;
+				SET_FRAG(addr_base, i, f_1);
+
+				float4 color = ConvertUIntToFloat4(f_1.i_vis);
+				vis_out += color * (1 - vis_out.a);
+				f_1 = f_2;
+			}
+			else
+			{
+				cnt_stored_fs = NUM_K;
+				// tail //
+				if (f_tail.i_vis == 0) f_tail = f_1;
+				else
+				{
+					float4 f_tail_vis = ConvertUIntToFloat4(f_tail.i_vis);
+					float4 f_2_vis = ConvertUIntToFloat4(f_2.i_vis);
+					f_tail_vis += f_2_vis * (1.f - f_tail_vis.a);
+					f_tail.i_vis = ConvertFloat4ToUInt(f_tail_vis);
+					f_tail.z = f_1.z;
+					f_tail.zthick = f_1.z - (f_tail.z - f_tail.zthick);
+					f_tail.opacity_sum += f_1.opacity_sum;
+				}
+				f_1 = f_tail;
+			}
+		}
+		else
+		{
+			f_1 = f_merge;
+		}
+	}
+	if (f_tail.i_vis != 0)
+	{
+		SET_FRAG(addr_base, NUM_K - 1, f_tail);
+		float4 color = ConvertUIntToFloat4(f_tail.i_vis);
+		vis_out += color * (1 - vis_out.a);
+	}
+
+#if TEST == 1
+	vis_out = (float4) 0.0f;
+	if (cnt_stored_fs == NUM_K)
+	{
+		//fragment_blendout[nDTid.xy] = float4(1, 1, 0, 1);
+		//return;
+	}
+	for (i = 0; i < cnt_stored_fs; i++)
+	{
+		Fragment f;
+		GET_FRAG(f, addr_base, i);
+		float4 vis = ConvertUIntToFloat4(f.i_vis);
+		vis_out += vis * (1 - vis_out.a);
+	}
+#endif
+#endif
+	fragment_blendout[nDTid.xy] = vis_out;
 	fragment_zdepth[nDTid.xy] = fragments[0].z;
 
-#else 
+#else // DX11 style
 	nThreadNum += 1; // to reuse nThreadNum - 1
 
 #define blocksize 1
 	uint N2 = 1 << (int)(ceil(log2(N)));
 
-#define MAX_SORT 400
+#define MAX_SORT 512
 	int nIndex[MAX_SORT];
 	float fDepth[MAX_SORT];
 	for (uint i = 0; i < N; i++)
 	{
 		nIndex[i] = i;
-		fDepth[i] = asfloat(LOAD1_RBB(2 * (offsettable_buf[nThreadNum - 1] + i) + 1));
+		fDepth[i] = asfloat(LOAD1_UBKB(2 * (offsettable_buf[nThreadNum - 1] + i) + 1));
 	}
 	for (i = N; i < N2; i++)
 	{
@@ -232,14 +350,14 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 		for (uint x = 0; x < N; x++)
 		{
 			//uint bufferValue = deep_DxA_buf[2 * (offsettable_buf[nThreadNum - 1] + nIndex[x]) + 0];
-			uint bufferValue = LOAD1_RBB(2 * (offsettable_buf[nThreadNum - 1] + nIndex[x]) + 0);
+			uint bufferValue = LOAD1_UBKB(2 * (offsettable_buf[nThreadNum - 1] + nIndex[x]) + 0);
 			float4 color = ConvertUIntToFloat4(bufferValue);
 			result += color * (1 - result.a);
 		}
 		//fragment_blendout[nDTid.xy] = float4((float3)N / 8, 1);//
-		//fragment_blendout[nDTid.xy] = float4((float3)N / 8, 1); //ConvertUIntToFloat4(LOAD1_RBB(2 * (offsettable_buf[nThreadNum - 1] + nIndex[0]) + 0));
+		//fragment_blendout[nDTid.xy] = float4((float3)N / 8, 1); //ConvertUIntToFloat4(LOAD1_UBKB(2 * (offsettable_buf[nThreadNum - 1] + nIndex[0]) + 0));
 		fragment_blendout[nDTid.xy] = result;
-		//fragment_zdepth[nDTid.xy] = asfloat(LOAD1_RBB(2 * (offsettable_buf[nThreadNum - 1] + nIndex[x - 1]) + 1));
+		//fragment_zdepth[nDTid.xy] = asfloat(LOAD1_UBKB(2 * (offsettable_buf[nThreadNum - 1] + nIndex[x - 1]) + 1));
 		fragment_zdepth[nDTid.xy] = N; // for checking # of layers
 	}
 #endif

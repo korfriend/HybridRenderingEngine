@@ -34,9 +34,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 enum MFR_MODE
 {
-	SKBTZ = 0,
-	DXAB,
+	STATIC_KB_FM = 0,
+	DYNAMIC_FB,
 	MOMENT,
-	DKBTZ,
-	DKBT
+	DYNAMIC_KB,
 };

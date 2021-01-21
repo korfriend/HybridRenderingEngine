@@ -408,6 +408,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11102), "SR_OIT_ABUFFER_PREFIX_1_cs_5_0", "cs_5_0"), SR_OIT_ABUFFER_PREFIX_1_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11103), "SR_OIT_ABUFFER_OffsetTable_cs_5_0", "cs_5_0"), SR_OIT_ABUFFER_OffsetTable_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11104), "SR_OIT_ABUFFER_SORT2SENDER_cs_5_0", "cs_5_0"), SR_OIT_ABUFFER_SORT2SENDER_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11105), "SR_OIT_ABUFFER_SORT2SENDER_SFM_cs_5_0", "cs_5_0"), SR_OIT_ABUFFER_SORT2SENDER_SFM_cs_5_0);
 
 		{
 			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11030), "SR_MOMENT_GEN_ps_5_0", "ps_5_0"), SR_MOMENT_GEN_ps_5_0);
@@ -1658,6 +1659,11 @@ void grd_helper::SetCb_Camera(CB_CameraState& cb_cam, vmmat44f& matWS2PS, vmmat4
 
 	cb_cam.k_value = k_value;
 	cb_cam.cam_vz_thickness = vz_thickness;
+
+	double np, fp;
+	ccobj->GetCameraIntState(NULL, &np, &fp, NULL);
+	cb_cam.near_plane = (float)np;
+	cb_cam.far_plane = (float)fp;
 }
 
 void grd_helper::SetCb_Env(CB_EnvState& cb_env, VmCObject* ccobj, VmFnContainer* _fncontainer, vmfloat3 simple_light_intensities)
@@ -1784,7 +1790,7 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 	if (lobj != NULL)
 	{
 		lobj->GetDstObjValue(vobj_id, "_double_SamplePrecisionLevel", &dSamplePrecisionLevel);
-		lobj->GetDstObjValue(vobj_id, "_double_VZThickness", &dThicknessVirtualzSlab);
+		//lobj->GetDstObjValue(vobj_id, "_double_VZThickness", &dThicknessVirtualzSlab);
 		lobj->GetDstObjValue(vobj_id, "_double_SSAOIntensity", &ssao_intensity);
 	}
 
@@ -1944,7 +1950,7 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 
 	bool is_forced_depth_front_bias = rendering_obj_info.is_wireframe;
 	pobj->GetCustomParameter("_bool_IsForcedDepthBias", data_type::dtype<bool>(), &is_forced_depth_front_bias);
-	cb_polygon.depth_forward_bias = rendering_obj_info.is_wireframe ? rendering_obj_info.vzthickness : 0;
+	//cb_polygon.depth_forward_bias = rendering_obj_info.is_wireframe ? rendering_obj_info.vzthickness : 0;
 
 	bool force_to_pointsetrender = false;
 	lobj->GetDstObjValue(pobj_id, "_bool_ForceToPointsetRender", &force_to_pointsetrender);

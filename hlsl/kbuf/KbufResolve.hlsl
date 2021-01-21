@@ -97,8 +97,8 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 	uint addr_base = pixel_id * bytes_frags_per_pixel;
 #endif
 	
-	float v_thickness = GetHotspotThickness((int2)DTid);
-	v_thickness = max(v_thickness, g_cbCamState.cam_vz_thickness);
+	float vz_thickness = GetHotspotThickness((int2)DTid);
+	vz_thickness = max(vz_thickness, g_cbCamState.cam_vz_thickness);
 
 	Fragment fs[LOCAL_SIZE];
 	[loop]
@@ -143,7 +143,7 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 			}
 
 			// optional setting for manual z-thickness
-			f_k.zthick = max(f_k.zthick, v_thickness);
+			f_k.zthick = max(f_k.zthick, GetVZThickness(f_k.zdepth, vz_thickness));
 			fs[k] = f_k;
 		}
 	}

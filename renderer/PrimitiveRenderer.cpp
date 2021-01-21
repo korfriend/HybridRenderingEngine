@@ -697,13 +697,13 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	int num_moments = _fncontainer->GetParamValue("_int_NumQueueLayers", num_moments_old);
 	int num_safe_loopexit = _fncontainer->GetParamValue("_int_SpinLockSafeLoops", (int)1000000000);
 	bool is_final_renderer = _fncontainer->GetParamValue("_bool_IsFinalRenderer", true);
-	double v_discont_depth = _fncontainer->GetParamValue("_double_DiscontDepth", -1.0);
+	//double v_discont_depth = _fncontainer->GetParamValue("_double_DiscontDepth", -1.0);
 	float merging_beta = (float)_fncontainer->GetParamValue("_double_MergingBeta", 0.5);
 	bool blur_SSAO = _fncontainer->GetParamValue("_bool_BlurSSAO", true);
 
-	//bool is_a_buffer = _fncontainer->GetParamValue("_bool_IsAbuffer", false);
-	//bool is_moment_oit = is_a_buffer ? false : _fncontainer->GetParamValue("_bool_MomentOIT", false);
-	MFR_MODE mode_OIT = (MFR_MODE)_fncontainer->GetParamValue("_int_OitMode", (int)0);
+	bool apply_fragmerge = _fncontainer->GetParamValue("_bool_ApplyFragMerge", true);
+	MFR_MODE mode_OIT = (MFR_MODE)_fncontainer->GetParamValue("_int_OitMode", (int)1);
+	if (mode_OIT == MFR_MODE::STATIC_KB_FM) apply_fragmerge = true;
 
 	int buf_ex_scale = _fncontainer->GetParamValue("_int_BufExScale", (int)8); // 64 layers
 	bool use_blending_option_MomentOIT = _fncontainer->GetParamValue("_bool_UseBlendingOptionMomentOIT", false);
@@ -718,7 +718,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	vmdouble3 default_color_cmmobj = _fncontainer->GetParamValue("_double3_CmmGlobalColor", vmdouble3(-1, -1, -1));
 
 	bool is_ghost_mode = _fncontainer->GetParamValue("_bool_GhostEffect", false);
-	bool use_spinlock_pixsynch = _fncontainer->GetParamValue("_bool_UseSpinLock", true);
+	bool use_spinlock_pixsynch = _fncontainer->GetParamValue("_bool_UseSpinLock", false);
 
 	bool is_rgba = _fncontainer->GetParamValue("_bool_IsRGBA", false); // false means bgra
 
@@ -727,11 +727,14 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 	bool only_surface_test = _fncontainer->GetParamValue("_bool_OnlySurfaceTest", false);
 	bool test_consoleout = _fncontainer->GetParamValue("_bool_TestConsoleOut", false);
+	bool test_fps_profiling = _fncontainer->GetParamValue("_bool_TestFpsProfile", false);
 	auto test_out = [&test_consoleout](const string& _message)
 	{
 		if (test_consoleout)
 			cout << _message << endl;
 	};
+
+	float global_test_alpha = (float)_fncontainer->GetParamValue("_double_GlobalTestAlpha", -1.0);
 
 #pragma region // Shader Setting
 	// Shader Re-Compile Setting //
@@ -765,7 +768,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #define VS_NUM 5
 #define GS_NUM 3
 #define PS_NUM 54
-#define CS_NUM 14
+#define CS_NUM 15
 #define SET_VS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(VERTEX_SHADER, NAME), __S, true)
 #define SET_PS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(PIXEL_SHADER, NAME), __S, true)
 #define SET_CS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(COMPUTE_SHADER, NAME), __S, true)
@@ -946,6 +949,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			  ,"SR_OIT_ABUFFER_PREFIX_1_cs_5_0"
 			  ,"SR_OIT_ABUFFER_OffsetTable_cs_5_0"
 			  ,"SR_OIT_ABUFFER_SORT2SENDER_cs_5_0"
+			  ,"SR_OIT_ABUFFER_SORT2SENDER_SFM_cs_5_0"
 			  ,"KB_SSAO_cs_5_0"
 			  ,"KB_SSAO_BLUR_cs_5_0"
 			  ,"KBZ_TO_TEXTURE_cs_5_0"
@@ -1019,7 +1023,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	__ID3D11DeviceContext* dx11DeviceImmContext = dx11CommonParams->dx11DeviceImmContext;
 
 #pragma region // IOBJECT GPU
-	int buffer_ex = mode_OIT != MFR_MODE::SKBTZ? buf_ex_scale : 1, buffer_ex_old = 0; // optimal for K is 1
+	int buffer_ex = buf_ex_scale, buffer_ex_old = 0; // optimal for K is 1
+	if (mode_OIT == MFR_MODE::STATIC_KB_FM || (mode_OIT == MFR_MODE::DYNAMIC_FB && apply_fragmerge)) buffer_ex = 1;
+
 	vmint2 fb_size_cur, fb_size_old = vmint2(0, 0);
 	iobj->GetFrameBufferInfo(&fb_size_cur);
 	iobj->GetCustomParameter("_int2_PreviousScreenSize", data_type::dtype<vmint2>(), &fb_size_old);
@@ -1037,7 +1043,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	iobj->GetCustomParameter("_double_LatestSrTime", data_type::dtype<double>(), &lastest_render_time);
 
 	GpuRes gres_fb_rgba, gres_fb_depthcs, gres_fb_depthstencil, gres_fb_counter, gres_fb_spinlock;
-	GpuRes gres_fb_k_buffer;
+	GpuRes gres_fb_k_buffer, gres_fb_ubk_buffer;
 	GpuRes gres_fb_ao_texs[2], gres_fb_ao_blf_texs[2], gres_fb_mip_a_halftexs[2], gres_fb_mip_z_halftexs[2]; // max_layers
 	GpuRes gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex;
 	GpuRes gres_fb_ref_pidx;
@@ -1066,6 +1072,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	const int num_frags_perpixel = k_value * 4 * buffer_ex;
 	grd_helper::UpdateFrameBuffer(gres_fb_k_buffer, iobj, "BUFFER_RW_K_BUF", RTYPE_BUFFER,
 		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, num_frags_perpixel);
+	grd_helper::UpdateFrameBuffer(gres_fb_ubk_buffer, iobj, "BUFFER_RW_UBK_BUF", RTYPE_BUFFER,
+		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, k_value * 2 * 8);
 
 	// SSAO
 	{
@@ -1093,9 +1101,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_rgba, iobj, "SYSTEM_OUT_RGBA", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_SYSOUT);
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_depthcs, iobj, "SYSTEM_OUT_DEPTH", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R32_FLOAT, UPFB_SYSOUT);
 
-	if(mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::DKBT)
-		grd_helper::UpdateFrameBuffer(gres_fb_ref_pidx, iobj, "BUFFER_RW_REF_PIDX_BUF", RTYPE_BUFFER,
-			D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
+	if(mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB)
+		grd_helper::UpdateFrameBuffer(gres_fb_ref_pidx, iobj, "BUFFER_RW_REF_PIDX_BUF", RTYPE_BUFFER, D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
 
 	if (check_pixel_transmittance)
 	{
@@ -1194,60 +1201,50 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	uint num_grid_y = __BLOCKSIZE == 1 ? fb_size_cur.y : (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
 
 	uint num_pobjs = (uint)input_pobjs.size();
-	float len_diagonal_max = 0;
+	//float len_diagonal_max = 0;
+	//vmfloat3 pos_aabb_min_ws(FLT_MAX), pos_aabb_max_ws(-FLT_MAX);
+	//for (uint i = 0; i < num_pobjs; i++)
+	//{
+	//	VmVObjectPrimitive* pobj = (VmVObjectPrimitive*)input_pobjs[i];
+	//	if (pobj->IsDefined() == false)
+	//		continue;
+	//	bool is_visible = true;
+	//	pobj->GetCustomParameter("_bool_visibility", data_type::dtype<bool>(), &is_visible);
+	//	if (!is_visible)
+	//		continue;
+	//
+	//	PrimitiveData* prim_data = pobj->GetPrimitiveData();
+	//	vmmat44f matOS2WS = pobj->GetMatrixOS2WSf();
+	//
+	//	vmfloat3 min_aabb, max_aabb;
+	//	fTransformPoint(&min_aabb, &(vmfloat3)prim_data->aabb_os.pos_min, &matOS2WS);
+	//	fTransformPoint(&max_aabb, &(vmfloat3)prim_data->aabb_os.pos_max, &matOS2WS);
+	//	pos_aabb_min_ws.x = min(pos_aabb_min_ws.x, min_aabb.x);
+	//	pos_aabb_min_ws.y = min(pos_aabb_min_ws.y, min_aabb.y);
+	//	pos_aabb_min_ws.z = min(pos_aabb_min_ws.z, min_aabb.z);
+	//	pos_aabb_max_ws.x = max(pos_aabb_max_ws.x, max_aabb.x);
+	//	pos_aabb_max_ws.y = max(pos_aabb_max_ws.y, max_aabb.y);
+	//	pos_aabb_max_ws.z = max(pos_aabb_max_ws.z, max_aabb.z);
+	//}
+	//len_diagonal_max = fLengthVector(&(pos_aabb_min_ws - pos_aabb_max_ws));
+	//if(test_consoleout)
+	//	cout << "len_diagonal_max : " << len_diagonal_max << endl;
 
-	vmfloat3 pos_aabb_min_ws(FLT_MAX), pos_aabb_max_ws(-FLT_MAX);
-	for (uint i = 0; i < num_pobjs; i++)
-	{
-		VmVObjectPrimitive* pobj = (VmVObjectPrimitive*)input_pobjs[i];
-		if (pobj->IsDefined() == false)
-			continue;
-		bool is_visible = true;
-		pobj->GetCustomParameter("_bool_visibility", data_type::dtype<bool>(), &is_visible);
-		if (!is_visible)
-			continue;
+	//if (v_discont_depth < 0)
+	//	v_discont_depth = len_diagonal_max * 0.1;
+	//iobj->RegisterCustomParameter("_double_ploygonobjs_diagonallenth", (double)len_diagonal_max);
 
-		PrimitiveData* prim_data = pobj->GetPrimitiveData();
-		vmmat44f matOS2WS = pobj->GetMatrixOS2WSf();
-
-		vmfloat3 min_aabb, max_aabb;
-		fTransformPoint(&min_aabb, &(vmfloat3)prim_data->aabb_os.pos_min, &matOS2WS);
-		fTransformPoint(&max_aabb, &(vmfloat3)prim_data->aabb_os.pos_max, &matOS2WS);
-		pos_aabb_min_ws.x = min(pos_aabb_min_ws.x, min_aabb.x);
-		pos_aabb_min_ws.y = min(pos_aabb_min_ws.y, min_aabb.y);
-		pos_aabb_min_ws.z = min(pos_aabb_min_ws.z, min_aabb.z);
-		pos_aabb_max_ws.x = max(pos_aabb_max_ws.x, max_aabb.x);
-		pos_aabb_max_ws.y = max(pos_aabb_max_ws.y, max_aabb.y);
-		pos_aabb_max_ws.z = max(pos_aabb_max_ws.z, max_aabb.z);
-	}
-	len_diagonal_max = fLengthVector(&(pos_aabb_min_ws - pos_aabb_max_ws));
-	if(test_consoleout)
-		cout << "len_diagonal_max : " << len_diagonal_max << endl;
-
-	if (v_discont_depth < 0)
-		v_discont_depth = len_diagonal_max * 0.1;
-	iobj->RegisterCustomParameter("_double_ploygonobjs_diagonallenth", (double)len_diagonal_max);
-
-	double v_copthickness = _fncontainer->GetParamValue("_double_CopVZThickness", 0.002);
-	double v_thickness = _fncontainer->GetParamValue("_double_VZThickness", 0.003);
-	if (v_copthickness <= 0) v_copthickness = 0.002;
-	if (v_thickness <= 0) v_thickness = v_copthickness * 1.5;
-
-	double v_copthickness_abs = _fncontainer->GetParamValue("_double_AbsCopVZThickness", 0.0);
-	double v_thickness_abs = _fncontainer->GetParamValue("_double_AbsVZThickness", 0.0);
+	float v_thickness = (float)_fncontainer->GetParamValue("_double_VZThickness", 0.0);
+	float gi_v_thickness = (float)_fncontainer->GetParamValue("_double_GIVZThickness", (double)v_thickness);
 	//cout << v_copthickness_abs << endl;
-
-	float fv_copthickness = v_copthickness_abs <= 0 ? (float)(len_diagonal_max * v_copthickness) : (float)v_copthickness_abs;
-	float fv_thickness = v_thickness_abs <= 0 ? v_copthickness_abs <= 0 ? (float)(len_diagonal_max * v_thickness) : fv_copthickness * v_thickness / v_copthickness : (float)v_thickness_abs;
+	//float fv_copthickness = v_copthickness_abs <= 0 ? (float)(len_diagonal_max * v_copthickness) : (float)v_copthickness_abs;
+	//float fv_thickness = v_thickness_abs <= 0 ? v_copthickness_abs <= 0 ? (float)(len_diagonal_max * v_thickness) : fv_copthickness * v_thickness / v_copthickness : (float)v_thickness_abs;
 
 	VmCObject* cam_obj = iobj->GetCameraObject();
 	vmmat44f matWS2SS, matWS2PS, matSS2WS;
 	CB_CameraState cbCamState;
-	grd_helper::SetCb_Camera(cbCamState, matWS2PS, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, fv_thickness);
-	if(mode_OIT == MFR_MODE::SKBTZ || mode_OIT == MFR_MODE::DKBTZ)
-		cbCamState.iSrCamDummy__0 = *(uint*)&merging_beta;
-	if (mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::DKBT)
-		cbCamState.cam_flag |= (0x1 << 2);
+	grd_helper::SetCb_Camera(cbCamState, matWS2PS, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, gi_v_thickness);
+	cbCamState.iSrCamDummy__0 = *(uint*)&merging_beta;
 	if (!is_final_renderer || check_pixel_transmittance) // which means the k-buffer can be used for the following renderer
 		cbCamState.cam_flag |= (0x1 << 3);
 	D3D11_MAPPED_SUBRESOURCE mappedResCamState;
@@ -1461,7 +1458,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 		RenderObjInfo render_obj_info;
 		render_obj_info.pobj = pobj;
-		render_obj_info.vzthickness = fv_copthickness; //(float)pobj_vzthickness;
+		render_obj_info.vzthickness = v_thickness;
 
 		render_obj_info.num_safe_loopexit = num_safe_loopexit;
 		lobj->GetDstObjValue(pobj_id, "_int_SpinLockSafeLoops", &render_obj_info.num_safe_loopexit);
@@ -1494,6 +1491,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		if (render_obj_info.is_annotation_obj) render_obj_info.is_annotation_obj = prim_data->texture_res_info.size() > 0;
 		render_obj_info.is_wireframe = false;
 		render_obj_info.fColor = fColor;
+		if (global_test_alpha > 0) render_obj_info.fColor.a = global_test_alpha;
 		render_obj_info.use_vertex_color = true;
 		lobj->GetDstObjValue(pobj_id, "_bool_UseVertexColor", &render_obj_info.use_vertex_color);
 		if (prim_data->GetVerticeDefinition("TEXCOORD0") == NULL)
@@ -1572,7 +1570,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	//dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_deep_k_buffer.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 	//if(is_rov_mode)
 	//	dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_deep_k_buffer_rov.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
-	if(mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::DKBT)
+	if(mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB)
 		dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV], clr_unit4); 
 
 	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
@@ -1629,7 +1627,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	// For Each Primitive //
 	int count_call_render = 0;
 	int RENDERER_LOOP = 0;
-	bool is_frag_counter_buffer = mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::DKBT;
+	bool is_frag_counter_buffer = mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB;
 	bool is_MOMENT_gen_buffer = mode_OIT == MFR_MODE::MOMENT;
 
 	if (gpu_profile)
@@ -1802,7 +1800,7 @@ BEGIN_RENDERER_LOOP:
 		grd_helper::SetCb_PolygonObj(cbPolygonObj, pobj, lobj, matOS2WS, matWS2SS, matWS2PS, render_obj_info, default_point_thickness, default_line_thickness, is_surfel? default_surfel_size : -1.0);
 		if (RENDERER_LOOP == 1 && render_obj_info.show_outline)
 		{
-			cbPolygonObj.depth_forward_bias = (float)v_discont_depth;
+			//cbPolygonObj.depth_forward_bias = (float)v_discont_depth;
 			cbPolygonObj.pobj_flag |= 0x1;
 		}
 
@@ -1857,31 +1855,43 @@ BEGIN_RENDERER_LOOP:
 			if (render_obj_info.is_annotation_obj && dx11InputLayer_Target == dx11LI_PNT)
 				switch (mode_OIT)
 				{
-				case MFR_MODE::DXAB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0); break;
+				case MFR_MODE::DYNAMIC_FB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0); break;
 				case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_MOMENT_OIT_TEXTMAPPING_ps_5_0) : GETPS(SR_MOMENT_OIT_TEXTMAPPING_ROV_ps_5_0); break;
-				case MFR_MODE::DKBTZ: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ROV_ps_5_0q); break;
-				case MFR_MODE::DKBT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ROV_ps_5_0); break;
-				case MFR_MODE::SKBTZ:
+				case MFR_MODE::DYNAMIC_KB: 
+					if(apply_fragmerge)
+						dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ROV_ps_5_0q);
+					else
+						dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ROV_ps_5_0); 
+					break;
+				case MFR_MODE::STATIC_KB_FM:
 				default: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ROV_ps_5_0); break;
 				}
 			else if(render_obj_info.has_texture_img && dx11InputLayer_Target == dx11LI_PNT)
 				switch (mode_OIT)
 				{
-				case MFR_MODE::DXAB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0); break;
+				case MFR_MODE::DYNAMIC_FB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0); break;
 				case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_MOMENT_OIT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_MOMENT_OIT_TEXTUREIMGMAP_ROV_ps_5_0); break;
-				case MFR_MODE::DKBTZ: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBTZ_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_TEXTUREIMGMAP_ROV_ps_5_0); break;
-				case MFR_MODE::DKBT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ROV_ps_5_0); break;
-				case MFR_MODE::SKBTZ:
+				case MFR_MODE::DYNAMIC_KB:
+					if (apply_fragmerge)
+						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_TEXTUREIMGMAP_ROV_ps_5_0);
+					else
+						dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ROV_ps_5_0); 
+					break;
+				case MFR_MODE::STATIC_KB_FM:
 				default: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ROV_ps_5_0); break;
 				}
 			else
 				switch (mode_OIT)
 				{
-				case MFR_MODE::DXAB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
+				case MFR_MODE::DYNAMIC_FB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
 				case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0) : GETPS(SR_MOMENT_OIT_PHONGBLINN_ROV_ps_5_0); break;
-				case MFR_MODE::DKBTZ: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ROV_ps_5_0); break;
-				case MFR_MODE::DKBT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ROV_ps_5_0); break;
-				case MFR_MODE::SKBTZ:
+				case MFR_MODE::DYNAMIC_KB:
+					if (apply_fragmerge)
+						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ROV_ps_5_0); 
+					else
+						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ROV_ps_5_0);
+					break;
+				case MFR_MODE::STATIC_KB_FM:
 				default: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ROV_ps_5_0); break;
 				}
 		}
@@ -1897,11 +1907,15 @@ BEGIN_RENDERER_LOOP:
 
 				switch (mode_OIT)
 				{
-				case MFR_MODE::DXAB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_MULTITEXTMAPPING_ps_5_0); break;
+				case MFR_MODE::DYNAMIC_FB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_MULTITEXTMAPPING_ps_5_0); break;
 				case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_MOMENT_OIT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_MOMENT_OIT_MULTITEXTMAPPING_ROV_ps_5_0); break;
-				case MFR_MODE::DKBTZ: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBTZ_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_MULTITEXTMAPPING_ROV_ps_5_0); break;
-				case MFR_MODE::DKBT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ROV_ps_5_0); break;
-				case MFR_MODE::SKBTZ:
+				case MFR_MODE::DYNAMIC_KB:
+					if (apply_fragmerge)
+						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_MULTITEXTMAPPING_ROV_ps_5_0);
+					else
+						dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ROV_ps_5_0); 
+					break;
+				case MFR_MODE::STATIC_KB_FM:
 				default: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ROV_ps_5_0); break;
 				}
 			}
@@ -1915,31 +1929,43 @@ BEGIN_RENDERER_LOOP:
 				if (render_obj_info.is_annotation_obj)
 					switch (mode_OIT)
 					{
-					case MFR_MODE::DXAB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0); break;
+					case MFR_MODE::DYNAMIC_FB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0); break;
 					case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_TEXTMAPPING_ps_5_0) : GETPS(SR_MOMENT_OIT_TEXTMAPPING_ROV_ps_5_0); break;
-					case MFR_MODE::DKBTZ: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ROV_ps_5_0); break;
-					case MFR_MODE::DKBT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ROV_ps_5_0); break;
-					case MFR_MODE::SKBTZ:
+					case MFR_MODE::DYNAMIC_KB:
+						if (apply_fragmerge)
+							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ROV_ps_5_0); 
+						else 
+							dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ROV_ps_5_0); 
+						break;
+					case MFR_MODE::STATIC_KB_FM:
 					default: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ROV_ps_5_0); break;
 					}
 				else if ((cbPolygonObj.pobj_flag & (0x1 << 19)) && prim_data->ptype == PrimitiveTypeLINE)
 					switch (mode_OIT)
 					{
-					case MFR_MODE::DXAB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_DASHEDLINE_ps_5_0); break;
+					case MFR_MODE::DYNAMIC_FB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_DASHEDLINE_ps_5_0); break;
 					case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_MOMENT_OIT_DASHEDLINE_ps_5_0) : GETPS(SR_MOMENT_OIT_DASHEDLINE_ROV_ps_5_0); break;
-					case MFR_MODE::DKBTZ: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBTZ_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_DASHEDLINE_ROV_ps_5_0); break;
-					case MFR_MODE::DKBT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBT_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_DASHEDLINE_ROV_ps_5_0); break;
-					case MFR_MODE::SKBTZ:
+					case MFR_MODE::DYNAMIC_KB:
+						if (apply_fragmerge)
+							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_DASHEDLINE_ROV_ps_5_0);
+						else
+							dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBT_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_DASHEDLINE_ROV_ps_5_0); 
+						break;
+					case MFR_MODE::STATIC_KB_FM:
 					default: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_SKBTZ_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_DASHEDLINE_ROV_ps_5_0); break;
 					}
 				else
 					switch (mode_OIT)
 					{
-					case MFR_MODE::DXAB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
+					case MFR_MODE::DYNAMIC_FB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
 					case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0) : GETPS(SR_MOMENT_OIT_PHONGBLINN_ROV_ps_5_0); break;
-					case MFR_MODE::DKBTZ: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ROV_ps_5_0); break;
-					case MFR_MODE::DKBT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ROV_ps_5_0); break;
-					case MFR_MODE::SKBTZ:
+					case MFR_MODE::DYNAMIC_KB:
+						if (apply_fragmerge)
+							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ROV_ps_5_0);
+						else
+							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ROV_ps_5_0); 
+						break;
+					case MFR_MODE::STATIC_KB_FM:
 					default: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ROV_ps_5_0); break;
 					}
 			}
@@ -1951,11 +1977,15 @@ BEGIN_RENDERER_LOOP:
 			dx11VS_Target = dx11VShader_P;
 			switch (mode_OIT)
 			{
-			case MFR_MODE::DXAB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
+			case MFR_MODE::DYNAMIC_FB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
 			case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0) : GETPS(SR_MOMENT_OIT_PHONGBLINN_ROV_ps_5_0); break;
-			case MFR_MODE::DKBTZ: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ROV_ps_5_0); break;
-			case MFR_MODE::DKBT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ROV_ps_5_0); break;
-			case MFR_MODE::SKBTZ:
+			case MFR_MODE::DYNAMIC_KB:
+				if (apply_fragmerge)
+					dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ROV_ps_5_0); 
+				else
+					dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ROV_ps_5_0); 
+				break;
+			case MFR_MODE::STATIC_KB_FM:
 			default: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ROV_ps_5_0); break;
 			}
 		}
@@ -2097,7 +2127,7 @@ BEGIN_RENDERER_LOOP:
 		ID3D11UnorderedAccessView* dx11UAVs_1st_pass[NUM_UAVs_1ST] = {
 				(ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV]
 				, use_spinlock_pixsynch ? (ID3D11UnorderedAccessView*)gres_fb_spinlock.alloc_res_ptrs[DTYPE_UAV] : NULL
-				, (ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]
+				, mode_OIT == MFR_MODE::DYNAMIC_FB? (ID3D11UnorderedAccessView*)gres_fb_ubk_buffer.alloc_res_ptrs[DTYPE_UAV] : (ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]
 				, NULL 
 		};
 
@@ -2146,7 +2176,7 @@ BEGIN_RENDERER_LOOP:
 		}
 		else //if (mode_OIT != MFR_MODE::MOMENT)
 		{
-			if ((mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::DKBT) && !is_frag_counter_buffer) // filling
+			if ((mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB) && !is_frag_counter_buffer) // storing fragments
 			{
 				// weird //mode_OIT == MFR_MODE::DXAB ? (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV] : NULL
 				//dx11UAVs_1st_pass[3] = (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV];
@@ -2192,7 +2222,7 @@ BEGIN_RENDERER_LOOP:
 		//dx11DeviceImmContext->CSSetShaderResources(50, 1, dx11SRVs_NULL);
 
 		if (RENDERER_LOOP == 1 && 
-			(mode_OIT == MFR_MODE::SKBTZ || mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::DKBT))
+			(mode_OIT == MFR_MODE::STATIC_KB_FM || mode_OIT == MFR_MODE::DYNAMIC_KB))
 		{
 			// RT to K-Buffer
 			ID3D11ShaderResourceView* dx11SRVs_1st_pass[2] = {
@@ -2203,12 +2233,10 @@ BEGIN_RENDERER_LOOP:
 			dx11DeviceImmContext->CSSetShaderResources(10, 2, dx11SRVs_1st_pass);
 
 			UINT UAVInitialCounts = 0;
-			if(mode_OIT == MFR_MODE::SKBTZ)
+			if(mode_OIT == MFR_MODE::STATIC_KB_FM)
 				dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_SKBTZ_cs_5_0), NULL, 0);
-			else if (mode_OIT == MFR_MODE::DKBTZ)
-				dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_DKBTZ_cs_5_0), NULL, 0);
-			else if (mode_OIT == MFR_MODE::DKBT)
-				dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_DKBT_cs_5_0), NULL, 0);
+			else if (mode_OIT == MFR_MODE::DYNAMIC_KB)
+				dx11DeviceImmContext->CSSetShader(apply_fragmerge? GETCS(SR_SINGLE_LAYER_TO_DKBTZ_cs_5_0) : GETCS(SR_SINGLE_LAYER_TO_DKBT_cs_5_0), NULL, 0);
 			else assert(0);	
 
 			//dx11DeviceImmContext->Flush();
@@ -2241,9 +2269,7 @@ BEGIN_RENDERER_LOOP:
 		}
 	}
 
-#define NUM_UAVs_2ND 4
-	if (mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::MOMENT)
-		if (!is_frag_counter_buffer && !is_MOMENT_gen_buffer) goto RENDERER_LOOP_EXIT;
+#define NUM_UAVs_2ND 5
 
 	if (is_frag_counter_buffer)
 	{
@@ -2251,7 +2277,7 @@ BEGIN_RENDERER_LOOP:
 		
 		dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, 5, dx11UAVs_NULL, 0);
 
-		if (mode_OIT == MFR_MODE::DXAB)
+		if (mode_OIT == MFR_MODE::DYNAMIC_FB)
 		{
 			if (gpu_profile)
 			{
@@ -2265,6 +2291,7 @@ BEGIN_RENDERER_LOOP:
 					, (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
 					, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
 					, (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV]
+					, NULL // (ID3D11UnorderedAccessView*)gres_fb_ubk_buffer.alloc_res_ptrs[DTYPE_UAV]
 			};
 			UINT UAVInitialCounts = 0;
 			dx11DeviceImmContext->CSSetShader(GETCS(SR_OIT_ABUFFER_OffsetTable_cs_5_0), NULL, 0);
@@ -2322,7 +2349,7 @@ BEGIN_RENDERER_LOOP:
 				gpu_profilecount++;
 			}
 		}
-		else if (mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::DKBT)
+		else if (mode_OIT == MFR_MODE::DYNAMIC_KB)
 		{
 			if (gpu_profile)
 			{
@@ -2385,9 +2412,10 @@ BEGIN_RENDERER_LOOP:
 			const double size_k_buf_mb = (double)(16 * k_value * buffer_ex) * ((double)fb_size_cur.x * (double)fb_size_cur.y / (1024.0 * 1024.0));
 
 			double min_diff = 1.0;
+			uint miss_frags = 0;
 			for (; dyn_k_value >= 8; dyn_k_value--)
 			{
-				uint miss_frags = 0;
+				miss_frags = 0;
 				for (uint i = bins_frag_histo - 1; i >= dyn_k_value; i--)
 				{
 					miss_frags += (i + 1 - dyn_k_value) * histogram_frags[i];
@@ -2411,6 +2439,7 @@ BEGIN_RENDERER_LOOP:
 			if (gpu_profile)
 			{
 				cout << "----> total frag    : " << totol_num_frags << endl;
+				cout << "----> miss frag     : " << miss_frags << endl;
 				cout << "----> max layers    : " << max_layers << endl;
 				cout << "----> Processing Rh : " << Rh - min_diff << " (" << Rh << ")" << endl;
 				cout << "----> dynamic k     : " << k_value << endl;
@@ -2418,6 +2447,24 @@ BEGIN_RENDERER_LOOP:
 				dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
 				profile_map["end histogram analysis"] = gpu_profilecount;
 				gpu_profilecount++;
+			}
+
+			if (test_fps_profiling)
+			{
+				//...totol_num_frags
+				// k_value
+				ofstream file_totalfrags;
+				file_totalfrags.open(".\\data\\frames_profile_totalfrags.txt", std::ios_base::app);
+				file_totalfrags << totol_num_frags << endl;
+				file_totalfrags.close();
+				ofstream file_missfrags;
+				file_missfrags.open(".\\data\\frames_profile_missfrags.txt", std::ios_base::app);
+				file_missfrags << miss_frags << endl;
+				file_missfrags.close();
+				ofstream file_k;
+				file_k.open(".\\data\\frames_profile_k.txt", std::ios_base::app);
+				file_k << k_value << endl;
+				file_k.close();
 			}
 			
 			const int test_K = _fncontainer->GetParamValue("_int_TestKvalue", -1);
@@ -2460,6 +2507,13 @@ BEGIN_RENDERER_LOOP:
 	}
 	else if (RENDERER_LOOP == 2 && foremost_surfaces_routine_objs.size() > 0)
 	{
+		// note that we use mode_OIT == MFR_MODE::MOMENT and MFR_MODE::DYNAMIC_FB WITHOUT FM just for the experimental comparison
+		if ((mode_OIT == MFR_MODE::DYNAMIC_FB && !apply_fragmerge) || mode_OIT == MFR_MODE::MOMENT)
+		{
+			VMERRORMESSAGE("DOES NOT SUPPORT!! for OPAQUE SURFACE FOREMOST RENDERER");
+			goto RENDERER_LOOP_EXIT;
+		}
+
 		ID3D11UnorderedAccessView* dx11UAVs_1st_pass[NUM_UAVs_1ST] = {
 				(ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV]
 				, NULL//(ID3D11UnorderedAccessView*)gres_fb_spinlock.alloc_res_ptrs[DTYPE_UAV]
@@ -2477,9 +2531,9 @@ BEGIN_RENDERER_LOOP:
 		UINT UAVInitialCounts = 0;
 		switch (mode_OIT)
 		{
-		case MFR_MODE::SKBTZ: dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_SKBTZ_cs_5_0), NULL, 0); break;
-		case MFR_MODE::DKBTZ: dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_DKBTZ_cs_5_0), NULL, 0); break;
-		case MFR_MODE::DKBT: dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_DKBT_cs_5_0), NULL, 0); break;
+		case MFR_MODE::DYNAMIC_FB: // implying apply_fragmerge == true
+		case MFR_MODE::STATIC_KB_FM: dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_SKBTZ_cs_5_0), NULL, 0); break;
+		case MFR_MODE::DYNAMIC_KB: dx11DeviceImmContext->CSSetShader(apply_fragmerge? GETCS(SR_SINGLE_LAYER_TO_DKBTZ_cs_5_0) : GETCS(SR_SINGLE_LAYER_TO_DKBT_cs_5_0), NULL, 0); break;
 		default:
 			cout << mode_OIT << endl;
 			assert(0);
@@ -2527,32 +2581,33 @@ RENDERER_LOOP_EXIT:
 			, (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
 			, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
 			, NULL//mode_OIT == MFR_MODE::DXAB ? (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV] : NULL
+			, mode_OIT == MFR_MODE::DYNAMIC_FB ? (ID3D11UnorderedAccessView*)gres_fb_ubk_buffer.alloc_res_ptrs[DTYPE_UAV] : NULL
 	};
 	if (mode_OIT != MFR_MODE::MOMENT)
 	{
 		// resolve pass
-		if (mode_OIT == MFR_MODE::DXAB)
+		switch (mode_OIT)
 		{
-			// Sort and render the fragments.  Use the prefix sum to determine where the 
+		case STATIC_KB_FM:
+			dx11DeviceImmContext->CSSetShader(GETCS(OIT_SKBZ_RESOLVE_cs_5_0), NULL, 0);
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], 0); // trimming may occur 
+			break;
+		case DYNAMIC_FB:
+			// sort and render the fragments.  Use the prefix sum to determine where the 
 			// fragments for each pixel reside.
-			//SortAndRenderFragments(pD3DContext, pDevice, pRTV);
-			dx11DeviceImmContext->CSSetShader(GETCS(SR_OIT_ABUFFER_SORT2SENDER_cs_5_0), NULL, 0);
+			dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(SR_OIT_ABUFFER_SORT2SENDER_SFM_cs_5_0) : GETCS(SR_OIT_ABUFFER_SORT2SENDER_cs_5_0), NULL, 0);
 			dx11DeviceImmContext->CSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_SRV]);
 			dx11DeviceImmContext->CSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]);
-		}
-		else
-		{
-			if (mode_OIT == MFR_MODE::SKBTZ)
-				dx11DeviceImmContext->CSSetShader(GETCS(OIT_SKBZ_RESOLVE_cs_5_0), NULL, 0);
-			else 
-			{
-				dx11DeviceImmContext->CSSetShader(mode_OIT == MFR_MODE::DKBTZ ? GETCS(OIT_DKBZ_RESOLVE_cs_5_0) : GETCS(OIT_DKB_RESOLVE_cs_5_0), NULL, 0);
-				dx11DeviceImmContext->CSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]);
-			}
-			//dx11DeviceImmContext->CSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_SRV]);
+			break;
+		case DYNAMIC_KB:
+			dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(OIT_DKBZ_RESOLVE_cs_5_0) : GETCS(OIT_DKB_RESOLVE_cs_5_0), NULL, 0);
+			dx11DeviceImmContext->CSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]);
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], 0); // trimming may occur 
+			break;
+		default:
+			assert(0);
 		}
-
+		
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(1, NUM_UAVs_2ND, dx11UAVs_2nd_pass, (UINT*)(&dx11UAVs_2nd_pass));
 
 		//dx11DeviceImmContext->Flush();
@@ -2799,7 +2854,7 @@ RENDERER_LOOP_EXIT:
 				else
 				{
 					uint pixel_offset = (pixel_pos.x + pixel_pos.y * fb_size_cur.x) * 8;
-					if (mode_OIT != MFR_MODE::SKBTZ)
+					if (mode_OIT != MFR_MODE::STATIC_KB_FM)
 					{
 						dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_fb_sys_ref_pidx.alloc_res_ptrs[DTYPE_RES],
 							(ID3D11Buffer*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_RES]);
@@ -2814,7 +2869,7 @@ RENDERER_LOOP_EXIT:
 					hr |= dx11DeviceImmContext->Map((ID3D11Buffer*)gres_fb_sys_deep_k.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysDeepK);
 					hr |= dx11DeviceImmContext->Map((ID3D11Texture2D*)gres_fb_sys_counter.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysCounter);
 
-					uint* deep_buffer = (uint*)mappedResSysDeepK.pData;
+					uint* deep_kbuffer = (uint*)mappedResSysDeepK.pData;
 					uint num_layers = ((uint*)mappedResSysCounter.pData)[pixel_pos.x + pixel_pos.y * buf_row_pitch];
 					cout << "num_layers : " << num_layers << " at (" << pixel_pos.x << ", " << pixel_pos.y << ")" << endl;
 
@@ -2825,15 +2880,15 @@ RENDERER_LOOP_EXIT:
 						float thick;
 					};
 
-					uint element_size = (mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::SKBTZ) ? 4 : 2;
+					uint element_size = ((mode_OIT == MFR_MODE::DYNAMIC_KB && apply_fragmerge) || mode_OIT == MFR_MODE::STATIC_KB_FM) ? 4 : 2;
 					Fragment* fs = new Fragment[num_layers];
 
 					for (int i = 0; i < num_layers; i++)
 					{
-						fs[i].z = *(float*)&deep_buffer[element_size * (pixel_offset + i) + 1];
-						fs[i].alpha = (deep_buffer[element_size * (pixel_offset + i) + 0] >> 24) / 255.f;
-						if (mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::SKBTZ)
-							fs[i].thick = *(float*)&deep_buffer[element_size * (pixel_offset + i) + 2];
+						fs[i].z = *(float*)&deep_kbuffer[element_size * (pixel_offset + i) + 1];
+						fs[i].alpha = (deep_kbuffer[element_size * (pixel_offset + i) + 0] >> 24) / 255.f;
+						if (mode_OIT == MFR_MODE::DYNAMIC_KB || mode_OIT == MFR_MODE::STATIC_KB_FM)
+							fs[i].thick = *(float*)&deep_kbuffer[element_size * (pixel_offset + i) + 2];
 					}
 					dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_fb_sys_deep_k.alloc_res_ptrs[DTYPE_RES], 0);
 					dx11DeviceImmContext->Unmap((ID3D11Texture2D*)gres_fb_sys_counter.alloc_res_ptrs[DTYPE_RES], 0);
@@ -2842,7 +2897,7 @@ RENDERER_LOOP_EXIT:
 					/**/
 
 					string refdepthrangePath = ".\\data\\absorbance_depth_ref_range.txt";
-					if (mode_OIT == MFR_MODE::DXAB)
+					if (mode_OIT == MFR_MODE::DYNAMIC_FB)
 					{
 						ofstream refwriteFile_depth_range(refdepthrangePath.data());
 						if (refwriteFile_depth_range.is_open())
@@ -2878,7 +2933,7 @@ RENDERER_LOOP_EXIT:
 
 						int hit_count = 0;
 						float absorb = 0;
-						if (mode_OIT == MFR_MODE::DXAB || mode_OIT == MFR_MODE::DKBT)
+						if (mode_OIT == MFR_MODE::DYNAMIC_FB && !apply_fragmerge)
 						{
 							for (int i = 0; i < num_intervals; i++)
 							{
@@ -2897,7 +2952,7 @@ RENDERER_LOOP_EXIT:
 								writeFile_depth << to_string(d_cur) + "\n";
 							}
 						}
-						else if (mode_OIT == MFR_MODE::DKBTZ || mode_OIT == MFR_MODE::SKBTZ)
+						else if ((mode_OIT == MFR_MODE::DYNAMIC_KB && apply_fragmerge) || mode_OIT == MFR_MODE::STATIC_KB_FM)
 						{
 							for (int i = 0; i < num_intervals; i++)
 							{
@@ -2946,11 +3001,11 @@ RENDERER_LOOP_EXIT:
 
 	if(gpu_profile)
 	{
-		if (mode_OIT == MFR_MODE::SKBTZ || mode_OIT == MFR_MODE::DKBTZ)
-		{
-			cout << "z_thickness used in store pass   : " << fv_copthickness << endl;
-			cout << "z_thickness used in resolve pass : " << fv_thickness << endl; // len_diagonal_max * (float)v_thickness 
-		}
+		//if (mode_OIT == MFR_MODE::SKBTZ || mode_OIT == MFR_MODE::DKBTZ)
+		//{
+		//	cout << "z_thickness used in store pass   : " << fv_copthickness << endl;
+		//	cout << "z_thickness used in resolve pass : " << fv_thickness << endl; // len_diagonal_max * (float)v_thickness 
+		//}
 
 		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
 		profile_map["end"] = gpu_profilecount;
@@ -3024,6 +3079,17 @@ RENDERER_LOOP_EXIT:
 			DisplayDuration(tsEndGeoPass, tsEndResolvePass, "#GPU# Resolve Pass Time");
 			//DisplayDuration(tsBeginCopyBack, tsEndCopyRes, "#GPU# CopyResource Time");
 			//DisplayDuration(tsEndCopyRes, tsEndCopyBack, "#GPU# CopyBack Time");
+
+
+			if (test_fps_profiling)
+			{
+				//...totol_num_frags
+				// k_value
+				ofstream file_rendertime;
+				file_rendertime.open(".\\data\\frames_profile_rendertime.txt", std::ios_base::app);
+				file_rendertime << float(tsEndRender - tsBeginFrame) / float(tsDisjoint.Frequency) * 1000.0f << endl;
+				file_rendertime.close();
+			}
 		}
 	}
 

@@ -252,13 +252,13 @@ void load_preset(const std::string& preset_file, const std::list<int>& obj_ids)
 			cam_loaded++;
 			iss >> SET_CAM(cam_params.view);
 		}
-		else if (param_name == "z_thickenss_sp")
+		else if (param_name == "z_thickenss_gi")
 		{
 			double v;
 			iss >> v;
-			vzm::SetRenderTestParam("_double_CopVZThickness", v, sizeof(double), -1, -1);
+			vzm::SetRenderTestParam("_double_GIVZThickness", v, sizeof(double), -1, -1);
 		}
-		else if (param_name == "z_thickenss_rp")
+		else if (param_name == "z_thickenss")
 		{
 			double v;
 			iss >> v;
@@ -327,13 +327,11 @@ void store_preset(const std::string& preset_file, const std::list<int>& obj_ids)
 	fileout << "cam_up " << __PR(cam_params.up, " ") << endl;
 	fileout << "cam_view " << __PR(cam_params.view, " ") << endl;
 
-	double z_thickenss_sp, z_thickenss_rp, beta, Rh;
+	double z_thickenss, beta, Rh;
 	glm::dvec4 shading_param;
 
-	if (vzm::GetRenderTestParam("_double_CopVZThickness", &z_thickenss_sp, sizeof(double), 0, 0))
-		fileout << "z_thickenss_sp " << z_thickenss_sp << endl;
-	if (vzm::GetRenderTestParam("_double_VZThickness", &z_thickenss_rp, sizeof(double), 0, 0))
-		fileout << "z_thickenss_rp " << z_thickenss_rp << endl;
+	if (vzm::GetRenderTestParam("_double_VZThickness", &z_thickenss, sizeof(double), 0, 0))
+		fileout << "z_thickenss " << z_thickenss << endl;
 	if (vzm::GetRenderTestParam("_double_MergingBeta", &beta, sizeof(double), 0, 0))
 		fileout << "beta " << beta << endl;
 	if (vzm::GetRenderTestParam("_double_RobustRatio", &Rh, sizeof(double), 0, 0))
@@ -354,14 +352,17 @@ void store_preset(const std::string& preset_file, const std::list<int>& obj_ids)
 double high_Rh = 0.8, low_Rh = 0.2, diff_amp = 10.0;
 void compute_difference(const std::string& out_file_prefix)
 {
-	auto make_cvmat = [](int oit_mode, double rh = 0.5) -> cv::Mat
+	auto make_cvmat = [](int oit_mode, bool apply_fm, double rh = 0.5) -> cv::Mat
 	{
 		int ot_mode_original = 0;
 		vzm::GetRenderTestParam("_int_OitMode", &ot_mode_original, sizeof(int), -1, -1);
+		bool ot_fm_original = true;
+		vzm::GetRenderTestParam("_bool_ApplyFragMerge", &ot_fm_original, sizeof(bool), -1, -1);
 		double rh_original;
 		vzm::GetRenderTestParam("_double_RobustRatio", &rh_original, sizeof(double), -1, -1);
 
 		vzm::SetRenderTestParam("_int_OitMode", oit_mode, sizeof(int), -1, -1);
+		vzm::SetRenderTestParam("_bool_ApplyFragMerge", apply_fm, sizeof(bool), -1, -1);
 		vzm::SetRenderTestParam("_double_RobustRatio", rh, sizeof(double), -1, -1);
 		vzm::RenderScene(0, 0);
 		unsigned char* ptr_rgba;
@@ -372,6 +373,7 @@ void compute_difference(const std::string& out_file_prefix)
 		memcpy(cvmat.data, ptr_rgba, sizeof(unsigned char) * 4 * w * h);
 
 		vzm::SetRenderTestParam("_int_OitMode", ot_mode_original, sizeof(int), -1, -1);
+		vzm::SetRenderTestParam("_bool_ApplyFragMerge", ot_fm_original, sizeof(bool), -1, -1);
 		vzm::SetRenderTestParam("_double_RobustRatio", rh_original, sizeof(double), -1, -1);
 		return cvmat;
 	};
@@ -379,24 +381,26 @@ void compute_difference(const std::string& out_file_prefix)
 	bool profiling_original = false;
 	vzm::GetRenderTestParam("_bool_GpuProfile", &profiling_original, sizeof(bool), -1, -1);
 	vzm::SetRenderTestParam("_bool_GpuProfile", true, sizeof(bool), -1, -1);
-	cv::Mat cvmat_DFB = make_cvmat(1);
-	cv::Mat cvmat_MBT = make_cvmat(2);
-	cv::Mat cvmat_DKBT_highRh = make_cvmat(4, high_Rh);
-	cv::Mat cvmat_DKBT_lowRh = make_cvmat(4, low_Rh);
-	cv::Mat cvmat_DKBTZ_lowRh = make_cvmat(3, low_Rh);
-	cv::Mat cvmat_SKBTZ = make_cvmat(0);
+	cv::Mat cvmat_SKB_FM = make_cvmat(0, true);
+	cv::Mat cvmat_DFB = make_cvmat(1, false);
+	cv::Mat cvmat_DFB_FM = make_cvmat(1, true);
+	cv::Mat cvmat_MBT = make_cvmat(2, false);
+	cv::Mat cvmat_DKB_lowRh = make_cvmat(3, false, low_Rh);
+	cv::Mat cvmat_DKB_FM_lowRh = make_cvmat(3, true, low_Rh);
+	cv::Mat cvmat_DKB_highRh = make_cvmat(3, false, high_Rh);
+	cv::Mat cvmat_DKB_FM_highRh = make_cvmat(3, true, high_Rh);
 	vzm::SetRenderTestParam("_bool_GpuProfile", profiling_original, sizeof(bool), -1, -1);
 
-	cv::Mat cvmat_DFB_rgb;
-	cv::cvtColor(cvmat_DFB, cvmat_DFB_rgb, cv::COLOR_BGRA2BGR);
+	cv::Mat cvmat_REF_rgb;
+	cv::cvtColor(cvmat_DFB, cvmat_REF_rgb, cv::COLOR_BGRA2BGR);
 
-	auto GenColorMap = [&cvmat_DFB_rgb](cv::Mat mat_rgba, float _amp) -> cv::Mat
+	auto GenColorMap = [&cvmat_REF_rgb](cv::Mat mat_rgba, float _amp) -> cv::Mat
 	{
 		cv::Mat mat_rgb;
 		cv::cvtColor(mat_rgba, mat_rgb, cv::COLOR_BGRA2BGR);
 
 		cv::Mat mat_diff;
-		cv::absdiff(cvmat_DFB_rgb, mat_rgb, mat_diff);
+		cv::absdiff(cvmat_REF_rgb, mat_rgb, mat_diff);
 
 		auto enhance_diff = [](cv::Mat& img, float factor)
 		{
@@ -427,22 +431,28 @@ void compute_difference(const std::string& out_file_prefix)
 
 	const float _amp = diff_amp;
 	cv::Mat cvmat_MBT_DIFFMAP = GenColorMap(cvmat_MBT, _amp);
-	cv::Mat cvmat_DKBT_highRh_DIFFMAP = GenColorMap(cvmat_DKBT_highRh, _amp);
-	cv::Mat cvmat_DKBT_lowRh_DIFFMAP = GenColorMap(cvmat_DKBT_lowRh, _amp);
-	cv::Mat cvmat_DKBTZ_lowRh_DIFFMAP = GenColorMap(cvmat_DKBTZ_lowRh, _amp);
-	cv::Mat cvmat_SKBTZ_DIFFMAP = GenColorMap(cvmat_SKBTZ, _amp);
+	cv::Mat cvmat_DKB_lowRh_DIFFMAP = GenColorMap(cvmat_DKB_lowRh, _amp);
+	cv::Mat cvmat_DKB_FM_lowRh_DIFFMAP = GenColorMap(cvmat_DKB_FM_lowRh, _amp);
+	cv::Mat cvmat_DKB_highRh_DIFFMAP = GenColorMap(cvmat_DKB_highRh, _amp);
+	cv::Mat cvmat_DKB_FM_highRh_DIFFMAP = GenColorMap(cvmat_DKB_FM_highRh, _amp);
+	cv::Mat cvmat_DFB_FM_DIFFMAP = GenColorMap(cvmat_DFB_FM, _amp);
+	cv::Mat cvmat_SKB_FM_DIFFMAP = GenColorMap(cvmat_SKB_FM, _amp);
 
 	cv::imshow("cvmat_MBT_DIFFMAP", cvmat_MBT_DIFFMAP);
-	cv::imshow("cvmat_DKBT_HighRh_DIFFMAP", cvmat_DKBT_highRh_DIFFMAP);
-	cv::imshow("cvmat_DKBT_lowRh_DIFFMAP", cvmat_DKBT_lowRh_DIFFMAP);
-	cv::imshow("cvmat_DKBTZ_lowRh_DIFFMAP", cvmat_DKBTZ_lowRh_DIFFMAP);
-	cv::imshow("cvmat_SKBTZ_DIFFMAP", cvmat_SKBTZ_DIFFMAP);
+	cv::imshow("cvmat_DKB_lowRh_DIFFMAP", cvmat_DKB_lowRh_DIFFMAP);
+	cv::imshow("cvmat_DKB_FM_lowRh_DIFFMAP", cvmat_DKB_FM_lowRh_DIFFMAP);
+	cv::imshow("cvmat_DKB_highRh_DIFFMAP", cvmat_DKB_highRh_DIFFMAP);
+	cv::imshow("cvmat_DKB_FM_highRh_DIFFMAP", cvmat_DKB_FM_highRh_DIFFMAP);
+	cv::imshow("cvmat_DFB_FM_DIFFMAP", cvmat_DFB_FM_DIFFMAP);
+	cv::imshow("cvmat_SKB_FM_DIFFMAP", cvmat_SKB_FM_DIFFMAP);
 
-	cv::imwrite(out_file_prefix + "MBT_DIFFMAP.png", cvmat_MBT_DIFFMAP);
-	cv::imwrite(out_file_prefix + "DKBT_HighRh_DIFFMAP.png", cvmat_DKBT_highRh_DIFFMAP);
-	cv::imwrite(out_file_prefix + "DKBT_lowRh_DIFFMAP.png", cvmat_DKBT_lowRh_DIFFMAP);
-	cv::imwrite(out_file_prefix + "DKBTZ_lowRh_DIFFMAP.png", cvmat_DKBTZ_lowRh_DIFFMAP);
-	cv::imwrite(out_file_prefix + "SKBTZ_DIFFMAP.png", cvmat_SKBTZ_DIFFMAP);
+	cv::imwrite(out_file_prefix + "cvmat_MBT_DIFFMAP.png", cvmat_MBT_DIFFMAP);
+	cv::imwrite(out_file_prefix + "cvmat_DKB_lowRh_DIFFMAP.png", cvmat_DKB_lowRh_DIFFMAP);
+	cv::imwrite(out_file_prefix + "cvmat_DKB_FM_lowRh_DIFFMAP.png", cvmat_DKB_FM_lowRh_DIFFMAP);
+	cv::imwrite(out_file_prefix + "cvmat_DKB_highRh_DIFFMAP.png", cvmat_DKB_highRh_DIFFMAP);
+	cv::imwrite(out_file_prefix + "cvmat_DKB_FM_highRh_DIFFMAP.png", cvmat_DKB_FM_highRh_DIFFMAP);
+	cv::imwrite(out_file_prefix + "cvmat_DFB_FM_DIFFMAP.png", cvmat_DFB_FM_DIFFMAP);
+	cv::imwrite(out_file_prefix + "cvmat_SKB_FM_DIFFMAP.png", cvmat_SKB_FM_DIFFMAP);
 }
 
 std::string GetSolutionPath()
@@ -474,7 +484,7 @@ void key_actions(const int key, const std::string& preset_file, const std::list<
 	{
 	case 'o':
 	{
-		static bool use_spinlock = true;
+		static bool use_spinlock = false;
 		use_spinlock = !use_spinlock;
 		vzm::SetRenderTestParam("_bool_UseSpinLock", use_spinlock, sizeof(bool), -1, -1);
 		if(use_spinlock) std::cout << "Pixel Synchronization by Spinlock" << std::endl;
@@ -520,47 +530,61 @@ void key_actions(const int key, const std::string& preset_file, const std::list<
 	case '0':
 	{
 		vzm::SetRenderTestParam("_int_OitMode", (int)0, sizeof(int), -1, -1);
-		std::cout << "oit mode : SK+BTZ" << std::endl;
+		vzm::SetRenderTestParam("_bool_ApplyFragMerge", true, sizeof(bool), -1, -1);
+		std::cout << "oit mode : Static KB + FM" << std::endl;
 		break;
 	}
 	case '1':
 	{
 		vzm::SetRenderTestParam("_int_OitMode", (int)1, sizeof(int), -1, -1);
-		std::cout << "oit mode : DFB" << std::endl;
+		vzm::SetRenderTestParam("_bool_ApplyFragMerge", false, sizeof(bool), -1, -1);
+		std::cout << "oit mode : Dynamic FB" << std::endl;
 		break;
 	}
 	case '2':
 	{
-		vzm::SetRenderTestParam("_int_OitMode", (int)2, sizeof(int), -1, -1);
-		std::cout << "oit mode : MBT" << std::endl;
+		vzm::SetRenderTestParam("_int_OitMode", (int)1, sizeof(int), -1, -1);
+		vzm::SetRenderTestParam("_bool_ApplyFragMerge", true, sizeof(bool), -1, -1);
+		std::cout << "oit mode : Dynamic FB + SFM" << std::endl;
 		break;
 	}
 	case '3':
 	{
-		vzm::SetRenderTestParam("_int_OitMode", (int)3, sizeof(int), -1, -1);
-		vzm::SetRenderTestParam("_double_RobustRatio", low_Rh, sizeof(double), -1, -1);
-		std::cout << "oit mode : DK+BTZ with Rh (" << low_Rh << ")" << std::endl;
+		vzm::SetRenderTestParam("_int_OitMode", (int)2, sizeof(int), -1, -1);
+		vzm::SetRenderTestParam("_bool_ApplyFragMerge", false, sizeof(bool), -1, -1);
+		std::cout << "oit mode : MBT" << std::endl;
 		break;
 	}
 	case '4':
 	{
 		vzm::SetRenderTestParam("_int_OitMode", (int)3, sizeof(int), -1, -1);
-		vzm::SetRenderTestParam("_double_RobustRatio", high_Rh, sizeof(double), -1, -1);
-		std::cout << "oit mode : DK+BTZ with Rh (" << high_Rh << ")" << std::endl;
+		vzm::SetRenderTestParam("_bool_ApplyFragMerge", false, sizeof(bool), -1, -1);
+		vzm::SetRenderTestParam("_double_RobustRatio", low_Rh, sizeof(double), -1, -1);
+		std::cout << "oit mode : Dynamic KB(Rh:" << low_Rh << ")" << std::endl;;
 		break;
 	}
 	case '5':
 	{
-		vzm::SetRenderTestParam("_int_OitMode", (int)4, sizeof(int), -1, -1);
+		vzm::SetRenderTestParam("_int_OitMode", (int)3, sizeof(int), -1, -1);
+		vzm::SetRenderTestParam("_bool_ApplyFragMerge", true, sizeof(bool), -1, -1);
 		vzm::SetRenderTestParam("_double_RobustRatio", low_Rh, sizeof(double), -1, -1);
-		std::cout << "oit mode : DK+BT with Rh (" << low_Rh << ")" << std::endl;
+		std::cout << "oit mode : Dynamic KB(Rh:" << low_Rh << ") + FM" << std::endl;;
 		break;
 	}
 	case '6':
 	{
-		vzm::SetRenderTestParam("_int_OitMode", (int)4, sizeof(int), -1, -1);
+		vzm::SetRenderTestParam("_int_OitMode", (int)3, sizeof(int), -1, -1);
+		vzm::SetRenderTestParam("_bool_ApplyFragMerge", false, sizeof(bool), -1, -1);
 		vzm::SetRenderTestParam("_double_RobustRatio", high_Rh, sizeof(double), -1, -1);
-		std::cout << "oit mode : DK+BT with Rh (" << high_Rh << ")" << std::endl;
+		std::cout << "oit mode : Dynamic KB(Rh:" << high_Rh << ")" << std::endl;;
+		break;
+	}
+	case '7':
+	{
+		vzm::SetRenderTestParam("_int_OitMode", (int)3, sizeof(int), -1, -1);
+		vzm::SetRenderTestParam("_bool_ApplyFragMerge", true, sizeof(bool), -1, -1);
+		vzm::SetRenderTestParam("_double_RobustRatio", high_Rh, sizeof(double), -1, -1);
+		std::cout << "oit mode : Dynamic KB(Rh:" << high_Rh << ") + FM" << std::endl;;
 		break;
 	}
 	case 'c':
@@ -635,15 +659,14 @@ int Fig_Absorbance()
 
 	align_obj_to_world_center(0, loaded_obj_ids);
 
-	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), -1, -1);
-	vzm::SetRenderTestParam("_double_CopVZThickness", 0.002, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_bool_UseSpinLock", false, sizeof(bool), -1, -1);
 	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), -1, -1);
 	// after presetting of SetRenderTestParams
 	load_preset(preset_file, loaded_obj_ids);
-	std::cout << "oit mode : SK+BTZ" << std::endl;
+	std::cout << "oit mode : DFB + FM" << std::endl;
 
 	int oit_mode = 0;
 	int key = -1;
@@ -786,15 +809,14 @@ int Fig_OitIntersection()
 	delete[] idx_prims;
 	delete[] idx_lines;
 
-	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), -1, -1);
-	vzm::SetRenderTestParam("_double_CopVZThickness", 0.002, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_bool_UseSpinLock", false, sizeof(bool), -1, -1);
 	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), -1, -1);
 	// after presetting of SetRenderTestParams
-	load_preset(preset_file, {loaded_obj_id});
-	std::cout << "oit mode : SK+BTZ" << std::endl;
+	load_preset(preset_file, { loaded_obj_id });
+	std::cout << "oit mode : DFB + FM" << std::endl;
 
 	int oit_mode = 0;
 	int key = -1;
@@ -841,7 +863,7 @@ int Fig_OitPerformance()
 	int w = 1024, h = 1024;
 	if(w > 1024 && h > 1024)
 		vzm::SetRenderTestParam("_int_BufExScale", (int)4, sizeof(int), -1, -1); // set this when the resolution 2048x2048 (NVIDIA GTX 1080)
-#define __OBJ1
+#define __OBJ3
 #ifdef __OBJ1
 	high_Rh = 0.75, low_Rh = 0.2, diff_amp = 10.0;
 	scene_stage_scale = 5.f;
@@ -919,15 +941,14 @@ int Fig_OitPerformance()
 
 	align_obj_to_world_center(0, loaded_obj_ids);
 
-	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), -1, -1);
-	vzm::SetRenderTestParam("_double_CopVZThickness", 0.002, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_bool_UseSpinLock", false, sizeof(bool), -1, -1);
 	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), -1, -1);
 	// after presetting of SetRenderTestParams
 	load_preset(preset_file, loaded_obj_ids);
-	std::cout << "oit mode : SK+BTZ" << std::endl;
+	std::cout << "oit mode : DFB + FM" << std::endl;
 
 	int oit_mode = 0;
 	int key = -1;
@@ -1006,15 +1027,14 @@ int Fig_LocalDepthBlending()
 
 	align_obj_to_world_center(0, loaded_obj_ids);
 
-	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), -1, -1);
-	vzm::SetRenderTestParam("_double_CopVZThickness", 0.002, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_bool_UseSpinLock", false, sizeof(bool), -1, -1);
 	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), -1, -1);
 	// after presetting of SetRenderTestParams
 	load_preset(preset_file, loaded_obj_ids);
-	std::cout << "oit mode : SK+BTZ" << std::endl;
+	std::cout << "oit mode : DFB + FM" << std::endl;
 
 	int oit_mode = 0;
 	int key = -1;
@@ -1067,7 +1087,7 @@ int Fig_HybridVR()
 
 	vzm::ReplaceOrAddSceneObject(0, loaded_vol_id, volume_state);
 	vzm::ObjStates obj_state;
-	obj_state.color[3] = 0.1f; // control for transparency
+	obj_state.color[3] = 0.7f; // control for transparency
 	obj_state.surfel_size = 0.12f;
 	vzm::ReplaceOrAddSceneObject(0, loaded_surfel_id, obj_state);
 	align_obj_to_world_center(0, { loaded_surfel_id });
@@ -1092,8 +1112,8 @@ int Fig_HybridVR()
 
 	cam_params.fov_y = 3.141592654f / 4.f;
 	cam_params.projection_mode = 2;
-	cam_params.w = 1024;
-	cam_params.h = 1024;
+	cam_params.w = 514;
+	cam_params.h = 514;
 	cam_params.aspect_ratio = (float)cam_params.w / (float)cam_params.h;
 
 	vzm::SceneEnvParameters scn_env_params;
@@ -1120,15 +1140,14 @@ int Fig_HybridVR()
 		cv::setMouseCallback(scene_name[i], CallBackFunc_Mouse, NULL);// &scenes[i]);
 	}
 
-	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), -1, -1);
-	vzm::SetRenderTestParam("_double_CopVZThickness", 0.00002, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_bool_UseSpinLock", false, sizeof(bool), -1, -1);
 	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), -1, -1);
 	// after presetting of SetRenderTestParams
 	load_preset(preset_file, { });
-	std::cout << "oit mode : SK+BTZ" << std::endl;
+	std::cout << "oit mode : DFB + FM" << std::endl;
 
 	int oit_mode = 0;
 	int key = -1;
@@ -1213,15 +1232,14 @@ int Fig_GhostedIllustration()
 	align_obj_to_world_center(0, loaded_obj_ids);
 	align_obj_to_world_center(1, loaded_obj_ids);
 
-	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), -1, -1);
-	vzm::SetRenderTestParam("_double_CopVZThickness", 0.0002, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_bool_UseSpinLock", false, sizeof(bool), -1, -1);
 	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double_MergingBeta", 1.0, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.0, 1.5, 2.0, 100.0), sizeof(glm::dvec4), -1, -1);
 	// after presetting of SetRenderTestParams
 	//load_preset(preset_file, loaded_obj_ids);
-	std::cout << "oit mode : SK+BTZ" << std::endl;
+	std::cout << "oit mode : DFB + FM" << std::endl;
 
 	int control_value = 250;
 	cv::createTrackbar("thickness", scene_name[0], &control_value, 1000, NULL);
@@ -1258,9 +1276,9 @@ int Fig_GhostedIllustration()
 			vzm::ReplaceOrAddSceneObject(1, obj_id, obj_state);
 		}
 
-		vzm::SetRenderTestParam("_double_VZThickness", control_value * 2.0 / 1000.0, sizeof(double), -1, -1);
+		vzm::SetRenderTestParam("_double_GIVZThickness", control_value * 2.0 / 1000.0, sizeof(double), -1, -1);
 		show_window(scene_name[0], 0, 0, write_img_file, GetSolutionPath() + ".\\data\\GI_crab_thickness");
-		vzm::SetRenderTestParam("_double_VZThickness", 0.0002, sizeof(double), -1, -1);
+		vzm::SetRenderTestParam("_double_GIVZThickness", 0, sizeof(double), -1, -1);
 		show_window(scene_name[1], 1, 0, write_img_file, GetSolutionPath() + ".\\data\\GI_crab_alpha");
 
 		vzm::SetRenderTestParam("_bool_ReloadHLSLObjFiles", false, sizeof(bool), -1, -1);
@@ -1341,15 +1359,14 @@ int Test()
 
 	align_obj_to_world_center(0, loaded_obj_ids);
 
-	vzm::SetRenderTestParam("_bool_UseSpinLock", true, sizeof(bool), -1, -1);
-	vzm::SetRenderTestParam("_double_CopVZThickness", 0.002, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_bool_UseSpinLock", false, sizeof(bool), -1, -1);
 	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), -1, -1);
 	// after presetting of SetRenderTestParams
 	load_preset(preset_file, loaded_obj_ids);
-	std::cout << "oit mode : SK+BTZ" << std::endl;
+	std::cout << "oit mode : DFB + FM" << std::endl;
 
 	int oit_mode = 0;
 	int key = -1;
@@ -1456,14 +1473,13 @@ int Test2()
 	align_obj_to_world_center(1, loaded_obj_ids);
 
 	vzm::SetRenderTestParam("_bool_UseSpinLock", false, sizeof(bool), -1, -1);
-	vzm::SetRenderTestParam("_double_AbsVZThickness", 0.002, sizeof(double), -1, -1);
-	vzm::SetRenderTestParam("_double_AbsCopVZThickness", 0.001, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double_MergingBeta", 0.5, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double_RobustRatio", 0.5, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", glm::dvec4(0.4, 0.6, 0.2, 30.0), sizeof(glm::dvec4), -1, -1);
 	// after presetting of SetRenderTestParams
 	load_preset(preset_file, loaded_obj_ids);
-	std::cout << "oit mode : SK+BTZ" << std::endl;
+	std::cout << "oit mode : DFB + FM" << std::endl;
 
 	vzm::ObjStates obj_state_index_sphere;
 
@@ -1689,11 +1705,12 @@ int main()
 
 	//Fig_Absorbance();
 	//Fig_OitIntersection();
-	Test2();
+	//Test2();
+	//Test();
 	//Fig_OitPerformance();
 	//Fig_LocalDepthBlending();
 	//Fig_GhostedIllustration();
-	//Fig_HybridVR();
+	Fig_HybridVR();
 	
 	vzm::DeinitEngineLib();
 	return 0;

@@ -187,6 +187,7 @@
 #define IDR_RCDATA11102					  11102
 #define IDR_RCDATA11103					  11103
 #define IDR_RCDATA11104					  11104
+#define IDR_RCDATA11105					  11105
 
 #define IDR_RCDATA11030					  11030
 #define IDR_RCDATA11031					  11031

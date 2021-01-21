@@ -406,6 +406,11 @@ namespace grd_helper
 		uint cam_flag;
 		uint iSrCamDummy__0; // used for 1) A-Buffer prefix computations /*deprecated*/ or 2) beta (asfloat) for merging operation
 
+		float near_plane;
+		float far_plane;
+		uint iSrCamDummy__1;
+		uint iSrCamDummy__2;
+
 		ZERO_SET(CB_CameraState)
 	};
 
@@ -487,7 +492,7 @@ namespace grd_helper
 		uint pobj_flag;
 		uint num_letters;
 		float dash_interval;
-		float depth_forward_bias;
+		float depth_forward_bias;	// deprecated!
 
 		float pix_thickness; // only for POINT and LINE TOPOLOGY
 		float vz_thickness;
@@ -527,7 +532,7 @@ namespace grd_helper
 		uint vobj_dummy_2;
 
 		// light properties
-		vmfloat4 pb_shading_factor;	// x : Ambient, y : Diffuse, z : Specular, w : specular
+		vmfloat4 pb_shading_factor;	// x : Ambient, y : Diffuse, z : Specular, w : Specular power
 
 		ZERO_SET(CB_VolumeObject)
 	};

@@ -21,7 +21,7 @@ void FillHistogram(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID, u
 	InterlockedAdd(histo_buf[frag_num], 1);
 }
 
-[numthreads(GRIDSIZE, GRIDSIZE, 1)] // 조금 더 큰값으로 나중에..
+[numthreads(GRIDSIZE, GRIDSIZE, 1)] // later, tuning the gird size
 void CreateOffsetTableKpB(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID, uint3 nGTid : SV_GroupThreadID)
 {
 	uint nThreadId = nDTid.y * g_cbCamState.rt_width + nDTid.x;

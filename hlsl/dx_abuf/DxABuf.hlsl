@@ -1,9 +1,9 @@
 #include "../Sr_Common.hlsl"
 
 RWTexture2D<uint> fragment_counter : register(u2);
-RWByteAddressBuffer deep_DxA_buf : register(u4);
+RWByteAddressBuffer deep_ubk_buf : register(u4);
 
-#define STORE1_RBB(V, ADDR) deep_DxA_buf.Store((ADDR) * 4, V)
+#define STORE1_RBB(V, ADDR) deep_ubk_buf.Store((ADDR) * 4, V)
 
 void OIT_A_BUFFER_CNF_FRAGS(__VS_OUT input)
 {
@@ -130,8 +130,8 @@ void OIT_A_BUFFER_FILL(__VS_OUT input)
 #endif
 
 	// Store fragment data into the allocated space
-	//deep_DxA_buf[2 * nDeepBufferPos + 0] = ConvertFloat4ToUInt(v_rgba);
-	//deep_DxA_buf[2 * nDeepBufferPos + 1] = asuint(z_depth);
+	//deep_ubk_buf[2 * nDeepBufferPos + 0] = ConvertFloat4ToUInt(v_rgba);
+	//deep_ubk_buf[2 * nDeepBufferPos + 1] = asuint(z_depth);
 	STORE1_RBB(ConvertFloat4ToUInt(v_rgba), 2 * nDeepBufferPos + 0);
 	STORE1_RBB(asuint(z_depth), 2 * nDeepBufferPos + 1);
 }

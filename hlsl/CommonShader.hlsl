@@ -42,6 +42,11 @@ struct HxCB_CameraState // Hlsl dX Contant Buffer
 	// 4th bit : for storing the final fragments to the k buffer, which is used for sequentially coming renderer (e.g., DVR) : 0 (skipping), 1 (storing)
 	uint cam_flag;
 	uint iSrCamDummy__0; // used for 1) A-Buffer prefix computations /*deprecated*/ or 2) beta (asfloat) for merging operation
+
+	float near_plane;
+	float far_plane;
+	uint iSrCamDummy__1;
+	uint iSrCamDummy__2;
 };
 
 struct HxCB_EnvState
@@ -1180,7 +1185,7 @@ Fragment_OUT MergeFrags(Fragment f_prior, Fragment f_posterior, const in float b
 	}
 	else
 	{
-		float4 fs_out_prior_vis, fs_out_posterior_vis;
+		float4 fs_out_prior_vis;
 		float4 f_prior_vis = ConvertUIntToFloat4(f_prior.i_vis);
 		float4 f_posterior_vis = ConvertUIntToFloat4(f_posterior.i_vis);
 		f_prior_vis.a = min(f_prior_vis.a, SAFE_OPAQUEALPHA);
@@ -1282,7 +1287,6 @@ Fragment_OUT MergeFrags(Fragment f_prior, Fragment f_posterior, const in float b
 		f_prior.i_vis = ConvertFloat4ToUInt(f_prior_vis);
 		f_posterior.i_vis = ConvertFloat4ToUInt(f_posterior_vis);
 		fs_out.f_prior.i_vis = ConvertFloat4ToUInt(fs_out_prior_vis);
-		fs_out.f_posterior.i_vis = ConvertFloat4ToUInt(fs_out_posterior_vis);
 
 #define ALPHA_CHECK(IV) ((IV >> 24) > 0)
 		if (!ALPHA_CHECK(f_posterior.i_vis))
@@ -1298,6 +1302,132 @@ Fragment_OUT MergeFrags(Fragment f_prior, Fragment f_posterior, const in float b
 	}
 	fs_out.f_posterior = f_posterior;
 	return fs_out;
+}
+
+Fragment MergeFrags_ver2(Fragment f_prior, Fragment f_posterior, const in float beta)
+{
+	// Overall algorithm computation cost 
+	// : 3 branches, 2 visibility interpolations, 2 visibility integrations, and 1 fusion of overlapping ray-segments
+
+	// f_prior and f_posterior mean f_prior.z >= f_prior.z
+	Fragment f_out = (Fragment)0;
+	float zfront_posterior_rs = f_posterior.z - f_posterior.zthick;
+	if (f_prior.z > zfront_posterior_rs && f_posterior.i_vis != 0) // overlapping test
+	{
+		Fragment f_m_prior;
+		float4 f_m_prior_vis;
+		float4 f_prior_vis = ConvertUIntToFloat4(f_prior.i_vis);
+		float4 f_posterior_vis = ConvertUIntToFloat4(f_posterior.i_vis);
+		f_prior_vis.a = min(f_prior_vis.a, SAFE_OPAQUEALPHA);
+		f_posterior_vis.a = min(f_posterior_vis.a, SAFE_OPAQUEALPHA);
+
+		float zfront_prior_rs = f_prior.z - f_prior.zthick;
+		if (zfront_prior_rs <= zfront_posterior_rs)
+		{
+			// Case 2 : Intersecting each other
+			//f_m_prior.zthick = max(zfront_posterior_rs - zfront_prior_rs, 0); // to avoid computational precision error (0 or small minus)
+			f_m_prior.zthick = zfront_posterior_rs - zfront_prior_rs;
+			f_m_prior.z = zfront_posterior_rs;
+#if LINEAR_MODE == 1
+			{
+				f_m_prior_vis = f_prior_vis * (f_m_prior.zthick / f_prior.zthick);
+			}
+#else
+			{
+				float zd_ratio = f_m_prior.zthick / f_prior.zthick;
+				float Ad = f_prior_vis.a;
+				float3 Id = f_prior_vis.rgb / Ad;
+
+				// strict mode
+				float Az = Ad * zd_ratio * beta + (1 - beta) * (1 - pow(abs(1 - Ad), zd_ratio));
+				// approx. mode
+				//float term1 = zd_ratio * (1 - zd_ratio) / 2.f * Ad * Ad;
+				//float term2 = term1 * (2 - zd_ratio) / 3.f * Ad;
+				//float term3 = term2 * (3 - zd_ratio) / 4.f * Ad;
+				//float term4 = term3 * (4 - zd_ratio) / 5.f * Ad;
+				//float Az = Ad * zd_ratio + (1 - beta) * (term1 + term2 + term3 + term4 + term4 * (5 - zd_ratio) / 6.f * Ad);
+
+				float3 Cz = Id * Az;
+				f_m_prior_vis = float4(Cz, Az);
+			}
+#endif
+
+			float old_alpha = f_prior_vis.a;
+			f_prior.zthick -= f_m_prior.zthick;
+			f_prior_vis = (f_prior_vis - f_m_prior_vis) / (1.f - f_m_prior_vis.a);
+
+			f_m_prior.opacity_sum = f_prior.opacity_sum * f_m_prior_vis.a / old_alpha;
+			f_prior.opacity_sum = f_prior.opacity_sum * f_prior_vis.a / old_alpha;
+		}
+		else
+		{
+			// Case 3 : f_prior belongs to f_posterior
+			//f_m_prior.zthick = max(zfront_prior_rs - zfront_posterior_rs, 0); // to avoid computational precision error (0 or small minus)
+			f_m_prior.zthick = zfront_prior_rs - zfront_posterior_rs;
+			f_m_prior.z = zfront_prior_rs;
+
+#if LINEAR_MODE == 1
+			{
+				f_m_prior_vis = f_posterior_vis * (f_m_prior.zthick / f_posterior.zthick);
+			}
+#else
+			{
+				float zd_ratio = f_m_prior.zthick / f_posterior.zthick;
+				float Ad = f_posterior_vis.a;
+				float3 Id = f_posterior_vis.rgb / Ad;
+
+				// strict mode
+				float Az = Ad * zd_ratio * beta + (1 - beta) * (1 - pow(abs(1 - Ad), zd_ratio));
+				// approx. mode
+				//float term1 = zd_ratio * (1 - zd_ratio) / 2.f * Ad * Ad;
+				//float term2 = term1 * (2 - zd_ratio) / 3.f * Ad;
+				//float term3 = term2 * (3 - zd_ratio) / 4.f * Ad;
+				//float term4 = term3 * (4 - zd_ratio) / 5.f * Ad;
+				//float Az = Ad * zd_ratio + (1 - beta) * (term1 + term2 + term3 + term4 + term4 * (5 - zd_ratio) / 6.f * Ad);
+
+				float3 Cz = Id * Az;
+				f_m_prior_vis = float4(Cz, Az);
+			}
+#endif
+
+			float old_alpha = f_posterior_vis.a;
+			f_posterior.zthick -= f_m_prior.zthick;
+			f_posterior_vis = (f_posterior_vis - f_m_prior_vis) / (1.f - f_m_prior_vis.a);
+
+			f_m_prior.opacity_sum = f_posterior.opacity_sum * f_m_prior_vis.a / old_alpha;
+			f_posterior.opacity_sum = f_posterior.opacity_sum * f_posterior_vis.a / old_alpha;
+		}
+
+		// merge the fusion (remained) f_prior to f_m_prior
+		f_m_prior.zthick += f_prior.zthick;
+		f_m_prior.z = f_prior.z;
+		float4 f_mid_vis = f_posterior_vis * (f_prior.zthick / f_posterior.zthick); // REDESIGN
+		float f_mid_alphaw = f_posterior.opacity_sum * f_mid_vis.a / f_posterior_vis.a;
+		//float4 f_mid_mix_vis = BlendFloat4AndFloat4(f_mid_vis, f_prior_vis);
+		float4 f_mid_mix_vis = MixOpt(f_mid_vis, f_mid_alphaw, f_prior_vis, f_prior.opacity_sum);
+		f_m_prior_vis += f_mid_mix_vis * (1.f - f_m_prior_vis.a); // OV operator
+		f_m_prior.opacity_sum += f_mid_alphaw + f_prior.opacity_sum;
+
+		f_posterior.zthick -= f_prior.zthick;
+		float old_alpha = f_posterior_vis.a;
+		f_posterior_vis = (f_posterior_vis - f_mid_vis) / (1.f - f_mid_vis.a);
+		f_posterior.opacity_sum *= f_posterior_vis.a / old_alpha;
+
+		// merge f_m_prior, f_posterior
+		float4 vis_out = f_m_prior_vis + f_posterior_vis * (1.f - f_m_prior_vis.a);
+		f_out.i_vis = ConvertFloat4ToUInt(vis_out);
+		f_out.zthick = f_m_prior.zthick + f_posterior.zthick;
+		f_out.z = f_posterior.z;
+		f_out.opacity_sum = f_m_prior.opacity_sum + f_posterior.opacity_sum;
+
+#define ALPHA_CHECK(IV) ((IV >> 24) > 0)
+		if (!ALPHA_CHECK(f_out.i_vis))
+		{
+			f_out.i_vis = 0;
+			f_out.zthick = 0;
+		}
+	}
+	return f_out;
 }
 #endif
 
@@ -1443,6 +1573,26 @@ float GetHotspotThickness(in int2 pos_xy)
 	}
 	if (w_sum == 0) w_sum = 1.f;
 	return max(v_thickness / w_sum, 0.0001f);
+}
+
+float GetVZThickness(const float z, const float vz_thick)
+{
+	float vz_thickness = vz_thick;
+	if (vz_thickness <= 0)
+	{
+		const int nbits = 24;
+		// view-source:https://www.sjbaker.org/steve/omniv/love_your_z_buffer.html
+		// compute z-precision
+		const float zNear = g_cbCamState.near_plane;
+		const float zFar = g_cbCamState.far_plane;
+		float b = zFar * zNear / (zNear - zFar);
+		float res = (b / ((b / z) - 1.0f / (1 << nbits))) - z;
+		if (res < 0.0001)
+			vz_thickness = res;
+		else
+			vz_thickness = floor(res * 100000.0f) / 100000.0f;
+	}
+	return vz_thickness;
 }
 
 //f16tof32
