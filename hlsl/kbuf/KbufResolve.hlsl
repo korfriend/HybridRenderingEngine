@@ -143,7 +143,7 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 			}
 
 			// optional setting for manual z-thickness
-			f_k.zthick = max(f_k.zthick, GetVZThickness(f_k.zdepth, vz_thickness));
+			f_k.zthick = max(f_k.zthick, GetVZThickness(f_k.z, vz_thickness));
 			fs[k] = f_k;
 		}
 	}

@@ -636,7 +636,6 @@ __IES(ADDR + (K) * NUM_ELES_PER_FRAG * 4, 1, asuint(F.z)); }
 }
 #endif
 
-#define VZ_THICK_COPLANAR_WEIGHT 0.5f 
 // load the result obtained by SINGLE_LAYER, and draw its outlines
 [numthreads(GRIDSIZE, GRIDSIZE, 1)]
 void OIT_PRESET(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
@@ -659,7 +658,7 @@ void OIT_PRESET(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	if (v_rgba.a == 0)
 		return;
 
-	float vz_thickness = depth_res * VZ_THICK_COPLANAR_WEIGHT;
+	float vz_thickness = depth_res;
 	Fill_kBuffer(tex2d_xy, g_cbCamState.k_value, v_rgba, depthcs, vz_thickness);
 }
 
@@ -674,7 +673,7 @@ void OIT_KDEPTH(__VS_OUT input)
 		clip(-1);
 
 	float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
-	float vz_thickness = GetVZThickness(z_depth, g_cbPobj.vz_thickness) * VZ_THICK_COPLANAR_WEIGHT;
+	float vz_thickness = GetVZThickness(z_depth, g_cbPobj.vz_thickness);
 
 	float3 nor = (float3)0;
 	float nor_len = 0;

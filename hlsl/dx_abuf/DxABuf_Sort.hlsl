@@ -152,44 +152,36 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 
 	sort(N, fragments, FragmentVD);
 
-#if FRAG_MERGING == 1
-	float merging_beta = asfloat(g_cbCamState.iSrCamDummy__0);
-	Fragment f_tail = (Fragment)0;
+	bool store_to_kbuf = BitCheck(g_cbCamState.cam_flag, 3);
+	float4 vis_out = (float4) 0.0f;
 
+#if FRAG_MERGING == 1
+#define NUM_K 8
+	float merging_beta = asfloat(g_cbCamState.iSrCamDummy__0);
+	//Fragment f_tail = (Fragment)0;
 	const uint k_value = g_cbCamState.k_value;
 	uint bytes_per_frag = 4 * NUM_ELES_PER_FRAG;
 	uint bytes_frags_per_pixel = k_value * bytes_per_frag; // to do : consider the dynamic scheme. (4 bytes unit)
 	uint addr_base = nThreadNum * bytes_frags_per_pixel;
-#define NUM_K 8
-#endif
-	bool store_to_kbuf = BitCheck(g_cbCamState.cam_flag, 3);
-	float4 vis_out = (float4) 0.0f;
-#if FRAG_MERGING == 0
-	[loop]
-	for (i = 0; i < N; i++)
-	{
-		uint ivis = fragments[i].i_vis;
-		float4 color = ConvertUIntToFloat4(ivis);
-		vis_out += color * (1 - vis_out.a);
-
-		if (store_to_kbuf)
-		{
-			STORE1_KB(ivis, 2 * (offset + i) + 0);
-			STORE1_KB(asuint(fragments[i].z), 2 * (offset + i) + 1);
-		}
-	}
-#else
 	int cnt_stored_fs = 0;
 	Fragment f_1, f_2;
 	f_1.i_vis = fragments[0].i_vis;
 	f_1.z = fragments[0].z;
 	f_1.zthick = GetVZThickness(f_1.z, g_cbCamState.cam_vz_thickness);
+	//{
+	//	if (f_1.zthick < 0)
+	//		fragment_blendout[nDTid.xy] = float4(1, 0, 0, 1);
+	//	else
+	//		fragment_blendout[nDTid.xy] = float4(0, 0, 1, 1);
+	//	return;
+	//}
 	f_1.opacity_sum = ConvertUIntToFloat4(f_1.i_vis).a;
 	// use the SFM
 	[loop]
 	for (i = 0; i < N; i++)
 	{
 		f_2 = (Fragment)0;
+		Fragment f_merge = (Fragment)0;
 		int inext = i + 1;
 		if (inext < N)
 		{
@@ -197,15 +189,23 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 			f_2.z = fragments[inext].z;
 			f_2.zthick = GetVZThickness(f_2.z, g_cbCamState.cam_vz_thickness);
 			f_2.opacity_sum = ConvertUIntToFloat4(f_2.i_vis).a;
+
+			f_merge = MergeFrags_ver2(f_1, f_2, merging_beta);
 		}
 
-		Fragment f_merge = MergeFrags_ver2(f_1, f_2, merging_beta);
+		//Fragment f_merge = (Fragment)0;
+		//if (OverlapTest(f_1, f_2) && f_2.i_vis != 0)
+		//{
+		//	f_merge = f_1;
+		//	Fragment_OrderIndependentMerge(f_merge, f_2);
+		//}
+
 		if (f_merge.i_vis == 0)
 		{
 			if (cnt_stored_fs < NUM_K - 1)
 			{
-				cnt_stored_fs++;
 				SET_FRAG(addr_base, i, f_1);
+				cnt_stored_fs++;
 
 				float4 color = ConvertUIntToFloat4(f_1.i_vis);
 				vis_out += color * (1 - vis_out.a);
@@ -213,20 +213,15 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 			}
 			else
 			{
-				cnt_stored_fs = NUM_K;
 				// tail //
-				if (f_tail.i_vis == 0) f_tail = f_1;
-				else
-				{
-					float4 f_tail_vis = ConvertUIntToFloat4(f_tail.i_vis);
-					float4 f_2_vis = ConvertUIntToFloat4(f_2.i_vis);
-					f_tail_vis += f_2_vis * (1.f - f_tail_vis.a);
-					f_tail.i_vis = ConvertFloat4ToUInt(f_tail_vis);
-					f_tail.z = f_1.z;
-					f_tail.zthick = f_1.z - (f_tail.z - f_tail.zthick);
-					f_tail.opacity_sum += f_1.opacity_sum;
-				}
-				f_1 = f_tail;
+				float4 f_1_vis = ConvertUIntToFloat4(f_1.i_vis);
+				float4 f_2_vis = ConvertUIntToFloat4(f_2.i_vis);
+				f_1_vis += f_2_vis * (1.f - f_1_vis.a);
+				f_1.i_vis = ConvertFloat4ToUInt(f_1_vis);
+				f_1.zthick = f_2.z - f_1.z + f_1.zthick;
+				f_1.z = f_2.z;
+				f_1.opacity_sum += f_2.opacity_sum;
+				//f_tail = f_1;
 			}
 		}
 		else
@@ -234,11 +229,13 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 			f_1 = f_merge;
 		}
 	}
-	if (f_tail.i_vis != 0)
+	if (f_1.i_vis != 0)
 	{
-		SET_FRAG(addr_base, NUM_K - 1, f_tail);
-		float4 color = ConvertUIntToFloat4(f_tail.i_vis);
-		vis_out += color * (1 - vis_out.a);
+		SET_FRAG(addr_base, cnt_stored_fs, f_1); 
+		cnt_stored_fs++;
+
+		float4 vis = ConvertUIntToFloat4(f_1.i_vis);
+		vis_out += vis * (1 - vis_out.a);
 	}
 
 #if TEST == 1
@@ -256,6 +253,20 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 		vis_out += vis * (1 - vis_out.a);
 	}
 #endif
+#else
+	[loop]
+	for (i = 0; i < N; i++)
+	{
+		uint ivis = fragments[i].i_vis;
+		float4 color = ConvertUIntToFloat4(ivis);
+		vis_out += color * (1 - vis_out.a);
+
+		if (store_to_kbuf)
+		{
+			STORE1_KB(ivis, 2 * (offset + i) + 0);
+			STORE1_KB(asuint(fragments[i].z), 2 * (offset + i) + 1);
+		}
+	}
 #endif
 	fragment_blendout[nDTid.xy] = vis_out;
 	fragment_zdepth[nDTid.xy] = fragments[0].z;

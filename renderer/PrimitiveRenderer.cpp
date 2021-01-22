@@ -703,6 +703,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 	bool apply_fragmerge = _fncontainer->GetParamValue("_bool_ApplyFragMerge", true);
 	MFR_MODE mode_OIT = (MFR_MODE)_fncontainer->GetParamValue("_int_OitMode", (int)1);
+	mode_OIT = (MFR_MODE)min((int)mode_OIT, (int)MFR_MODE::DYNAMIC_KB);
 	if (mode_OIT == MFR_MODE::STATIC_KB_FM) apply_fragmerge = true;
 
 	int buf_ex_scale = _fncontainer->GetParamValue("_int_BufExScale", (int)8); // 64 layers
@@ -1236,6 +1237,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 	float v_thickness = (float)_fncontainer->GetParamValue("_double_VZThickness", 0.0);
 	float gi_v_thickness = (float)_fncontainer->GetParamValue("_double_GIVZThickness", (double)v_thickness);
+
 	//cout << v_copthickness_abs << endl;
 	//float fv_copthickness = v_copthickness_abs <= 0 ? (float)(len_diagonal_max * v_copthickness) : (float)v_copthickness_abs;
 	//float fv_thickness = v_thickness_abs <= 0 ? v_copthickness_abs <= 0 ? (float)(len_diagonal_max * v_thickness) : fv_copthickness * v_thickness / v_copthickness : (float)v_thickness_abs;
@@ -2588,18 +2590,18 @@ RENDERER_LOOP_EXIT:
 		// resolve pass
 		switch (mode_OIT)
 		{
-		case STATIC_KB_FM:
+		case MFR_MODE::STATIC_KB_FM:
 			dx11DeviceImmContext->CSSetShader(GETCS(OIT_SKBZ_RESOLVE_cs_5_0), NULL, 0);
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], 0); // trimming may occur 
 			break;
-		case DYNAMIC_FB:
+		case MFR_MODE::DYNAMIC_FB:
 			// sort and render the fragments.  Use the prefix sum to determine where the 
 			// fragments for each pixel reside.
 			dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(SR_OIT_ABUFFER_SORT2SENDER_SFM_cs_5_0) : GETCS(SR_OIT_ABUFFER_SORT2SENDER_cs_5_0), NULL, 0);
 			dx11DeviceImmContext->CSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_SRV]);
 			dx11DeviceImmContext->CSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]);
 			break;
-		case DYNAMIC_KB:
+		case MFR_MODE::DYNAMIC_KB:
 			dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(OIT_DKBZ_RESOLVE_cs_5_0) : GETCS(OIT_DKB_RESOLVE_cs_5_0), NULL, 0);
 			dx11DeviceImmContext->CSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]);
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], 0); // trimming may occur 
@@ -2630,7 +2632,7 @@ RENDERER_LOOP_EXIT:
 		{
 			//gres_fb_deep_k_SSAO
 			//dx11DeviceImmContext->Flush();
-			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs_2ND, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 			ComputeSSAO(dx11DeviceImmContext, dx11CommonParams, num_grid_x, num_grid_y,
 				gres_fb_counter, gres_fb_k_buffer, gres_fb_rgba, blur_SSAO,
 				gres_fb_mip_z_halftexs, gres_fb_mip_a_halftexs, gres_fb_ao_texs, gres_fb_ao_blf_texs,

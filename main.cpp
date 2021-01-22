@@ -863,7 +863,7 @@ int Fig_OitPerformance()
 	int w = 1024, h = 1024;
 	if(w > 1024 && h > 1024)
 		vzm::SetRenderTestParam("_int_BufExScale", (int)4, sizeof(int), -1, -1); // set this when the resolution 2048x2048 (NVIDIA GTX 1080)
-#define __OBJ3
+#define __OBJ1
 #ifdef __OBJ1
 	high_Rh = 0.75, low_Rh = 0.2, diff_amp = 10.0;
 	scene_stage_scale = 5.f;
@@ -876,6 +876,12 @@ int Fig_OitPerformance()
 	cam_params.np = 0.01f;
 	cam_params.fp = 20.f;
 	// obj file includes material info, which is prior shading option for rendering; therefore, wildcard setting is required to change shading.
+
+	vzm::SetRenderTestParam("_bool_ApplySSAO", true, sizeof(bool), -1, -1);
+	vzm::SetRenderTestParam("_double_SSAOKernalR", 0.1, sizeof(double), -1, -1);
+	vzm::SetRenderTestParam("_int_SSAONumDirs", (int)8, sizeof(int), -1, -1);
+	vzm::SetRenderTestParam("_int_SSAONumSteps", (int)8, sizeof(int), -1, -1);
+	vzm::SetRenderTestParam("_double_SSAOTangentBias", 3.14 / 6.0, sizeof(double), -1, -1);
 
 #elif defined(__OBJ2)
 	high_Rh = 0.75, low_Rh = 0.2, diff_amp = 10.0;
@@ -1082,7 +1088,7 @@ int Fig_HybridVR()
 	vzm::ObjStates volume_state;
 	volume_state.associated_obj_ids[vzm::ObjStates::VR_OTF] = vr_tmap_id;
 	double vol_scale = 1.0;// 0.02f * 0.2f;
-	volume_state.is_visible = false;
+	volume_state.is_visible = true;
 	__cm4__ volume_state.os2ws = glm::translate(glm::fvec3(-4.37, 8.71, 0)) * glm::scale(glm::fvec3(vol_scale));
 
 	vzm::ReplaceOrAddSceneObject(0, loaded_vol_id, volume_state);
@@ -1112,8 +1118,8 @@ int Fig_HybridVR()
 
 	cam_params.fov_y = 3.141592654f / 4.f;
 	cam_params.projection_mode = 2;
-	cam_params.w = 514;
-	cam_params.h = 514;
+	cam_params.w = 1024;
+	cam_params.h = 1024;
 	cam_params.aspect_ratio = (float)cam_params.w / (float)cam_params.h;
 
 	vzm::SceneEnvParameters scn_env_params;
@@ -1707,10 +1713,10 @@ int main()
 	//Fig_OitIntersection();
 	//Test2();
 	//Test();
-	//Fig_OitPerformance();
+	Fig_OitPerformance();
 	//Fig_LocalDepthBlending();
 	//Fig_GhostedIllustration();
-	Fig_HybridVR();
+	//Fig_HybridVR();
 	
 	vzm::DeinitEngineLib();
 	return 0;

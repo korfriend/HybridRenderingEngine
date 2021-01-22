@@ -591,22 +591,22 @@ MergeRS_OUT MergeRS(RaySegment rs_prior, RaySegment rs_posterior)
 	// rs_prior and rs_posterior mean rs_prior.zdepth >= rs_prior.zdepth
     MergeRS_OUT rs_out;
 
-    float zfront_posterior_rs = rs_posterior.zdepth - rs_posterior.zthick;
-    if (rs_prior.zdepth <= zfront_posterior_rs)
+    float zfront_posterior_f = rs_posterior.zdepth - rs_posterior.zthick;
+    if (rs_prior.zdepth <= zfront_posterior_f)
     {
 		// Case 1 : No Overlapping
         rs_out.rs_prior = rs_prior;
     }
     else
     {
-        float zfront_prior_rs = rs_prior.zdepth - rs_prior.zthick;
-        if (zfront_prior_rs <= zfront_posterior_rs)
+        float zfront_prior_f = rs_prior.zdepth - rs_prior.zthick;
+        if (zfront_prior_f <= zfront_posterior_f)
         {
 			// Case 2 : Intersecting each other
-            //rs_out.rs_prior.zthick = max(zfront_posterior_rs - zfront_prior_rs, 0); // to avoid computational precision error (0 or small minus)
-            rs_out.rs_prior.zthick = zfront_posterior_rs - zfront_prior_rs;
+            //rs_out.rs_prior.zthick = max(zfront_posterior_f - zfront_prior_f, 0); // to avoid computational precision error (0 or small minus)
+            rs_out.rs_prior.zthick = zfront_posterior_f - zfront_prior_f;
 
-            rs_out.rs_prior.zdepth = zfront_posterior_rs;
+            rs_out.rs_prior.zdepth = zfront_posterior_f;
 
             rs_out.rs_prior.fvis = rs_prior.fvis * (rs_out.rs_prior.zthick / rs_prior.zthick);
             
@@ -616,9 +616,9 @@ MergeRS_OUT MergeRS(RaySegment rs_prior, RaySegment rs_posterior)
         else
         {
 			// Case 3 : rs_prior belongs to rs_posterior
-            //rs_out.rs_prior.zthick = max(zfront_prior_rs - zfront_posterior_rs, 0); // to avoid computational precision error (0 or small minus)
-            rs_out.rs_prior.zthick = zfront_prior_rs - zfront_posterior_rs;
-            rs_out.rs_prior.zdepth = zfront_prior_rs;
+            //rs_out.rs_prior.zthick = max(zfront_prior_f - zfront_posterior_f, 0); // to avoid computational precision error (0 or small minus)
+            rs_out.rs_prior.zthick = zfront_prior_f - zfront_posterior_f;
+            rs_out.rs_prior.zdepth = zfront_prior_f;
 
             rs_out.rs_prior.fvis = rs_posterior.fvis * (rs_out.rs_prior.zthick / rs_posterior.zthick);
 
@@ -674,9 +674,9 @@ int MergeFragRS(inout RaySegment rs_merge, RaySegment rs_1, RaySegment rs_2)
 
 	// rs_prior and rs_posterior mean rs_prior.zdepth >= rs_prior.zdepth
 
-    float zfront_posterior_rs = rs_posterior.zdepth - rs_posterior.zthick;
+    float zfront_posterior_f = rs_posterior.zdepth - rs_posterior.zthick;
     int ret = 0;
-    if (rs_prior.zdepth <= zfront_posterior_rs)
+    if (rs_prior.zdepth <= zfront_posterior_f)
     {
 		// Case 1 : No Overlapping
         //rs_merge = rs_2;
@@ -685,14 +685,14 @@ int MergeFragRS(inout RaySegment rs_merge, RaySegment rs_1, RaySegment rs_2)
     else
     {
         MergeRS_OUT rs_out;
-        float zfront_prior_rs = rs_prior.zdepth - rs_prior.zthick;
-        if (zfront_prior_rs <= zfront_posterior_rs)
+        float zfront_prior_f = rs_prior.zdepth - rs_prior.zthick;
+        if (zfront_prior_f <= zfront_posterior_f)
         {
 			// Case 2 : Intersecting each other
-            //rs_out.rs_prior.zthick = max(zfront_posterior_rs - zfront_prior_rs, 0); // to avoid computational precision error (0 or small minus)
-            rs_out.rs_prior.zthick = zfront_posterior_rs - zfront_prior_rs;
+            //rs_out.rs_prior.zthick = max(zfront_posterior_f - zfront_prior_f, 0); // to avoid computational precision error (0 or small minus)
+            rs_out.rs_prior.zthick = zfront_posterior_f - zfront_prior_f;
 
-            rs_out.rs_prior.zdepth = zfront_posterior_rs;
+            rs_out.rs_prior.zdepth = zfront_posterior_f;
 
 #define SIMPLE_MERGE 1
 #ifdef SIMPLE_MERGE
@@ -708,9 +708,9 @@ int MergeFragRS(inout RaySegment rs_merge, RaySegment rs_1, RaySegment rs_2)
         else
         {
 			// Case 3 : rs_prior belongs to rs_posterior
-            //rs_out.rs_prior.zthick = max(zfront_prior_rs - zfront_posterior_rs, 0); // to avoid computational precision error (0 or small minus)
-            rs_out.rs_prior.zthick = zfront_prior_rs - zfront_posterior_rs;
-            rs_out.rs_prior.zdepth = zfront_prior_rs;
+            //rs_out.rs_prior.zthick = max(zfront_prior_f - zfront_posterior_f, 0); // to avoid computational precision error (0 or small minus)
+            rs_out.rs_prior.zthick = zfront_prior_f - zfront_posterior_f;
+            rs_out.rs_prior.zdepth = zfront_prior_f;
             
 #ifdef SIMPLE_MERGE
             rs_out.rs_prior.fvis = rs_posterior.fvis * (rs_out.rs_prior.zthick / rs_posterior.zthick);
@@ -769,10 +769,10 @@ int MergeFragRS_NV(inout RaySegment rs_1, inout RaySegment rs_2)
 
 	// rs_prior and rs_posterior mean rs_prior.zdepth >= rs_prior.zdepth
 
-    float zfront_posterior_rs = rs_posterior.zdepth - rs_posterior.zthick;
+    float zfront_posterior_f = rs_posterior.zdepth - rs_posterior.zthick;
     int ret = 0;
     MergeRS_OUT rs_out;
-    if (rs_prior.zdepth <= zfront_posterior_rs)
+    if (rs_prior.zdepth <= zfront_posterior_f)
     {
 		// Case 1 : No Overlapping
         //rs_merge = rs_2;
@@ -780,14 +780,14 @@ int MergeFragRS_NV(inout RaySegment rs_1, inout RaySegment rs_2)
     }
     else
     {
-        float zfront_prior_rs = rs_prior.zdepth - rs_prior.zthick;
-        if (zfront_prior_rs <= zfront_posterior_rs)
+        float zfront_prior_f = rs_prior.zdepth - rs_prior.zthick;
+        if (zfront_prior_f <= zfront_posterior_f)
         {
 			// Case 2 : Intersecting each other
-            //rs_out.rs_prior.zthick = max(zfront_posterior_rs - zfront_prior_rs, 0); // to avoid computational precision error (0 or small minus)
-            rs_out.rs_prior.zthick = zfront_posterior_rs - zfront_prior_rs;
+            //rs_out.rs_prior.zthick = max(zfront_posterior_f - zfront_prior_f, 0); // to avoid computational precision error (0 or small minus)
+            rs_out.rs_prior.zthick = zfront_posterior_f - zfront_prior_f;
 
-            rs_out.rs_prior.zdepth = zfront_posterior_rs;
+            rs_out.rs_prior.zdepth = zfront_posterior_f;
 
 #define SIMPLE_MERGE 1
 #ifdef SIMPLE_MERGE
@@ -803,9 +803,9 @@ int MergeFragRS_NV(inout RaySegment rs_1, inout RaySegment rs_2)
         else
         {
 			// Case 3 : rs_prior belongs to rs_posterior
-            //rs_out.rs_prior.zthick = max(zfront_prior_rs - zfront_posterior_rs, 0); // to avoid computational precision error (0 or small minus)
-            rs_out.rs_prior.zthick = zfront_prior_rs - zfront_posterior_rs;
-            rs_out.rs_prior.zdepth = zfront_prior_rs;
+            //rs_out.rs_prior.zthick = max(zfront_prior_f - zfront_posterior_f, 0); // to avoid computational precision error (0 or small minus)
+            rs_out.rs_prior.zthick = zfront_prior_f - zfront_posterior_f;
+            rs_out.rs_prior.zdepth = zfront_prior_f;
             
 #ifdef SIMPLE_MERGE
             rs_out.rs_prior.fvis = rs_posterior.fvis * (rs_out.rs_prior.zthick / rs_posterior.zthick);
@@ -901,21 +901,21 @@ MergeRS_OUT2 MergeRS2(RaySegment2 rs_prior, RaySegment2 rs_posterior, const in f
 	// rs_prior and rs_posterior mean rs_prior.zdepth >= rs_prior.zdepth
     MergeRS_OUT2 rs_out;
 
-    float zfront_posterior_rs = rs_posterior.zdepth - rs_posterior.zthick;
-    if (rs_prior.zdepth <= zfront_posterior_rs)
+    float zfront_posterior_f = rs_posterior.zdepth - rs_posterior.zthick;
+    if (rs_prior.zdepth <= zfront_posterior_f)
     {
 		// Case 1 : No Overlapping
         rs_out.rs_prior = rs_prior;
     }
     else
     {
-        float zfront_prior_rs = rs_prior.zdepth - rs_prior.zthick;
-        if (zfront_prior_rs <= zfront_posterior_rs)
+        float zfront_prior_f = rs_prior.zdepth - rs_prior.zthick;
+        if (zfront_prior_f <= zfront_posterior_f)
         {
 			// Case 2 : Intersecting each other
-            //rs_out.rs_prior.zthick = max(zfront_posterior_rs - zfront_prior_rs, 0); // to avoid computational precision error (0 or small minus)
-            rs_out.rs_prior.zthick = zfront_posterior_rs - zfront_prior_rs;
-            rs_out.rs_prior.zdepth = zfront_posterior_rs;
+            //rs_out.rs_prior.zthick = max(zfront_posterior_f - zfront_prior_f, 0); // to avoid computational precision error (0 or small minus)
+            rs_out.rs_prior.zthick = zfront_posterior_f - zfront_prior_f;
+            rs_out.rs_prior.zdepth = zfront_posterior_f;
 			// if simple linear mode
 			{
 				//rs_out.rs_prior.fvis = rs_prior.fvis * (rs_out.rs_prior.zthick / rs_prior.zthick); 
@@ -949,9 +949,9 @@ MergeRS_OUT2 MergeRS2(RaySegment2 rs_prior, RaySegment2 rs_posterior, const in f
         else
         {
 			// Case 3 : rs_prior belongs to rs_posterior
-            //rs_out.rs_prior.zthick = max(zfront_prior_rs - zfront_posterior_rs, 0); // to avoid computational precision error (0 or small minus)
-            rs_out.rs_prior.zthick = zfront_prior_rs - zfront_posterior_rs;
-            rs_out.rs_prior.zdepth = zfront_prior_rs;
+            //rs_out.rs_prior.zthick = max(zfront_prior_f - zfront_posterior_f, 0); // to avoid computational precision error (0 or small minus)
+            rs_out.rs_prior.zthick = zfront_prior_f - zfront_posterior_f;
+            rs_out.rs_prior.zdepth = zfront_prior_f;
 
 			// if simple linear mode
 			{
@@ -1038,9 +1038,9 @@ int MergeFragRS2(inout RaySegment2 rs_merge, RaySegment2 rs_1, RaySegment2 rs_2)
     rs_prior.fvis.a = min(rs_prior.fvis.a, SAFE_OPAQUEALPHA);
     rs_posterior.fvis.a = min(rs_posterior.fvis.a, SAFE_OPAQUEALPHA);
 
-    float zfront_posterior_rs = rs_posterior.zdepth - rs_posterior.zthick;
+    float zfront_posterior_f = rs_posterior.zdepth - rs_posterior.zthick;
     int ret = 0;
-    if (rs_prior.zdepth <= zfront_posterior_rs)
+    if (rs_prior.zdepth <= zfront_posterior_f)
     {
 		// Case 1 : No Overlapping
         //rs_merge = rs_2;
@@ -1049,13 +1049,13 @@ int MergeFragRS2(inout RaySegment2 rs_merge, RaySegment2 rs_1, RaySegment2 rs_2)
     else
     {
         MergeRS_OUT2 rs_out;
-        float zfront_prior_rs = rs_prior.zdepth - rs_prior.zthick;
-        if (zfront_prior_rs <= zfront_posterior_rs)
+        float zfront_prior_f = rs_prior.zdepth - rs_prior.zthick;
+        if (zfront_prior_f <= zfront_posterior_f)
         {
 			// Case 2 : Intersecting each other
-            //rs_out.rs_prior.zthick = max(zfront_posterior_rs - zfront_prior_rs, 0); // to avoid computational precision error (0 or small minus)
-            rs_out.rs_prior.zthick = zfront_posterior_rs - zfront_prior_rs;
-            rs_out.rs_prior.zdepth = zfront_posterior_rs;
+            //rs_out.rs_prior.zthick = max(zfront_posterior_f - zfront_prior_f, 0); // to avoid computational precision error (0 or small minus)
+            rs_out.rs_prior.zthick = zfront_posterior_f - zfront_prior_f;
+            rs_out.rs_prior.zdepth = zfront_posterior_f;
 
 //#define SIMPLE_MERGE 1
 #ifdef SIMPLE_MERGE
@@ -1074,9 +1074,9 @@ int MergeFragRS2(inout RaySegment2 rs_merge, RaySegment2 rs_1, RaySegment2 rs_2)
         else
         {
 			// Case 3 : rs_prior belongs to rs_posterior
-            //rs_out.rs_prior.zthick = max(zfront_prior_rs - zfront_posterior_rs, 0); // to avoid computational precision error (0 or small minus)
-            rs_out.rs_prior.zthick = zfront_prior_rs - zfront_posterior_rs;
-            rs_out.rs_prior.zdepth = zfront_prior_rs;
+            //rs_out.rs_prior.zthick = max(zfront_prior_f - zfront_posterior_f, 0); // to avoid computational precision error (0 or small minus)
+            rs_out.rs_prior.zthick = zfront_prior_f - zfront_posterior_f;
+            rs_out.rs_prior.zdepth = zfront_prior_f;
             
 #ifdef SIMPLE_MERGE
             rs_out.rs_prior.fvis = rs_posterior.fvis * (rs_out.rs_prior.zthick / rs_posterior.zthick);
@@ -1134,9 +1134,9 @@ int MergeFragRS_Avr(inout RaySegment2 rs_merge, RaySegment2 rs_1, RaySegment2 rs
         rs_posterior = rs_2;
     }
 
-    float zfront_posterior_rs = rs_posterior.zdepth - rs_posterior.zthick;
+    float zfront_posterior_f = rs_posterior.zdepth - rs_posterior.zthick;
     int ret = 0;
-    if (rs_prior.zdepth < zfront_posterior_rs)
+    if (rs_prior.zdepth < zfront_posterior_f)
     {
 		// Case 1 : No Overlapping
         //rs_merge = rs_2;
@@ -1177,30 +1177,30 @@ Fragment_OUT MergeFrags(Fragment f_prior, Fragment f_posterior, const in float b
 	// f_prior and f_posterior mean f_prior.z >= f_prior.z
 	Fragment_OUT fs_out;
 
-	float zfront_posterior_rs = f_posterior.z - f_posterior.zthick;
-	if (f_prior.z <= zfront_posterior_rs)
+	float zfront_posterior_f = f_posterior.z - f_posterior.zthick;
+	if (f_prior.z <= zfront_posterior_f)
 	{
 		// Case 1 : No Overlapping
 		fs_out.f_prior = f_prior;
 	}
 	else
 	{
-		float4 fs_out_prior_vis;
+		float4 f_m_prior_vis;
 		float4 f_prior_vis = ConvertUIntToFloat4(f_prior.i_vis);
 		float4 f_posterior_vis = ConvertUIntToFloat4(f_posterior.i_vis);
 		f_prior_vis.a = min(f_prior_vis.a, SAFE_OPAQUEALPHA);
 		f_posterior_vis.a = min(f_posterior_vis.a, SAFE_OPAQUEALPHA);
 
-		float zfront_prior_rs = f_prior.z - f_prior.zthick;
-		if (zfront_prior_rs <= zfront_posterior_rs)
+		float zfront_prior_f = f_prior.z - f_prior.zthick;
+		if (zfront_prior_f <= zfront_posterior_f)
 		{
 			// Case 2 : Intersecting each other
-			//fs_out.f_prior.zthick = max(zfront_posterior_rs - zfront_prior_rs, 0); // to avoid computational precision error (0 or small minus)
-			fs_out.f_prior.zthick = zfront_posterior_rs - zfront_prior_rs;
-			fs_out.f_prior.z = zfront_posterior_rs;
+			//fs_out.f_prior.zthick = max(zfront_posterior_f - zfront_prior_f, 0); // to avoid computational precision error (0 or small minus)
+			fs_out.f_prior.zthick = zfront_posterior_f - zfront_prior_f;
+			fs_out.f_prior.z = zfront_posterior_f;
 #if LINEAR_MODE == 1
 			{
-				fs_out_prior_vis = f_prior_vis * (fs_out.f_prior.zthick / f_prior.zthick);
+				f_m_prior_vis = f_prior_vis * (fs_out.f_prior.zthick / f_prior.zthick);
 			}
 #else
 			{
@@ -1218,27 +1218,28 @@ Fragment_OUT MergeFrags(Fragment f_prior, Fragment f_posterior, const in float b
 				//float Az = Ad * zd_ratio + (1 - beta) * (term1 + term2 + term3 + term4 + term4 * (5 - zd_ratio) / 6.f * Ad);
 
 				float3 Cz = Id * Az;
-				fs_out_prior_vis = float4(Cz, Az);
+				f_m_prior_vis = float4(Cz, Az);
 			}
 #endif
 
 			float old_alpha = f_prior_vis.a;
 			f_prior.zthick -= fs_out.f_prior.zthick;
-			f_prior_vis = (f_prior_vis - fs_out_prior_vis) / (1.f - fs_out_prior_vis.a);
+			f_prior_vis = (f_prior_vis - f_m_prior_vis) / (1.f - f_m_prior_vis.a);
 
-			fs_out.f_prior.opacity_sum = f_prior.opacity_sum * fs_out_prior_vis.a / old_alpha;
-			f_prior.opacity_sum = f_prior.opacity_sum * f_prior_vis.a / old_alpha;
+			fs_out.f_prior.opacity_sum = f_prior.opacity_sum * f_m_prior_vis.a / old_alpha;
+			//f_prior.opacity_sum = f_prior.opacity_sum * f_prior_vis.a / old_alpha;
+			f_prior.opacity_sum = f_prior.opacity_sum - fs_out.f_prior.opacity_sum;
 		}
 		else
 		{
 			// Case 3 : f_prior belongs to f_posterior
-			//fs_out.f_prior.zthick = max(zfront_prior_rs - zfront_posterior_rs, 0); // to avoid computational precision error (0 or small minus)
-			fs_out.f_prior.zthick = zfront_prior_rs - zfront_posterior_rs;
-			fs_out.f_prior.z = zfront_prior_rs;
+			//fs_out.f_prior.zthick = max(zfront_prior_f - zfront_posterior_f, 0); // to avoid computational precision error (0 or small minus)
+			fs_out.f_prior.zthick = zfront_prior_f - zfront_posterior_f;
+			fs_out.f_prior.z = zfront_prior_f;
 
 #if LINEAR_MODE == 1
 			{
-				fs_out_prior_vis = f_posterior_vis * (fs_out.f_prior.zthick / f_posterior.zthick); 
+				f_m_prior_vis = f_posterior_vis * (fs_out.f_prior.zthick / f_posterior.zthick); 
 			}
 #else
 			{
@@ -1256,37 +1257,39 @@ Fragment_OUT MergeFrags(Fragment f_prior, Fragment f_posterior, const in float b
 				//float Az = Ad * zd_ratio + (1 - beta) * (term1 + term2 + term3 + term4 + term4 * (5 - zd_ratio) / 6.f * Ad);
 
 				float3 Cz = Id * Az;
-				fs_out_prior_vis = float4(Cz, Az);
+				f_m_prior_vis = float4(Cz, Az);
 			}
 #endif
 
 			float old_alpha = f_posterior_vis.a;
 			f_posterior.zthick -= fs_out.f_prior.zthick;
-			f_posterior_vis = (f_posterior_vis - fs_out_prior_vis) / (1.f - fs_out_prior_vis.a);
+			f_posterior_vis = (f_posterior_vis - f_m_prior_vis) / (1.f - f_m_prior_vis.a);
 
-			fs_out.f_prior.opacity_sum = f_posterior.opacity_sum * fs_out_prior_vis.a / old_alpha;
-			f_posterior.opacity_sum = f_posterior.opacity_sum * f_posterior_vis.a / old_alpha;
+			fs_out.f_prior.opacity_sum = f_posterior.opacity_sum * f_m_prior_vis.a / old_alpha;
+			//f_posterior.opacity_sum = f_posterior.opacity_sum * f_posterior_vis.a / old_alpha;
+			f_posterior.opacity_sum = f_posterior.opacity_sum - fs_out.f_prior.opacity_sum;
 		}
 
 		// merge the fusion sub_rs (f_prior) to fs_out.f_prior
 		fs_out.f_prior.zthick += f_prior.zthick;
 		fs_out.f_prior.z = f_prior.z;
-		float4 fvis_front_sub_rs = f_posterior_vis * (f_prior.zthick / f_posterior.zthick); // REDESIGN
-		float alphaw_front_sub_rs = f_posterior.opacity_sum * fvis_front_sub_rs.a / f_posterior_vis.a;
-		//float4 fvis_fusion_sub_rs = BlendFloat4AndFloat4(fvis_front_sub_rs, f_prior_vis);
-		float4 fvis_fusion_sub_rs = MixOpt(fvis_front_sub_rs, alphaw_front_sub_rs, f_prior_vis, f_prior.opacity_sum);
-		fs_out_prior_vis += fvis_fusion_sub_rs * (1.f - fs_out_prior_vis.a);
-		fs_out.f_prior.opacity_sum += alphaw_front_sub_rs + f_prior.opacity_sum;
+		float4 f_mid_vis = f_posterior_vis * (f_prior.zthick / f_posterior.zthick); // REDESIGN
+		float f_mid_alphaw = f_posterior.opacity_sum * f_mid_vis.a / f_posterior_vis.a;
+		//float4 f_mid_mix_vis = BlendFloat4AndFloat4(f_mid_vis, f_prior_vis);
+		float4 f_mid_mix_vis = MixOpt(f_mid_vis, f_mid_alphaw, f_prior_vis, f_prior.opacity_sum);
+		f_m_prior_vis += f_mid_mix_vis * (1.f - f_m_prior_vis.a);
+		fs_out.f_prior.opacity_sum += f_mid_alphaw + f_prior.opacity_sum;
 
 		f_posterior.zthick -= f_prior.zthick;
 		float old_alpha = f_posterior_vis.a;
-		f_posterior_vis = (f_posterior_vis - fvis_front_sub_rs) / (1.f - fvis_front_sub_rs.a);
-		f_posterior.opacity_sum *= f_posterior_vis.a / old_alpha;
+		f_posterior_vis = (f_posterior_vis - f_mid_vis) / (1.f - f_mid_vis.a);
+		//f_posterior.opacity_sum *= f_posterior_vis.a / old_alpha;
+		f_posterior.opacity_sum -= f_mid_alphaw;
 
 		// convert to 8b channels
-		f_prior.i_vis = ConvertFloat4ToUInt(f_prior_vis);
+		//f_prior.i_vis = ConvertFloat4ToUInt(f_prior_vis);
 		f_posterior.i_vis = ConvertFloat4ToUInt(f_posterior_vis);
-		fs_out.f_prior.i_vis = ConvertFloat4ToUInt(fs_out_prior_vis);
+		fs_out.f_prior.i_vis = ConvertFloat4ToUInt(f_m_prior_vis);
 
 #define ALPHA_CHECK(IV) ((IV >> 24) > 0)
 		if (!ALPHA_CHECK(f_posterior.i_vis))
@@ -1304,6 +1307,22 @@ Fragment_OUT MergeFrags(Fragment f_prior, Fragment f_posterior, const in float b
 	return fs_out;
 }
 
+Fragment OFM(in Fragment f_1, const in Fragment f_2) // ordered ver.
+{
+	float4 f_1_vis = ConvertUIntToFloat4(f_1.i_vis);
+	float4 f_2_vis = ConvertUIntToFloat4(f_2.i_vis);
+
+	Fragment f_mix;
+	float4 f_mix_vis = MixOpt(f_1_vis, f_1.opacity_sum, f_2_vis, f_2.opacity_sum);
+	f_mix.i_vis = ConvertFloat4ToUInt(f_mix_vis);
+	f_mix.opacity_sum = f_1.opacity_sum + f_2.opacity_sum;
+	float z_front = min(f_1.z - f_1.zthick, f_2.z - f_2.zthick);
+	f_mix.z = f_2.z;
+	f_mix.zthick = f_mix.z - z_front;
+
+	return f_mix;
+}
+
 Fragment MergeFrags_ver2(Fragment f_prior, Fragment f_posterior, const in float beta)
 {
 	// Overall algorithm computation cost 
@@ -1311,23 +1330,23 @@ Fragment MergeFrags_ver2(Fragment f_prior, Fragment f_posterior, const in float 
 
 	// f_prior and f_posterior mean f_prior.z >= f_prior.z
 	Fragment f_out = (Fragment)0;
-	float zfront_posterior_rs = f_posterior.z - f_posterior.zthick;
-	if (f_prior.z > zfront_posterior_rs && f_posterior.i_vis != 0) // overlapping test
+
+	float zfront_posterior_f = f_posterior.z - f_posterior.zthick;
+	if (f_prior.z > zfront_posterior_f) // overlapping test
 	{
-		Fragment f_m_prior;
+		Fragment f_m_prior, f_m_posterior;
 		float4 f_m_prior_vis;
 		float4 f_prior_vis = ConvertUIntToFloat4(f_prior.i_vis);
 		float4 f_posterior_vis = ConvertUIntToFloat4(f_posterior.i_vis);
 		f_prior_vis.a = min(f_prior_vis.a, SAFE_OPAQUEALPHA);
 		f_posterior_vis.a = min(f_posterior_vis.a, SAFE_OPAQUEALPHA);
 
-		float zfront_prior_rs = f_prior.z - f_prior.zthick;
-		if (zfront_prior_rs <= zfront_posterior_rs)
+		float zfront_prior_f = f_prior.z - f_prior.zthick;
+		if (zfront_prior_f < zfront_posterior_f)
 		{
 			// Case 2 : Intersecting each other
-			//f_m_prior.zthick = max(zfront_posterior_rs - zfront_prior_rs, 0); // to avoid computational precision error (0 or small minus)
-			f_m_prior.zthick = zfront_posterior_rs - zfront_prior_rs;
-			f_m_prior.z = zfront_posterior_rs;
+			f_m_prior.zthick = zfront_posterior_f - zfront_prior_f;
+			f_m_prior.z = zfront_posterior_f;
 #if LINEAR_MODE == 1
 			{
 				f_m_prior_vis = f_prior_vis * (f_m_prior.zthick / f_prior.zthick);
@@ -1351,20 +1370,19 @@ Fragment MergeFrags_ver2(Fragment f_prior, Fragment f_posterior, const in float 
 				f_m_prior_vis = float4(Cz, Az);
 			}
 #endif
-
 			float old_alpha = f_prior_vis.a;
 			f_prior.zthick -= f_m_prior.zthick;
 			f_prior_vis = (f_prior_vis - f_m_prior_vis) / (1.f - f_m_prior_vis.a);
 
 			f_m_prior.opacity_sum = f_prior.opacity_sum * f_m_prior_vis.a / old_alpha;
 			f_prior.opacity_sum = f_prior.opacity_sum * f_prior_vis.a / old_alpha;
+			//f_prior.opacity_sum = f_prior.opacity_sum - f_m_prior.opacity_sum;
 		}
 		else
 		{
 			// Case 3 : f_prior belongs to f_posterior
-			//f_m_prior.zthick = max(zfront_prior_rs - zfront_posterior_rs, 0); // to avoid computational precision error (0 or small minus)
-			f_m_prior.zthick = zfront_prior_rs - zfront_posterior_rs;
-			f_m_prior.z = zfront_prior_rs;
+			f_m_prior.zthick = zfront_prior_f - zfront_posterior_f;
+			f_m_prior.z = zfront_prior_f;
 
 #if LINEAR_MODE == 1
 			{
@@ -1396,6 +1414,7 @@ Fragment MergeFrags_ver2(Fragment f_prior, Fragment f_posterior, const in float 
 
 			f_m_prior.opacity_sum = f_posterior.opacity_sum * f_m_prior_vis.a / old_alpha;
 			f_posterior.opacity_sum = f_posterior.opacity_sum * f_posterior_vis.a / old_alpha;
+			//f_posterior.opacity_sum = f_posterior.opacity_sum - f_m_prior.opacity_sum;
 		}
 
 		// merge the fusion (remained) f_prior to f_m_prior
@@ -1412,10 +1431,150 @@ Fragment MergeFrags_ver2(Fragment f_prior, Fragment f_posterior, const in float 
 		float old_alpha = f_posterior_vis.a;
 		f_posterior_vis = (f_posterior_vis - f_mid_vis) / (1.f - f_mid_vis.a);
 		f_posterior.opacity_sum *= f_posterior_vis.a / old_alpha;
+		//f_posterior.opacity_sum -= f_mid_alphaw;
 
 		// merge f_m_prior, f_posterior
 		float4 vis_out = f_m_prior_vis + f_posterior_vis * (1.f - f_m_prior_vis.a);
 		f_out.i_vis = ConvertFloat4ToUInt(vis_out);
+		//f_out.i_vis = ConvertFloat4ToUInt(float4(1, 0, 0, 1));
+		f_out.zthick = f_m_prior.zthick + f_posterior.zthick;
+		f_out.z = f_posterior.z;
+		f_out.opacity_sum = f_m_prior.opacity_sum + f_posterior.opacity_sum;
+
+#define ALPHA_CHECK(IV) ((IV >> 24) > 0)
+		if (!ALPHA_CHECK(f_out.i_vis))
+		{
+			f_out.i_vis = 0;
+			f_out.zthick = 0;
+		}
+	}
+	return f_out;
+}
+
+Fragment MergeFrags_ShiftVer(Fragment f_prior, Fragment f_posterior, const in float beta)
+{
+	// Overall algorithm computation cost 
+	// : 3 branches, 2 visibility interpolations, 2 visibility integrations, and 1 fusion of overlapping ray-segments
+
+	// f_prior and f_posterior mean f_prior.z >= f_prior.z
+	Fragment f_out = (Fragment)0;
+
+	float delta_z = f_posterior.z - f_prior.z;
+	// the following code suffers from single-precision floating-point problem
+	// instead, linear shift is used for resolving the precision issue
+	//float zfront_posterior_f = f_posterior.z - f_posterior.zthick;
+	//if (f_prior.z > zfront_posterior_f)
+	if ((delta_z - f_posterior.zthick) * (delta_z + f_prior.zthick) < 0) // overlapping test
+	{
+		Fragment f_m_prior, f_m_posterior;
+		float4 f_m_prior_vis;
+		float4 f_prior_vis = ConvertUIntToFloat4(f_prior.i_vis);
+		float4 f_posterior_vis = ConvertUIntToFloat4(f_posterior.i_vis);
+		f_prior_vis.a = min(f_prior_vis.a, SAFE_OPAQUEALPHA);
+		f_posterior_vis.a = min(f_posterior_vis.a, SAFE_OPAQUEALPHA);
+
+		float zfront_prior_f = f_prior.z - f_prior.zthick;
+		float zfront_posterior_f = f_posterior.z - f_posterior.zthick;
+		// the following code suffers from single-precision floating-point problem
+		// instead, linear shift is used for resolving the precision issue
+		//if (zfront_prior_f < zfront_posterior_f)
+		if (f_posterior.zthick - f_prior.zthick < delta_z)
+		{
+			// Case 2 : Intersecting each other
+			//f_m_prior.zthick = zfront_posterior_f - zfront_prior_f;
+			f_m_prior.zthick = delta_z + (f_prior.zthick - f_posterior.zthick);
+			f_m_prior.z = zfront_posterior_f;
+#if LINEAR_MODE == 1
+			{
+				f_m_prior_vis = f_prior_vis * (f_m_prior.zthick / f_prior.zthick);
+			}
+#else
+			{
+				float zd_ratio = f_m_prior.zthick / f_prior.zthick;
+				float Ad = f_prior_vis.a;
+				float3 Id = f_prior_vis.rgb / Ad;
+
+				// strict mode
+				float Az = Ad * zd_ratio * beta + (1 - beta) * (1 - pow(abs(1 - Ad), zd_ratio));
+				// approx. mode
+				//float term1 = zd_ratio * (1 - zd_ratio) / 2.f * Ad * Ad;
+				//float term2 = term1 * (2 - zd_ratio) / 3.f * Ad;
+				//float term3 = term2 * (3 - zd_ratio) / 4.f * Ad;
+				//float term4 = term3 * (4 - zd_ratio) / 5.f * Ad;
+				//float Az = Ad * zd_ratio + (1 - beta) * (term1 + term2 + term3 + term4 + term4 * (5 - zd_ratio) / 6.f * Ad);
+
+				float3 Cz = Id * Az;
+				f_m_prior_vis = float4(Cz, Az);
+			}
+#endif
+			float old_alpha = f_prior_vis.a;
+			f_prior.zthick = (f_prior.zthick - f_m_prior.zthick);
+			f_prior_vis = (f_prior_vis - f_m_prior_vis) / (1.f - f_m_prior_vis.a);
+
+			f_m_prior.opacity_sum = f_prior.opacity_sum * f_m_prior_vis.a / old_alpha;
+			f_prior.opacity_sum = f_prior.opacity_sum * f_prior_vis.a / old_alpha;
+			//f_prior.opacity_sum = f_prior.opacity_sum - f_m_prior.opacity_sum;
+		}
+		else
+		{
+			// Case 3 : f_prior belongs to f_posterior
+			//f_m_prior.zthick = zfront_prior_f - zfront_posterior_f;
+			f_m_prior.zthick = (f_posterior.zthick - f_prior.zthick) - delta_z;
+			f_m_prior.z = zfront_prior_f;
+
+#if LINEAR_MODE == 1
+			{
+				f_m_prior_vis = f_posterior_vis * (f_m_prior.zthick / f_posterior.zthick);
+			}
+#else
+			{
+				float zd_ratio = f_m_prior.zthick / f_posterior.zthick;
+				float Ad = f_posterior_vis.a;
+				float3 Id = f_posterior_vis.rgb / Ad;
+
+				// strict mode
+				float Az = Ad * zd_ratio * beta + (1 - beta) * (1 - pow(abs(1 - Ad), zd_ratio));
+				// approx. mode
+				//float term1 = zd_ratio * (1 - zd_ratio) / 2.f * Ad * Ad;
+				//float term2 = term1 * (2 - zd_ratio) / 3.f * Ad;
+				//float term3 = term2 * (3 - zd_ratio) / 4.f * Ad;
+				//float term4 = term3 * (4 - zd_ratio) / 5.f * Ad;
+				//float Az = Ad * zd_ratio + (1 - beta) * (term1 + term2 + term3 + term4 + term4 * (5 - zd_ratio) / 6.f * Ad);
+
+				float3 Cz = Id * Az;
+				f_m_prior_vis = float4(Cz, Az);
+			}
+#endif
+
+			float old_alpha = f_posterior_vis.a;
+			f_posterior.zthick = f_posterior.zthick - f_m_prior.zthick;
+			f_posterior_vis = (f_posterior_vis - f_m_prior_vis) / (1.f - f_m_prior_vis.a);
+
+			f_m_prior.opacity_sum = f_posterior.opacity_sum * f_m_prior_vis.a / old_alpha;
+			f_posterior.opacity_sum = f_posterior.opacity_sum * f_posterior_vis.a / old_alpha;
+			//f_posterior.opacity_sum = f_posterior.opacity_sum - f_m_prior.opacity_sum;
+		}
+
+		// merge the fusion (remained) f_prior to f_m_prior
+		f_m_prior.zthick += f_prior.zthick;
+		f_m_prior.z = f_prior.z;
+		float4 f_mid_vis = f_posterior_vis * (f_prior.zthick / f_posterior.zthick); // REDESIGN
+		float f_mid_alphaw = f_posterior.opacity_sum * f_mid_vis.a / f_posterior_vis.a;
+		//float4 f_mid_mix_vis = BlendFloat4AndFloat4(f_mid_vis, f_prior_vis);
+		float4 f_mid_mix_vis = MixOpt(f_mid_vis, f_mid_alphaw, f_prior_vis, f_prior.opacity_sum);
+		f_m_prior_vis += f_mid_mix_vis * (1.f - f_m_prior_vis.a); // OV operator
+		f_m_prior.opacity_sum += f_mid_alphaw + f_prior.opacity_sum;
+
+		f_posterior.zthick -= f_prior.zthick;
+		float old_alpha = f_posterior_vis.a;
+		f_posterior_vis = (f_posterior_vis - f_mid_vis) / (1.f - f_mid_vis.a);
+		f_posterior.opacity_sum *= f_posterior_vis.a / old_alpha;
+		//f_posterior.opacity_sum -= f_mid_alphaw;
+
+		// merge f_m_prior, f_posterior
+		float4 vis_out = f_m_prior_vis + f_posterior_vis * (1.f - f_m_prior_vis.a);
+		f_out.i_vis = ConvertFloat4ToUInt(vis_out);
+		//f_out.i_vis = ConvertFloat4ToUInt(float4(1, 0, 0, 1));
 		f_out.zthick = f_m_prior.zthick + f_posterior.zthick;
 		f_out.z = f_posterior.z;
 		f_out.opacity_sum = f_m_prior.opacity_sum + f_posterior.opacity_sum;
@@ -1578,9 +1737,9 @@ float GetHotspotThickness(in int2 pos_xy)
 float GetVZThickness(const float z, const float vz_thick)
 {
 	float vz_thickness = vz_thick;
-	if (vz_thickness <= 0)
+	if (vz_thick <= 0)
 	{
-		const int nbits = 24;
+#define nbits 24
 		// view-source:https://www.sjbaker.org/steve/omniv/love_your_z_buffer.html
 		// compute z-precision
 		const float zNear = g_cbCamState.near_plane;
@@ -1588,9 +1747,9 @@ float GetVZThickness(const float z, const float vz_thick)
 		float b = zFar * zNear / (zNear - zFar);
 		float res = (b / ((b / z) - 1.0f / (1 << nbits))) - z;
 		if (res < 0.0001)
-			vz_thickness = res;
+			vz_thickness = -res;
 		else
-			vz_thickness = floor(res * 100000.0f) / 100000.0f;
+			vz_thickness = -floor(res * 100000.0f) / 100000.0f;
 	}
 	return vz_thickness;
 }
