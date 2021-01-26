@@ -291,14 +291,14 @@ cbuffer cbGlobalParams : register(b7)
 //=====================
 // Helpers
 //=====================
-float3 TransformPoint(const in float3 pos_src, const in float4x4 matT)
+float3 TransformPoint(in float3 pos_src, in float4x4 matT)
 {
 	//float4 pos_src_h = mul(float4(pos_src, 1.f), matT);
 	float4 pos_src_h = mul(matT, float4(pos_src, 1.f));
     return pos_src_h.xyz / pos_src_h.w;
 }
 
-float3 TransformVector(const in float3 vec_src, const in float4x4 matT)
+float3 TransformVector(in float3 vec_src, in float4x4 matT)
 {
 	//return mul(vec_src, (float3x3) matT);
 	return mul((float3x3) matT, vec_src);
@@ -476,6 +476,40 @@ float Random(const in float2 seed2)
     float2 temp = float2(23.1406926327792690, 2.6651441426902251);
     return frac(cos(123456789.0 % 1e-7 + 256.0 * dot(seed2, temp)));
 }
+
+// A single iteration of Bob Jenkins' One-At-A-Time hashing algorithm.
+uint hash(uint x) {
+	x += (x << 10u);
+	x ^= (x >> 6u);
+	x += (x << 3u);
+	x ^= (x >> 11u);
+	x += (x << 15u);
+	return x;
+}
+
+// Compound versions of the hashing algorithm I whipped together.
+uint hash(uint2 v) { return hash(v.x ^ hash(v.y)); }
+uint hash(uint3 v) { return hash(v.x ^ hash(v.y) ^ hash(v.z)); }
+uint hash(uint4 v) { return hash(v.x ^ hash(v.y) ^ hash(v.z) ^ hash(v.w)); }
+
+// Construct a float with half-open range [0:1] using low 23 bits.
+// All zeroes yields 0.0, all ones yields the next smallest representable value below 1.0.
+float floatConstruct(uint m) {
+	const uint ieeeMantissa = 0x007FFFFFu; // binary32 mantissa bitmask
+	const uint ieeeOne = 0x3F800000u; // 1.0 in IEEE binary32
+
+	m &= ieeeMantissa;                     // Keep only mantissa bits (fractional part)
+	m |= ieeeOne;                          // Add fractional part to 1.0
+
+	float  f = asfloat(m);       // Range [1:2]
+	return f - 1.0;              // Range [0:1]
+}
+
+// Pseudo-random value in half-open range [0:1].
+float _random(float x) { return floatConstruct(hash(asuint(x))); }
+float _random(float2 v) { return floatConstruct(hash(asuint(v))); }
+float _random(float3 v) { return floatConstruct(hash(asuint(v))); }
+float _random(float4 v) { return floatConstruct(hash(asuint(v))); }
 
 float4 LoadOtfBuf(const in int sample_value, const in Buffer<float4> buf_otf, const in float opacity_correction)
 {

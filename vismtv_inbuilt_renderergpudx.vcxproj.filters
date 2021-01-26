@@ -54,7 +54,7 @@
       <Filter>bat</Filter>
     </None>
     <None Include="hlsl\moment\TrigonometricMomentMath.hlsli">
-      <Filter>hlsl source code\ssao</Filter>
+      <Filter>hlsl source code\Moment</Filter>
     </None>
   </ItemGroup>
   <ItemGroup>

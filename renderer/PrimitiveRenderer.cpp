@@ -580,25 +580,26 @@ void ComputeSSAO(__ID3D11DeviceContext* dx11DeviceImmContext,
 	dx11SRVs_SSAO[2] = dx11SRVs_SSAO[3] = dx11SRVs_SSAO[4] = NULL;
 	dx11DeviceImmContext->CSSetShaderResources(10, 2, dx11SRVs_SSAO);
 
-	// KBZ_TO_TEXTURE_cs_5_0
 	ID3D11UnorderedAccessView* dx11UAVs_SSAO[5] = {};
-	dx11UAVs_SSAO[0] = (ID3D11UnorderedAccessView*)gres_fb_mip_z_halftexs[0].alloc_res_ptrs[DTYPE_UAV];
-	dx11UAVs_SSAO[1] = (ID3D11UnorderedAccessView*)gres_fb_mip_z_halftexs[1].alloc_res_ptrs[DTYPE_UAV];
-	dx11DeviceImmContext->CSSetUnorderedAccessViews(15, 2, dx11UAVs_SSAO, 0);
-	dx11UAVs_SSAO[0] = (ID3D11UnorderedAccessView*)gres_fb_mip_a_halftexs[0].alloc_res_ptrs[DTYPE_UAV];
-	dx11UAVs_SSAO[1] = (ID3D11UnorderedAccessView*)gres_fb_mip_a_halftexs[1].alloc_res_ptrs[DTYPE_UAV];
-	dx11DeviceImmContext->CSSetUnorderedAccessViews(20, 2, dx11UAVs_SSAO, 0);
 	dx11UAVs_SSAO[2] = dx11UAVs_SSAO[3] = dx11UAVs_SSAO[4] = NULL;
-
-	dx11DeviceImmContext->CSSetShader(GETCS(KBZ_TO_TEXTURE_cs_5_0), NULL, 0);
-	dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
-	//dx11DeviceImmContext->Flush();
-	dx11DeviceImmContext->CSSetUnorderedAccessViews(15, 2, &dx11UAVs_SSAO[2], 0);
-	dx11DeviceImmContext->CSSetUnorderedAccessViews(20, 2, &dx11UAVs_SSAO[2], 0);
-	dx11DeviceImmContext->GenerateMips((ID3D11ShaderResourceView*)gres_fb_mip_z_halftexs[0].alloc_res_ptrs[DTYPE_SRV]);
-	dx11DeviceImmContext->GenerateMips((ID3D11ShaderResourceView*)gres_fb_mip_z_halftexs[1].alloc_res_ptrs[DTYPE_SRV]);
-	dx11DeviceImmContext->GenerateMips((ID3D11ShaderResourceView*)gres_fb_mip_a_halftexs[0].alloc_res_ptrs[DTYPE_SRV]);
-	dx11DeviceImmContext->GenerateMips((ID3D11ShaderResourceView*)gres_fb_mip_a_halftexs[1].alloc_res_ptrs[DTYPE_SRV]);
+	// KBZ_TO_TEXTURE_cs_5_0
+	//dx11UAVs_SSAO[0] = (ID3D11UnorderedAccessView*)gres_fb_mip_z_halftexs[0].alloc_res_ptrs[DTYPE_UAV];
+	//dx11UAVs_SSAO[1] = (ID3D11UnorderedAccessView*)gres_fb_mip_z_halftexs[1].alloc_res_ptrs[DTYPE_UAV];
+	//dx11DeviceImmContext->CSSetUnorderedAccessViews(15, 2, dx11UAVs_SSAO, 0);
+	//dx11UAVs_SSAO[0] = (ID3D11UnorderedAccessView*)gres_fb_mip_a_halftexs[0].alloc_res_ptrs[DTYPE_UAV];
+	//dx11UAVs_SSAO[1] = (ID3D11UnorderedAccessView*)gres_fb_mip_a_halftexs[1].alloc_res_ptrs[DTYPE_UAV];
+	//dx11DeviceImmContext->CSSetUnorderedAccessViews(20, 2, dx11UAVs_SSAO, 0);
+	//dx11UAVs_SSAO[2] = dx11UAVs_SSAO[3] = dx11UAVs_SSAO[4] = NULL;
+	//
+	//dx11DeviceImmContext->CSSetShader(GETCS(KBZ_TO_TEXTURE_cs_5_0), NULL, 0);
+	//dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+	////dx11DeviceImmContext->Flush();
+	//dx11DeviceImmContext->CSSetUnorderedAccessViews(15, 2, &dx11UAVs_SSAO[2], 0);
+	//dx11DeviceImmContext->CSSetUnorderedAccessViews(20, 2, &dx11UAVs_SSAO[2], 0);
+	//dx11DeviceImmContext->GenerateMips((ID3D11ShaderResourceView*)gres_fb_mip_z_halftexs[0].alloc_res_ptrs[DTYPE_SRV]);
+	//dx11DeviceImmContext->GenerateMips((ID3D11ShaderResourceView*)gres_fb_mip_z_halftexs[1].alloc_res_ptrs[DTYPE_SRV]);
+	//dx11DeviceImmContext->GenerateMips((ID3D11ShaderResourceView*)gres_fb_mip_a_halftexs[0].alloc_res_ptrs[DTYPE_SRV]);
+	//dx11DeviceImmContext->GenerateMips((ID3D11ShaderResourceView*)gres_fb_mip_a_halftexs[1].alloc_res_ptrs[DTYPE_SRV]);
 
 	// KB_SSAO_cs_5_0
 	dx11UAVs_SSAO[0] = (ID3D11UnorderedAccessView*)gres_fb_ao_texs[0].alloc_res_ptrs[DTYPE_UAV];
@@ -607,12 +608,12 @@ void ComputeSSAO(__ID3D11DeviceContext* dx11DeviceImmContext,
 
 	dx11DeviceImmContext->CSSetUnorderedAccessViews(10, 1, (ID3D11UnorderedAccessView**)&gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV], 0);
 
-	dx11SRVs_SSAO[0] = (ID3D11ShaderResourceView*)gres_fb_mip_z_halftexs[0].alloc_res_ptrs[DTYPE_SRV];
-	dx11SRVs_SSAO[1] = (ID3D11ShaderResourceView*)gres_fb_mip_z_halftexs[1].alloc_res_ptrs[DTYPE_SRV];
-	dx11DeviceImmContext->CSSetShaderResources(15, 2, dx11SRVs_SSAO);
-	dx11SRVs_SSAO[0] = (ID3D11ShaderResourceView*)gres_fb_mip_a_halftexs[0].alloc_res_ptrs[DTYPE_SRV];
-	dx11SRVs_SSAO[1] = (ID3D11ShaderResourceView*)gres_fb_mip_a_halftexs[1].alloc_res_ptrs[DTYPE_SRV];
-	dx11DeviceImmContext->CSSetShaderResources(20, 2, dx11SRVs_SSAO);
+	//dx11SRVs_SSAO[0] = (ID3D11ShaderResourceView*)gres_fb_mip_z_halftexs[0].alloc_res_ptrs[DTYPE_SRV];
+	//dx11SRVs_SSAO[1] = (ID3D11ShaderResourceView*)gres_fb_mip_z_halftexs[1].alloc_res_ptrs[DTYPE_SRV];
+	//dx11DeviceImmContext->CSSetShaderResources(15, 2, dx11SRVs_SSAO);
+	//dx11SRVs_SSAO[0] = (ID3D11ShaderResourceView*)gres_fb_mip_a_halftexs[0].alloc_res_ptrs[DTYPE_SRV];
+	//dx11SRVs_SSAO[1] = (ID3D11ShaderResourceView*)gres_fb_mip_a_halftexs[1].alloc_res_ptrs[DTYPE_SRV];
+	//dx11DeviceImmContext->CSSetShaderResources(20, 2, dx11SRVs_SSAO);
 
 	if (involve_vr)
 	{
@@ -1243,11 +1244,22 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	//float fv_thickness = v_thickness_abs <= 0 ? v_copthickness_abs <= 0 ? (float)(len_diagonal_max * v_thickness) : fv_copthickness * v_thickness / v_copthickness : (float)v_thickness_abs;
 
 	VmCObject* cam_obj = iobj->GetCameraObject();
+
+	CB_EnvState cbEnvState;
+	grd_helper::SetCb_Env(cbEnvState, cam_obj, _fncontainer, (vmfloat3)global_light_factors);
+	D3D11_MAPPED_SUBRESOURCE mappedResEnvState;
+	dx11DeviceImmContext->Map(cbuf_env_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResEnvState);
+	CB_EnvState* cbEnvStateData = (CB_EnvState*)mappedResEnvState.pData;
+	memcpy(cbEnvStateData, &cbEnvState, sizeof(CB_EnvState));
+	dx11DeviceImmContext->Unmap(cbuf_env_state, 0);
+	dx11DeviceImmContext->PSSetConstantBuffers(7, 1, &cbuf_env_state);
+	dx11DeviceImmContext->CSSetConstantBuffers(7, 1, &cbuf_env_state);
+
 	vmmat44f matWS2SS, matWS2PS, matSS2WS;
 	CB_CameraState cbCamState;
 	grd_helper::SetCb_Camera(cbCamState, matWS2PS, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, gi_v_thickness);
 	cbCamState.iSrCamDummy__0 = *(uint*)&merging_beta;
-	if (!is_final_renderer || check_pixel_transmittance) // which means the k-buffer can be used for the following renderer
+	if (!is_final_renderer || check_pixel_transmittance || cbEnvState.r_kernel_ao > 0) // which means the k-buffer can be used for the following renderer
 		cbCamState.cam_flag |= (0x1 << 3);
 	D3D11_MAPPED_SUBRESOURCE mappedResCamState;
 	dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
@@ -1309,16 +1321,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	//	dx11DeviceImmContext->PSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_mask_hotspot.alloc_res_ptrs[DTYPE_SRV]);
 	//	dx11DeviceImmContext->CSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_mask_hotspot.alloc_res_ptrs[DTYPE_SRV]);
 	//}
-
-	CB_EnvState cbEnvState;
-	grd_helper::SetCb_Env(cbEnvState, cam_obj, _fncontainer, (vmfloat3)global_light_factors);
-	D3D11_MAPPED_SUBRESOURCE mappedResEnvState;
-	dx11DeviceImmContext->Map(cbuf_env_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResEnvState);
-	CB_EnvState* cbEnvStateData = (CB_EnvState*)mappedResEnvState.pData;
-	memcpy(cbEnvStateData, &cbEnvState, sizeof(CB_EnvState));
-	dx11DeviceImmContext->Unmap(cbuf_env_state, 0);
-	dx11DeviceImmContext->PSSetConstantBuffers(7, 1, &cbuf_env_state);
-	dx11DeviceImmContext->CSSetConstantBuffers(7, 1, &cbuf_env_state);
 
 	D3D11_RECT rects[1];
 	rects[0].left = 0;
@@ -2598,7 +2600,8 @@ RENDERER_LOOP_EXIT:
 			// sort and render the fragments.  Use the prefix sum to determine where the 
 			// fragments for each pixel reside.
 			dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(SR_OIT_ABUFFER_SORT2SENDER_SFM_cs_5_0) : GETCS(SR_OIT_ABUFFER_SORT2SENDER_cs_5_0), NULL, 0);
-			dx11DeviceImmContext->CSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_SRV]);
+			//dx11DeviceImmContext->CSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_SRV]);
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], 0); // trimming may occur 
 			dx11DeviceImmContext->CSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]);
 			break;
 		case MFR_MODE::DYNAMIC_KB:

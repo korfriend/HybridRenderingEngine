@@ -539,106 +539,18 @@ float TanToSin(float x)
 	return x * rsqrt(x*x + 1.0);
 }
 
-float BiasedTangent(float3 V)
-{
-	//return V.z / length(V.xy) + g_cbEnv.tangent_bias;
-	return tan(acos(dot(V, -g_cbCamState.dir_view_ws))) + g_cbEnv.tangent_bias;
-}
-
-float Tangent(float3 P, float3 S, float3 N)
-{
-	//return -(P.z - S.z) / length(S.xy - P.xy);
-	float3 PS = normalize(S - P);
-	return tan(F_PI * 0.5 - acos(dot(PS, N)));
-}
-
 float Length2(float3 V)
 {
 	return dot(V, V);
 }
 
-float HorizonOcclusion1(float2 xy_coord, float2 delta_dir,
-	float3 P,
-	float3 dPdx,
-	float3 dPdy,
-	float3 face_normal,
-	float randstep,
-	int numSamples, 
-	uint bytes_frags_per_pixel)
-{
-	float ao = 0;
-
-	// Offset the first coord with some noise
-	float2 xy_pix = xy_coord + round(randstep * delta_dir);
-	delta_dir = float2(uint2(delta_dir));
-
-	// Calculate the tangent vector
-	//float3 T = delta_dir.x * dPdx + delta_dir.y * dPdy;
-	//T = normalize(T);
-
-	// Get the angle of the tangent vector from the viewspace axis
-	//float tanH = BiasedTangent(T);
-	float beta = acos(dot(face_normal, -g_cbCamState.dir_view_ws));
-	float tanH = tan(beta) + g_cbEnv.tangent_bias;
-	float sinH = TanToSin(tanH);
-
-	float tanS;
-	float d2;
-	float3 S;
-
-	float R2 = g_cbEnv.r_kernel_ao * g_cbEnv.r_kernel_ao;
-	float NegInvR2 = -1.0 / R2;
-
-	// Sample to find the maximum angle
-	[loop]
-	for (int s = 1; s <= numSamples; ++s)
-	{
-		xy_pix += delta_dir;
-
-		int2 ixy_pix = int2(xy_pix);
-		int frag_cnt = (int)fragment_counter[ixy_pix] & 0xFFF;
-		if (frag_cnt == 0) continue;
-
-		uint addr_base = (ixy_pix.y * g_cbCamState.rt_width + ixy_pix.x) * bytes_frags_per_pixel;
-
-		for (int layer = 0; layer < frag_cnt; ++layer)
-		{
-			float z = LOAD1_KBUF_Z(deep_k_buf, addr_base, layer);
-
-			S = ComputePos_SSZ2WS(ixy_pix.x, ixy_pix.y, z);
-
-			//tanS = Tangent(P, S);
-			//tanS = Tangent(P, S, face_normal);
-			float3 PS = normalize(S - P);
-			tanS = tan(F_PI * 0.5 - acos(dot(PS, face_normal)) - beta);
-
-			d2 = Length2(S - P);
-
-			// Is the sample within the radius and the angle greater?
-			if (d2 < R2 && tanS > tanH)
-			{
-				float sinS = TanToSin(tanS);
-				// Apply falloff based on the distance
-				ao += (d2 * NegInvR2 + 1.0f) * (sinS - sinH);
-
-				tanH = tanS;
-				sinH = sinS;
-				break;
-			}
-		}
-	}
-
-	return ao;
-}
-
 float HorizonOcclusion(float2 xy_coord, float2 delta_dir,
 	float3 P,
-	float3 dPdx,
-	float3 dPdy,
 	float3 face_normal,
 	float randstep,
 	int numSamples,
-	uint bytes_frags_per_pixel)
+	uint bytes_frags_per_pixel,
+	bool apply_vr_geometry)
 {
 	float ao = 0;
 
@@ -646,12 +558,8 @@ float HorizonOcclusion(float2 xy_coord, float2 delta_dir,
 	float2 xy_pix = xy_coord + round(randstep * delta_dir);
 	delta_dir = float2(uint2(delta_dir));
 
-	// Calculate the tangent vector
-	float3 T = delta_dir.x * dPdx + delta_dir.y * dPdy;
-	T = normalize(T);
-
 	// Get the angle of the tangent vector from the viewspace axis
-	float tanH = g_cbEnv.tangent_bias;
+	float tanH = tan(g_cbEnv.tangent_bias);
 	float sinH = TanToSin(tanH);
 
 	float tanS;
@@ -680,9 +588,33 @@ float HorizonOcclusion(float2 xy_coord, float2 delta_dir,
 			S = ComputePos_SSZ2WS(ixy_pix.x, ixy_pix.y, z);
 
 			tanS = tan(F_PI * 0.5 - acos(dot(normalize(S-P), face_normal)));
-			//tanS = Tangent(P, S);
-			//tanS = Tangent(P, S, face_normal);
+			d2 = Length2(S - P);
 
+			// Is the sample within the radius and the angle greater?
+			if (d2 < R2 && tanS > tanH)
+			{
+				float sinS = TanToSin(tanS);
+				// Apply falloff based on the distance : (d2 * NegInvR2 + 1.0f)
+#if APPLY_TRANSPARENCY == 1
+				float a = LOAD1_KBUF_ALPHAF(deep_k_buf, addr_base, layer);
+				ao += (d2 * NegInvR2 + 1.0f) * (sinS - sinH) * a;
+#else
+				ao += (d2 * NegInvR2 + 1.0f) * (sinS - sinH);
+#endif
+
+				tanH = tanS;
+				sinH = sinS;
+			}
+		}
+
+		// to do for VR geometry
+		if (apply_vr_geometry)
+		{
+			float z = fragment_vr_zdepth[ixy_pix];
+
+			S = ComputePos_SSZ2WS(ixy_pix.x, ixy_pix.y, z);
+
+			tanS = tan(F_PI * 0.5 - acos(dot(normalize(S - P), face_normal)));
 			d2 = Length2(S - P);
 
 			// Is the sample within the radius and the angle greater?
@@ -694,7 +626,6 @@ float HorizonOcclusion(float2 xy_coord, float2 delta_dir,
 
 				tanH = tanS;
 				sinH = sinS;
-				break;
 			}
 		}
 	}
@@ -725,6 +656,8 @@ void KB_SSAO(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTi
 	int frag_cnt = (int)fragment_counter[DTid.xy];
 	uint vr_hit_enc = frag_cnt >> 24;
 	frag_cnt = frag_cnt & 0xFFF;
+	//rw_fragment_blendout[DTid.xy] = float4((float3)frag_cnt / 8.0, 1);
+	//return;
 
 	if (frag_cnt == 0 && vr_hit_enc == 0)
 	{
@@ -764,7 +697,7 @@ void KB_SSAO(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTi
 
 	float v_AOs[LOCAL_SIZE];
 	[loop]
-	for (int i = 0; i < (int)min(frag_cnt, 1); i++)
+	for (int i = 0; i < (int)frag_cnt; i++)
 	{
 		v_AOs[i] = 0;
 		float z = LOAD1_KBUF_Z(deep_k_buf, addr_base, i);
@@ -800,7 +733,8 @@ void KB_SSAO(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTi
 		float3 face_normal = normalize(cross(dPdx, dPdy));
 		if (dot(view_dir_ws, face_normal) > 0)
 			face_normal *= -1.f;
-
+		//rw_fragment_blendout[DTid.xy] = float4((float3)z / 100, 1);
+		//if(i == frag_cnt - 1) return;
 		float ao = 0.0;
 		// Calculate the horizon occlusion of each direction
 		for (float d = 0; d < num_dirs; ++d)
@@ -813,21 +747,17 @@ void KB_SSAO(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTi
 
 			// Sample the pixels along the direction
 			ao += HorizonOcclusion(DTid.xy, delta_dir,
-				p,
-				dPdx, dPdy, face_normal,
+				p, face_normal,
 				random_samples.z,
 				(int)numSteps, 
-				bytes_frags_per_pixel);
+				bytes_frags_per_pixel, false);
 		}
 
-		//rw_fragment_blendout[DTid.xy] = float4((float3)dot(-view_dir_ws, face_normal), 1);
-		v_AOs[i] = ao / num_dirs * ao_intensity; //min(1.f / (2.f * F_PI) * AO * ao_intensity, 1.f);
+		v_AOs[i] = ao / num_dirs * ao_intensity;
 	}
 	rw_fragment_blendout[DTid.xy] = float4((float3)1 - v_AOs[0], 1);
-	return;
-	/*
+	//return;
 	for (i = (int)frag_cnt; i < k_value; i++) v_AOs[i] = 0;
-
 	rw_ao_textures[0][DTid.xy] = float4(v_AOs[0], v_AOs[1], v_AOs[2], v_AOs[3]);
 	rw_ao_textures[1][DTid.xy] = float4(v_AOs[4], v_AOs[5], v_AOs[6], v_AOs[7]);
 
@@ -837,209 +767,60 @@ void KB_SSAO(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTi
 		float z = fragment_vr_zdepth[DTid.xy];
 		float3 p = pos_ip_ws + view_dir_ws * z;
 
-		// compute face normal // 
-		// https://www.youtube.com/watch?v=eqzh8lWWyrk
-		// http://c0de517e.blogspot.com/2008/10/normals-without-normals.html
-		int x_offset = 1;
-		int y_offset = 1;
-		uint addr_base_dxR = (DTid.y * g_cbCamState.rt_width + DTid.x + x_offset) * k_value * 4;
-		uint addr_base_dxL = (DTid.y * g_cbCamState.rt_width + DTid.x - x_offset) * k_value * 4;
-		uint addr_base_dyR = ((DTid.y + y_offset) * g_cbCamState.rt_width + DTid.x) * k_value * 4;
-		uint addr_base_dyL = ((DTid.y - y_offset) * g_cbCamState.rt_width + DTid.x) * k_value * 4;
-		float z_dxR = fragment_vr_zdepth[uint2(DTid.x + x_offset, DTid.y)];
-		float z_dxL = fragment_vr_zdepth[uint2(DTid.x - x_offset, DTid.y)];
-		float z_dyR = fragment_vr_zdepth[uint2(DTid.x, DTid.y + y_offset)];
-		float z_dyL = fragment_vr_zdepth[uint2(DTid.x, DTid.y - y_offset)];
-		float zRx_diff = z - z_dxR;
-		float zLx_diff = z - z_dxL;
-		float zRy_diff = z - z_dyR;
-		float zLy_diff = z - z_dyL;
-		float z_dx = z_dxR, z_dy = z_dyR;
-		if (zRx_diff*zRx_diff > zLx_diff*zLx_diff)
-		{
-			z_dx = z_dxL;
-			x_offset = -1;
-		}
-		if (zRy_diff*zRy_diff > zLy_diff*zLy_diff)
-		{
-			z_dy = z_dyL;
-			y_offset = -1;
-		}
-		ao_vr = 1;
-		//if ((z_dx - z_dy) * (z_dx - z_dy) > r_kernel_ao * r_kernel_ao) continue;
+		float z_p = dot(p - g_cbCamState.pos_cam_ws, view_dir_ws);
 
-		float3 p_dx = ComputePos_SSZ2WS(DTid.x + x_offset, DTid.y, z_dx);
-		float3 p_dy = ComputePos_SSZ2WS(DTid.x, DTid.y + y_offset, z_dy);
-		float3 p_ddx = p_dx - p;
-		float3 p_ddy = p_dy - p;
-		float3 face_normal = normalize(cross(p_ddx, p_ddy));
-		float dot_view_face = dot(view_dir_ws, face_normal);
-		if (dot_view_face > 0)
-			face_normal *= -1.f;
+		float kernel_r_ip = (g_cbCamState.cam_flag & 0x1) ? r_kernel_ao * (g_cbCamState.near_plane / z_p) : r_kernel_ao;
+		float kernel_r_ss = kernel_r_ip / pix_r;
 
-		float3 w_a, h_b, w, h;
-		if (g_cbCamState.cam_flag & 0x1)
+		if (kernel_r_ss <= 1.0)
 		{
-			//ComputeSSS_PerspMask(w_a, h_b, g_cbCamState.pos_cam_ws, g_cbCamState.dir_view_ws, r_kernel_ao, pos_ip_ws, p, w_ws);
-			float r_i;
-			ComputeSSS_PerspMask2(r_i, g_cbCamState.pos_cam_ws, r_kernel_ao, pos_ip_ws, p);
-			w_a = w_ws * r_i;
-			h_b = h_ws * r_i;
+			ao_vr = 1.f;
 		}
 		else
 		{
-			w_a = w_ws * r_kernel_ao;
-			h_b = h_ws * r_kernel_ao;
-		}
-		float ellipse_a = length(w_a);
-		float ellipse_b = length(h_b);
-		w = w_a / ellipse_a;
-		h = h_b / ellipse_b;
+			float numSteps, stepSizePix;
+			ComputeSteps(stepSizePix, numSteps, kernel_r_ss, random_samples.z);
 
-		float AO = 0;
-		for (int k = 0; k < num_dirs; k++) // num_dirs
-		{
-#if HBAO == 1
-			float azimuthal_angle = interval_angle * k;
-			//float azimuthal_angle = interval_angle * Random(float2(DTid.x, DTid.y * k) * k) * 360.f;
-			float cos_zimuthal = cos(azimuthal_angle);
-			float sin_zimuthal = sin(azimuthal_angle);
-			float2 azimuthal_uv = float2(1.f, 0) * cos_zimuthal + float2(0, 1.f) * sin_zimuthal;
-			azimuthal_uv = normalize(azimuthal_uv);
-			// ellipse_a;// 
-			w = w_ws, h = h_ws;
-			float inter_r = ellipse_a;// 1.f / sqrt(azimuthal_uv.x * azimuthal_uv.x / (ellipse_a * ellipse_a) + azimuthal_uv.y * azimuthal_uv.y / (ellipse_b * ellipse_b));
+			// compute face normal // 
+			// http://c0de517e.blogspot.com/2008/10/normals-without-normals.html
+			float z_dxR = fragment_vr_zdepth[DTid.xy + uint2(1, 0)];
+			float z_dyR = fragment_vr_zdepth[DTid.xy + uint2(0, 1)];
+			float z_dxL = fragment_vr_zdepth[DTid.xy - uint2(1, 0)];
+			float z_dyL = fragment_vr_zdepth[DTid.xy - uint2(0, 1)];
 
-			float3 azimuthal_v = w * cos_zimuthal + h * sin_zimuthal;
-			float3 azimuthal_vcross = cross(view_dir_ws, azimuthal_v);
-			azimuthal_v = cross(azimuthal_vcross, view_dir_ws);
-			azimuthal_v = normalize(azimuthal_v);
+			float3 p_dxR = ComputePos_SSZ2WS((int)(DTid.x + x_offset), (int)DTid.y, z_dxR);
+			float3 p_dyR = ComputePos_SSZ2WS((int)(DTid.x), (int)(DTid.y + y_offset), z_dyR);
+			float3 p_dxL = ComputePos_SSZ2WS((int)(DTid.x - x_offset), (int)DTid.y, z_dxL);
+			float3 p_dyL = ComputePos_SSZ2WS((int)(DTid.x), (int)(DTid.y - y_offset), z_dyL);
 
-			// compute the angles on the 2D plane defined by -view_dir_ws and azimuthal_v
-			float3 face_normal_proj = -view_dir_ws * dot(face_normal, -view_dir_ws) + azimuthal_v * dot(face_normal, azimuthal_v);//
-			face_normal_proj = normalize(face_normal_proj);
-			float _dot_t = dot(-view_dir_ws, face_normal_proj);
-			float t_theta = acos(_dot_t);// min(max(_dot_t, -0.99f), 0.99f));
+			float3 dPdx = MinDiff(p, p_dxR, p_dxL);
+			float3 dPdy = MinDiff(p, p_dyR, p_dyL);
+			float3 face_normal = normalize(cross(dPdx, dPdy));
+			if (dot(view_dir_ws, face_normal) > 0)
+				face_normal *= -1.f;
 
-			float t_theta_signed = dot(azimuthal_v, face_normal_proj) > 0 ? -t_theta : t_theta;
-			t_theta_signed += tangent_bias;
-			float max_h_theta = t_theta_signed;
-			float AO_theta = 0;
-			int2 ss_xy_prev = (int2)(pos_ip_ss.xy + (float2)0.5f);
-			for (int l = 0; l < num_steps; l++)
+			float ao = 0;
+			// Calculate the horizon occlusion of each direction
+			for (float d = 0; d < num_dirs; ++d)
 			{
-				float r_dist = (inter_r / (float)(num_steps + 1)) * (float)(l + 1);
-				float3 pos_ip_ellipse_ws = pos_ip_ws + azimuthal_v * r_dist;
-				float3 pos_ip_ellipse_ss = TransformPoint(pos_ip_ellipse_ws, g_cbCamState.mat_ws2ss);
-				//float3 pos_ip_ellipse_ss;
-				//{
-				//	float4 pos_ip_ellipse_ssh = mul(float4(pos_ip_ellipse_ws, 1.f), g_cbCamState.mat_ws2ss);
-				//	pos_ip_ellipse_ss = pos_ip_ellipse_ssh.xyz / pos_ip_ellipse_ssh.w;
-				//}
-				int2 ss_xy = int2(pos_ip_ellipse_ss.xy + (float2)0.5f);
-				int2 ss_diff = ss_xy - ss_xy_prev;
-				if (dot(ss_diff, ss_diff) == 0) continue;
-				ss_xy_prev = ss_xy;
-				//[allow_uav_condition][loop]
-				int frag_nb_cnt = (int)fragment_counter[ss_xy.xy] & 0xFFF;
-				for (int j = 0; j < frag_nb_cnt; j++) // k_value, frag_nb_cnt
-				{
-					uint addr_base_cand = (ss_xy.y * g_cbCamState.rt_width + ss_xy.x) * k_value * 4;
-					float z_cand = LOAD1_KBUF_Z(deep_k_buf, addr_base_cand, j); // asfloat(deep_k_buf[addr_base_cand + 3 * j + 1]);
-					if (z_cand < 1000000 && z_cand > 0)
-					{
-						float3 p_cand = ComputePos_SSZ2WS(pos_ip_ellipse_ss.x, pos_ip_ellipse_ss.y, z_cand);
-						//{
-						// float4 pos_cand_ip_h = mul(float4(ss_xy.x, ss_xy.y, 0, 1.f), g_cbCamState.mat_ss2ws);
-						// float3 pos_cand_ip_ws = pos_cand_ip_h.xyz / pos_cand_ip_h.w;
-						// float3 view_cand_dir_ws = g_cbCamState.dir_view_ws;
-						// if (g_cbCamState.cam_flag & 0x1)
-						// 	view_cand_dir_ws = pos_cand_ip_ws - g_cbCamState.pos_cam_ws;
-						// view_cand_dir_ws = normalize(view_cand_dir_ws);
-						// p_cand = pos_cand_ip_ws + view_cand_dir_ws * z_cand;
-						//}
-						float3 D = p_cand - p;
-						D = -view_dir_ws * dot(D, -view_dir_ws) + azimuthal_v * dot(D, azimuthal_v);
-						float dist = length(D);
-						if (dist <= r_kernel_ao) //g_cbCamState.cam_vz_thickness)//
-						{
-							float _dvd = dot(-view_dir_ws, D / dist);// max(min(dot(-view_dir_ws, D / dist), 0.99f), -0.99f);
-							float alpha = F_PI / 2.f - acos(_dvd);// (_dvd);// (max(min(_dvd, 1.f), -1.f));
+				float theta = alpha * d;
 
-							// HBAO
-							//if (1)//i == 0)
-							{
-								float h_theta = max(alpha, t_theta_signed);
-								if (max_h_theta < h_theta)
-								{
-									//float opacity = (deep_k_buf[addr_base_cand + 3 * j + 0] >> 24) / 255.f;
-									float opacity = (LOAD1_KBUF_VIS(deep_k_buf, addr_base_cand, j) >> 24) / 255.f;
-									max_h_theta = h_theta;
-									float local_AO = (sin(h_theta) - sin(t_theta_signed)) * opacity;
-									float r_ratio = r_dist / r_kernel_ao;
-									AO += (1.f - r_ratio * r_ratio) * max(local_AO - AO_theta, 0);
-									AO_theta += local_AO;
-								}
-							}
-							//else
-							//{
-							//	if (alpha > t_theta_signed)// && dist > g_cbCamState.cam_vz_thickness)
-							//	{
-							//		//float opacity = (deep_k_buf[addr_base_cand + 3 * j + 0] >> 24) / 255.f;
-							//		float opacity = (LOAD1_KBUF_VIS(deep_k_buf, addr_base_cand, j) >> 24) / 255.f;
-							//		float r_ratio = r_dist / r_kernel_ao;
-							//		AO += (1.f - r_ratio * r_ratio) * opacity / num_steps;
-							//	}
-							//}
+				// Apply noise to the direction
+				float2 dir = RotateDirections(float2(cos(theta), sin(theta)), random_samples.xy);
+				float2 delta_dir = dir * stepSizePix;
 
-						}
-					}
-				} // for (int j = 0; j < frag_nb_cnt; j++) // k_value, frag_nb_cnt
-				//if (g_cbEnv.env_flag & 0x2) // always
-				{
-					// g_cbVobj.ao_intensity;
-					float2 uv = pos_ip_ellipse_ss.xy / float2(g_cbCamState.rt_width, g_cbCamState.rt_height);
-					float z_cand = fragment_vr_zdepth.SampleLevel(g_samplerLinear, uv, 0);
-					if (z_cand < 1000000 && z_cand > 0)
-					{
-						float3 p_cand;
-						float4 pos_cand_ip_h = mul(float4(ss_xy.x, ss_xy.y, 0, 1.f), g_cbCamState.mat_ss2ws);
-						float3 pos_cand_ip_ws = pos_cand_ip_h.xyz / pos_cand_ip_h.w;
-						float3 view_cand_dir_ws = g_cbCamState.dir_view_ws;
-						if (g_cbCamState.cam_flag & 0x1)
-							view_cand_dir_ws = pos_cand_ip_ws - g_cbCamState.pos_cam_ws;
-						view_cand_dir_ws = normalize(view_cand_dir_ws);
-						p_cand = pos_cand_ip_ws + view_cand_dir_ws * z_cand;
-
-						float3 D = p_cand - p;
-						D = -view_dir_ws * dot(D, -view_dir_ws) + azimuthal_v * dot(D, azimuthal_v);
-						float dist = length(D);
-
-						if (dist <= r_kernel_ao)
-						{
-							float _dvd = dot(-view_dir_ws, D / dist);// max(min(dot(-view_dir_ws, D / dist), 0.99f), -0.99f);
-							float alpha = F_PI / 2.f - acos(_dvd);// (_dvd);// (max(min(_dvd, 1.f), -1.f));
-
-							// HBAO
-							float h_theta = max(alpha, t_theta_signed);
-							if (max_h_theta < h_theta)
-							{
-								max_h_theta = h_theta;
-								float local_AO = (sin(h_theta) - sin(t_theta_signed)) * g_cbVobj.ao_intensity;
-								float r_ratio = r_dist / r_kernel_ao;
-								AO += (1.f - r_ratio * r_ratio) * max(local_AO - AO_theta, 0);
-								AO_theta += local_AO;
-							}
-						}
-					}
-				}
+				// Sample the pixels along the direction
+				ao += HorizonOcclusion(DTid.xy, delta_dir,
+					p, face_normal,
+					random_samples.z,
+					(int)numSteps,
+					bytes_frags_per_pixel, true);
 			}
-#else
-#endif
+
+			ao_vr = ao / num_dirs * ao_intensity;
 		}
-		ao_vr = min(1.f / (2.f * F_PI) * AO * ao_intensity, 1.f);
 	}
-	//rw_ao_vr_texture[DTid.xy] = ao_vr;
+	rw_ao_vr_texture[DTid.xy] = ao_vr;
 	//vis_out = float4(TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts), 1);
 	//rw_fragment_blendout[DTid.xy] = float4((float3)ao_vr, 1);
 	////if(DTid.x % 200 != 0 || DTid.y % 200 != 0)
@@ -1098,8 +879,13 @@ void KB_SSAO_BLUR(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
 		return;
 
+	// at this moment, only static k buffer is supported.
 	const uint k_value = g_cbCamState.k_value;
-	uint addr_base_f = (DTid.y * g_cbCamState.rt_width + DTid.x) * k_value * 4;
+	uint bytes_per_frag = 4 * NUM_ELES_PER_FRAG;
+	uint bytes_frags_per_pixel = k_value * bytes_per_frag; // to do : consider the dynamic scheme. (4 bytes unit)
+	uint pixel_id = DTid.y * g_cbCamState.rt_width + DTid.x;
+	uint addr_base = pixel_id * bytes_frags_per_pixel;
+
 	int frag_cnt = (int)fragment_counter[DTid.xy];
 	uint vr_hit_enc = frag_cnt >> 24;
 	frag_cnt = frag_cnt & 0xFFF;
@@ -1113,9 +899,9 @@ void KB_SSAO_BLUR(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 		return;
 	}
 
-#define SIGMA 10.0
-	//#define BSIGMA 0.1
-#define BSIGMA 0.2
+#define SIGMA 20.0
+#define BSIGMA 0.5
+//#define BSIGMA 0.2
 #define MSIZE 15
 
 	//declare stuff
@@ -1181,7 +967,7 @@ void KB_SSAO_BLUR(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	float4 vis_ssao = (float4)0;
 	for (j = 0; j < frag_cnt; j++)
 	{
-		float4 fvis = ConvertUIntToFloat4(LOAD1_KBUF_VIS(deep_k_buf, addr_base_f, j));
+		float4 fvis = ConvertUIntToFloat4(LOAD1_KBUF_VIS(deep_k_buf, addr_base, j));
 		if (bZs[j] > 0)
 		{
 			v_AOs_out[j] /= bZs[j];
@@ -1195,7 +981,7 @@ void KB_SSAO_BLUR(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 		rw_ao_vr_texture[DTid.xy] = v_AO_vr_out;
 	}
 	rw_fragment_blendout[DTid.xy] = vis_ssao;
-	//rw_fragment_blendout[DTid.xy] = float4((float3)(1 - v_AOs_out[0]), 1);
+	//rw_fragment_blendout[DTid.xy] = float4((float3)(1 - v_AOs_out[1]), 1);
 	//rw_fragment_blendout[DTid.xy] = float4((float3)(frag_cnt / 8.f), 1);
 
 	rw_ao_textures[0][DTid.xy] = float4(v_AOs_out[0], v_AOs_out[1], v_AOs_out[2], v_AOs_out[3]);

@@ -7,6 +7,7 @@ RWBuffer<uint> offsettable_buf : register(u4); // gres_fb_ref_pidx // only for t
 RWByteAddressBuffer deep_ubk_buf : register(u5); // only for the resolve pass
 
 Texture2D<uint> sr_fragment_counter : register(t0);
+RWTexture2D<uint> fragment_counter : register(u0);
 
 #define LOAD1_UBKB(ADDR) deep_ubk_buf.Load((ADDR) * 4)
 #define STORE1_KB(V, ADDR) deep_k_buf.Store((ADDR) * 4, V)
@@ -124,7 +125,7 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 	if (nThreadNum == 0) // we used 0th pixel for temporal synch //
 		return;
 
-	int N = (int)sr_fragment_counter[nDTid.xy];
+	int N = (int)fragment_counter[nDTid.xy];
 	if (N == 0)
 		return;
 
@@ -204,7 +205,7 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 		{
 			if (cnt_stored_fs < NUM_K - 1)
 			{
-				SET_FRAG(addr_base, i, f_1);
+				SET_FRAG(addr_base, cnt_stored_fs, f_1);
 				cnt_stored_fs++;
 
 				float4 color = ConvertUIntToFloat4(f_1.i_vis);
@@ -214,14 +215,17 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 			else
 			{
 				// tail //
-				float4 f_1_vis = ConvertUIntToFloat4(f_1.i_vis);
-				float4 f_2_vis = ConvertUIntToFloat4(f_2.i_vis);
-				f_1_vis += f_2_vis * (1.f - f_1_vis.a);
-				f_1.i_vis = ConvertFloat4ToUInt(f_1_vis);
-				f_1.zthick = f_2.z - f_1.z + f_1.zthick;
-				f_1.z = f_2.z;
-				f_1.opacity_sum += f_2.opacity_sum;
-				//f_tail = f_1;
+				if (f_2.i_vis != 0)
+				{
+					float4 f_1_vis = ConvertUIntToFloat4(f_1.i_vis);
+					float4 f_2_vis = ConvertUIntToFloat4(f_2.i_vis);
+					f_1_vis += f_2_vis * (1.f - f_1_vis.a);
+					f_1.i_vis = ConvertFloat4ToUInt(f_1_vis);
+					f_1.zthick = f_2.z - f_1.z + f_1.zthick;
+					f_1.z = f_2.z;
+					f_1.opacity_sum += f_2.opacity_sum;
+					//f_tail = f_1;
+				}
 			}
 		}
 		else
@@ -237,6 +241,7 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 		float4 vis = ConvertUIntToFloat4(f_1.i_vis);
 		vis_out += vis * (1 - vis_out.a);
 	}
+	fragment_counter[nDTid.xy] = cnt_stored_fs;
 
 #if TEST == 1
 	vis_out = (float4) 0.0f;
@@ -268,6 +273,10 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 		}
 	}
 #endif
+
+	//Fragment f;
+	//GET_FRAG(f, addr_base, cnt_stored_fs);
+	//fragment_blendout[nDTid.xy] = float4((float3)f.z / 100, 1);;
 	fragment_blendout[nDTid.xy] = vis_out;
 	fragment_zdepth[nDTid.xy] = fragments[0].z;
 

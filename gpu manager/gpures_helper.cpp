@@ -1691,9 +1691,9 @@ void grd_helper::SetCb_Env(CB_EnvState& cb_env, VmCObject* ccobj, VmFnContainer*
 	cb_env.r_kernel_ao = 0;
 	if (apply_SSAO)
 	{
-		cb_env.r_kernel_ao = (float)_fncontainer->GetParamValue("_double_SSAOKernalR", (double)5.0);
-		cb_env.num_dirs = _fncontainer->GetParamValue("_int_SSAONumDirs", (int)8);
-		cb_env.num_steps = _fncontainer->GetParamValue("_int_SSAONumSteps", (int)8);
+		cb_env.r_kernel_ao = (float)_fncontainer->GetParamValue("_double_SSAOKernalR", (double)1.0);
+		cb_env.num_dirs = _fncontainer->GetParamValue("_int_SSAONumDirs", (int)4);
+		cb_env.num_steps = _fncontainer->GetParamValue("_int_SSAONumSteps", (int)4);
 		cb_env.tangent_bias = (float)_fncontainer->GetParamValue("_double_SSAOTangentBias", (double)VM_PI / 6.0);
 	}
 
