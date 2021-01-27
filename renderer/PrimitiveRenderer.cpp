@@ -2589,25 +2589,23 @@ RENDERER_LOOP_EXIT:
 	};
 	if (mode_OIT != MFR_MODE::MOMENT)
 	{
+		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], 0); // trimming may occur 
 		// resolve pass
 		switch (mode_OIT)
 		{
 		case MFR_MODE::STATIC_KB_FM:
 			dx11DeviceImmContext->CSSetShader(GETCS(OIT_SKBZ_RESOLVE_cs_5_0), NULL, 0);
-			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], 0); // trimming may occur 
 			break;
 		case MFR_MODE::DYNAMIC_FB:
 			// sort and render the fragments.  Use the prefix sum to determine where the 
 			// fragments for each pixel reside.
 			dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(SR_OIT_ABUFFER_SORT2SENDER_SFM_cs_5_0) : GETCS(SR_OIT_ABUFFER_SORT2SENDER_cs_5_0), NULL, 0);
 			//dx11DeviceImmContext->CSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_SRV]);
-			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], 0); // trimming may occur 
 			dx11DeviceImmContext->CSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]);
 			break;
 		case MFR_MODE::DYNAMIC_KB:
 			dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(OIT_DKBZ_RESOLVE_cs_5_0) : GETCS(OIT_DKB_RESOLVE_cs_5_0), NULL, 0);
 			dx11DeviceImmContext->CSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]);
-			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], 0); // trimming may occur 
 			break;
 		default:
 			assert(0);

@@ -544,7 +544,7 @@ float Length2(float3 V)
 	return dot(V, V);
 }
 
-float HorizonOcclusion(float2 xy_coord, float2 delta_dir,
+float HorizonOcclusion(int2 xy_coord, float2 delta_dir,
 	float3 P,
 	float3 face_normal,
 	float randstep,
@@ -555,8 +555,8 @@ float HorizonOcclusion(float2 xy_coord, float2 delta_dir,
 	float ao = 0;
 
 	// Offset the first coord with some noise
-	float2 xy_pix = xy_coord + round(randstep * delta_dir);
-	delta_dir = float2(uint2(delta_dir));
+	float2 xy_pix = (float2)xy_coord + round(randstep * delta_dir);
+	//delta_dir = float2(uint2(delta_dir));
 
 	// Get the angle of the tangent vector from the viewspace axis
 	float tanH = tan(g_cbEnv.tangent_bias);
@@ -576,18 +576,69 @@ float HorizonOcclusion(float2 xy_coord, float2 delta_dir,
 		xy_pix += delta_dir;
 
 		int2 ixy_pix = int2(xy_pix);
+		int2 diff_pix = ixy_pix - xy_coord;
+		if (dot(diff_pix, diff_pix) == 0) continue;
+
 		int frag_cnt = (int)fragment_counter[ixy_pix] & 0xFFF;
 		if (frag_cnt == 0) continue;
 
 		uint addr_base = (ixy_pix.y * g_cbCamState.rt_width + ixy_pix.x) * bytes_frags_per_pixel;
+#if ZT_MODEL == 1
+		float3 pos_ip_ws = TransformPoint(float3(ixy_pix.x, ixy_pix.y, 0), g_cbCamState.mat_ss2ws);
+		float3 view_dir_ws = g_cbCamState.dir_view_ws;
+		if (g_cbCamState.cam_flag & 0x1)
+			view_dir_ws = pos_ip_ws - g_cbCamState.pos_cam_ws;
+		view_dir_ws = normalize(view_dir_ws);
+		for (int layer = 0; layer < frag_cnt; ++layer)
+		{
+			Fragment f;
+			GET_FRAG(f, addr_base, layer);
+			float z = f.z;
 
+			S = pos_ip_ws + view_dir_ws * z;
+
+			float a = (f.i_vis >> 24) / 255.0;
+			float zthick_merge = f.zthick - g_cbCamState.cam_vz_thickness;
+			float check_merge = (a - f.opacity_sum) * (a - f.opacity_sum) > 1.0 / 255 && zthick_merge > 0;
+			float w = 1.f;
+			for (int i = 1; i <= 3; i++)
+			{
+				tanS = tan(F_PI * 0.5 - acos(dot(normalize(S - P), face_normal)));
+				d2 = Length2(S - P);
+
+				// Is the sample within the radius and the angle greater?
+				if (d2 < R2 && tanS > tanH)
+				{
+					float sinS = TanToSin(tanS);
+					// Apply falloff based on the distance : (d2 * NegInvR2 + 1.0f)
+					float falloff = (d2 * NegInvR2 + 1.0f);
+					float occl = (sinS - sinH);
+#if APPLY_TRANSPARENCY == 1
+					ao += falloff * occl * a * w;
+#else
+					ao += falloff * occl;
+#endif
+					tanH = tanS;
+					sinH = sinS;
+					break;
+				}
+				else
+				{
+					if (!check_merge) break;
+					w = pow(2, -i);
+					float thick = zthick_merge * w;
+					S -= view_dir_ws * thick;
+				}
+			}
+		}
+#else
 		for (int layer = 0; layer < frag_cnt; ++layer)
 		{
 			float z = LOAD1_KBUF_Z(deep_k_buf, addr_base, layer);
 
 			S = ComputePos_SSZ2WS(ixy_pix.x, ixy_pix.y, z);
 
-			tanS = tan(F_PI * 0.5 - acos(dot(normalize(S-P), face_normal)));
+			tanS = tan(F_PI * 0.5 - acos(dot(normalize(S - P), face_normal)));
 			d2 = Length2(S - P);
 
 			// Is the sample within the radius and the angle greater?
@@ -595,17 +646,20 @@ float HorizonOcclusion(float2 xy_coord, float2 delta_dir,
 			{
 				float sinS = TanToSin(tanS);
 				// Apply falloff based on the distance : (d2 * NegInvR2 + 1.0f)
+				float falloff = (d2 * NegInvR2 + 1.0f);
+				float occl = (sinS - sinH);
 #if APPLY_TRANSPARENCY == 1
 				float a = LOAD1_KBUF_ALPHAF(deep_k_buf, addr_base, layer);
-				ao += (d2 * NegInvR2 + 1.0f) * (sinS - sinH) * a;
+				ao += falloff * occl * a;
 #else
-				ao += (d2 * NegInvR2 + 1.0f) * (sinS - sinH);
+				ao += falloff * occl;
 #endif
 
 				tanH = tanS;
 				sinH = sinS;
 			}
 		}
+#endif
 
 		// to do for VR geometry
 		if (apply_vr_geometry)
@@ -668,7 +722,6 @@ void KB_SSAO(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTi
 	}
 
 	const float r_kernel_ao = g_cbEnv.r_kernel_ao;
-	const float tangent_bias = g_cbEnv.tangent_bias;
 	const float ao_intensity = 1.5f;
 
 	float3 pos_ip_ss = float3(DTid.xy, 0.0f);
