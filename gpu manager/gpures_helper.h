@@ -328,6 +328,10 @@ namespace grd_helper
 #define UPFB_RAWBYTE 0x2 // buffer only
 #define UPFB_MIPMAP 0x4  // texture only
 #define UPFB_HALF 0x8    // texture only
+#define UPFB_HALF_W 0x10    // texture only
+#define UPFB_HALF_H 0x20    // texture only
+#define UPFB_NFPP_BUFFERSIZE 0x40 // buffer only
+#define UPFB_NFPP_TEXTURESTACK 0x80 // texture only
 	// framebuffer structure
 	bool UpdateFrameBuffer(GpuRes& gres, const VmIObject* iobj,
 		const string& res_name,
@@ -408,7 +412,7 @@ namespace grd_helper
 
 		float near_plane;
 		float far_plane;
-		uint iSrCamDummy__1;
+		uint iSrCamDummy__1; // used for the level of MIPMAP generation
 		uint iSrCamDummy__2;
 
 		ZERO_SET(CB_CameraState)
@@ -421,6 +425,8 @@ namespace grd_helper
 		vmfloat3 pos_light_ws;
 		// 1st bit : 0 (parallel), 1 : (spot)
 		// 2nd bit : 0 (only polygons for SSAO), 1 : (volume G buffer for SSAO)
+		// 10th bit : 0 (no SSAO output to render buffer), 1: (SSAO output to render buffer)
+		// 11th~13th bit : 0~7th layer of SSAO
 		uint env_flag;
 
 		vmfloat3 dir_light_ws;
@@ -438,6 +444,16 @@ namespace grd_helper
 		int num_dirs;
 		int num_steps;
 		float tangent_bias;
+
+		float ao_intensity;
+		uint env_dummy_0;
+		uint env_dummy_1;
+		uint env_dummy_2;
+
+		float dof_lens_r;
+		float dof_lens_F;
+		float dof_focus_z;
+		int dof_lens_ray_num_samples;
 
 		ZERO_SET(CB_EnvState)
 	};

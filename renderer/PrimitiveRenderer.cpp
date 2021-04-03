@@ -568,10 +568,9 @@ void computeWrappingZoneParameters(float p_out_wrapping_zone_parameters[4], floa
 }
 
 void ComputeSSAO(__ID3D11DeviceContext* dx11DeviceImmContext,
-	grd_helper::GpuDX11CommonParameters* dx11CommonParams, int num_grid_x, int num_grid_y,
+	grd_helper::GpuDX11CommonParameters* dx11CommonParams, VmIObject* iobj, 
+	int num_grid_x, int num_grid_y,
 	GpuRes& gres_fb_counter, GpuRes& gres_fb_deep_k_buffer, GpuRes& gres_fb_rgba, bool blur_SSAO,
-	//GpuRes(& gres_fb_mip_z_halftexs)[2], GpuRes(& gres_fb_mip_a_halftexs)[2],
-	GpuRes(&gres_fb_ao_texs)[2], GpuRes(&gres_fb_ao_blf_texs)[2],
 	GpuRes& gres_fb_vr_depth, GpuRes& gres_fb_vr_ao, GpuRes& gres_fb_vr_ao_blf, bool involve_vr,
 	map<string, int>& profile_map, bool gpu_profile)
 {
@@ -582,6 +581,15 @@ void ComputeSSAO(__ID3D11DeviceContext* dx11DeviceImmContext,
 		profile_map["begin SSAO"] = gpu_profilecount;
 		//gpu_profilecount++;
 	}
+
+#define MAX_LAYERS_SSAO 8
+
+	GpuRes gres_fb_ao_texs, gres_fb_ao_blf_texs;
+	grd_helper::UpdateFrameBuffer(gres_fb_ao_texs, iobj, "RW_TEXS_AO", RTYPE_TEXTURE2D,
+		D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8_UNORM, UPFB_NFPP_TEXTURESTACK, MAX_LAYERS_SSAO);
+	grd_helper::UpdateFrameBuffer(gres_fb_ao_blf_texs, iobj, "RW_TEXS_AO_BLF", RTYPE_TEXTURE2D,
+		D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_NFPP_TEXTURESTACK, MAX_LAYERS_SSAO);
+
 	ID3D11ShaderResourceView* dx11SRVs_SSAO[5] = {};
 	dx11SRVs_SSAO[0] = (ID3D11ShaderResourceView*)gres_fb_counter.alloc_res_ptrs[DTYPE_SRV];
 	dx11SRVs_SSAO[1] = (ID3D11ShaderResourceView*)gres_fb_deep_k_buffer.alloc_res_ptrs[DTYPE_SRV];
@@ -610,9 +618,8 @@ void ComputeSSAO(__ID3D11DeviceContext* dx11DeviceImmContext,
 	//dx11DeviceImmContext->GenerateMips((ID3D11ShaderResourceView*)gres_fb_mip_a_halftexs[1].alloc_res_ptrs[DTYPE_SRV]);
 
 	// KB_SSAO_cs_5_0
-	dx11UAVs_SSAO[0] = (ID3D11UnorderedAccessView*)gres_fb_ao_texs[0].alloc_res_ptrs[DTYPE_UAV];
-	dx11UAVs_SSAO[1] = (ID3D11UnorderedAccessView*)gres_fb_ao_texs[1].alloc_res_ptrs[DTYPE_UAV];
-	dx11DeviceImmContext->CSSetUnorderedAccessViews(25, 2, dx11UAVs_SSAO, 0);
+	dx11UAVs_SSAO[0] = (ID3D11UnorderedAccessView*)gres_fb_ao_texs.alloc_res_ptrs[DTYPE_UAV];
+	dx11DeviceImmContext->CSSetUnorderedAccessViews(25, 1, dx11UAVs_SSAO, 0);
 
 	dx11DeviceImmContext->CSSetUnorderedAccessViews(10, 1, (ID3D11UnorderedAccessView**)&gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV], 0);
 
@@ -651,13 +658,11 @@ void ComputeSSAO(__ID3D11DeviceContext* dx11DeviceImmContext,
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(30, 1, (ID3D11UnorderedAccessView**)&gres_fb_vr_ao_blf.alloc_res_ptrs[DTYPE_UAV], 0);
 		}
 
-		dx11SRVs_SSAO[0] = (ID3D11ShaderResourceView*)gres_fb_ao_texs[0].alloc_res_ptrs[DTYPE_SRV];
-		dx11SRVs_SSAO[1] = (ID3D11ShaderResourceView*)gres_fb_ao_texs[1].alloc_res_ptrs[DTYPE_SRV];
-		dx11DeviceImmContext->CSSetShaderResources(25, 2, dx11SRVs_SSAO);
+		dx11SRVs_SSAO[0] = (ID3D11ShaderResourceView*)gres_fb_ao_texs.alloc_res_ptrs[DTYPE_SRV];
+		dx11DeviceImmContext->CSSetShaderResources(25, 1, dx11SRVs_SSAO);
 
-		dx11UAVs_SSAO[0] = (ID3D11UnorderedAccessView*)gres_fb_ao_blf_texs[0].alloc_res_ptrs[DTYPE_UAV];
-		dx11UAVs_SSAO[1] = (ID3D11UnorderedAccessView*)gres_fb_ao_blf_texs[1].alloc_res_ptrs[DTYPE_UAV];
-		dx11DeviceImmContext->CSSetUnorderedAccessViews(25, 2, dx11UAVs_SSAO, 0);
+		dx11UAVs_SSAO[0] = (ID3D11UnorderedAccessView*)gres_fb_ao_blf_texs.alloc_res_ptrs[DTYPE_UAV];
+		dx11DeviceImmContext->CSSetUnorderedAccessViews(25, 1, dx11UAVs_SSAO, 0);
 
 		dx11DeviceImmContext->CSSetShader(GETCS(KB_SSAO_BLUR_cs_5_0), NULL, 0);
 		dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
@@ -685,13 +690,51 @@ void ComputeSSAO(__ID3D11DeviceContext* dx11DeviceImmContext,
 }
 
 void ComputeDOF(__ID3D11DeviceContext* dx11DeviceImmContext,
-	grd_helper::GpuDX11CommonParameters* dx11CommonParams, int num_grid_x, int num_grid_y,
-	GpuRes& gres_fb_counter, GpuRes& gres_fb_deep_k_buffer, GpuRes& gres_fb_rgba, bool blur_SSAO,
-	GpuRes& gres_fb_globalminmax, GpuRes& gres_fb_z_mipmax_halftexture,
-	GpuRes(&gres_fb_ao_texs)[2], GpuRes(&gres_fb_ao_blf_texs)[2],
-	GpuRes& gres_fb_vr_depth, GpuRes& gres_fb_vr_ao, GpuRes& gres_fb_vr_ao_blf, bool involve_vr,
+	grd_helper::GpuDX11CommonParameters* dx11CommonParams, VmIObject* iobj,
+	int num_grid_x, int num_grid_y,
+	GpuRes& gres_fb_counter, GpuRes& gres_fb_deep_k_buffer, GpuRes& gres_fb_rgba, 
+	bool apply_SSAO, bool is_blurred_SSAO,
+	GpuRes& gres_fb_vr_depth, GpuRes& gres_fb_vr_ao, GpuRes& gres_fb_vr_ao_blf, 
+	CB_CameraState& cbCamState, ID3D11Buffer* cbuf_cam_state, int __BLOCKSIZE,
+	bool involve_vr,
 	map<string, int>& profile_map, bool gpu_profile)
 {
+	VmCObject* cam_obj = iobj->GetCameraObject();
+	vmmat44 dmatWS2CS, dmatCS2PS, dmatPS2SS;
+	vmmat44 dmatSS2PS, dmatPS2CS, dmatCS2WS;
+	cam_obj->GetMatrixWStoSS(&dmatWS2CS, &dmatCS2PS, &dmatPS2SS);
+	cam_obj->GetMatrixSStoWS(&dmatSS2PS, &dmatPS2CS, &dmatCS2WS);
+	vmmat44 dmatCS2SS = dmatCS2PS * dmatPS2SS;
+	vmmat44 dmatSS2CS = dmatSS2PS * dmatPS2CS;
+
+	vmint2 fb_size_cur;
+	iobj->GetFrameBufferInfo(&fb_size_cur);
+	vmfloat3 p_test = vmfloat3(fb_size_cur.x - 1, 0, 0);
+	fTransformPoint(&p_test, &p_test, &((vmmat44f)dmatSS2CS));
+	cout << "================== " << p_test.x << ", " << p_test.y << ", " << p_test.z << endl;
+
+	D3D11_MAPPED_SUBRESOURCE mappedResCamState;
+	dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
+	CB_CameraState* cbCamStateData = (CB_CameraState*)mappedResCamState.pData;
+	memcpy(cbCamStateData, &cbCamState, sizeof(CB_CameraState));
+	cbCamStateData->mat_ws2ss = TRANSPOSE(dmatCS2SS);
+	cbCamStateData->mat_ss2ws = TRANSPOSE(dmatSS2CS);
+	dx11DeviceImmContext->Unmap(cbuf_cam_state, 0);
+	dx11DeviceImmContext->CSSetConstantBuffers(0, 1, &cbuf_cam_state);
+
+#define MAX_LAYERS_DOF 8
+	GpuRes gres_fb_globalminmax, gres_fb_z_minmax_mipmap_nbtex;
+	grd_helper::UpdateFrameBuffer(gres_fb_globalminmax, iobj, "BUFFER_RW_GLOBAL_MINMAX", RTYPE_BUFFER,
+		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, UPFB_NFPP_BUFFERSIZE, 2 * MAX_LAYERS_DOF);
+	uint clr_unit4[4] = { 0, 0, 0, 0 };
+	dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_globalminmax.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
+
+	grd_helper::UpdateFrameBuffer(gres_fb_z_minmax_mipmap_nbtex, iobj, "TEX_ARRAY_Z_MINMAX_MipMap", RTYPE_TEXTURE2D,
+		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32G32_FLOAT, 
+		UPFB_NFPP_TEXTURESTACK, MAX_LAYERS_DOF); // UPFB_HALF_H | 
+	float clr_float_zero_4[4] = { 0, 0, 0, 0 };
+	dx11DeviceImmContext->ClearUnorderedAccessViewFloat((ID3D11UnorderedAccessView*)gres_fb_z_minmax_mipmap_nbtex.alloc_res_ptrs[DTYPE_UAV], clr_float_zero_4);
+
 	if (gpu_profile)
 	{
 		int gpu_profilecount = (int)profile_map.size();
@@ -699,20 +742,21 @@ void ComputeDOF(__ID3D11DeviceContext* dx11DeviceImmContext,
 		profile_map["begin SSDOF"] = gpu_profilecount;
 		//gpu_profilecount++;
 	}
-	ID3D11ShaderResourceView* dx11SRVs_DOF[5] = {};
+
+	ID3D11ShaderResourceView* dx11SRVs_DOF[3] = {};
+	ID3D11ShaderResourceView* dx11SRVs_NULL[3] = {};
 	dx11SRVs_DOF[0] = (ID3D11ShaderResourceView*)gres_fb_counter.alloc_res_ptrs[DTYPE_SRV];
 	dx11SRVs_DOF[1] = (ID3D11ShaderResourceView*)gres_fb_deep_k_buffer.alloc_res_ptrs[DTYPE_SRV];
-	dx11SRVs_DOF[2] = dx11SRVs_DOF[3] = dx11SRVs_DOF[4] = NULL;
 	dx11DeviceImmContext->CSSetShaderResources(10, 2, dx11SRVs_DOF);
 
 	dx11DeviceImmContext->CSSetUnorderedAccessViews(10, 1, (ID3D11UnorderedAccessView**)&gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV], 0);
 
-	ID3D11UnorderedAccessView* dx11UAVs_DOF[5] = {};
-	dx11UAVs_DOF[2] = dx11UAVs_DOF[3] = dx11UAVs_DOF[4] = NULL;
+	ID3D11UnorderedAccessView* dx11UAVs_DOF[2] = {};
+	ID3D11UnorderedAccessView* dx11UAVs_NULL[2] = {};
 
 	// KB_SSAO_cs_5_0
-	dx11UAVs_DOF[0] = (ID3D11UnorderedAccessView*)gres_fb_z_mipmax_halftexture.alloc_res_ptrs[DTYPE_UAV];
-	dx11UAVs_DOF[1] = (ID3D11UnorderedAccessView*)gres_fb_globalminmax.alloc_res_ptrs[DTYPE_UAV];
+	dx11UAVs_DOF[0] = (ID3D11UnorderedAccessView*)gres_fb_globalminmax.alloc_res_ptrs[DTYPE_UAV];
+	dx11UAVs_DOF[1] = (ID3D11UnorderedAccessView*)gres_fb_z_minmax_mipmap_nbtex.alloc_res_ptrs[DTYPE_UAV];
 	dx11DeviceImmContext->CSSetUnorderedAccessViews(15, 2, dx11UAVs_DOF, 0);
 
 	if (involve_vr)
@@ -721,21 +765,62 @@ void ComputeDOF(__ID3D11DeviceContext* dx11DeviceImmContext,
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(30, 1, (ID3D11UnorderedAccessView**)&gres_fb_vr_ao.alloc_res_ptrs[DTYPE_UAV], 0);
 	}
 
+	int half_w = fb_size_cur.x / 4;
+	int half_h = fb_size_cur.y / 4;
+	uint texMm_num_grid_x = __BLOCKSIZE == 1 ? half_w : (uint)ceil(half_w / (float)__BLOCKSIZE);
+	uint texMm_num_grid_y = __BLOCKSIZE == 1 ? half_h : (uint)ceil(half_h / (float)__BLOCKSIZE);
+	dx11DeviceImmContext->CSSetShader(GETCS(KB_MINMAXTEXTURE_cs_5_0), NULL, 0);
+	dx11DeviceImmContext->Dispatch(texMm_num_grid_x, texMm_num_grid_y, 1);
+
 	if (gpu_profile)
 	{
 		int gpu_profilecount = (int)profile_map.size();
 		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
-		profile_map["end minmax z texure"] = gpu_profilecount;
+		profile_map["end minmax z texture (half)"] = gpu_profilecount;
 		//gpu_profilecount++;
 	}
 
-	dx11DeviceImmContext->CSSetShader(GETCS(KB_MINMAXTEXTURE_cs_5_0), NULL, 0);
-	dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+	dx11DeviceImmContext->CSSetShader(GETCS(KB_MINMAX_NBUF_cs_5_0), NULL, 0);
+	int max_wh = max(half_w, half_w);
+	int nbuf_step = 1;
+	while (max_wh > 1 && nbuf_step <= 10)
+	{
+		dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
+		CB_CameraState* cbCamStateData = (CB_CameraState*)mappedResCamState.pData;
+		memcpy(cbCamStateData, &cbCamState, sizeof(CB_CameraState));
+		cbCamStateData->mat_ws2ss = TRANSPOSE(dmatCS2SS);
+		cbCamStateData->mat_ss2ws = TRANSPOSE(dmatSS2CS);
+		cbCamStateData->iSrCamDummy__1 = nbuf_step++;
+		dx11DeviceImmContext->Unmap(cbuf_cam_state, 0);
+		dx11DeviceImmContext->CSSetConstantBuffers(0, 1, &cbuf_cam_state);
 
-	dx11DeviceImmContext->CSSetUnorderedAccessViews(15, 2, &dx11UAVs_DOF[2], 0);
-	dx11SRVs_DOF[0] = (ID3D11ShaderResourceView*)gres_fb_z_mipmax_halftexture.alloc_res_ptrs[DTYPE_SRV];
-	dx11SRVs_DOF[1] = (ID3D11ShaderResourceView*)gres_fb_globalminmax.alloc_res_ptrs[DTYPE_SRV];
-	dx11DeviceImmContext->CSSetShaderResources(15, 2, dx11SRVs_DOF);
+		dx11DeviceImmContext->Dispatch(texMm_num_grid_x, texMm_num_grid_y, 1);
+		dx11DeviceImmContext->Flush();
+		max_wh >>= 1;
+	}
+
+	if (gpu_profile)
+	{
+		int gpu_profilecount = (int)profile_map.size();
+		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
+		profile_map["end minmax z texture nbuffer"] = gpu_profilecount;
+		//gpu_profilecount++;
+	}
+
+	dx11DeviceImmContext->CSSetUnorderedAccessViews(15, 2, dx11UAVs_NULL, 0);
+	dx11SRVs_DOF[0] = (ID3D11ShaderResourceView*)gres_fb_globalminmax.alloc_res_ptrs[DTYPE_SRV];
+	dx11SRVs_DOF[1] = (ID3D11ShaderResourceView*)gres_fb_z_minmax_mipmap_nbtex.alloc_res_ptrs[DTYPE_SRV];
+
+	GpuRes gres_fb_ao_texs, gres_fb_ao_blf_texs;
+	if (apply_SSAO)
+	{
+		grd_helper::UpdateFrameBuffer(gres_fb_ao_texs, iobj, "RW_TEXS_AO", RTYPE_TEXTURE2D,
+			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8_UNORM, UPFB_NFPP_TEXTURESTACK, MAX_LAYERS_SSAO);
+		grd_helper::UpdateFrameBuffer(gres_fb_ao_blf_texs, iobj, "RW_TEXS_AO_BLF", RTYPE_TEXTURE2D,
+			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_NFPP_TEXTURESTACK, MAX_LAYERS_SSAO);
+		dx11SRVs_DOF[2] = is_blurred_SSAO ? (ID3D11ShaderResourceView*)gres_fb_ao_blf_texs.alloc_res_ptrs[DTYPE_SRV] : (ID3D11ShaderResourceView*)gres_fb_ao_texs.alloc_res_ptrs[DTYPE_SRV];
+	}
+	dx11DeviceImmContext->CSSetShaderResources(15, 3, dx11SRVs_DOF);
 
 	dx11DeviceImmContext->CSSetShader(GETCS(KB_SSDOF_RT_cs_5_0), NULL, 0);
 	dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
@@ -747,17 +832,11 @@ void ComputeDOF(__ID3D11DeviceContext* dx11DeviceImmContext,
 		//gpu_profilecount++;
 	}
 	
-	dx11DeviceImmContext->CSSetShaderResources(10, 2, &dx11SRVs_DOF[2]);
-	dx11DeviceImmContext->CSSetUnorderedAccessViews(10, 1, &dx11UAVs_DOF[2], 0);
+	dx11DeviceImmContext->CSSetShaderResources(10, 3, dx11SRVs_NULL);
+	dx11DeviceImmContext->CSSetUnorderedAccessViews(10, 1, dx11UAVs_NULL, 0);
 
-	dx11DeviceImmContext->CSSetShaderResources(15, 2, &dx11SRVs_DOF[2]);
-	dx11DeviceImmContext->CSSetShaderResources(20, 2, &dx11SRVs_DOF[2]);
-	dx11DeviceImmContext->CSSetShaderResources(25, 2, &dx11SRVs_DOF[2]);
-	dx11DeviceImmContext->CSSetShaderResources(30, 2, &dx11SRVs_DOF[2]);
-	dx11DeviceImmContext->CSSetUnorderedAccessViews(15, 2, &dx11UAVs_DOF[2], 0);
-	dx11DeviceImmContext->CSSetUnorderedAccessViews(20, 2, &dx11UAVs_DOF[2], 0);
-	dx11DeviceImmContext->CSSetUnorderedAccessViews(25, 2, &dx11UAVs_DOF[2], 0);
-	dx11DeviceImmContext->CSSetUnorderedAccessViews(30, 1, &dx11UAVs_DOF[2], 0);
+	dx11DeviceImmContext->CSSetShaderResources(15, 3, dx11SRVs_NULL);
+	dx11DeviceImmContext->CSSetUnorderedAccessViews(15, 2, dx11UAVs_NULL, 0);
 }
 
 bool RenderSrOIT(VmFnContainer* _fncontainer,
@@ -869,7 +948,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #define VS_NUM 5
 #define GS_NUM 3
 #define PS_NUM 54
-#define CS_NUM 17
+#define CS_NUM 18
 #define SET_VS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(VERTEX_SHADER, NAME), __S, true)
 #define SET_PS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(PIXEL_SHADER, NAME), __S, true)
 #define SET_CS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(COMPUTE_SHADER, NAME), __S, true)
@@ -1055,6 +1134,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			  ,"KB_SSAO_BLUR_cs_5_0"
 			  ,"KBZ_TO_TEXTURE_cs_5_0"
 			  ,"KB_MINMAXTEXTURE_cs_5_0"
+			  ,"KB_MINMAX_NBUF_cs_5_0"
 			  ,"KB_SSDOF_RT_cs_5_0"
 		};
 
@@ -1147,9 +1227,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 	GpuRes gres_fb_rgba, gres_fb_depthcs, gres_fb_depthstencil, gres_fb_counter, gres_fb_spinlock;
 	GpuRes gres_fb_k_buffer, gres_fb_ubk_buffer;
-	GpuRes gres_fb_ao_texs[2], gres_fb_ao_blf_texs[2];
 	//GpuRes gres_fb_mip_a_halftexs[2], gres_fb_mip_z_halftexs[2]; // deprecated
-	GpuRes gres_fb_globalminmax, gres_fb_z_mipmax_halftexture;
 	GpuRes gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex;
 	GpuRes gres_fb_ref_pidx;
 	GpuRes gres_fb_sys_rgba, gres_fb_sys_depthcs;
@@ -1182,19 +1260,12 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 	// SSAO
 	{
-		grd_helper::UpdateFrameBuffer(gres_fb_ao_texs[0], iobj, "RW_TEXS_AO_0", RTYPE_TEXTURE2D,
-			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_MIPMAP);
-		grd_helper::UpdateFrameBuffer(gres_fb_ao_texs[1], iobj, "RW_TEXS_AO_1", RTYPE_TEXTURE2D,
-			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_MIPMAP);
-		grd_helper::UpdateFrameBuffer(gres_fb_ao_blf_texs[0], iobj, "RW_TEXS_AO_BLF_0", RTYPE_TEXTURE2D,
-			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_MIPMAP);
-		grd_helper::UpdateFrameBuffer(gres_fb_ao_blf_texs[1], iobj, "RW_TEXS_AO_BLF_1", RTYPE_TEXTURE2D,
-			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_MIPMAP);
-		// gres_fb_globalminmax, gres_fb_z_mipmax_halftexture;
-		grd_helper::UpdateFrameBuffer(gres_fb_globalminmax, iobj, "BUFFER_RW_GLOBAL_MINMAX", RTYPE_BUFFER,
-			D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
-		grd_helper::UpdateFrameBuffer(gres_fb_z_mipmax_halftexture, iobj, "TEX_Z_MINMAX", RTYPE_TEXTURE2D,
-			D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32G32_FLOAT, 0);
+		//GpuRes gres_fb_ao_texs, gres_fb_ao_blf_texs;
+		//grd_helper::UpdateFrameBuffer(gres_fb_ao_texs, iobj, "RW_TEXS_AO", RTYPE_TEXTURE2D,
+		//	D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8_UNORM, UPFB_MIPMAP);
+		//grd_helper::UpdateFrameBuffer(gres_fb_ao_blf_texs, iobj, "RW_TEXS_AO_BLF", RTYPE_TEXTURE2D,
+		//	D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_MIPMAP);
+		//
 		//grd_helper::UpdateFrameBuffer(gres_fb_mip_a_halftexs[0], iobj, "RW_TEXS_OPACITY_0", RTYPE_TEXTURE2D,
 		//	D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_MIPMAP | UPFB_HALF);
 		//grd_helper::UpdateFrameBuffer(gres_fb_mip_a_halftexs[1], iobj, "RW_TEXS_OPACITY_1", RTYPE_TEXTURE2D,
@@ -1690,12 +1761,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
 	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV], clr_float_fltmax_4);
 
-	// gres_fb_globalminmax, gres_fb_z_mipmax_halftexture
-	if (cbEnvState.dof_lens_r > 0 && cam_obj->IsPerspective())
-	{
-		dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_globalminmax.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
-		dx11DeviceImmContext->ClearUnorderedAccessViewFloat((ID3D11UnorderedAccessView*)gres_fb_z_mipmax_halftexture.alloc_res_ptrs[DTYPE_UAV], clr_float_zero_4);
-	}
 #pragma endregion // FrameBuffer Setting
 
 #pragma region // Other Presetting For Shaders
@@ -2763,37 +2828,20 @@ RENDERER_LOOP_EXIT:
 		{
 
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs_2ND, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-			ComputeSSAO(dx11DeviceImmContext, dx11CommonParams, num_grid_x, num_grid_y,
+			ComputeSSAO(dx11DeviceImmContext, dx11CommonParams, iobj, num_grid_x, num_grid_y,
 				gres_fb_counter, gres_fb_k_buffer, gres_fb_rgba, blur_SSAO,
-				//gres_fb_mip_z_halftexs, gres_fb_mip_a_halftexs, 
-				gres_fb_ao_texs, gres_fb_ao_blf_texs,
 				gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex, false, profile_map, gpu_profile);
 		}
 
 		// DOF
 		if (cbEnvState.dof_lens_r > 0 && is_final_renderer && cam_obj->IsPerspective())
 		{
-			vmmat44 dmatWS2CS, dmatCS2PS, dmatPS2SS;
-			vmmat44 dmatSS2PS, dmatPS2CS, dmatCS2WS;
-			cam_obj->GetMatrixWStoSS(&dmatWS2CS, &dmatCS2PS, &dmatPS2SS);
-			cam_obj->GetMatrixSStoWS(&dmatSS2PS, &dmatPS2CS, &dmatCS2WS);
-			vmmat44 dmatCS2SS = dmatCS2PS * dmatPS2SS;
-			vmmat44 dmatSS2CS = dmatSS2PS * dmatPS2CS;
-
-			//D3D11_MAPPED_SUBRESOURCE mappedResCamState;
-			dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
-			CB_CameraState* cbCamStateData = (CB_CameraState*)mappedResCamState.pData;
-			memcpy(cbCamStateData, &cbCamState, sizeof(CB_CameraState));
-			cbCamStateData->mat_ws2ss = TRANSPOSE(dmatCS2SS);
-			cbCamStateData->mat_ss2ws = TRANSPOSE(dmatSS2CS);
-			dx11DeviceImmContext->Unmap(cbuf_cam_state, 0);
-			dx11DeviceImmContext->CSSetConstantBuffers(0, 1, &cbuf_cam_state);
-
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs_2ND, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-			ComputeDOF(dx11DeviceImmContext, dx11CommonParams, num_grid_x, num_grid_y,
-				gres_fb_counter, gres_fb_k_buffer, gres_fb_rgba, blur_SSAO,
-				gres_fb_globalminmax, gres_fb_z_mipmax_halftexture, gres_fb_ao_texs, gres_fb_ao_blf_texs,
-				gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex, false, profile_map, gpu_profile);
+			ComputeDOF(dx11DeviceImmContext, dx11CommonParams, iobj, num_grid_x, num_grid_y,
+				gres_fb_counter, gres_fb_k_buffer, gres_fb_rgba, cbEnvState.r_kernel_ao > 0, blur_SSAO,
+				gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex, 
+				cbCamState, cbuf_cam_state, __BLOCKSIZE,
+				false, profile_map, gpu_profile);
 		}
 	}
 
@@ -3191,7 +3239,8 @@ RENDERER_LOOP_EXIT:
 			UINT64 tsBeginFrame = 0, tsBeginOffsetTable = 0, tsEndOffsetTable = 0, tsEndGeoPass = 0,
 				tsBeginCounter = 0, tsEndCounter = 0, tsBeginGenMM = 0, tsEndGenMM = 0, tsBeginGeoShader = 0, 
 				tsEndResolvePass = 0, tsEndRender = 0, tsBeginCopyBack = 0, tsEndCopyRes = 0, tsEndCopyBack = 0, tsEndFrame = 0,
-				tsBeginHisto = 0, tsEndHisto = 0, tsBeginSSAO = 0, tsEndSSAOsample = 0, tsEndSSAPBlur = 0;;
+				tsBeginHisto = 0, tsEndHisto = 0, tsBeginSSAO = 0, tsEndSSAOsample = 0, tsEndSSAPBlur = 0,
+				tsBeginDOF = 0, tsEndMinMaxZ = 0, tsEndMipMapZ = 0, tsEndDOF = 0;
 
 			auto GetTimeGpuProfile = [&profile_map, &dx11DeviceImmContext, &dx11CommonParams](const string& name, UINT64& ts) -> bool
 			{
@@ -3224,6 +3273,10 @@ RENDERER_LOOP_EXIT:
 			GetTimeGpuProfile("begin copy-back", tsBeginCopyBack);
 			GetTimeGpuProfile("end CopyResource", tsEndCopyRes);
 			GetTimeGpuProfile("end copy-back", tsEndCopyBack);
+			GetTimeGpuProfile("begin SSDOF", tsBeginDOF);
+			GetTimeGpuProfile("end minmax z texture (half)", tsEndMinMaxZ);
+			GetTimeGpuProfile("end minmax z texture nbuffer", tsEndMipMapZ);
+			GetTimeGpuProfile("end SSDOF", tsEndDOF);
 			GetTimeGpuProfile("end", tsEndFrame);
 			UINT64 __dummny;
 			for(int i = 0; i < MAXSTAMPS; i++)
@@ -3246,6 +3299,9 @@ RENDERER_LOOP_EXIT:
 			DisplayDuration(tsEndGeoPass, tsEndResolvePass, "#GPU# Resolve Pass Time");
 			DisplayDuration(tsBeginSSAO, tsEndSSAOsample, "#GPU# SSAO Sample Time");
 			DisplayDuration(tsEndSSAOsample, tsEndSSAPBlur, "#GPU# SSAO Blur Time");
+			DisplayDuration(tsBeginDOF, tsEndMinMaxZ, "#GPU# SSDOF Gen MinMax Z");
+			DisplayDuration(tsEndMinMaxZ, tsEndMipMapZ, "#GPU# SSDOF Gen MipMap Z");
+			DisplayDuration(tsEndMipMapZ, tsEndDOF, "#GPU# SSDOF RT");
 			//DisplayDuration(tsBeginCopyBack, tsEndCopyRes, "#GPU# CopyResource Time");
 			//DisplayDuration(tsEndCopyRes, tsEndCopyBack, "#GPU# CopyBack Time");
 

@@ -321,6 +321,7 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		case DXGI_FORMAT_R32_FLOAT: stride_bytes = sizeof(float); break;
 		case DXGI_FORMAT_D32_FLOAT:	stride_bytes = sizeof(float); break;
 		case DXGI_FORMAT_R32G32B32A32_FLOAT: stride_bytes = sizeof(vmfloat4); break;
+		case DXGI_FORMAT_R32G32_FLOAT: stride_bytes = sizeof(vmfloat2); break;
 		case DXGI_FORMAT_R8G8B8A8_UNORM: stride_bytes = sizeof(vmbyte4); break;
 		case DXGI_FORMAT_R8G8B8A8_UINT: stride_bytes = sizeof(vmbyte4); break;
 		case DXGI_FORMAT_R8_UNORM: stride_bytes = sizeof(byte); break;
@@ -395,8 +396,8 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		descTex2D.CPUAccessFlags = GetOption("CPU_ACCESS_FLAG");
 		descTex2D.MiscFlags = gres.options["MIP_GEN"] == 1 ? D3D11_RESOURCE_MISC_GENERATE_MIPS : NULL;
 
-		if (gres.options["MIP_GEN"] == 1)
-			int gg = 0;
+		//if (gres.options["MIP_GEN"] == 1)
+		//	int gg = 0;
 		ID3D11Texture2D* pdx11TX2D = NULL;
 		g_pdx11Device->CreateTexture2D(&descTex2D, NULL, &pdx11TX2D);
 		if (pdx11TX2D == NULL)
@@ -533,9 +534,24 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 			if (GetOption("RAW_ACCESS") & 0x1) descUAV.Buffer.Flags = D3D11_BUFFER_UAV_FLAG_RAW;
 			break;
 		case RTYPE_TEXTURE2D:
-			descUAV.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
-			descUAV.Texture2D.MipSlice = 0;
-			break;
+			//descUAV.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
+			//descUAV.Texture2D.MipSlice = 0;
+			{
+				uint depth = (uint)GetParam("DEPTH");
+				if (depth > 1)
+				{
+					descUAV.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2DARRAY;
+					descUAV.Texture2DArray.MipSlice = 0;
+					descUAV.Texture2DArray.ArraySize = depth;
+					descUAV.Texture2DArray.FirstArraySlice = 0;
+				}
+				else
+				{
+					descUAV.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
+					descUAV.Texture2D.MipSlice = 0;
+				}
+				break;
+			}
 		default:
 			::MessageBoxA(NULL, "Error Res Type", NULL, MB_OK);
 			return false;

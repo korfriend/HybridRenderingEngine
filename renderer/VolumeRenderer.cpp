@@ -5,11 +5,10 @@
 using namespace grd_helper;
 
 extern void ComputeSSAO(__ID3D11DeviceContext* dx11DeviceImmContext,
-	grd_helper::GpuDX11CommonParameters* dx11CommonParams, int num_grid_x, int num_grid_y,
-	GpuRes& gres_fb_counter, GpuRes& gres_fb_k_buffer, GpuRes& gres_fb_rgba, bool blur_SSAO,
-	//GpuRes(&gres_fb_mip_z_halftexs)[2], GpuRes(&gres_fb_mip_a_halftexs)[2],
-	GpuRes(&gres_fb_ao_texs)[2], GpuRes(&gres_fb_ao_blf_texs)[2],
-	GpuRes& gres_fb_vr_depth, GpuRes& gres_fb_vr_ao, GpuRes& gres_fb_vr_ao_blf, bool involve_vr, 
+	grd_helper::GpuDX11CommonParameters* dx11CommonParams, VmIObject* iobj,
+	int num_grid_x, int num_grid_y,
+	GpuRes& gres_fb_counter, GpuRes& gres_fb_deep_k_buffer, GpuRes& gres_fb_rgba, bool blur_SSAO,
+	GpuRes& gres_fb_vr_depth, GpuRes& gres_fb_vr_ao, GpuRes& gres_fb_vr_ao_blf, bool involve_vr,
 	map<string, int>& profile_map, bool gpu_profile);
 
 bool RenderVrDLS(VmFnContainer* _fncontainer,
@@ -830,10 +829,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			is_performed_ssao = true;
 			//dx11DeviceImmContext->Flush();
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-			ComputeSSAO(dx11DeviceImmContext, dx11CommonParams, num_grid_x, num_grid_y,
+			ComputeSSAO(dx11DeviceImmContext, dx11CommonParams, iobj, num_grid_x, num_grid_y,
 				gres_fb_counter, gres_fb_k_buffer, gres_fb_rgba, blur_SSAO,
-				//gres_fb_mip_z_halftexs, gres_fb_mip_a_halftexs, 
-				gres_fb_ao_texs, gres_fb_ao_blf_texs,
 				gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex, true, profile_map, gpu_profile);
 
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs, (UINT*)(&dx11UAVs));
@@ -876,10 +873,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		is_performed_ssao = true;
 		//dx11DeviceImmContext->Flush();
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-		ComputeSSAO(dx11DeviceImmContext, dx11CommonParams, num_grid_x, num_grid_y,
+		ComputeSSAO(dx11DeviceImmContext, dx11CommonParams, iobj, num_grid_x, num_grid_y,
 			gres_fb_counter, gres_fb_k_buffer, gres_fb_rgba, blur_SSAO,
-			//gres_fb_mip_z_halftexs, gres_fb_mip_a_halftexs, 
-			gres_fb_ao_texs, gres_fb_ao_blf_texs,
 			gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex, true, profile_map, gpu_profile);
 
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs, (UINT*)(&dx11UAVs));

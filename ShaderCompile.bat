@@ -59,9 +59,10 @@ fxc /E OIT_KDEPTH /T ps_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/
 fxc /E KB_SSAO /T cs_5_0 ./hlsl/ssao/SSAO.hlsl /Fo ./shader_compiled_objs/KB_SSAO_cs_5_0 /D HBAO=1 /D FRAG_MERGING=1 /D APPLY_TRANSPARENCY=1
 fxc /E KB_SSAO_BLUR /T cs_5_0 ./hlsl/ssao/SSAO.hlsl /Fo ./shader_compiled_objs/KB_SSAO_BLUR_cs_5_0 /D FRAG_MERGING=1
 fxc /E KB_TO_TEXTURE /T cs_5_0 ./hlsl/ssao/SSAO.hlsl /Fo ./shader_compiled_objs/KBZ_TO_TEXTURE_cs_5_0 /D FRAG_MERGING=1
-//fxc /E KB_SSAO /T cs_5_0 ./hlsl/ssao/SSAO.hlsl /Fo ./shader_compiled_objs/KB_SSAO_cs_5_0 /D MAX_LAYERS=8 /D HBAO=1 /D FRAG_MERGING=1
-//fxc /E KB_SSAO_BLUR /T cs_5_0 ./hlsl/ssao/SSAO.hlsl /Fo ./shader_compiled_objs/KB_SSAO_BLUR_cs_5_0 /D MAX_LAYERS=8 /D FRAG_MERGING=1
-//fxc /E KB_TO_TEXTURE /T cs_5_0 ./hlsl/ssao/SSAO.hlsl /Fo ./shader_compiled_objs/KBZ_TO_TEXTURE_cs_5_0 /D MAX_LAYERS=8 /D FRAG_MERGING=1
+
+fxc /E KB_TO_MINMAXDEPTHTEXTURE /T cs_5_0 "./hlsl/layered dof/SSDOF.hlsl" /Fo ./shader_compiled_objs/KB_MINMAXTEXTURE_cs_5_0 /D FRAG_MERGING=1 /D ZT_MODEL=0
+fxc /E KB_TO_MINMAXDEPTH_NBUF /T cs_5_0 "./hlsl/layered dof/SSDOF.hlsl" /Fo ./shader_compiled_objs/KB_MINMAX_NBUF_cs_5_0 
+fxc /E KB_SSDOF_RT /T cs_5_0 "./hlsl/layered dof/SSDOF.hlsl" /Fo ./shader_compiled_objs/KB_SSDOF_RT_cs_5_0 /D FRAG_MERGING=1 /D ZT_MODEL=0 /D EARLY_ENTIRE_LAYERS_CULLING=1 /D RAY_LAYER_CULLING=1
 
 fxc /E FillHistogram /T cs_5_0 ./hlsl/kbuf/KplusB.hlsl /Fo ./shader_compiled_objs/SR_FillHistogram_cs_5_0
 fxc /E CreateOffsetTableKpB /T cs_5_0 ./hlsl/kbuf/KplusB.hlsl /Fo ./shader_compiled_objs/SR_CreateOffsetTableKpB_cs_5_0
@@ -110,9 +111,9 @@ fxc /E GS_ThickLines /T gs_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/
 //fxc /E DVR /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/VR_OPAQUE_cs_5_0 /D RAYMODE=0 /DOTF_MASK=0 /D MAX_LAYERS=8 /D VR_MODE=1
 //fxc /E DVR /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/VR_CONTEXT_cs_5_0 /D RAYMODE=0 /DOTF_MASK=0 /D MAX_LAYERS=8 /D VR_MODE=2
 //fxc /E VR_SURFACE /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/VR_SURFACE_cs_5_0 /D RAYMODE=0 /DOTF_MASK=0 /D MAX_LAYERS=8
-fxc /E DVR /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/VR_RAYMAX_cs_5_0 /D RAYMODE=1 /DOTF_MASK=0 /D FRAG_MERGING=1 /D DYNAMIC_K_MODE=0
-fxc /E DVR /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/VR_RAYMIN_cs_5_0 /D RAYMODE=2 /DOTF_MASK=0 /D FRAG_MERGING=1 /D DYNAMIC_K_MODE=0
-fxc /E DVR /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/VR_RAYSUM_cs_5_0 /D RAYMODE=3 /DOTF_MASK=0 /D FRAG_MERGING=1 /D DYNAMIC_K_MODE=0
+//fxc /E DVR /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/VR_RAYMAX_cs_5_0 /D RAYMODE=1 /DOTF_MASK=0 /D FRAG_MERGING=1 /D DYNAMIC_K_MODE=0
+//fxc /E DVR /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/VR_RAYMIN_cs_5_0 /D RAYMODE=2 /DOTF_MASK=0 /D FRAG_MERGING=1 /D DYNAMIC_K_MODE=0
+//fxc /E DVR /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/VR_RAYSUM_cs_5_0 /D RAYMODE=3 /DOTF_MASK=0 /D FRAG_MERGING=1 /D DYNAMIC_K_MODE=0
 
 fxc /E RayCasting /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/VR_DEFAULT_cs_5_0 /D RAYMODE=0 /DOTF_MASK=0 /D VR_MODE=0 /D FRAG_MERGING=1 /D DYNAMIC_K_MODE=0 /D LINEAR_MODE=1
 fxc /E RayCasting /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/VR_OPAQUE_cs_5_0 /D RAYMODE=0 /DOTF_MASK=0 /D VR_MODE=1 /D FRAG_MERGING=1 /D DYNAMIC_K_MODE=0 /D LINEAR_MODE=1

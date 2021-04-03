@@ -97,7 +97,7 @@ RWByteAddressBuffer deep_k_buf : register(u4);
 
 void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4 v_rgba, const in float z_depth, const in float z_thickness)
 {
-	if (z_depth > FLT_LARGE || v_rgba.a == 0) EXIT;
+	if (z_depth > FLT_LARGE || v_rgba.a <= 0.01) EXIT;
 
 	uint iv_rgba = ConvertFloat4ToUInt(v_rgba);
 
@@ -353,7 +353,7 @@ RWByteAddressBuffer deep_k_buf : register(u4);
 
 void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4 v_rgba, const in float z_depth, const in float z_thickness)
 {
-	if (z_depth > FLT_LARGE || v_rgba.a == 0)
+	if (z_depth > FLT_LARGE || v_rgba.a <= 0.01)
 		EXIT;
 
 	uint __dummy;
@@ -655,7 +655,7 @@ void OIT_PRESET(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	//if(v_rgba.a == 0)
 	//	v_rgba = float4(1, 0, 0, 1);
 
-	if (v_rgba.a == 0)
+	if (v_rgba.a <= 0.01)
 		return;
 
 	float vz_thickness = depth_res;
@@ -689,6 +689,7 @@ void OIT_KDEPTH(__VS_OUT input)
 	int max_c = g_cbPobj.pobj_flag >> 30;
 	float line_pos = max_c == 0 ? input.f3PosWS.x : max_c == 1 ? input.f3PosWS.y : input.f3PosWS.z;
 	DashedLine(v_rgba, z_depth, line_pos, g_cbPobj.dash_interval, g_cbPobj.pobj_flag & (0x1 << 19), g_cbPobj.pobj_flag & (0x1 << 20));
+	if (v_rgba.a <= 0.01) clip(-1);
 #elif __RENDERING_MODE == 2
 	MultiTextMapping(v_rgba, z_depth, input.f3Custom0.xy, (int)(input.f3Custom0.z + 0.5f), input.f3Custom1, input.f3Custom2);
 	if (v_rgba.a <= 0.01) clip(-1);

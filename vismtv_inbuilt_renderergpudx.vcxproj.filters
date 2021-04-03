@@ -91,6 +91,9 @@
     <Filter Include="hlsl source code\DxABuf">
       <UniqueIdentifier>{63f19760-d12e-4893-b68c-56ff570b2542}</UniqueIdentifier>
     </Filter>
+    <Filter Include="hlsl source code\layered DOF">
+      <UniqueIdentifier>{9fddb088-05c7-45cb-a253-5151f777f821}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="vismtv_inbuilt_renderergpudx.rc">
@@ -130,6 +133,9 @@
     </FxCompile>
     <FxCompile Include="hlsl\Matrix.hlsl">
       <Filter>hlsl source code</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\layered DOF\SSDOF.hlsl">
+      <Filter>hlsl source code\layered DOF</Filter>
     </FxCompile>
   </ItemGroup>
 </Project>

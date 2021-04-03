@@ -15,7 +15,7 @@ RWTexture2D<float> fragment_zdepth : register(u3);
 
 #define AO_MAX_LAYERS 8 
 
-Texture2D<unorm float4> ao_textures[AO_MAX_LAYERS / 4] : register(t10);
+Texture2DArray<unorm float> ao_textures : register(t10);
 Texture2D<unorm float> ao_vr_texture : register(t20);
 
 #if DYNAMIC_K_MODE == 1
@@ -290,10 +290,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	float ao_vr = 0;
 	if (g_cbEnv.r_kernel_ao > 0)
 	{
-		float4 aos_tex0 = ao_textures[0][DTid.xy];
-		float4 aos_tex1 = ao_textures[1][DTid.xy];
-		aos[0] = aos_tex0.x; aos[1] = aos_tex0.y; aos[2] = aos_tex0.z; aos[3] = aos_tex0.w;
-		aos[4] = aos_tex1.x; aos[5] = aos_tex1.y; aos[6] = aos_tex1.z; aos[7] = aos_tex1.w;
+		for (int k = 0; k < AO_MAX_LAYERS; k++) aos[k] = ao_textures[int3(DTid.xy, k)];
 		ao_vr = ao_vr_texture[DTid.xy];
 	}
 

@@ -137,13 +137,24 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 	//	return;
 	//}
 
+	int num_valid_fs = 0; // for safe check
 	FragmentVD fragments[MAX_ARRAY_SIZE];
 	for (int i = 0; i < N; i++)
 	{
 		FragmentVD f;
 		f.i_vis = LOAD1_UBKB(2 * (offset + i) + 0);
-		f.z = asfloat(LOAD1_UBKB(2 * (offset + i) + 1));
-		fragments[i] = f;
+		if (f.i_vis >> 24 > 0)
+		{
+			f.z = asfloat(LOAD1_UBKB(2 * (offset + i) + 1));
+			fragments[num_valid_fs++] = f;
+		}
+	}
+	N = num_valid_fs;
+	if (N == 0)
+	{
+		// this is the case that the incoming fragment is invalid, e.g., 
+		fragment_counter[nDTid.xy] = 0;
+		return;
 	}
 
 	//const int test_idx = 0;
@@ -158,6 +169,9 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 
 #if FRAG_MERGING == 1
 #define NUM_K 8
+#if TEST == 1
+	store_to_kbuf = true;
+#endif
 	float merging_beta = asfloat(g_cbCamState.iSrCamDummy__0);
 	//Fragment f_tail = (Fragment)0;
 	const uint k_value = g_cbCamState.k_value;
@@ -205,7 +219,7 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 		{
 			if (cnt_stored_fs < NUM_K - 1)
 			{
-				SET_FRAG(addr_base, cnt_stored_fs, f_1);
+				if(store_to_kbuf) SET_FRAG(addr_base, cnt_stored_fs, f_1);
 				cnt_stored_fs++;
 
 				float4 color = ConvertUIntToFloat4(f_1.i_vis);
@@ -235,13 +249,13 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 	}
 	if (f_1.i_vis != 0)
 	{
-		SET_FRAG(addr_base, cnt_stored_fs, f_1); 
+		if (store_to_kbuf) SET_FRAG(addr_base, cnt_stored_fs, f_1);
 		cnt_stored_fs++;
 
 		float4 vis = ConvertUIntToFloat4(f_1.i_vis);
 		vis_out += vis * (1 - vis_out.a);
 	}
-	fragment_counter[nDTid.xy] = cnt_stored_fs;
+	if (store_to_kbuf) fragment_counter[nDTid.xy] = cnt_stored_fs;
 
 #if TEST == 1
 	vis_out = (float4) 0.0f;

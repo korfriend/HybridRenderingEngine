@@ -38,10 +38,13 @@ void OIT_A_BUFFER_FILL(__VS_OUT input)
 
 #if __RENDERING_MODE == 1
 	DashedLine(v_rgba, z_depth, input.f3Custom.x, g_cbPobj.dash_interval, g_cbPobj.pobj_flag & (0x1 << 19), g_cbPobj.pobj_flag & (0x1 << 20));
+	if (v_rgba.a <= 0.01) clip(-1);
 #elif __RENDERING_MODE == 2
 	MultiTextMapping(v_rgba, z_depth, input.f3Custom0.xy, (int)(input.f3Custom0.z + 0.5f), input.f3Custom1, input.f3Custom2);
+	if (v_rgba.a <= 0.01) clip(-1);
 #elif __RENDERING_MODE == 3
 	TextMapping(v_rgba, z_depth, input.f3Custom.xy, g_cbPobj.pobj_flag & (0x1 << 9), g_cbPobj.pobj_flag & (0x1 << 10));
+	if (v_rgba.a <= 0.01) clip(-1);
 #elif __RENDERING_MODE == 4
 	if (g_cbPobj.tex_map_enum == 1)
 	{
@@ -63,7 +66,7 @@ void OIT_A_BUFFER_FILL(__VS_OUT input)
 			ComputeColor(v_rgba.rgb, Ka, Kd, Ks, Ns, 1.0, input.f3PosWS, view_dir, nor, nor_len);
 			v_rgba.a *= clr_map.a;
 		}
-		v_rgba.rgb = float3(1, 0, 0);
+		//v_rgba.rgb = float3(1, 0, 0);
 	}
 	else
 	{
@@ -80,6 +83,7 @@ void OIT_A_BUFFER_FILL(__VS_OUT input)
 		}
 		else // illumination model 0
 			v_rgba.rgb = Kd;
+		if (d <= 0.01) clip(-1);
 		v_rgba.a *= d;
 	}
 #else
@@ -112,6 +116,24 @@ void OIT_A_BUFFER_FILL(__VS_OUT input)
 	v_rgba.rgb *= v_rgba.a;
 
 	int2 tex2d_xy = int2(input.f4PosSS.xy);
+	// dynamic opacity modulation
+	bool is_dynamic_transparency = BitCheck(g_cbPobj.pobj_flag, 22);
+	bool is_mask_transparency = BitCheck(g_cbPobj.pobj_flag, 23);
+	if (is_dynamic_transparency || is_mask_transparency)
+	{
+		float mask_weight = 1, dynamic_alpha_weight = 1;
+		int out_lined = GhostedEffect(mask_weight, dynamic_alpha_weight, input.f3PosWS, view_dir, nor, nor_len, is_dynamic_transparency);
+		if (out_lined > 0)
+			v_rgba = float4(1, 1, 0, 1);
+		else
+		{
+			if (is_dynamic_transparency)
+				v_rgba.rgba *= dynamic_alpha_weight;
+			if (is_mask_transparency)
+				v_rgba.rgba *= mask_weight;
+			if (v_rgba.a <= 0.01) clip(-1);
+		}
+	}
 
 	// Atomically allocate space in the deep buffer
 	uint fc = 0;

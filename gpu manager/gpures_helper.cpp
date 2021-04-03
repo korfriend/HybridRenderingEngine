@@ -434,6 +434,10 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA21100), "KB_SSAO_cs_5_0", "cs_5_0"), KB_SSAO_cs_5_0);
 			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA21101), "KB_SSAO_BLUR_cs_5_0", "cs_5_0"), KB_SSAO_BLUR_cs_5_0);
 			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA21102), "KBZ_TO_TEXTURE_cs_5_0", "cs_5_0"), KBZ_TO_TEXTURE_cs_5_0);
+
+			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA21105), "KB_MINMAXTEXTURE_cs_5_0", "cs_5_0"), KB_MINMAXTEXTURE_cs_5_0);
+			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA21106), "KB_SSDOF_RT_cs_5_0", "cs_5_0"), KB_SSDOF_RT_cs_5_0);
+			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA21107), "KB_MINMAX_NBUF_cs_5_0", "cs_5_0"), KB_MINMAX_NBUF_cs_5_0);
 		}
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA21000), "OIT_SKBZ_RESOLVE_cs_5_0", "cs_5_0"), OIT_SKBZ_RESOLVE_cs_5_0);
@@ -1568,7 +1572,8 @@ bool grd_helper::UpdateFrameBuffer(GpuRes& gres,
 	switch (gres_type)
 	{
 	case RTYPE_BUFFER:
-		gres.res_dvalues["NUM_ELEMENTS"] = num_frags_perpixel > 0 ? fb_size.x * fb_size.y * num_frags_perpixel : fb_size.x * fb_size.y;
+		if (fb_flag & UPFB_NFPP_BUFFERSIZE) gres.res_dvalues["NUM_ELEMENTS"] = num_frags_perpixel;
+		else gres.res_dvalues["NUM_ELEMENTS"] = num_frags_perpixel > 0 ? fb_size.x * fb_size.y * num_frags_perpixel : fb_size.x * fb_size.y;
 		switch (dx_format)
 		{
 		case DXGI_FORMAT_R32_UINT: stride_bytes = sizeof(uint); break;
@@ -1591,8 +1596,9 @@ bool grd_helper::UpdateFrameBuffer(GpuRes& gres,
 		gres.res_dvalues["STRIDE_BYTES"] = (double)(stride_bytes);
 		break;
 	case RTYPE_TEXTURE2D:
-		gres.res_dvalues["WIDTH"] = (fb_flag & UPFB_HALF) ? fb_size.x / 2 : fb_size.x;
-		gres.res_dvalues["HEIGHT"] = (fb_flag & UPFB_HALF) ? fb_size.y / 2 : fb_size.y;
+		gres.res_dvalues["WIDTH"] = ((fb_flag & UPFB_HALF) || (fb_flag & UPFB_HALF_W)) ? fb_size.x / 2 : fb_size.x;
+		gres.res_dvalues["HEIGHT"] = ((fb_flag & UPFB_HALF) || (fb_flag & UPFB_HALF_H)) ? fb_size.y / 2 : fb_size.y;
+		if (fb_flag & UPFB_NFPP_TEXTURESTACK) gres.res_dvalues["DEPTH"] = num_frags_perpixel;
 		if (fb_flag & UPFB_MIPMAP) gres.options["MIP_GEN"] = 1;
 		if (fb_flag & UPFB_HALF) gres.options["HALF_GEN"] = 1;
 		break;
@@ -1695,6 +1701,19 @@ void grd_helper::SetCb_Env(CB_EnvState& cb_env, VmCObject* ccobj, VmFnContainer*
 		cb_env.num_dirs = _fncontainer->GetParamValue("_int_SSAONumDirs", (int)4);
 		cb_env.num_steps = _fncontainer->GetParamValue("_int_SSAONumSteps", (int)4);
 		cb_env.tangent_bias = (float)_fncontainer->GetParamValue("_double_SSAOTangentBias", (double)VM_PI / 6.0);
+		cb_env.ao_intensity = (float)_fncontainer->GetParamValue("_double_SSAOIntensity", 0.5);
+		cb_env.env_flag |= (_fncontainer->GetParamValue("_int_SSAOOutput", (int)0) & 0xF) << 9;
+	}
+
+	bool apply_DOF = _fncontainer->GetParamValue("_bool_ApplyDOF", false);
+	cb_env.dof_lens_r = 0;
+	if (apply_DOF)
+	{
+		cb_env.dof_lens_r = (float)_fncontainer->GetParamValue("_double_DOFLensRadius", (double)3.0);
+		cb_env.dof_lens_F = (float)_fncontainer->GetParamValue("_double_DOFFocalLength", (double)10.0);
+		cb_env.dof_lens_ray_num_samples = _fncontainer->GetParamValue("_int_DOFLensRaySamples", (int)8);
+		cb_env.dof_focus_z = (float)_fncontainer->GetParamValue("_double_DOFFocusZ", (double)20.0);
+		cb_env.dof_focus_z = max(cb_env.dof_focus_z, cb_env.dof_lens_F * 1.2f);
 	}
 
 	cb_env.ltint_ambient = vmfloat4(simple_light_intensities.x);

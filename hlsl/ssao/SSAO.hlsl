@@ -1,19 +1,19 @@
 #include "../CommonShader.hlsl"
 
-#define LOCAL_SIZE 8
+#define MAX_LAYERS 8
 
 Texture2D<uint> fragment_counter : register(t10);
 ByteAddressBuffer deep_k_buf : register(t11);
 
 RWTexture2D<unorm float4> rw_fragment_blendout : register(u10);
 
-//Texture2D<float4> mip_z_textures[LOCAL_SIZE / 4] : register(t15);
-//RWTexture2D<float4> rw_mip_z_textures[LOCAL_SIZE / 4] : register(u15);
-//Texture2D<unorm float4> mip_opacity_textures[LOCAL_SIZE / 4] : register(t20);
-//RWTexture2D<unorm float4> rw_mip_opacity_textures[LOCAL_SIZE / 4] : register(u20);
+//Texture2D<float4> mip_z_textures[MAX_LAYERS / 4] : register(t15);
+//RWTexture2D<float4> rw_mip_z_textures[MAX_LAYERS / 4] : register(u15);
+//Texture2D<unorm float4> mip_opacity_textures[MAX_LAYERS / 4] : register(t20);
+//RWTexture2D<unorm float4> rw_mip_opacity_textures[MAX_LAYERS / 4] : register(u20);
 
-Texture2D<unorm float4> ao_textures[LOCAL_SIZE / 4] : register(t25);
-RWTexture2D<unorm float4> rw_ao_textures[LOCAL_SIZE / 4] : register(u25);
+Texture2DArray<unorm float> ao_textures : register(t25);
+RWTexture2DArray<unorm float> rw_ao_textures : register(u25);
 
 Texture2D<unorm float> ao_vr_texture : register(t30);
 Texture2D<float> fragment_vr_zdepth : register(t31);
@@ -258,8 +258,8 @@ void KB_SSAO(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTi
 
 	if (frag_cnt == 0 && vr_hit_enc == 0)
 	{
-		rw_ao_textures[0][DTid.xy] = (float4)0;
-		rw_ao_textures[1][DTid.xy] = (float4)0;
+		for(int k = 0; k < MAX_LAYERS; k++)
+		rw_ao_textures[int3(DTid.xy, k)] = 0;
 		rw_ao_vr_texture[DTid.xy] = 0;
 		return;
 	}
@@ -291,7 +291,7 @@ void KB_SSAO(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTi
 	uint addr_base_dxL = (DTid.y * g_cbCamState.rt_width + DTid.x - x_offset) * bytes_frags_per_pixel;
 	uint addr_base_dyL = ((DTid.y - y_offset) * g_cbCamState.rt_width + DTid.x) * bytes_frags_per_pixel;
 
-	float v_AOs[LOCAL_SIZE];
+	float v_AOs[MAX_LAYERS];
 	[loop]
 	for (int i = 0; i < (int)frag_cnt; i++)
 	{
@@ -349,12 +349,14 @@ void KB_SSAO(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTi
 				bytes_frags_per_pixel, false);
 		}
 
-		v_AOs[i] = ao / num_dirs * ao_intensity;
+		rw_ao_textures[int3(DTid.xy, i)] = v_AOs[i] = ao / num_dirs * ao_intensity;
 	}
 
-	for (i = (int)frag_cnt; i < k_value; i++) v_AOs[i] = 0;
-	rw_ao_textures[0][DTid.xy] = float4(v_AOs[0], v_AOs[1], v_AOs[2], v_AOs[3]);
-	rw_ao_textures[1][DTid.xy] = float4(v_AOs[4], v_AOs[5], v_AOs[6], v_AOs[7]);
+	for (i = (int)frag_cnt; i < (int)k_value; i++)
+	{
+		v_AOs[i] = 0;
+		rw_ao_textures[int3(DTid.xy, i)] = 0;
+	}
 
 	float ao_vr = 0;
 	if (g_cbEnv.env_flag & 0x2 && vr_hit_enc == 1)
@@ -464,9 +466,9 @@ void KB_TO_TEXTURE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uin
 		max(fragment_counter[float2(DTid.x * 2 + 1, DTid.y * 2 + 0)] & 0xFFF, fragment_counter[float2(DTid.x * 2 + 1, DTid.y * 2 + 1)] & 0xFFF));
 
 
-	float _zs_avr[LOCAL_SIZE];
-	float _opacity_avr[LOCAL_SIZE];
-	for (int i = 0; i < LOCAL_SIZE; i++)
+	float _zs_avr[MAX_LAYERS];
+	float _opacity_avr[MAX_LAYERS];
+	for (int i = 0; i < MAX_LAYERS; i++)
 	{
 		if (i < frag_cnt_max)
 		{
@@ -507,8 +509,8 @@ void KB_SSAO_BLUR(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 
 	if (frag_cnt == 0 && vr_hit_enc == 0)
 	{
-		rw_ao_textures[0][DTid.xy] = (float4)0;
-		rw_ao_textures[1][DTid.xy] = (float4)0;
+		for(int k = 0; k < MAX_LAYERS; k++)
+			rw_ao_textures[int3(DTid.xy, k)] = 0;
 		if (g_cbEnv.env_flag & 0x2)
 			rw_ao_vr_texture[DTid.xy] = 0;
 		return;
@@ -529,18 +531,16 @@ void KB_SSAO_BLUR(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 		kernel[kSize + j] = kernel[kSize - j] = normpdf(float(j), SIGMA);
 	}
 
-	float v_AOs[LOCAL_SIZE];
-	float v_AOs_nb[LOCAL_SIZE];
-	float4 aos_tex0 = ao_textures[0][DTid.xy];
-	float4 aos_tex1 = ao_textures[1][DTid.xy];
-	v_AOs[0] = aos_tex0.x; v_AOs[1] = aos_tex0.y; v_AOs[2] = aos_tex0.z; v_AOs[3] = aos_tex0.w;
-	v_AOs[4] = aos_tex1.x; v_AOs[5] = aos_tex1.y; v_AOs[6] = aos_tex1.z; v_AOs[7] = aos_tex1.w;
+	float v_AOs[MAX_LAYERS];
+	float v_AOs_nb[MAX_LAYERS];
+	for (int k = 0; k < MAX_LAYERS; k++) 
+		v_AOs[k] = ao_textures[int3(DTid.xy, k)];
 	float v_AO_vr = ao_vr_texture[DTid.xy];
 
-	float v_AOs_out[LOCAL_SIZE];
-	float bZs[LOCAL_SIZE];
+	float v_AOs_out[MAX_LAYERS];
+	float bZs[MAX_LAYERS];
 	[loop]
-	for (j = 0; j < k_value; j++)
+	for (j = 0; j < (int)k_value; j++)
 	{
 		v_AOs_out[j] = 0;
 		bZs[j] = 0;
@@ -555,13 +555,11 @@ void KB_SSAO_BLUR(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	{
 		for (int j = -kSize; j <= kSize; ++j)
 		{
-			float4 aos_tex0_nb = ao_textures[0][DTid.xy + uint2(i, j)];
-			float4 aos_tex1_nb = ao_textures[1][DTid.xy + uint2(i, j)];
-			v_AOs_nb[0] = aos_tex0_nb.x; v_AOs_nb[1] = aos_tex0_nb.y; v_AOs_nb[2] = aos_tex0_nb.z; v_AOs_nb[3] = aos_tex0_nb.w;
-			v_AOs_nb[4] = aos_tex1_nb.x; v_AOs_nb[5] = aos_tex1_nb.y; v_AOs_nb[6] = aos_tex1_nb.z; v_AOs_nb[7] = aos_tex1_nb.w;
+			for (int k = 0; k < MAX_LAYERS; k++) 
+				v_AOs_nb[k] = ao_textures[int3(DTid.xy + uint2(i, j), k)];
 
 			float gfactor = kernel[kSize + j] * kernel[kSize + i];
-			for (int k = 0; k < frag_cnt; k++)
+			for (k = 0; k < frag_cnt; k++)
 			{
 				float ao_nb = v_AOs_nb[k];
 				float bfactor = normpdf(ao_nb - v_AOs[k], BSIGMA) * bZnorm * gfactor;
@@ -609,6 +607,6 @@ void KB_SSAO_BLUR(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	//rw_fragment_blendout[DTid.xy] = float4((float3)(1 - v_AOs_out[1]), 1);
 	//rw_fragment_blendout[DTid.xy] = float4((float3)(frag_cnt / 8.f), 1);
 
-	rw_ao_textures[0][DTid.xy] = float4(v_AOs_out[0], v_AOs_out[1], v_AOs_out[2], v_AOs_out[3]);
-	rw_ao_textures[1][DTid.xy] = float4(v_AOs_out[4], v_AOs_out[5], v_AOs_out[6], v_AOs_out[7]);
+	for (k = 0; k < MAX_LAYERS; k++)
+		rw_ao_textures[int3(DTid.xy, k)] = v_AOs_out[k];
 }

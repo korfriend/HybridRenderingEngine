@@ -45,7 +45,7 @@ struct HxCB_CameraState // Hlsl dX Contant Buffer
 
 	float near_plane;
 	float far_plane;
-	uint iSrCamDummy__1;
+	uint iSrCamDummy__1; // used for the N-buffer index or SSAO setting for DOF
 	uint iSrCamDummy__2;
 };
 
@@ -54,6 +54,7 @@ struct HxCB_EnvState
 	float3 pos_light_ws;
 	// 1st bit : 0 (parallel), 1 : (spot)
 	// 2nd bit : 0 (only polygons for SSAO), 1 : (volume G buffer for SSAO)
+	// 10th~13th bit : 0 (no SSAO output to render buffer), 1~8: (0~7th layer of SSAO to render buffer), 9: vr layer of SSAO to render buffer
 	uint env_flag;
 
 	float3 dir_light_ws;
@@ -70,6 +71,16 @@ struct HxCB_EnvState
 	int num_dirs;
 	int num_steps;
 	float tangent_bias;
+
+	float ao_intensity;
+	uint env_dummy_0;
+	uint env_dummy_1;
+	uint env_dummy_2;
+
+	float dof_lens_r;
+	float dof_sensor_z; // sensor distance (lens' image plane, not view-frustum's image plane of rendering pipeline)
+	float dof_focus_z;
+	int dof_lens_ray_num_samples;
 };
 
 struct HxCB_ClipInfo
@@ -1189,7 +1200,7 @@ int MergeFragRS_Avr(inout RaySegment2 rs_merge, RaySegment2 rs_1, RaySegment2 rs
 struct Fragment
 {
 	uint i_vis;
-	float z;
+	float z; // note that the distance along the view-ray, not z value in CS
 #if !defined(FRAG_MERGING) || FRAG_MERGING == 1
 	float zthick;
 	float opacity_sum;
