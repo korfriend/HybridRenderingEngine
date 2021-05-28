@@ -1352,6 +1352,143 @@ Fragment_OUT MergeFrags(Fragment f_prior, Fragment f_posterior, const in float b
 	return fs_out;
 }
 
+Fragment MergeFrags_ver2_test(Fragment f_prior, Fragment f_posterior, const in float beta)
+{
+	// Overall algorithm computation cost 
+	// : 3 branches, 2 visibility interpolations, 2 visibility integrations, and 1 fusion of overlapping ray-segments
+
+	// f_prior and f_posterior mean f_prior.z >= f_prior.z
+	Fragment fs_m;
+	Fragment_OUT fs_out;
+
+	float zfront_posterior_f = f_posterior.z - f_posterior.zthick;
+	if (f_prior.z <= zfront_posterior_f)
+	{
+		// Case 1 : No Overlapping
+		return (Fragment)0;
+	}
+
+	float4 f_m_prior_vis;
+	float4 f_prior_vis = ConvertUIntToFloat4(f_prior.i_vis);
+	float4 f_posterior_vis = ConvertUIntToFloat4(f_posterior.i_vis);
+	f_prior_vis.a = min(f_prior_vis.a, SAFE_OPAQUEALPHA);
+	f_posterior_vis.a = min(f_posterior_vis.a, SAFE_OPAQUEALPHA);
+
+	float zfront_prior_f = f_prior.z - f_prior.zthick;
+	if (zfront_prior_f <= zfront_posterior_f)
+	{
+		// Case 2 : Intersecting each other
+		//fs_out.f_prior.zthick = max(zfront_posterior_f - zfront_prior_f, 0); // to avoid computational precision error (0 or small minus)
+		fs_out.f_prior.zthick = zfront_posterior_f - zfront_prior_f;
+		fs_out.f_prior.z = zfront_posterior_f;
+#if LINEAR_MODE == 1
+		{
+			f_m_prior_vis = f_prior_vis * (fs_out.f_prior.zthick / f_prior.zthick);
+		}
+#else
+		{
+			float zd_ratio = fs_out.f_prior.zthick / f_prior.zthick;
+			float Ad = f_prior_vis.a;
+			float3 Id = f_prior_vis.rgb / Ad;
+
+			// strict mode
+			float Az = Ad * zd_ratio * beta + (1 - beta) * (1 - pow(abs(1 - Ad), zd_ratio));
+			// approx. mode
+			//float term1 = zd_ratio * (1 - zd_ratio) / 2.f * Ad * Ad;
+			//float term2 = term1 * (2 - zd_ratio) / 3.f * Ad;
+			//float term3 = term2 * (3 - zd_ratio) / 4.f * Ad;
+			//float term4 = term3 * (4 - zd_ratio) / 5.f * Ad;
+			//float Az = Ad * zd_ratio + (1 - beta) * (term1 + term2 + term3 + term4 + term4 * (5 - zd_ratio) / 6.f * Ad);
+
+			float3 Cz = Id * Az;
+			f_m_prior_vis = float4(Cz, Az);
+		}
+#endif
+
+		float old_alpha = f_prior_vis.a;
+		f_prior.zthick -= fs_out.f_prior.zthick;
+		f_prior_vis = (f_prior_vis - f_m_prior_vis) / (1.f - f_m_prior_vis.a);
+
+		fs_out.f_prior.opacity_sum = f_prior.opacity_sum * f_m_prior_vis.a / old_alpha;
+		//f_prior.opacity_sum = f_prior.opacity_sum * f_prior_vis.a / old_alpha;
+		f_prior.opacity_sum = f_prior.opacity_sum - fs_out.f_prior.opacity_sum;
+	}
+	else
+	{
+		// Case 3 : f_prior belongs to f_posterior
+		//fs_out.f_prior.zthick = max(zfront_prior_f - zfront_posterior_f, 0); // to avoid computational precision error (0 or small minus)
+		fs_out.f_prior.zthick = zfront_prior_f - zfront_posterior_f;
+		fs_out.f_prior.z = zfront_prior_f;
+
+#if LINEAR_MODE == 1
+		{
+			f_m_prior_vis = f_posterior_vis * (fs_out.f_prior.zthick / f_posterior.zthick);
+		}
+#else
+		{
+			float zd_ratio = fs_out.f_prior.zthick / f_posterior.zthick;
+			float Ad = f_posterior_vis.a;
+			float3 Id = f_posterior_vis.rgb / Ad;
+
+			// strict mode
+			float Az = Ad * zd_ratio * beta + (1 - beta) * (1 - pow(abs(1 - Ad), zd_ratio));
+			// approx. mode
+			//float term1 = zd_ratio * (1 - zd_ratio) / 2.f * Ad * Ad;
+			//float term2 = term1 * (2 - zd_ratio) / 3.f * Ad;
+			//float term3 = term2 * (3 - zd_ratio) / 4.f * Ad;
+			//float term4 = term3 * (4 - zd_ratio) / 5.f * Ad;
+			//float Az = Ad * zd_ratio + (1 - beta) * (term1 + term2 + term3 + term4 + term4 * (5 - zd_ratio) / 6.f * Ad);
+
+			float3 Cz = Id * Az;
+			f_m_prior_vis = float4(Cz, Az);
+		}
+#endif
+
+		float old_alpha = f_posterior_vis.a;
+		f_posterior.zthick -= fs_out.f_prior.zthick;
+		f_posterior_vis = (f_posterior_vis - f_m_prior_vis) / (1.f - f_m_prior_vis.a);
+
+		fs_out.f_prior.opacity_sum = f_posterior.opacity_sum * f_m_prior_vis.a / old_alpha;
+		//f_posterior.opacity_sum = f_posterior.opacity_sum * f_posterior_vis.a / old_alpha;
+		f_posterior.opacity_sum = f_posterior.opacity_sum - fs_out.f_prior.opacity_sum;
+	}
+
+	// merge the fusion sub_rs (f_prior) to fs_out.f_prior
+	fs_out.f_prior.zthick += f_prior.zthick;
+	fs_out.f_prior.z = f_prior.z;
+	float4 f_mid_vis = f_posterior_vis * (f_prior.zthick / f_posterior.zthick); // REDESIGN
+	float f_mid_alphaw = f_posterior.opacity_sum * f_mid_vis.a / f_posterior_vis.a;
+	//float4 f_mid_mix_vis = BlendFloat4AndFloat4(f_mid_vis, f_prior_vis);
+	float4 f_mid_mix_vis = MixOpt(f_mid_vis, f_mid_alphaw, f_prior_vis, f_prior.opacity_sum);
+	f_m_prior_vis += f_mid_mix_vis * (1.f - f_m_prior_vis.a);
+	fs_out.f_prior.opacity_sum += f_mid_alphaw + f_prior.opacity_sum;
+
+	f_posterior.zthick -= f_prior.zthick;
+	float old_alpha = f_posterior_vis.a;
+	f_posterior_vis = (f_posterior_vis - f_mid_vis) / (1.f - f_mid_vis.a);
+	//f_posterior.opacity_sum *= f_posterior_vis.a / old_alpha;
+	f_posterior.opacity_sum -= f_mid_alphaw;
+
+	// convert to 8b channels
+	//f_prior.i_vis = ConvertFloat4ToUInt(f_prior_vis);
+	f_posterior.i_vis = ConvertFloat4ToUInt(f_posterior_vis);
+	fs_out.f_prior.i_vis = ConvertFloat4ToUInt(f_m_prior_vis);
+	fs_out.f_posterior = f_posterior;
+
+	fs_m.i_vis = ConvertFloat4ToUInt(f_m_prior_vis + f_posterior_vis * (1.f - f_m_prior_vis.a));
+	fs_m.zthick = fs_out.f_prior.zthick + fs_out.f_posterior.zthick;
+	fs_m.z = fs_out.f_posterior.z;
+	fs_m.opacity_sum = fs_out.f_prior.opacity_sum + fs_out.f_posterior.opacity_sum;
+
+#define ALPHA_CHECK(IV) ((IV >> 24) > 0)
+	if (!ALPHA_CHECK(fs_m.i_vis))
+	{
+		fs_m.i_vis = 0;
+		fs_m.zthick = 0;
+	}
+	return fs_m;
+}
+
 Fragment OFM(in Fragment f_1, const in Fragment f_2) // ordered ver.
 {
 	float4 f_1_vis = ConvertUIntToFloat4(f_1.i_vis);
@@ -1379,7 +1516,7 @@ Fragment MergeFrags_ver2(Fragment f_prior, Fragment f_posterior, const in float 
 	float zfront_posterior_f = f_posterior.z - f_posterior.zthick;
 	if (f_prior.z > zfront_posterior_f) // overlapping test
 	{
-		Fragment f_m_prior, f_m_posterior;
+		Fragment f_m_prior;
 		float4 f_m_prior_vis;
 		float4 f_prior_vis = ConvertUIntToFloat4(f_prior.i_vis);
 		float4 f_posterior_vis = ConvertUIntToFloat4(f_posterior.i_vis);
@@ -1858,5 +1995,3 @@ void ComputeSSS_PerspMask2(out float r_i, const float3 p_c, const float r, const
 	float cam2i_dist = length(p_i - p_c);
 	r_i = r * cam2i_dist / cam2p_dist;
 }
-
-

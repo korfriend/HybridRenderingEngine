@@ -323,7 +323,7 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 		Fragment f_k = fs[k];
 		if (f_k.i_vis != 0)
 		{
-			[loop]
+			/*[loop]
 			for (uint l = k + 1; l < frag_cnt; l++)
 			{
 				if (l != k)
@@ -343,19 +343,24 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 				}
 			}
 
+			/**/
 			// optional setting for manual z-thickness
 			f_k.zthick = max(f_k.zthick, GetVZThickness(f_k.z, vz_thickness));
 			fs[k] = f_k;
 		}
 	}
+	/**/
 #endif
 
 	//sort((int)frag_cnt, fs, Fragment);
 	float merging_beta = asfloat(g_cbCamState.iSrCamDummy__0);
+	bool store_to_kbuf = BitCheck(g_cbCamState.cam_flag, 3);
 
 	float4 fmix_vis = (float4) 0;
 	uint cnt_sorted_ztsurf = 0, i = 0;
 #if FRAG_MERGING == 1
+#define OLD_VER 0
+#if OLD_VER == 1
 	// merge self-overlapping surfaces to thickness surfaces
 	[loop]
 	for (i = 0; i < (uint)valid_frag_cnt; i++)
@@ -393,6 +398,90 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 		} // if (rs_ith.zthick >= FLT_MIN__)
 	}
 #else
+#define fragments fs 
+#define NUM_K 8
+	int cnt_stored_fs = 0;
+	Fragment f_1, f_2;
+	f_1.i_vis = fragments[0].i_vis;
+	f_1.z = fragments[0].z;
+	f_1.zthick = GetVZThickness(f_1.z, g_cbCamState.cam_vz_thickness);
+	//{
+	//	if (f_1.zthick < 0)
+	//		fragment_blendout[nDTid.xy] = float4(1, 0, 0, 1);
+	//	else
+	//		fragment_blendout[nDTid.xy] = float4(0, 0, 1, 1);
+	//	return;
+	//}
+	f_1.opacity_sum = ConvertUIntToFloat4(f_1.i_vis).a;
+	// use the SFM
+	[loop]
+	for (i = 0; i < valid_frag_cnt; i++)
+	{
+		f_2 = (Fragment)0;
+		Fragment f_merge = (Fragment)0;
+		int inext = i + 1;
+		if (inext < valid_frag_cnt)
+		{
+			f_2.i_vis = fragments[inext].i_vis;
+			f_2.z = fragments[inext].z;
+			f_2.zthick = GetVZThickness(f_2.z, g_cbCamState.cam_vz_thickness);
+			f_2.opacity_sum = ConvertUIntToFloat4(f_2.i_vis).a;
+
+			f_merge = MergeFrags_ver2(f_1, f_2, merging_beta);
+		}
+
+		//Fragment f_merge = (Fragment)0;
+		//if (OverlapTest(f_1, f_2) && f_2.i_vis != 0)
+		//{
+		//	f_merge = f_1;
+		//	Fragment_OrderIndependentMerge(f_merge, f_2);
+		//}
+
+		if (f_merge.i_vis == 0)
+		{
+			if (cnt_stored_fs < NUM_K - 1)
+			{
+				if (store_to_kbuf) SET_FRAG(addr_base, cnt_stored_fs, f_1);
+				cnt_stored_fs++;
+
+				float4 color = ConvertUIntToFloat4(f_1.i_vis);
+				fmix_vis += color * (1 - fmix_vis.a);
+				f_1 = f_2;
+			}
+			else
+			{
+				// tail //
+				if (f_2.i_vis != 0)
+				{
+					float4 f_1_vis = ConvertUIntToFloat4(f_1.i_vis);
+					float4 f_2_vis = ConvertUIntToFloat4(f_2.i_vis);
+					f_1_vis += f_2_vis * (1.f - f_1_vis.a);
+					f_1.i_vis = ConvertFloat4ToUInt(f_1_vis);
+					f_1.zthick = f_2.z - f_1.z + f_1.zthick;
+					f_1.z = f_2.z;
+					f_1.opacity_sum += f_2.opacity_sum;
+					//f_tail = f_1;
+				}
+			}
+		}
+		else
+		{
+			f_1 = f_merge;
+		}
+	}
+	if (f_1.i_vis != 0)
+	{
+		if (store_to_kbuf) SET_FRAG(addr_base, cnt_stored_fs, f_1);
+		cnt_stored_fs++;
+
+		float4 vis = ConvertUIntToFloat4(f_1.i_vis);
+		fmix_vis += vis * (1 - fmix_vis.a);
+	}
+	if (store_to_kbuf) fragment_counter[DTid.xy] = cnt_stored_fs;
+	cnt_sorted_ztsurf = cnt_stored_fs;
+	/**/
+#endif
+#else
 	// no thickness when zf_handling off
 	cnt_sorted_ztsurf = valid_frag_cnt;
 #endif
@@ -415,8 +504,7 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 		}
 		/**/
 	}
-
-	bool store_to_kbuf = BitCheck(g_cbCamState.cam_flag, 3);
+#if OLD_VER == 1
 #if FRAG_MERGING == 1
 	if (store_to_kbuf)
 #endif
@@ -429,17 +517,12 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 #if FRAG_MERGING == 0
 			float4 vis = ConvertUIntToFloat4(f_ith.i_vis);
 			fmix_vis += vis * (1.f - fmix_vis.a);
-			if (store_to_kbuf)
 #endif
-
-				SET_FRAG(addr_base, i, f_ith);
+			SET_FRAG(addr_base, i, f_ith);
 		}
-
-#if FRAG_MERGING == 0
-		if (store_to_kbuf)
-#endif
-			fragment_counter[DTid.xy] = cnt_sorted_ztsurf;
+		fragment_counter[DTid.xy] = cnt_sorted_ztsurf;
 	}
+#endif
 
 	//fragment_blendout[DTid.xy] = ConvertUIntToFloat4(fs[idx_array[7]].i_vis);
 	fragment_blendout[DTid.xy] = fmix_vis;

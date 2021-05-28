@@ -258,21 +258,23 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 	if (store_to_kbuf) fragment_counter[nDTid.xy] = cnt_stored_fs;
 
 #if TEST == 1
-	vis_out = (float4) 0.0f;
-	if (cnt_stored_fs == NUM_K)
-	{
-		//fragment_blendout[nDTid.xy] = float4(1, 1, 0, 1);
-		//return;
-	}
-	for (i = 0; i < cnt_stored_fs; i++)
-	{
-		Fragment f;
-		GET_FRAG(f, addr_base, i);
-		float4 vis = ConvertUIntToFloat4(f.i_vis);
-		vis_out += vis * (1 - vis_out.a);
-	}
+	//vis_out = (float4) 0.0f;
+	//if (cnt_stored_fs == NUM_K)
+	//{
+	//	//fragment_blendout[nDTid.xy] = float4(1, 1, 0, 1);
+	//	//return;
+	//}
+	//for (i = 0; i < cnt_stored_fs; i++)
+	//{
+	//	Fragment f;
+	//	GET_FRAG(f, addr_base, i);
+	//	float4 vis = ConvertUIntToFloat4(f.i_vis);
+	//	vis_out += vis * (1 - vis_out.a);
+	//}
+	store_to_kbuf = true;
 #endif
-#else
+
+#else // FRAG_MERGING == 0
 	[loop]
 	for (i = 0; i < N; i++)
 	{

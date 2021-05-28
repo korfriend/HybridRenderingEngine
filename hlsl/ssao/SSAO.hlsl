@@ -43,6 +43,7 @@ void DisplayRect(int x, int y, float4 color)
 #define LOAD1_KBUF_VIS(KBUF, F_ADDR, K) KBUF.Load(F_ADDR + (K) * 4 * 4)
 #define STORE1_KBUF_VIS(V, KBUF, F_ADDR, K) KBUF.Store(F_ADDR + (K) * 4 * 4, V)
 #define LOAD1_KBUF_Z(KBUF, F_ADDR, K) asfloat(KBUF.Load(F_ADDR + ((K) * 4 + 1) * 4))
+#define LOAD1_KBUF_THICK(KBUF, F_ADDR, K) asfloat(KBUF.Load(F_ADDR + ((K) * 4 + 2) * 4))
 #define LOAD1_KBUF_ALPHA(KBUF, F_ADDR, K) (LOAD1_KBUF_VIS(KBUF, F_ADDR, K) >> 24)
 #define LOAD1_KBUF_ALPHAF(KBUF, F_ADDR, K) (LOAD1_KBUF_ALPHA(KBUF, F_ADDR, K) / 255.f)
 #endif
@@ -87,6 +88,11 @@ float Length2(float3 V)
 	return dot(V, V);
 }
 
+float ComputeSSAOTanS(float3 S, float3 P, float3 face_normal)
+{
+	return tan(F_PI * 0.5 - acos(dot(normalize(S - P), face_normal)));
+}
+
 float HorizonOcclusion(int2 xy_coord, float2 delta_dir,
 	float3 P,
 	float3 face_normal,
@@ -126,6 +132,7 @@ float HorizonOcclusion(int2 xy_coord, float2 delta_dir,
 		if (frag_cnt == 0) continue;
 
 		uint addr_base = (ixy_pix.y * g_cbCamState.rt_width + ixy_pix.x) * bytes_frags_per_pixel;
+
 #if ZT_MODEL == 1
 		float3 pos_ip_ws = TransformPoint(float3(ixy_pix.x, ixy_pix.y, 0), g_cbCamState.mat_ss2ws);
 		float3 view_dir_ws = g_cbCamState.dir_view_ws;
@@ -136,41 +143,52 @@ float HorizonOcclusion(int2 xy_coord, float2 delta_dir,
 		{
 			Fragment f;
 			GET_FRAG(f, addr_base, layer);
-			float z = f.z;
+			float z_f = f.z - f.zthick;
+			float z_e = f.z;
 
-			S = pos_ip_ws + view_dir_ws * z;
-
-			float a = (f.i_vis >> 24) / 255.0;
-			float zthick_merge = f.zthick - g_cbCamState.cam_vz_thickness;
-			float check_merge = ((a - f.opacity_sum) * (a - f.opacity_sum) > (1.0 / 255)) && zthick_merge > 0.000001;
-			float w = 1.f;
-			for (int i = 1; i <= 3; i++)
+			S = pos_ip_ws + view_dir_ws * z_f;
+			tanS = ComputeSSAOTanS(S, P, face_normal);
+			if (tanS > tanH)
 			{
-				tanS = tan(F_PI * 0.5 - acos(dot(normalize(S - P), face_normal)));
-				d2 = Length2(S - P);
+				// https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
+				// herein, we use 't' as 'd'
+				float3 u = view_dir_ws;
+				float3 o = pos_ip_ws;
+				float3 c = P;
 
-				// Is the sample within the radius and the angle greater?
-				if (d2 < R2 && tanS > tanH)
+				float3 oc = o - c;
+				float u_dot_oc = dot(u, oc);
+				float det = u_dot_oc * u_dot_oc - (Length2(oc) - R2);
+
+				if (det >= 0)
 				{
-					float sinS = TanToSin(tanS);
-					// Apply falloff based on the distance : (d2 * NegInvR2 + 1.0f)
-					float falloff = (d2 * NegInvR2 + 1.0f);
-					float occl = (sinS - sinH);
+					float sqrt_det = sqrt(det);
+					float t1 = -u_dot_oc - sqrt_det;
+					//float t2 = -u_dot_oc + sqrt_det;
+					
+					d2 = Length2(S - P);
+					if (t1 > z_f && t1 < z_e)
+					{
+						S = o + u * t1;
+						tanS = ComputeSSAOTanS(S, P, face_normal);
+						d2 = Length2(S - P);
+					}
+
+					if (d2 < R2 && tanS > tanH)
+					{
+						float a = 1;
 #if APPLY_TRANSPARENCY == 1
-					ao += falloff * occl * a * w;
-#else
-					ao += falloff * occl;
+						a = (f.i_vis >> 24) / 255.0; // weight 
 #endif
-					tanH = tanS;
-					sinH = sinS;
-					break;
-				}
-				else
-				{
-					if (!check_merge) break;
-					w = pow(2, -i);
-					float thick = zthick_merge * w;
-					S -= view_dir_ws * thick;
+						float sinS = TanToSin(tanS);
+						// Apply falloff based on the distance : (d2 * NegInvR2 + 1.0f)
+						float falloff = (d2 * NegInvR2 + 1.0f);
+						float occl = (sinS - sinH);
+
+						ao += falloff * occl * a;
+						tanH = tanS;
+						sinH = sinS;
+					}
 				}
 			}
 		}
@@ -297,7 +315,14 @@ void KB_SSAO(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTi
 	{
 		v_AOs[i] = 0;
 		float z = LOAD1_KBUF_Z(deep_k_buf, addr_base, i);
+#if ZT_MODEL == 1
+		float zthick = LOAD1_KBUF_THICK(deep_k_buf, addr_base, i);
+		float3 p = pos_ip_ws + view_dir_ws * (z - zthick);
+#define ZT_OFFSET - zthick
+#else
 		float3 p = pos_ip_ws + view_dir_ws * z;
+#define ZT_OFFSET 
+#endif
 		float z_p = dot(p - g_cbCamState.pos_cam_ws, view_dir_ws);
 
 		float kernel_r_ip = (g_cbCamState.cam_flag & 0x1) ? r_kernel_ao * (g_cbCamState.near_plane / z_p) : r_kernel_ao;
@@ -314,10 +339,10 @@ void KB_SSAO(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTi
 
 		// compute face normal // 
 		// http://c0de517e.blogspot.com/2008/10/normals-without-normals.html
-		float z_dxR = LOAD1_KBUF_Z(deep_k_buf, addr_base_dxR, i);
-		float z_dyR = LOAD1_KBUF_Z(deep_k_buf, addr_base_dyR, i);
-		float z_dxL = LOAD1_KBUF_Z(deep_k_buf, addr_base_dxL, i);
-		float z_dyL = LOAD1_KBUF_Z(deep_k_buf, addr_base_dyL, i);
+		float z_dxR = LOAD1_KBUF_Z(deep_k_buf, addr_base_dxR, i) ZT_OFFSET;
+		float z_dyR = LOAD1_KBUF_Z(deep_k_buf, addr_base_dyR, i) ZT_OFFSET;
+		float z_dxL = LOAD1_KBUF_Z(deep_k_buf, addr_base_dxL, i) ZT_OFFSET;
+		float z_dyL = LOAD1_KBUF_Z(deep_k_buf, addr_base_dyL, i) ZT_OFFSET;
 
 		float3 p_dxR = ComputePos_SSZ2WS((int)(DTid.x + x_offset), (int)DTid.y, z_dxR);
 		float3 p_dyR = ComputePos_SSZ2WS((int)(DTid.x), (int)(DTid.y + y_offset), z_dyR);
