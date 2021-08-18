@@ -84,14 +84,15 @@ void CallBackFunc_Mouse(int event, int x, int y, int flags, void* userdata)
 		vzm::SetRenderTestParam("_int2_PixelPos", glm::ivec2(x, y), sizeof(int) * 2, -1, -1);
 		vzm::SetRenderTestParam("_bool_PixelTransmittance", true, sizeof(bool), -1, -1);
 		vzm::SetRenderTestParam("_int_OitMode", (int)1, sizeof(int), -1, -1);
+		vzm::SetRenderTestParam("_bool_ApplyFragMerge", false, sizeof(bool), -1, -1); /// test
 		vzm::RenderScene(0, 0);
-		vzm::SetRenderTestParam("_int_OitMode", (int)0, sizeof(int), -1, -1);
-		vzm::RenderScene(0, 0);
-		vzm::SetRenderTestParam("_int_OitMode", (int)2, sizeof(int), -1, -1);
-		vzm::RenderScene(0, 0);
-		vzm::SetRenderTestParam("_int_OitMode", (int)4, sizeof(int), -1, -1);
-		vzm::SetRenderTestParam("_double_RobustRatio", 0.2, sizeof(double), -1, -1);
-		vzm::RenderScene(0, 0);
+		//vzm::SetRenderTestParam("_int_OitMode", (int)0, sizeof(int), -1, -1);
+		//vzm::RenderScene(0, 0);
+		//vzm::SetRenderTestParam("_int_OitMode", (int)2, sizeof(int), -1, -1);
+		//vzm::RenderScene(0, 0);
+		//vzm::SetRenderTestParam("_int_OitMode", (int)4, sizeof(int), -1, -1);
+		//vzm::SetRenderTestParam("_double_RobustRatio", 0.2, sizeof(double), -1, -1);
+		//vzm::RenderScene(0, 0);
 
 		vzm::SetRenderTestParam("_bool_PixelTransmittance", false, sizeof(bool), -1, -1);
 		vzm::SetRenderTestParam("_int_OitMode", oit_mode, sizeof(int), -1, -1);
@@ -216,6 +217,7 @@ void align_obj_to_world_center(int scene_id, const std::list<int>& obj_ids)
 	}
 }
 
+double diff_amp = 10.0;
 void load_preset(const std::string& preset_file, const std::list<int>& obj_ids)
 {
 	using namespace std;
@@ -263,6 +265,16 @@ void load_preset(const std::string& preset_file, const std::list<int>& obj_ids)
 			double v;
 			iss >> v;
 			vzm::SetRenderTestParam("_double_VZThickness", v, sizeof(double), -1, -1);
+		}
+		else if (param_name == "zResScale")
+		{
+			double v;
+			iss >> v;
+			vzm::SetRenderTestParam("_double_zResScale", v, sizeof(double), -1, -1);
+		}
+		else if (param_name == "diff_amp")
+		{
+			iss >> diff_amp;
 		}
 		else if (param_name == "beta")
 		{
@@ -326,17 +338,23 @@ void store_preset(const std::string& preset_file, const std::list<int>& obj_ids)
 	fileout << "cam_pos " << __PR(cam_params.pos, " ") << endl;
 	fileout << "cam_up " << __PR(cam_params.up, " ") << endl;
 	fileout << "cam_view " << __PR(cam_params.view, " ") << endl;
+	fileout << "diff_amp " << diff_amp << endl;
 
-	double z_thickenss, beta, Rh;
+	double z_thickenss, z_thickenss_gi, zResScale, beta, Rh;
 	glm::dvec4 shading_param;
 
-	if (vzm::GetRenderTestParam("_double_VZThickness", &z_thickenss, sizeof(double), 0, 0))
+	if (vzm::GetRenderTestParam("_double_zResScale", &zResScale, sizeof(double), -1, -1))
+		fileout << "zResScale " << zResScale << endl;
+	if (vzm::GetRenderTestParam("_double_GIVZThickness", &z_thickenss_gi, sizeof(double), -1, -1))
+		fileout << "z_thickenss_gi " << z_thickenss_gi << endl;
+	if (vzm::GetRenderTestParam("_double_VZThickness", &z_thickenss, sizeof(double), -1, -1))
 		fileout << "z_thickenss " << z_thickenss << endl;
-	if (vzm::GetRenderTestParam("_double_MergingBeta", &beta, sizeof(double), 0, 0))
+	if (vzm::GetRenderTestParam("_double_MergingBeta", &beta, sizeof(double), -1, -1))
 		fileout << "beta " << beta << endl;
-	if (vzm::GetRenderTestParam("_double_RobustRatio", &Rh, sizeof(double), 0, 0))
+	if (vzm::GetRenderTestParam("_double_RobustRatio", &Rh, sizeof(double), -1, -1))
 		fileout << "robustness_ratio " << Rh << endl;
-	if (vzm::GetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", &shading_param, sizeof(glm::dvec4), 0, 0))
+
+	if (vzm::GetRenderTestParam("_double4_ShadingFactorsForGlobalPrimitives", &shading_param, sizeof(glm::dvec4), -1, -1))
 		fileout << "forced_shading " << __PR(((double*)&shading_param), " ") << " " << shading_param.w << endl;
 
 	vzm::ObjStates _obj_state;
@@ -349,7 +367,7 @@ void store_preset(const std::string& preset_file, const std::list<int>& obj_ids)
 	fileout.close();
 }
 
-double high_Rh = 0.8, low_Rh = 0.2, diff_amp = 10.0;
+double high_Rh = 0.8, low_Rh = 0.2;
 void compute_difference(const std::string& out_file_prefix)
 {
 	auto make_cvmat = [](int oit_mode, bool apply_fm, double rh = 0.5) -> cv::Mat
@@ -358,11 +376,23 @@ void compute_difference(const std::string& out_file_prefix)
 		vzm::GetRenderTestParam("_int_OitMode", &ot_mode_original, sizeof(int), -1, -1);
 		bool ot_fm_original = true;
 		vzm::GetRenderTestParam("_bool_ApplyFragMerge", &ot_fm_original, sizeof(bool), -1, -1);
-		double rh_original;
+		double rh_original = 0;
 		vzm::GetRenderTestParam("_double_RobustRatio", &rh_original, sizeof(double), -1, -1);
+		double zres_scale_original = 1.0;
+		vzm::GetRenderTestParam("_double_zResScale", &zres_scale_original, sizeof(double), -1, -1);
+		double zt_original = 0;
+		vzm::GetRenderTestParam("_double_VZThickness", &zt_original, sizeof(double), -1, -1);
+		double gizt_original = 0;
+		vzm::GetRenderTestParam("_double_GIVZThickness", &gizt_original, sizeof(double), -1, -1);
 
 		vzm::SetRenderTestParam("_int_OitMode", oit_mode, sizeof(int), -1, -1);
 		vzm::SetRenderTestParam("_bool_ApplyFragMerge", apply_fm, sizeof(bool), -1, -1);
+		if (!apply_fm) {
+			double zrs = 0.01;
+			vzm::SetRenderTestParam("_double_zResScale", 0.00001, sizeof(double), -1, -1);
+			vzm::SetRenderTestParam("_double_GIVZThickness", 0.0, sizeof(double), -1, -1);
+			vzm::SetRenderTestParam("_double_VZThickness", 0.00000, sizeof(double), -1, -1);
+		}
 		vzm::SetRenderTestParam("_double_RobustRatio", rh, sizeof(double), -1, -1);
 		vzm::RenderScene(0, 0);
 		unsigned char* ptr_rgba;
@@ -375,6 +405,9 @@ void compute_difference(const std::string& out_file_prefix)
 		vzm::SetRenderTestParam("_int_OitMode", ot_mode_original, sizeof(int), -1, -1);
 		vzm::SetRenderTestParam("_bool_ApplyFragMerge", ot_fm_original, sizeof(bool), -1, -1);
 		vzm::SetRenderTestParam("_double_RobustRatio", rh_original, sizeof(double), -1, -1);
+		vzm::SetRenderTestParam("_double_zResScale", zres_scale_original, sizeof(double), -1, -1);
+		vzm::SetRenderTestParam("_double_GIVZThickness", gizt_original, sizeof(double), -1, -1);
+		vzm::SetRenderTestParam("_double_VZThickness", zt_original, sizeof(double), -1, -1);
 		return cvmat;
 	};
 
@@ -382,13 +415,14 @@ void compute_difference(const std::string& out_file_prefix)
 	vzm::GetRenderTestParam("_bool_GpuProfile", &profiling_original, sizeof(bool), -1, -1);
 	vzm::SetRenderTestParam("_bool_GpuProfile", true, sizeof(bool), -1, -1);
 	cv::Mat cvmat_SKB_FM = make_cvmat(0, true);
+	cv::Mat cvmat_SKB = make_cvmat(0, false);
 	cv::Mat cvmat_DFB = make_cvmat(1, false);
 	cv::Mat cvmat_DFB_FM = make_cvmat(1, true);
 	cv::Mat cvmat_MBT = make_cvmat(2, false);
-	cv::Mat cvmat_DKB_lowRh = make_cvmat(3, false, low_Rh);
-	cv::Mat cvmat_DKB_FM_lowRh = make_cvmat(3, true, low_Rh);
-	cv::Mat cvmat_DKB_highRh = make_cvmat(3, false, high_Rh);
-	cv::Mat cvmat_DKB_FM_highRh = make_cvmat(3, true, high_Rh);
+	//cv::Mat cvmat_DKB_lowRh = make_cvmat(3, false, low_Rh);
+	//cv::Mat cvmat_DKB_FM_lowRh = make_cvmat(3, true, low_Rh);
+	//cv::Mat cvmat_DKB_highRh = make_cvmat(3, false, high_Rh);
+	//cv::Mat cvmat_DKB_FM_highRh = make_cvmat(3, true, high_Rh);
 	vzm::SetRenderTestParam("_bool_GpuProfile", profiling_original, sizeof(bool), -1, -1);
 
 	cv::Mat cvmat_REF_rgb;
@@ -431,26 +465,29 @@ void compute_difference(const std::string& out_file_prefix)
 
 	const float _amp = diff_amp;
 	cv::Mat cvmat_MBT_DIFFMAP = GenColorMap(cvmat_MBT, _amp);
-	cv::Mat cvmat_DKB_lowRh_DIFFMAP = GenColorMap(cvmat_DKB_lowRh, _amp);
-	cv::Mat cvmat_DKB_FM_lowRh_DIFFMAP = GenColorMap(cvmat_DKB_FM_lowRh, _amp);
-	cv::Mat cvmat_DKB_highRh_DIFFMAP = GenColorMap(cvmat_DKB_highRh, _amp);
-	cv::Mat cvmat_DKB_FM_highRh_DIFFMAP = GenColorMap(cvmat_DKB_FM_highRh, _amp);
+	cv::Mat cvmat_SKB_DIFFMAP = GenColorMap(cvmat_SKB, _amp);
+	//cv::Mat cvmat_DKB_lowRh_DIFFMAP = GenColorMap(cvmat_DKB_lowRh, _amp);
+	//cv::Mat cvmat_DKB_FM_lowRh_DIFFMAP = GenColorMap(cvmat_DKB_FM_lowRh, _amp);
+	//cv::Mat cvmat_DKB_highRh_DIFFMAP = GenColorMap(cvmat_DKB_highRh, _amp);
+	//cv::Mat cvmat_DKB_FM_highRh_DIFFMAP = GenColorMap(cvmat_DKB_FM_highRh, _amp);
 	cv::Mat cvmat_DFB_FM_DIFFMAP = GenColorMap(cvmat_DFB_FM, _amp);
 	cv::Mat cvmat_SKB_FM_DIFFMAP = GenColorMap(cvmat_SKB_FM, _amp);
 
 	cv::imshow("cvmat_MBT_DIFFMAP", cvmat_MBT_DIFFMAP);
-	cv::imshow("cvmat_DKB_lowRh_DIFFMAP", cvmat_DKB_lowRh_DIFFMAP);
-	cv::imshow("cvmat_DKB_FM_lowRh_DIFFMAP", cvmat_DKB_FM_lowRh_DIFFMAP);
-	cv::imshow("cvmat_DKB_highRh_DIFFMAP", cvmat_DKB_highRh_DIFFMAP);
-	cv::imshow("cvmat_DKB_FM_highRh_DIFFMAP", cvmat_DKB_FM_highRh_DIFFMAP);
+	cv::imshow("cvmat_SKB_DIFFMAP", cvmat_SKB_DIFFMAP);
+	//cv::imshow("cvmat_DKB_lowRh_DIFFMAP", cvmat_DKB_lowRh_DIFFMAP);
+	//cv::imshow("cvmat_DKB_FM_lowRh_DIFFMAP", cvmat_DKB_FM_lowRh_DIFFMAP);
+	//cv::imshow("cvmat_DKB_highRh_DIFFMAP", cvmat_DKB_highRh_DIFFMAP);
+	//cv::imshow("cvmat_DKB_FM_highRh_DIFFMAP", cvmat_DKB_FM_highRh_DIFFMAP);
 	cv::imshow("cvmat_DFB_FM_DIFFMAP", cvmat_DFB_FM_DIFFMAP);
 	cv::imshow("cvmat_SKB_FM_DIFFMAP", cvmat_SKB_FM_DIFFMAP);
 
 	cv::imwrite(out_file_prefix + "cvmat_MBT_DIFFMAP.png", cvmat_MBT_DIFFMAP);
-	cv::imwrite(out_file_prefix + "cvmat_DKB_lowRh_DIFFMAP.png", cvmat_DKB_lowRh_DIFFMAP);
-	cv::imwrite(out_file_prefix + "cvmat_DKB_FM_lowRh_DIFFMAP.png", cvmat_DKB_FM_lowRh_DIFFMAP);
-	cv::imwrite(out_file_prefix + "cvmat_DKB_highRh_DIFFMAP.png", cvmat_DKB_highRh_DIFFMAP);
-	cv::imwrite(out_file_prefix + "cvmat_DKB_FM_highRh_DIFFMAP.png", cvmat_DKB_FM_highRh_DIFFMAP);
+	cv::imwrite(out_file_prefix + "cvmat_SKB_DIFFMAP.png", cvmat_SKB_DIFFMAP);
+	//cv::imwrite(out_file_prefix + "cvmat_DKB_lowRh_DIFFMAP.png", cvmat_DKB_lowRh_DIFFMAP);
+	//cv::imwrite(out_file_prefix + "cvmat_DKB_FM_lowRh_DIFFMAP.png", cvmat_DKB_FM_lowRh_DIFFMAP);
+	//cv::imwrite(out_file_prefix + "cvmat_DKB_highRh_DIFFMAP.png", cvmat_DKB_highRh_DIFFMAP);
+	//cv::imwrite(out_file_prefix + "cvmat_DKB_FM_highRh_DIFFMAP.png", cvmat_DKB_FM_highRh_DIFFMAP);
 	cv::imwrite(out_file_prefix + "cvmat_DFB_FM_DIFFMAP.png", cvmat_DFB_FM_DIFFMAP);
 	cv::imwrite(out_file_prefix + "cvmat_SKB_FM_DIFFMAP.png", cvmat_SKB_FM_DIFFMAP);
 }
@@ -863,7 +900,7 @@ int Fig_OitPerformance()
 	int w = 1024, h = 1024;
 	if(w > 1024 && h > 1024)
 		vzm::SetRenderTestParam("_int_BufExScale", (int)4, sizeof(int), -1, -1); // set this when the resolution 2048x2048 (NVIDIA GTX 1080)
-#define __OBJ1
+#define __OBJ3
 #ifdef __OBJ1
 	high_Rh = 0.75, low_Rh = 0.2, diff_amp = 10.0;
 	scene_stage_scale = 5.f;
@@ -877,7 +914,7 @@ int Fig_OitPerformance()
 	cam_params.fp = 20.f;
 	// obj file includes material info, which is prior shading option for rendering; therefore, wildcard setting is required to change shading.
 
-	vzm::SetRenderTestParam("_bool_ApplySSAO", true, sizeof(bool), -1, -1);
+	vzm::SetRenderTestParam("_bool_ApplySSAO", false, sizeof(bool), -1, -1);
 	vzm::SetRenderTestParam("_double_SSAOKernalR", 0.1, sizeof(double), -1, -1);
 	vzm::SetRenderTestParam("_int_SSAONumDirs", (int)8, sizeof(int), -1, -1);
 	vzm::SetRenderTestParam("_int_SSAONumSteps", (int)8, sizeof(int), -1, -1);
@@ -1180,7 +1217,7 @@ int Fig_GhostedIllustration()
 
 	vzm::CameraParameters cam_params;
 	vzm::ObjStates obj_state;
-	int w = 1024, h = 1024;
+	int w = 512, h = 512;
 	if (w > 1024 && h > 1024)
 		vzm::SetRenderTestParam("_int_BufExScale", (int)4, sizeof(int), -1, -1); // set this when the resolution 2048x2048 (NVIDIA GTX 1080)
 
@@ -1833,11 +1870,11 @@ int main()
 	//Fig_OitIntersection();
 	//Test2();
 	//Test();
-	//Fig_OitPerformance();
+	Fig_OitPerformance();
 	//Fig_LocalDepthBlending();
 	//Fig_GhostedIllustration();
 	//Fig_HybridVR();
-	Fig_Dof();
+	//Fig_Dof();
 	
 	vzm::DeinitEngineLib();
 	return 0;

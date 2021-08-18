@@ -8,3 +8,5 @@ robustness_ratio 0.2
 forced_shading 0.4 2 0.2 30
 alpha 0.05
 surfel_size 0.10
+zResScale 5.0
+diff_amp 10.0

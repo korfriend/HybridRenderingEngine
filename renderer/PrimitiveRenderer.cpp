@@ -571,7 +571,7 @@ void ComputeSSAO(__ID3D11DeviceContext* dx11DeviceImmContext,
 	grd_helper::GpuDX11CommonParameters* dx11CommonParams, VmIObject* iobj, 
 	int num_grid_x, int num_grid_y,
 	GpuRes& gres_fb_counter, GpuRes& gres_fb_deep_k_buffer, GpuRes& gres_fb_rgba, bool blur_SSAO,
-	GpuRes& gres_fb_vr_depth, GpuRes& gres_fb_vr_ao, GpuRes& gres_fb_vr_ao_blf, bool involve_vr,
+	GpuRes& gres_fb_vr_depth, GpuRes& gres_fb_vr_ao, GpuRes& gres_fb_vr_ao_blf, bool involve_vr, bool apply_fragmerge,
 	map<string, int>& profile_map, bool gpu_profile)
 {
 	if (gpu_profile)
@@ -617,7 +617,7 @@ void ComputeSSAO(__ID3D11DeviceContext* dx11DeviceImmContext,
 	//dx11DeviceImmContext->GenerateMips((ID3D11ShaderResourceView*)gres_fb_mip_a_halftexs[0].alloc_res_ptrs[DTYPE_SRV]);
 	//dx11DeviceImmContext->GenerateMips((ID3D11ShaderResourceView*)gres_fb_mip_a_halftexs[1].alloc_res_ptrs[DTYPE_SRV]);
 
-	// KB_SSAO_cs_5_0
+	// KB_SSAO_cs_5_0, KB_SSAO_FM_cs_5_0
 	dx11UAVs_SSAO[0] = (ID3D11UnorderedAccessView*)gres_fb_ao_texs.alloc_res_ptrs[DTYPE_UAV];
 	dx11DeviceImmContext->CSSetUnorderedAccessViews(25, 1, dx11UAVs_SSAO, 0);
 
@@ -636,7 +636,7 @@ void ComputeSSAO(__ID3D11DeviceContext* dx11DeviceImmContext,
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(30, 1, (ID3D11UnorderedAccessView**)&gres_fb_vr_ao.alloc_res_ptrs[DTYPE_UAV], 0);
 	}
 
-	dx11DeviceImmContext->CSSetShader(GETCS(KB_SSAO_cs_5_0), NULL, 0);
+	dx11DeviceImmContext->CSSetShader(apply_fragmerge? GETCS(KB_SSAO_FM_cs_5_0) : GETCS(KB_SSAO_cs_5_0), NULL, 0);
 	dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
 
 	if (gpu_profile)
@@ -664,7 +664,7 @@ void ComputeSSAO(__ID3D11DeviceContext* dx11DeviceImmContext,
 		dx11UAVs_SSAO[0] = (ID3D11UnorderedAccessView*)gres_fb_ao_blf_texs.alloc_res_ptrs[DTYPE_UAV];
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(25, 1, dx11UAVs_SSAO, 0);
 
-		dx11DeviceImmContext->CSSetShader(GETCS(KB_SSAO_BLUR_cs_5_0), NULL, 0);
+		dx11DeviceImmContext->CSSetShader(apply_fragmerge? GETCS(KB_SSAO_BLUR_FM_cs_5_0) : GETCS(KB_SSAO_BLUR_cs_5_0), NULL, 0);
 		dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
 
 		if (gpu_profile)
@@ -693,7 +693,7 @@ void ComputeDOF(__ID3D11DeviceContext* dx11DeviceImmContext,
 	grd_helper::GpuDX11CommonParameters* dx11CommonParams, VmIObject* iobj,
 	int num_grid_x, int num_grid_y,
 	GpuRes& gres_fb_counter, GpuRes& gres_fb_deep_k_buffer, GpuRes& gres_fb_rgba, 
-	bool apply_SSAO, bool is_blurred_SSAO,
+	bool apply_SSAO, bool is_blurred_SSAO, bool apply_fragmerge,
 	GpuRes& gres_fb_vr_depth, GpuRes& gres_fb_vr_ao, GpuRes& gres_fb_vr_ao_blf, 
 	CB_CameraState& cbCamState, ID3D11Buffer* cbuf_cam_state, int __BLOCKSIZE,
 	bool involve_vr,
@@ -769,7 +769,7 @@ void ComputeDOF(__ID3D11DeviceContext* dx11DeviceImmContext,
 	int half_h = fb_size_cur.y / 4;
 	uint texMm_num_grid_x = __BLOCKSIZE == 1 ? half_w : (uint)ceil(half_w / (float)__BLOCKSIZE);
 	uint texMm_num_grid_y = __BLOCKSIZE == 1 ? half_h : (uint)ceil(half_h / (float)__BLOCKSIZE);
-	dx11DeviceImmContext->CSSetShader(GETCS(KB_MINMAXTEXTURE_cs_5_0), NULL, 0);
+	dx11DeviceImmContext->CSSetShader(apply_fragmerge? GETCS(KB_MINMAXTEXTURE_FM_cs_5_0) : GETCS(KB_MINMAXTEXTURE_cs_5_0), NULL, 0);
 	dx11DeviceImmContext->Dispatch(texMm_num_grid_x, texMm_num_grid_y, 1);
 
 	if (gpu_profile)
@@ -780,7 +780,7 @@ void ComputeDOF(__ID3D11DeviceContext* dx11DeviceImmContext,
 		//gpu_profilecount++;
 	}
 
-	dx11DeviceImmContext->CSSetShader(GETCS(KB_MINMAX_NBUF_cs_5_0), NULL, 0);
+	dx11DeviceImmContext->CSSetShader(apply_fragmerge? GETCS(KB_MINMAX_NBUF_FM_cs_5_0) : GETCS(KB_MINMAX_NBUF_cs_5_0), NULL, 0);
 	int max_wh = max(half_w, half_w);
 	int nbuf_step = 1;
 	while (max_wh > 1 && nbuf_step <= 10)
@@ -822,7 +822,7 @@ void ComputeDOF(__ID3D11DeviceContext* dx11DeviceImmContext,
 	}
 	dx11DeviceImmContext->CSSetShaderResources(15, 3, dx11SRVs_DOF);
 
-	dx11DeviceImmContext->CSSetShader(GETCS(KB_SSDOF_RT_cs_5_0), NULL, 0);
+	dx11DeviceImmContext->CSSetShader(apply_fragmerge? GETCS(KB_SSDOF_RT_FM_cs_5_0) : GETCS(KB_SSDOF_RT_cs_5_0), NULL, 0);
 	dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
 	if (gpu_profile)
 	{
@@ -882,10 +882,10 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 	bool apply_fragmerge = _fncontainer->GetParamValue("_bool_ApplyFragMerge", true);
 	MFR_MODE mode_OIT = (MFR_MODE)_fncontainer->GetParamValue("_int_OitMode", (int)1);
-	mode_OIT = (MFR_MODE)min((int)mode_OIT, (int)MFR_MODE::DYNAMIC_KB);
-	if (mode_OIT == MFR_MODE::STATIC_KB_FM) apply_fragmerge = true;
+	mode_OIT = (MFR_MODE)min((int)mode_OIT, (int)MFR_MODE::MOMENT);
+	//if (mode_OIT == MFR_MODE::STATIC_KB_FM) apply_fragmerge = true;
 
-	int buf_ex_scale = _fncontainer->GetParamValue("_int_BufExScale", (int)8); // 64 layers
+	int buf_ex_scale = _fncontainer->GetParamValue("_int_BufExScale", (int)8); // scaling the capacity of the k-buffer for _bool_PixelTransmittance
 	bool use_blending_option_MomentOIT = _fncontainer->GetParamValue("_bool_UseBlendingOptionMomentOIT", false);
 	bool check_pixel_transmittance = _fncontainer->GetParamValue("_bool_PixelTransmittance", false);
 	//vr_level = 2;
@@ -947,8 +947,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 #define VS_NUM 5
 #define GS_NUM 3
-#define PS_NUM 54
-#define CS_NUM 18
+#define PS_NUM 64
+#define CS_NUM 26
 #define SET_VS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(VERTEX_SHADER, NAME), __S, true)
 #define SET_PS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(PIXEL_SHADER, NAME), __S, true)
 #define SET_CS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(COMPUTE_SHADER, NAME), __S, true)
@@ -1036,6 +1036,18 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			  ,"SR_OIT_FILL_SKBTZ_TEXTMAPPING_ROV_ps_5_0"
 			  ,"SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ROV_ps_5_0"
 
+			   "SR_OIT_FILL_SKBT_PHONGBLINN_ps_5_0"
+			  ,"SR_OIT_FILL_SKBT_DASHEDLINE_ps_5_0"
+			  ,"SR_OIT_FILL_SKBT_MULTITEXTMAPPING_ps_5_0"
+			  ,"SR_OIT_FILL_SKBT_TEXTMAPPING_ps_5_0"
+			  ,"SR_OIT_FILL_SKBT_TEXTUREIMGMAP_ps_5_0"
+
+			  ,"SR_OIT_FILL_SKBT_PHONGBLINN_ROV_ps_5_0"
+			  ,"SR_OIT_FILL_SKBT_DASHEDLINE_ROV_ps_5_0"
+			  ,"SR_OIT_FILL_SKBT_MULTITEXTMAPPING_ROV_ps_5_0"
+			  ,"SR_OIT_FILL_SKBT_TEXTMAPPING_ROV_ps_5_0"
+			  ,"SR_OIT_FILL_SKBT_TEXTUREIMGMAP_ROV_ps_5_0"
+
 			  ,"SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0"
 			  ,"SR_OIT_FILL_DKBTZ_DASHEDLINE_ps_5_0"
 			  ,"SR_OIT_FILL_DKBTZ_MULTITEXTMAPPING_ps_5_0"
@@ -1120,6 +1132,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		string strNames_CS[CS_NUM] = {
 			   "OIT_SKBZ_RESOLVE_cs_5_0"
 			  ,"SR_SINGLE_LAYER_TO_SKBTZ_cs_5_0"
+			  ,"OIT_SKB_RESOLVE_cs_5_0"
+			  ,"SR_SINGLE_LAYER_TO_SKBT_cs_5_0"
 			  ,"OIT_DKBZ_RESOLVE_cs_5_0"
 			  ,"OIT_DKB_RESOLVE_cs_5_0"
 			  ,"SR_SINGLE_LAYER_TO_DKBTZ_cs_5_0"
@@ -1132,10 +1146,16 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			  ,"SR_OIT_ABUFFER_SORT2SENDER_SFM_cs_5_0"
 			  ,"KB_SSAO_cs_5_0"
 			  ,"KB_SSAO_BLUR_cs_5_0"
-			  ,"KBZ_TO_TEXTURE_cs_5_0"
+			  ,"KB_TO_TEXTURE_cs_5_0"
+			  ,"KB_SSAO_FM_cs_5_0"
+			  ,"KB_SSAO_BLUR_FM_cs_5_0"
+			  ,"KB_TO_TEXTURE_FM_cs_5_0"
 			  ,"KB_MINMAXTEXTURE_cs_5_0"
 			  ,"KB_MINMAX_NBUF_cs_5_0"
 			  ,"KB_SSDOF_RT_cs_5_0"
+			  ,"KB_MINMAXTEXTURE_FM_cs_5_0"
+			  ,"KB_MINMAX_NBUF_FM_cs_5_0"
+			  ,"KB_SSDOF_RT_FM_cs_5_0"
 		};
 
 		for (int i = 0; i < CS_NUM; i++)
@@ -1206,8 +1226,10 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	__ID3D11DeviceContext* dx11DeviceImmContext = dx11CommonParams->dx11DeviceImmContext;
 
 #pragma region // IOBJECT GPU
-	int buffer_ex = buf_ex_scale, buffer_ex_old = 0; // optimal for K is 1
-	if (mode_OIT == MFR_MODE::STATIC_KB_FM || (mode_OIT == MFR_MODE::DYNAMIC_FB && apply_fragmerge)) buffer_ex = 1;
+	int buffer_ex = (!check_pixel_transmittance && mode_OIT == MFR_MODE::DYNAMIC_FB)? buf_ex_scale : 1, buffer_ex_old = 0; // optimal for K is 1
+	// 'cause we now do not support the dynamic version of k+ buffer
+	// it always uses static number of k!!
+	// note that DFB uses a simple fragment model (vis and depth) and the stored simple fragments are extended into the z-thickness model fragments in the resolve pass
 
 	vmint2 fb_size_cur, fb_size_old = vmint2(0, 0);
 	iobj->GetFrameBufferInfo(&fb_size_cur);
@@ -1417,6 +1439,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 	float v_thickness = (float)_fncontainer->GetParamValue("_double_VZThickness", 0.0);
 	float gi_v_thickness = (float)_fncontainer->GetParamValue("_double_GIVZThickness", (double)v_thickness);
+	float scale_z_res = (float)_fncontainer->GetParamValue("_double_zResScale", (double)1.0);
+
+	int i_test_shader = (int)_fncontainer->GetParamValue("_int_ShaderTest", (int)0);
 
 	//cout << v_copthickness_abs << endl;
 	//float fv_copthickness = v_copthickness_abs <= 0 ? (float)(len_diagonal_max * v_copthickness) : (float)v_copthickness_abs;
@@ -1426,6 +1451,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 	CB_EnvState cbEnvState;
 	grd_helper::SetCb_Env(cbEnvState, cam_obj, _fncontainer, (vmfloat3)global_light_factors);
+	cbEnvState.env_dummy_2 = i_test_shader;
 	D3D11_MAPPED_SUBRESOURCE mappedResEnvState;
 	dx11DeviceImmContext->Map(cbuf_env_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResEnvState);
 	CB_EnvState* cbEnvStateData = (CB_EnvState*)mappedResEnvState.pData;
@@ -1434,10 +1460,13 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	dx11DeviceImmContext->PSSetConstantBuffers(7, 1, &cbuf_env_state);
 	dx11DeviceImmContext->CSSetConstantBuffers(7, 1, &cbuf_env_state);
 
+
+
 	vmmat44f matWS2SS, matWS2PS, matSS2WS;
 	CB_CameraState cbCamState;
 	grd_helper::SetCb_Camera(cbCamState, matWS2PS, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, gi_v_thickness);
 	cbCamState.iSrCamDummy__0 = *(uint*)&merging_beta;
+	cbCamState.iSrCamDummy__2 = *(uint*)&scale_z_res;
 	if (!is_final_renderer || check_pixel_transmittance 
 		|| cbEnvState.r_kernel_ao > 0 
 		|| (cbEnvState.dof_lens_r > 0 && cam_obj->IsPerspective())) // which means the k-buffer will be used for the following renderer
@@ -2049,12 +2078,17 @@ BEGIN_RENDERER_LOOP:
 				case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_MOMENT_OIT_TEXTMAPPING_ps_5_0) : GETPS(SR_MOMENT_OIT_TEXTMAPPING_ROV_ps_5_0); break;
 				case MFR_MODE::DYNAMIC_KB: 
 					if(apply_fragmerge)
-						dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ROV_ps_5_0q);
+						dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ROV_ps_5_0);
 					else
 						dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ROV_ps_5_0); 
 					break;
-				case MFR_MODE::STATIC_KB_FM:
-				default: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ROV_ps_5_0); break;
+				case MFR_MODE::STATIC_KB:
+				default:
+					if (apply_fragmerge)
+						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ROV_ps_5_0); 
+					else
+						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_TEXTMAPPING_ROV_ps_5_0);
+					break;
 				}
 			else if(render_obj_info.has_texture_img && dx11InputLayer_Target == dx11LI_PNT)
 				switch (mode_OIT)
@@ -2067,8 +2101,13 @@ BEGIN_RENDERER_LOOP:
 					else
 						dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ROV_ps_5_0); 
 					break;
-				case MFR_MODE::STATIC_KB_FM:
-				default: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ROV_ps_5_0); break;
+				case MFR_MODE::STATIC_KB:
+				default:
+					if (apply_fragmerge)
+						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ROV_ps_5_0); 
+					else
+						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_TEXTUREIMGMAP_ROV_ps_5_0);
+					break;
 				}
 			else
 				switch (mode_OIT)
@@ -2081,8 +2120,13 @@ BEGIN_RENDERER_LOOP:
 					else
 						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ROV_ps_5_0);
 					break;
-				case MFR_MODE::STATIC_KB_FM:
-				default: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ROV_ps_5_0); break;
+				case MFR_MODE::STATIC_KB:
+				default:
+					if (apply_fragmerge)
+						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ROV_ps_5_0); 
+					else
+						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ROV_ps_5_0);
+					break;
 				}
 		}
 		else if (prim_data->GetVerticeDefinition("TEXCOORD0"))
@@ -2105,8 +2149,13 @@ BEGIN_RENDERER_LOOP:
 					else
 						dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ROV_ps_5_0); 
 					break;
-				case MFR_MODE::STATIC_KB_FM:
-				default: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ROV_ps_5_0); break;
+				case MFR_MODE::STATIC_KB:
+				default:
+					if (apply_fragmerge)
+						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ROV_ps_5_0); 
+					else
+						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_MULTITEXTMAPPING_ROV_ps_5_0);
+					break;
 				}
 			}
 			else
@@ -2127,8 +2176,13 @@ BEGIN_RENDERER_LOOP:
 						else 
 							dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ROV_ps_5_0); 
 						break;
-					case MFR_MODE::STATIC_KB_FM:
-					default: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ROV_ps_5_0); break;
+					case MFR_MODE::STATIC_KB:
+					default:
+						if (apply_fragmerge)
+							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ROV_ps_5_0); 
+						else
+							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_TEXTMAPPING_ROV_ps_5_0);
+						break;
 					}
 				else if ((cbPolygonObj.pobj_flag & (0x1 << 19)) && prim_data->ptype == PrimitiveTypeLINE)
 					switch (mode_OIT)
@@ -2141,8 +2195,13 @@ BEGIN_RENDERER_LOOP:
 						else
 							dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_DKBT_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_DASHEDLINE_ROV_ps_5_0); 
 						break;
-					case MFR_MODE::STATIC_KB_FM:
-					default: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_OIT_FILL_SKBTZ_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_DASHEDLINE_ROV_ps_5_0); break;
+					case MFR_MODE::STATIC_KB:
+					default:
+						if (apply_fragmerge)
+							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_DASHEDLINE_ROV_ps_5_0); 
+						else
+							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_DASHEDLINE_ROV_ps_5_0);
+						break;
 					}
 				else
 					switch (mode_OIT)
@@ -2155,8 +2214,13 @@ BEGIN_RENDERER_LOOP:
 						else
 							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ROV_ps_5_0); 
 						break;
-					case MFR_MODE::STATIC_KB_FM:
-					default: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ROV_ps_5_0); break;
+					case MFR_MODE::STATIC_KB:
+					default:
+						if (apply_fragmerge)
+							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ROV_ps_5_0); 
+						else
+							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ROV_ps_5_0);
+						break;
 					}
 			}
 		}
@@ -2175,8 +2239,13 @@ BEGIN_RENDERER_LOOP:
 				else
 					dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ROV_ps_5_0); 
 				break;
-			case MFR_MODE::STATIC_KB_FM:
-			default: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ROV_ps_5_0); break;
+			case MFR_MODE::STATIC_KB:
+			default:
+				if (apply_fragmerge)
+					dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ROV_ps_5_0); 
+				else
+					dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ROV_ps_5_0);
+				break;
 			}
 		}
 
@@ -2412,7 +2481,7 @@ BEGIN_RENDERER_LOOP:
 		//dx11DeviceImmContext->CSSetShaderResources(50, 1, dx11SRVs_NULL);
 
 		if (RENDERER_LOOP == 1 && 
-			(mode_OIT == MFR_MODE::STATIC_KB_FM || mode_OIT == MFR_MODE::DYNAMIC_KB))
+			(mode_OIT == MFR_MODE::STATIC_KB || mode_OIT == MFR_MODE::DYNAMIC_KB))
 		{
 			// RT to K-Buffer
 			ID3D11ShaderResourceView* dx11SRVs_1st_pass[2] = {
@@ -2423,8 +2492,8 @@ BEGIN_RENDERER_LOOP:
 			dx11DeviceImmContext->CSSetShaderResources(10, 2, dx11SRVs_1st_pass);
 
 			UINT UAVInitialCounts = 0;
-			if(mode_OIT == MFR_MODE::STATIC_KB_FM)
-				dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_SKBTZ_cs_5_0), NULL, 0);
+			if(mode_OIT == MFR_MODE::STATIC_KB)
+				dx11DeviceImmContext->CSSetShader(apply_fragmerge? GETCS(SR_SINGLE_LAYER_TO_SKBTZ_cs_5_0) : GETCS(SR_SINGLE_LAYER_TO_SKBT_cs_5_0), NULL, 0);
 			else if (mode_OIT == MFR_MODE::DYNAMIC_KB)
 				dx11DeviceImmContext->CSSetShader(apply_fragmerge? GETCS(SR_SINGLE_LAYER_TO_DKBTZ_cs_5_0) : GETCS(SR_SINGLE_LAYER_TO_DKBT_cs_5_0), NULL, 0);
 			else assert(0);	
@@ -2728,8 +2797,8 @@ BEGIN_RENDERER_LOOP:
 		UINT UAVInitialCounts = 0;
 		switch (mode_OIT)
 		{
-		case MFR_MODE::DYNAMIC_FB: // implying apply_fragmerge == true
-		case MFR_MODE::STATIC_KB_FM: dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_SKBTZ_cs_5_0), NULL, 0); break;
+		case MFR_MODE::DYNAMIC_FB: // implying apply_fragmerge == true // deprecated
+		case MFR_MODE::STATIC_KB: dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(SR_SINGLE_LAYER_TO_SKBTZ_cs_5_0) : GETCS(SR_SINGLE_LAYER_TO_SKBT_cs_5_0), NULL, 0); break;
 		case MFR_MODE::DYNAMIC_KB: dx11DeviceImmContext->CSSetShader(apply_fragmerge? GETCS(SR_SINGLE_LAYER_TO_DKBTZ_cs_5_0) : GETCS(SR_SINGLE_LAYER_TO_DKBT_cs_5_0), NULL, 0); break;
 		default:
 			cout << mode_OIT << endl;
@@ -2787,8 +2856,8 @@ RENDERER_LOOP_EXIT:
 		// resolve pass
 		switch (mode_OIT)
 		{
-		case MFR_MODE::STATIC_KB_FM:
-			dx11DeviceImmContext->CSSetShader(GETCS(OIT_SKBZ_RESOLVE_cs_5_0), NULL, 0);
+		case MFR_MODE::STATIC_KB:
+			dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(OIT_SKBZ_RESOLVE_cs_5_0) : GETCS(OIT_SKB_RESOLVE_cs_5_0), NULL, 0);
 			break;
 		case MFR_MODE::DYNAMIC_FB:
 			// sort and render the fragments.  Use the prefix sum to determine where the 
@@ -2830,7 +2899,7 @@ RENDERER_LOOP_EXIT:
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs_2ND, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 			ComputeSSAO(dx11DeviceImmContext, dx11CommonParams, iobj, num_grid_x, num_grid_y,
 				gres_fb_counter, gres_fb_k_buffer, gres_fb_rgba, blur_SSAO,
-				gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex, false, profile_map, gpu_profile);
+				gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex, false, apply_fragmerge, profile_map, gpu_profile);
 		}
 
 		// DOF
@@ -2838,7 +2907,7 @@ RENDERER_LOOP_EXIT:
 		{
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs_2ND, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 			ComputeDOF(dx11DeviceImmContext, dx11CommonParams, iobj, num_grid_x, num_grid_y,
-				gres_fb_counter, gres_fb_k_buffer, gres_fb_rgba, cbEnvState.r_kernel_ao > 0, blur_SSAO,
+				gres_fb_counter, gres_fb_k_buffer, gres_fb_rgba, cbEnvState.r_kernel_ao > 0, blur_SSAO, apply_fragmerge,
 				gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex, 
 				cbCamState, cbuf_cam_state, __BLOCKSIZE,
 				false, profile_map, gpu_profile);
@@ -2986,10 +3055,11 @@ RENDERER_LOOP_EXIT:
 							uint cnt = cnt_buf[j + i * buf_row_pitch];
 							max_layers = max(max_layers, cnt);
 							avr_layers_sum += cnt;
+							pix_cnt += cnt > 0 ? 1 : 0;
 						}
 					cout << "--------------" << endl;
 					cout << "TOTAL LAYERS : " << avr_layers_sum << ", MAX LAYERS : " << max_layers << endl;
-					cout << "AVR LAYERS : " << avr_layers_sum / (fb_size_cur.x*fb_size_cur.y) << endl;
+					cout << "AVR LAYERS : " << avr_layers_sum / pix_cnt/*(fb_size_cur.x*fb_size_cur.y)*/ << endl;
 					cout << "--------------" << endl;
 
 					dx11DeviceImmContext->Unmap((ID3D11Texture2D*)gres_fb_sys_counter.alloc_res_ptrs[DTYPE_RES], 0);
@@ -3005,7 +3075,7 @@ RENDERER_LOOP_EXIT:
 				dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_fb_sys_deep_k.alloc_res_ptrs[DTYPE_RES],
 					(ID3D11Buffer*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_RES]);
 
-				string __METHODS[5] = { "SKBTZ" , "DXAB" , "MOMENT" , "DKBTZ" , "DKBT" };
+				string __METHODS[3] = { "SKB" , "DFB" , "MOMENT" };// , "DKBTZ", "DKBT"};
 				if (mode_OIT == MFR_MODE::MOMENT)
 				{
 					string refdepthrangePath = ".\\data\\absorbance_depth_ref_range.txt";
@@ -3065,7 +3135,7 @@ RENDERER_LOOP_EXIT:
 				else
 				{
 					uint pixel_offset = (pixel_pos.x + pixel_pos.y * fb_size_cur.x) * 8;
-					if (mode_OIT != MFR_MODE::STATIC_KB_FM)
+					if (mode_OIT != MFR_MODE::STATIC_KB)
 					{
 						dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_fb_sys_ref_pidx.alloc_res_ptrs[DTYPE_RES],
 							(ID3D11Buffer*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_RES]);
@@ -3084,124 +3154,127 @@ RENDERER_LOOP_EXIT:
 					uint num_layers = ((uint*)mappedResSysCounter.pData)[pixel_pos.x + pixel_pos.y * buf_row_pitch];
 					cout << "num_layers : " << num_layers << " at (" << pixel_pos.x << ", " << pixel_pos.y << ")" << endl;
 
-					struct Fragment
+					if (num_layers > 0)
 					{
-						float alpha;
-						float z;
-						float thick;
-					};
-
-					uint element_size = ((mode_OIT == MFR_MODE::DYNAMIC_KB && apply_fragmerge) || mode_OIT == MFR_MODE::STATIC_KB_FM) ? 4 : 2;
-					Fragment* fs = new Fragment[num_layers];
-
-					for (int i = 0; i < num_layers; i++)
-					{
-						fs[i].z = *(float*)&deep_kbuffer[element_size * (pixel_offset + i) + 1];
-						fs[i].alpha = (deep_kbuffer[element_size * (pixel_offset + i) + 0] >> 24) / 255.f;
-						if (mode_OIT == MFR_MODE::DYNAMIC_KB || mode_OIT == MFR_MODE::STATIC_KB_FM)
-							fs[i].thick = *(float*)&deep_kbuffer[element_size * (pixel_offset + i) + 2];
-					}
-					dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_fb_sys_deep_k.alloc_res_ptrs[DTYPE_RES], 0);
-					dx11DeviceImmContext->Unmap((ID3D11Texture2D*)gres_fb_sys_counter.alloc_res_ptrs[DTYPE_RES], 0);
-
-					__SORT(num_layers, fs, Fragment);
-					/**/
-
-					string refdepthrangePath = ".\\data\\absorbance_depth_ref_range.txt";
-					if (mode_OIT == MFR_MODE::DYNAMIC_FB)
-					{
-						ofstream refwriteFile_depth_range(refdepthrangePath.data());
-						if (refwriteFile_depth_range.is_open())
+						struct Fragment
 						{
-							refwriteFile_depth_range << to_string(fs[0].z - tr_startoffset) + "\n";
-							float d_range = fs[num_layers - 1].z - fs[0].z;
-							refwriteFile_depth_range << to_string(d_range + tr_startoffset * 2) + "\n";
-							refwriteFile_depth_range.close();
-						}
-					}
+							float alpha;
+							float z;
+							float thick;
+						};
 
-					ifstream openFile(refdepthrangePath.data());
-					if (openFile.is_open())
-					{
-						vector<float> depth_range_info;
-						string line;
-						while (getline(openFile, line)) {
-							depth_range_info.push_back(stof(line));
-						}
-						openFile.close();
+						uint element_size = apply_fragmerge ? 4 : 2;
+						Fragment* fs = new Fragment[num_layers];
 
-						string depthPath = ".\\data\\absorbance_depth_" + __METHODS[(int)mode_OIT] + ".txt";
-						string alphaPath = ".\\data\\absorbance_alpha_" + __METHODS[(int)mode_OIT] + ".txt";
-
-						ofstream writeFile_depth(depthPath.data());
-						ofstream writeFile_absorb(alphaPath.data());
-
-						assert(writeFile_depth.is_open() && writeFile_absorb.is_open());
-
-						float d_s = depth_range_info[0];
-						float depth_range = depth_range_info[1];
-						int num_intervals = (int)(depth_range / tr_interval) + 2;
-
-						int hit_count = 0;
-						float absorb = 0;
-						if (mode_OIT == MFR_MODE::DYNAMIC_FB && !apply_fragmerge)
+						for (int i = 0; i < num_layers; i++)
 						{
-							for (int i = 0; i < num_intervals; i++)
+							fs[i].z = *(float*)&deep_kbuffer[element_size * (pixel_offset + i) + 1];
+							fs[i].alpha = (deep_kbuffer[element_size * (pixel_offset + i) + 0] >> 24) / 255.f;
+							if (mode_OIT == MFR_MODE::DYNAMIC_KB || mode_OIT == MFR_MODE::STATIC_KB)
+								fs[i].thick = *(float*)&deep_kbuffer[element_size * (pixel_offset + i) + 2];
+						}
+						dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_fb_sys_deep_k.alloc_res_ptrs[DTYPE_RES], 0);
+						dx11DeviceImmContext->Unmap((ID3D11Texture2D*)gres_fb_sys_counter.alloc_res_ptrs[DTYPE_RES], 0);
+
+						__SORT(num_layers, fs, Fragment);
+						/**/
+
+						string refdepthrangePath = ".\\data\\absorbance_depth_ref_range.txt";
+						if (mode_OIT == MFR_MODE::DYNAMIC_FB)
+						{
+							ofstream refwriteFile_depth_range(refdepthrangePath.data());
+							if (refwriteFile_depth_range.is_open())
 							{
-								float d_cur = d_s + (float)i * tr_interval;
-
-								if (hit_count < num_layers)
-								{
-									while (d_cur > fs[hit_count].z)
-									{
-										absorb += (1 - absorb) * fs[hit_count].alpha;
-										hit_count++;
-										if (hit_count >= num_layers) break;
-									}
-								}
-								writeFile_absorb << to_string(absorb) + "\n";
-								writeFile_depth << to_string(d_cur) + "\n";
+								refwriteFile_depth_range << to_string(fs[0].z - tr_startoffset) + "\n";
+								float d_range = fs[num_layers - 1].z - fs[0].z;
+								refwriteFile_depth_range << to_string(d_range + tr_startoffset * 2) + "\n";
+								refwriteFile_depth_range.close();
 							}
 						}
-						else if ((mode_OIT == MFR_MODE::DYNAMIC_KB && apply_fragmerge) || mode_OIT == MFR_MODE::STATIC_KB_FM)
+
+						ifstream openFile(refdepthrangePath.data());
+						if (openFile.is_open())
 						{
-							for (int i = 0; i < num_intervals; i++)
+							vector<float> depth_range_info;
+							string line;
+							while (getline(openFile, line)) {
+								depth_range_info.push_back(stof(line));
+							}
+							openFile.close();
+
+							string depthPath = ".\\data\\absorbance_depth_" + __METHODS[(int)mode_OIT] + ".txt";
+							string alphaPath = ".\\data\\absorbance_alpha_" + __METHODS[(int)mode_OIT] + ".txt";
+
+							ofstream writeFile_depth(depthPath.data());
+							ofstream writeFile_absorb(alphaPath.data());
+
+							assert(writeFile_depth.is_open() && writeFile_absorb.is_open());
+
+							float d_s = depth_range_info[0];
+							float depth_range = depth_range_info[1];
+							int num_intervals = (int)(depth_range / tr_interval) + 2;
+
+							int hit_count = 0;
+							float absorb = 0;
+							if (mode_OIT == MFR_MODE::DYNAMIC_FB && !apply_fragmerge)
 							{
-								float d_cur = d_s + (float)i * tr_interval;
-								if (hit_count < num_layers)
+								for (int i = 0; i < num_intervals; i++)
 								{
-									while (d_cur > fs[hit_count].z - fs[hit_count].thick)
+									float d_cur = d_s + (float)i * tr_interval;
+
+									if (hit_count < num_layers)
 									{
-										if (d_cur >= fs[hit_count].z)
+										while (d_cur > fs[hit_count].z)
 										{
 											absorb += (1 - absorb) * fs[hit_count].alpha;
 											hit_count++;
 											if (hit_count >= num_layers) break;
 										}
-										else
+									}
+									writeFile_absorb << to_string(absorb) + "\n";
+									writeFile_depth << to_string(d_cur) + "\n";
+								}
+							}
+							else if ((mode_OIT == MFR_MODE::DYNAMIC_KB && apply_fragmerge) || mode_OIT == MFR_MODE::STATIC_KB)
+							{
+								for (int i = 0; i < num_intervals; i++)
+								{
+									float d_cur = d_s + (float)i * tr_interval;
+									if (hit_count < num_layers)
+									{
+										while (d_cur > fs[hit_count].z - fs[hit_count].thick)
 										{
-											float sub_thick_f = d_cur - (fs[hit_count].z - fs[hit_count].thick);
-											float sub_alpha_f = fs[hit_count].alpha * sub_thick_f / fs[hit_count].thick;
-											absorb += (1 - absorb) * sub_alpha_f;
+											if (d_cur >= fs[hit_count].z)
+											{
+												absorb += (1 - absorb) * fs[hit_count].alpha;
+												hit_count++;
+												if (hit_count >= num_layers) break;
+											}
+											else
+											{
+												float sub_thick_f = d_cur - (fs[hit_count].z - fs[hit_count].thick);
+												float sub_alpha_f = fs[hit_count].alpha * sub_thick_f / fs[hit_count].thick;
+												absorb += (1 - absorb) * sub_alpha_f;
 
-											fs[hit_count].thick = fs[hit_count].thick - sub_thick_f;
-											fs[hit_count].alpha = (fs[hit_count].alpha - sub_alpha_f) / (1.f - sub_alpha_f);
+												fs[hit_count].thick = fs[hit_count].thick - sub_thick_f;
+												fs[hit_count].alpha = (fs[hit_count].alpha - sub_alpha_f) / (1.f - sub_alpha_f);
+											}
 										}
 									}
+									writeFile_absorb << to_string(absorb) + "\n";
+									writeFile_depth << to_string(d_cur) + "\n";
 								}
-								writeFile_absorb << to_string(absorb) + "\n";
-								writeFile_depth << to_string(d_cur) + "\n";
 							}
-						}
 
-						writeFile_depth.close();
-						writeFile_absorb.close();
+							writeFile_depth.close();
+							writeFile_absorb.close();
+						}
+						else
+						{
+							cout << "NO REF DEPTH!" << endl;
+						}
+						delete[] fs;
 					}
-					else
-					{
-						cout << "NO REF DEPTH!" << endl;
-					}
-					delete[] fs;
 				}
 			}
 

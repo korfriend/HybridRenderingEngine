@@ -146,8 +146,7 @@
     }\
 }
 
-// optimized
-#define INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, thick_sample, fs, merging_beta) {\
+#define INTERMIX_OLD2(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, thick_sample, fs, merging_beta) {\
     if (idx_dlayer >= num_frags)\
     {\
         vis_out += vis_sample * (1.f - vis_out.a);\
@@ -160,7 +159,81 @@
         f_cur.zthick = thick_sample;\
 		f_cur.opacity_sum = vis_sample.a;\
         [loop]\
-        while (idx_dlayer < num_frags && (f_cur.i_vis >> 24) != 0)\
+        while (idx_dlayer <= num_frags && (f_cur.i_vis >> 24) != 0)\
+        {\
+            if (vis_out.a > ERT_ALPHA)\
+            {\
+                idx_dlayer = num_frags;\
+				i = num_ray_samples;\
+                break;\
+            }\
+			if (f_cur.z < f_dly.z - f_dly.zthick)\
+            {\
+				vis_out += ConvertUIntToFloat4(f_cur.i_vis) * (1.f - vis_out.a);\
+				f_cur.i_vis = 0;\
+                break;\
+            }\
+			else if (f_dly.z < f_cur.z - f_cur.zthick)\
+            {\
+				vis_out += ConvertUIntToFloat4(f_dly.i_vis) * (1.f - vis_out.a);\
+				f_dly = fs[++idx_dlayer];\
+            }\
+			else\
+			{\
+				Fragment f_prior, f_posterior; \
+				if (f_cur.z > f_dly.z)\
+				{\
+					f_prior = f_dly; \
+					f_posterior = f_cur; \
+				}\
+				else\
+				{\
+					f_prior = f_cur; \
+					f_posterior = f_dly; \
+				}\
+				Fragment_OUT fs_out = MergeFrags(f_prior, f_posterior, merging_beta);\
+				vis_out += ConvertUIntToFloat4(fs_out.f_prior.i_vis) * (1.f - vis_out.a);\
+				if (f_cur.z > f_dly.z)\
+				{\
+					f_cur = fs_out.f_posterior;\
+					f_dly = fs[++idx_dlayer];\
+				}\
+				else\
+				{\
+					f_cur.i_vis = 0; \
+					if ((fs_out.f_posterior.i_vis >> 24) == 0)\
+					{\
+						f_dly = fs[++idx_dlayer]; \
+					}\
+					else\
+						f_dly = fs_out.f_posterior;\
+					break;\
+				}\
+			}\
+        } \
+		if (f_cur.i_vis != 0)\
+		{\
+			vis_out += ConvertUIntToFloat4(f_cur.i_vis) * (1.f - vis_out.a); \
+		}\
+    }\
+}
+
+// optimized
+#define INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, thick_sample, fs, merging_beta) {\
+    if (idx_dlayer >= num_frags)\
+    {\
+        vis_out += vis_sample * (1.f - vis_out.a);\
+    }\
+    else\
+    {\
+        Fragment f_cur;\
+		/*conversion to integer causes some color difference.. but negligible*/\
+        f_cur.i_vis = ConvertFloat4ToUInt(vis_sample);\
+        f_cur.z = depth_sample;\
+        f_cur.zthick = thick_sample;\
+		f_cur.opacity_sum = vis_sample.a;\
+        [loop]\
+        while (idx_dlayer <= num_frags && (f_cur.i_vis >> 24) != 0)\
         {\
             if (vis_out.a > ERT_ALPHA)\
             {\
@@ -228,7 +301,9 @@
     else\
     {\
 		[loop]\
-        for (uint k = idx_dlayer; k < num_frags; k++)\
+		/*bool is_sample_used = false;*/\
+		/*herein, k <= num_frags's '=' is for safe blending of the ray sample */\
+        for (uint k = idx_dlayer; k <= num_frags; k++)\
         {\
             Fragment f_dly = fs[k];\
             float depth_diff = depth_sample - f_dly.z;\
@@ -236,9 +311,11 @@
             if (depth_diff >= 0) \
             {\
                 float4 vis_dly = ConvertUIntToFloat4(f_dly.i_vis); \
-                if (depth_diff < g_cbVobj.sample_dist)\
+                if (depth_diff < g_cbVobj.sample_dist) {\
                     /*vix_mix = BlendFloat4AndFloat4(vis_sample, vis_dly);*/\
 					vix_mix = MixOpt(vis_sample, vis_sample.a, vis_dly, vis_dly.a);\
+					/*is_sample_used = true;*/ \
+				}\
                 else\
                     vix_mix = vis_dly;\
                 vis_out += vix_mix * (1.f - vis_out.a);\
@@ -246,17 +323,20 @@
                 /*maybe removable*/if (vis_out.a > ERT_ALPHA)\
                 {\
                     idx_dlayer = num_frags; \
-                    k = num_frags;\
+					i = num_ray_samples;\
+                    k = num_frags + 1;\
                     break;\
                 }\
             }\
             else\
             {\
                 vis_out += vix_mix * (1.f - vis_out.a);\
-                k = num_frags;\
+				/*is_sample_used = true;*/\
+                k = num_frags + 1;\
                 break;\
             }\
         }\
+		/*if(!is_sample_used) vis_out += vis_sample * (1.f - vis_out.a);*/\
     }\
 }
 

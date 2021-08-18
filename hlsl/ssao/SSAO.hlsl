@@ -39,14 +39,14 @@ void DisplayRect(int x, int y, float4 color)
 			rw_fragment_blendout[int2(x, y) + int2(xx, yy)] = color;
 }
 
-#if !defined(FRAG_MERGING) || FRAG_MERGING == 1
-#define LOAD1_KBUF_VIS(KBUF, F_ADDR, K) KBUF.Load(F_ADDR + (K) * 4 * 4)
-#define STORE1_KBUF_VIS(V, KBUF, F_ADDR, K) KBUF.Store(F_ADDR + (K) * 4 * 4, V)
-#define LOAD1_KBUF_Z(KBUF, F_ADDR, K) asfloat(KBUF.Load(F_ADDR + ((K) * 4 + 1) * 4))
-#define LOAD1_KBUF_THICK(KBUF, F_ADDR, K) asfloat(KBUF.Load(F_ADDR + ((K) * 4 + 2) * 4))
+//#if !defined(FRAG_MERGING) || FRAG_MERGING == 1
+#define LOAD1_KBUF_VIS(KBUF, F_ADDR, K) KBUF.Load(F_ADDR + (K) * NUM_ELES_PER_FRAG * 4)
+#define STORE1_KBUF_VIS(V, KBUF, F_ADDR, K) KBUF.Store(F_ADDR + (K) * NUM_ELES_PER_FRAG * 4, V)
+#define LOAD1_KBUF_Z(KBUF, F_ADDR, K) asfloat(KBUF.Load(F_ADDR + ((K) * NUM_ELES_PER_FRAG + 1) * 4))
+#define LOAD1_KBUF_THICK(KBUF, F_ADDR, K) asfloat(KBUF.Load(F_ADDR + ((K) * NUM_ELES_PER_FRAG + 2) * 4))
 #define LOAD1_KBUF_ALPHA(KBUF, F_ADDR, K) (LOAD1_KBUF_VIS(KBUF, F_ADDR, K) >> 24)
 #define LOAD1_KBUF_ALPHAF(KBUF, F_ADDR, K) (LOAD1_KBUF_ALPHA(KBUF, F_ADDR, K) / 255.f)
-#endif
+//#endif
 
 #define XOR_HASH(x, y) (((30*x)&y) + 10*x*y)
 #define PACK_1TOFF(x) (((int)(x * 255.f)) & 0xFF)
@@ -264,6 +264,7 @@ void KB_SSAO(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTi
 	// at this moment, only static k buffer is supported.
 	const uint k_value = g_cbCamState.k_value;
 	uint bytes_per_frag = 4 * NUM_ELES_PER_FRAG;
+	
 	uint bytes_frags_per_pixel = k_value * bytes_per_frag; // to do : consider the dynamic scheme. (4 bytes unit)
 	uint pixel_id = DTid.y * g_cbCamState.rt_width + DTid.x;
 	uint addr_base = pixel_id * bytes_frags_per_pixel;
@@ -482,10 +483,10 @@ void KB_TO_TEXTURE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uin
 		return;
 
 	const uint k_value = g_cbCamState.k_value;
-	uint addr_base_f0 = ((DTid.y * 2 + 0) * g_cbCamState.rt_width + (DTid.x * 2 + 0)) * k_value * 4;
-	uint addr_base_f1 = ((DTid.y * 2 + 0) * g_cbCamState.rt_width + (DTid.x * 2 + 1)) * k_value * 4;
-	uint addr_base_f2 = ((DTid.y * 2 + 1) * g_cbCamState.rt_width + (DTid.x * 2 + 0)) * k_value * 4;
-	uint addr_base_f3 = ((DTid.y * 2 + 1) * g_cbCamState.rt_width + (DTid.x * 2 + 1)) * k_value * 4;
+	uint addr_base_f0 = ((DTid.y * 2 + 0) * g_cbCamState.rt_width + (DTid.x * 2 + 0)) * k_value * NUM_ELES_PER_FRAG;
+	uint addr_base_f1 = ((DTid.y * 2 + 0) * g_cbCamState.rt_width + (DTid.x * 2 + 1)) * k_value * NUM_ELES_PER_FRAG;
+	uint addr_base_f2 = ((DTid.y * 2 + 1) * g_cbCamState.rt_width + (DTid.x * 2 + 0)) * k_value * NUM_ELES_PER_FRAG;
+	uint addr_base_f3 = ((DTid.y * 2 + 1) * g_cbCamState.rt_width + (DTid.x * 2 + 1)) * k_value * NUM_ELES_PER_FRAG;
 
 	int frag_cnt_max = max(max(fragment_counter[float2(DTid.x * 2 + 0, DTid.y * 2 + 0)] & 0xFFF, fragment_counter[float2(DTid.x * 2 + 0, DTid.y * 2 + 1)] & 0xFFF),
 		max(fragment_counter[float2(DTid.x * 2 + 1, DTid.y * 2 + 0)] & 0xFFF, fragment_counter[float2(DTid.x * 2 + 1, DTid.y * 2 + 1)] & 0xFFF));

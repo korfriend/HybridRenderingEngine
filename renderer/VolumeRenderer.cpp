@@ -8,7 +8,7 @@ extern void ComputeSSAO(__ID3D11DeviceContext* dx11DeviceImmContext,
 	grd_helper::GpuDX11CommonParameters* dx11CommonParams, VmIObject* iobj,
 	int num_grid_x, int num_grid_y,
 	GpuRes& gres_fb_counter, GpuRes& gres_fb_deep_k_buffer, GpuRes& gres_fb_rgba, bool blur_SSAO,
-	GpuRes& gres_fb_vr_depth, GpuRes& gres_fb_vr_ao, GpuRes& gres_fb_vr_ao_blf, bool involve_vr,
+	GpuRes& gres_fb_vr_depth, GpuRes& gres_fb_vr_ao, GpuRes& gres_fb_vr_ao_blf, bool involve_vr, bool apply_fragmerge,
 	map<string, int>& profile_map, bool gpu_profile);
 
 bool RenderVrDLS(VmFnContainer* _fncontainer,
@@ -37,6 +37,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	bool force_to_update_otf = _fncontainer->GetParamValue("_bool_ForceToUpdateOtf", false);
 	bool show_block_test = _fncontainer->GetParamValue("_bool_IsShowBlock", false);
 	float v_thickness = (float)_fncontainer->GetParamValue("_double_VZThickness", 0.0);
+	bool check_pixel_transmittance = _fncontainer->GetParamValue("_bool_PixelTransmittance", false);
 
 	float merging_beta = (float)_fncontainer->GetParamValue("_double_MergingBeta", 0.5);
 	bool is_rgba = _fncontainer->GetParamValue("_bool_IsRGBA", false); // false means bgra
@@ -63,7 +64,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	lobj->RegisterCustomParameter("_int_NumK", k_value);
 	bool apply_fragmerge = _fncontainer->GetParamValue("_bool_ApplyFragMerge", true);
 	MFR_MODE mode_OIT = (MFR_MODE)_fncontainer->GetParamValue("_int_OitMode", (int)1); // 1
-	if (mode_OIT == MFR_MODE::STATIC_KB_FM) apply_fragmerge = true;
+	mode_OIT = (MFR_MODE)min((int)mode_OIT, (int)MFR_MODE::MOMENT);
+	//if (mode_OIT == MFR_MODE::STATIC_KB_FM) apply_fragmerge = true;
 
 	int buf_ex_scale = _fncontainer->GetParamValue("_int_BufExScale", (int)8); // 32 layers
 	int num_moments_old = 8;
@@ -97,7 +99,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 		string prefix_path = hlslobj_path;
 
-#define CS_NUM 13
+#define CS_NUM 16
 #define SET_CS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(COMPUTE_SHADER, NAME), dx11CShader, true)
 
 		string strNames_CS[CS_NUM] = {
@@ -107,6 +109,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			  ,"VR_DEFAULT_cs_5_0"
 			  ,"VR_OPAQUE_cs_5_0"
 			  ,"VR_CONTEXT_cs_5_0"
+			  ,"VR_DEFAULT_FM_cs_5_0"
+			  ,"VR_OPAQUE_FM_cs_5_0"
+			  ,"VR_CONTEXT_FM_cs_5_0"
 			  ,"VR_DEFAULT_DKBZ_cs_5_0"
 			  ,"VR_OPAQUE_DKBZ_cs_5_0"
 			  ,"VR_CONTEXT_DKBZ_cs_5_0"
@@ -161,8 +166,11 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	__ID3D11DeviceContext* dx11DeviceImmContext = dx11CommonParams->dx11DeviceImmContext;
 
 #pragma region // IOBJECT GPU
-	int buffer_ex = buf_ex_scale, buffer_ex_old = 0; // optimal for K is 1
-	if (mode_OIT == MFR_MODE::STATIC_KB_FM || (mode_OIT == MFR_MODE::DYNAMIC_FB && apply_fragmerge)) buffer_ex = 1;
+	//int buffer_ex = 1, buffer_ex_old = 0; // optimal for K is 1
+	int buffer_ex = (!check_pixel_transmittance && mode_OIT == MFR_MODE::DYNAMIC_FB) ? buf_ex_scale : 1, buffer_ex_old = 0; // optimal for K is 1
+	// 'cause we do not support the dynamic version of k+ buffer
+	// it always uses static number of k!!
+	// note that DFB uses a simple fragment model (vis and depth) and the stored simple fragments are extended into the z-thickness model fragments in the resolve pass
 
 	vmint2 fb_size_cur, fb_size_old = vmint2(0, 0);
 	iobj->GetFrameBufferInfo(&fb_size_cur);
@@ -765,12 +773,12 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			switch (mode_OIT)
 			{
 				// VR_OPAQUE_DFB_cs_5_0 is same as VR_OPAQUE_DKB_cs_5_0
-			case MFR_MODE::STATIC_KB_FM:
-				cshader = GETCS(VR_OPAQUE_cs_5_0); break;
+			case MFR_MODE::STATIC_KB:
+				cshader = apply_fragmerge ? GETCS(VR_OPAQUE_FM_cs_5_0) : GETCS(VR_OPAQUE_cs_5_0); break;
 			case MFR_MODE::DYNAMIC_KB:
 				cshader = apply_fragmerge? GETCS(VR_OPAQUE_DKBZ_cs_5_0) : GETCS(VR_OPAQUE_DFB_cs_5_0); break;
 			case MFR_MODE::DYNAMIC_FB:
-				cshader = apply_fragmerge? GETCS(VR_OPAQUE_cs_5_0) : GETCS(VR_OPAQUE_DFB_cs_5_0); break;
+				cshader = apply_fragmerge? GETCS(VR_OPAQUE_FM_cs_5_0) : GETCS(VR_OPAQUE_cs_5_0); break;
 			default:
 				VMERRORMESSAGE("DOES NOT SUPPORT!!");
 			}
@@ -778,12 +786,12 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		case __RM_MODULATION:
 			switch (mode_OIT)
 			{
-			case MFR_MODE::STATIC_KB_FM:
-				cshader = GETCS(VR_CONTEXT_cs_5_0); break;
+			case MFR_MODE::STATIC_KB:
+				cshader = apply_fragmerge ? GETCS(VR_CONTEXT_FM_cs_5_0) : GETCS(VR_CONTEXT_cs_5_0); break;
 			case MFR_MODE::DYNAMIC_KB:
 				cshader = apply_fragmerge ? GETCS(VR_CONTEXT_DKBZ_cs_5_0) : GETCS(VR_CONTEXT_DFB_cs_5_0); break;
 			case MFR_MODE::DYNAMIC_FB:
-				cshader = apply_fragmerge ? GETCS(VR_CONTEXT_cs_5_0) : GETCS(VR_CONTEXT_DFB_cs_5_0); break;
+				cshader = apply_fragmerge ? GETCS(VR_CONTEXT_FM_cs_5_0) : GETCS(VR_CONTEXT_cs_5_0); break;
 			default:
 				VMERRORMESSAGE("DOES NOT SUPPORT!!");
 			}
@@ -793,12 +801,12 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		default:
 			switch (mode_OIT)
 			{
-			case MFR_MODE::STATIC_KB_FM:
-				cshader = GETCS(VR_DEFAULT_cs_5_0); break;
+			case MFR_MODE::STATIC_KB:
+				cshader = apply_fragmerge ? GETCS(VR_DEFAULT_FM_cs_5_0) : GETCS(VR_DEFAULT_cs_5_0); break;
 			case MFR_MODE::DYNAMIC_KB:
 				cshader = apply_fragmerge ? GETCS(VR_DEFAULT_DKBZ_cs_5_0) : GETCS(VR_DEFAULT_DFB_cs_5_0); break;
 			case MFR_MODE::DYNAMIC_FB:
-				cshader = apply_fragmerge ? GETCS(VR_DEFAULT_cs_5_0) : GETCS(VR_DEFAULT_DFB_cs_5_0); break;
+				cshader = apply_fragmerge ? GETCS(VR_DEFAULT_FM_cs_5_0) : GETCS(VR_DEFAULT_cs_5_0); break;
 			default:
 				VMERRORMESSAGE("DOES NOT SUPPORT!!");
 			}
@@ -831,7 +839,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 			ComputeSSAO(dx11DeviceImmContext, dx11CommonParams, iobj, num_grid_x, num_grid_y,
 				gres_fb_counter, gres_fb_k_buffer, gres_fb_rgba, blur_SSAO,
-				gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex, true, profile_map, gpu_profile);
+				gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex, true, apply_fragmerge, profile_map, gpu_profile);
 
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs, (UINT*)(&dx11UAVs));
 
@@ -875,7 +883,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 		ComputeSSAO(dx11DeviceImmContext, dx11CommonParams, iobj, num_grid_x, num_grid_y,
 			gres_fb_counter, gres_fb_k_buffer, gres_fb_rgba, blur_SSAO,
-			gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex, true, profile_map, gpu_profile);
+			gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex, true, apply_fragmerge, profile_map, gpu_profile);
 
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs, (UINT*)(&dx11UAVs));
 

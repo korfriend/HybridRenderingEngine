@@ -22,13 +22,13 @@ void DisplayRect(int x, int y, float4 color)
 			rw_fragment_blendout[int2(x, y) + int2(xx, yy)] = color;
 }
 
-#if !defined(FRAG_MERGING) || FRAG_MERGING == 1
-#define LOAD1_KBUF_VIS(KBUF, F_ADDR, K) KBUF.Load(F_ADDR + (K) * 4 * 4)
-#define STORE1_KBUF_VIS(V, KBUF, F_ADDR, K) KBUF.Store(F_ADDR + (K) * 4 * 4, V)
-#define LOAD1_KBUF_Z(KBUF, F_ADDR, K) asfloat(KBUF.Load(F_ADDR + ((K) * 4 + 1) * 4))
+//#if !defined(FRAG_MERGING) || FRAG_MERGING == 1
+#define LOAD1_KBUF_VIS(KBUF, F_ADDR, K) KBUF.Load(F_ADDR + (K) * NUM_ELES_PER_FRAG * 4)
+#define STORE1_KBUF_VIS(V, KBUF, F_ADDR, K) KBUF.Store(F_ADDR + (K) * NUM_ELES_PER_FRAG * 4, V)
+#define LOAD1_KBUF_Z(KBUF, F_ADDR, K) asfloat(KBUF.Load(F_ADDR + ((K) * NUM_ELES_PER_FRAG + 1) * 4))
 #define LOAD1_KBUF_ALPHA(KBUF, F_ADDR, K) (LOAD1_KBUF_VIS(KBUF, F_ADDR, K) >> 24)
 #define LOAD1_KBUF_ALPHAF(KBUF, F_ADDR, K) (LOAD1_KBUF_ALPHA(KBUF, F_ADDR, K) / 255.f)
-#endif
+//#endif
 
 // assume camera space
 // right handed, view dir is -z
@@ -569,7 +569,7 @@ void KB_SSDOF_RT(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 			continue; // next ray
 		}
 
-		float lens_coc_ip_const = length(pos_lens) * pix_coc_r_const / (g_cbEnv.dof_focus_z - dof_lens_F);
+		//float lens_coc_ip_const = length(pos_lens) * pix_coc_r_const / (g_cbEnv.dof_focus_z - dof_lens_F);
 
 		// note that, herein, eye ray and lens ray are not parallel!
 		// , which implies that we consider only a hit per layer (k)
@@ -589,7 +589,7 @@ void KB_SSDOF_RT(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 			// local layer culling based on "Depth-of-Field Rendering with Multiview Synthesis, 2009, TOG"
 			float2 z_minmax;
 			int test = ComputeFootprintMinMaxZ(z_minmax, p_lensray_s, p_lensray_e, k, float2(z_min, z_max));
-			//rw_fragment_blendout[DTid.xy] = float4((float3)test / 10.0, 1); return;
+			//rw_fragment_blendout[DTid.xy] = float4(1, 0, 0, 1); return;
 			if (z_minmax.x == 0) break; // no more layers along the ray footprint so not continue
 			
 			z_min = z_minmax.x;
@@ -628,6 +628,7 @@ void KB_SSDOF_RT(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 			float3 v_eye_ray_se = p_eyeray_e - p_eyeray_s;
 			float interval_lensray_footprint = length(v_eye_ray_se_ss.xy) / MAX_ITERATIONS;
 			float3 p_eyeray_s_iter = p_eyeray_s;
+			[loop]
 			for (int s = 1; s <= MAX_ITERATIONS; s++)
 			{
 				step_dist_ss += interval_lensray_footprint;

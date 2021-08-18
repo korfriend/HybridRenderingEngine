@@ -482,8 +482,20 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 	/**/
 #endif
 #else
-	// no thickness when zf_handling off
+
 	cnt_sorted_ztsurf = valid_frag_cnt;
+	
+	[loop]
+	for (i = 0; i < cnt_sorted_ztsurf; i++)
+	{
+		int idx = i;
+		Fragment f_ith = fs[idx];
+		float4 vis = ConvertUIntToFloat4(f_ith.i_vis);
+		fmix_vis += vis * (1.f - fmix_vis.a);
+		if(store_to_kbuf) SET_FRAG(addr_base, i, f_ith);
+	}
+	fragment_counter[DTid.xy] = cnt_sorted_ztsurf;
+
 #endif
 
 	// disable when SSAO is activated

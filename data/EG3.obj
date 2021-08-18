@@ -2,10 +2,10 @@
 # www.blender.org
 mtllib EG.mtl
 o node_id31_mesh_id32
-v 0 0 0
-v -75 0 0
+v 75 0 20
+v -75 0 20
 v -75 0 75
-v 0 0 75
+v 75 0 75
 vt 1.0 1.0
 vt 0.0 1.0
 vt 0.0 0.0

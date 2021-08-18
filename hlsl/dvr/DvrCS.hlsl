@@ -105,7 +105,7 @@ bool Vis_Volume_And_Check(inout float4 vis_otf, inout int sample_v, const in flo
     vis_otf = LoadOtfBuf(sample_v, buf_otf, g_cbVobj.opacity_correction);
     return ((uint)(vis_otf.a * 255.f) > 0) && (max_vint == 0 || max_vint > sculpt_value);
 #else 
-    vis_otf = LoadOtfBuf(sample_v, buf_otf, g_cbVobj.opacity_correction);
+	vis_otf = LoadOtfBuf(sample_v, buf_otf, 1);// g_cbVobj.opacity_correction);
     return vis_otf.a >= FLT_OPACITY_MIN__;
 #endif
 }
@@ -410,8 +410,10 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #endif
 
 #if VR_MODE == 2
-		const float grad_max = 100.f;
-		const float grad_scale = 255.f;
+		const float grad_max = 1.731f / 255;
+		const float grad_scale = 1.f;
+		//vis_out = float4(1, 0, 0, 1);
+		//return;
 #endif
 		int start_idx = 0, sample_v = 0;
 		if (vr_hit_enc == 2)
@@ -464,7 +466,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 						float4 vis_sample = float4(shade * vis_otf.rgb, vis_otf.a);
 						float depth_sample = depth_hit + (float)i * sample_dist;
 #if VR_MODE == 2
-						float modulator = min(grad_len * grad_scale / grad_max, 1.f);
+						float modulator = min(pow(grad_len / grad_max, 2) * grad_scale, 1.f);
 						vis_sample *= modulator;
 #endif
 						//vis_sample *= mask_weight;

@@ -40,13 +40,14 @@ struct HxCB_CameraState // Hlsl dX Contant Buffer
 	// 2nd bit : for RT to k-buffer : 0 (just RT), 1 : (after silhouette processing)
 	// 3rd bit : for DK+B // deprecated... (this will be treated as a separate shader
 	// 4th bit : for storing the final fragments to the k buffer, which is used for sequentially coming renderer (e.g., DVR) : 0 (skipping), 1 (storing)
+	// 5th bit : only for DFB without (S)FM. stores all fragments into the framebuffer (using offset table)
 	uint cam_flag;
 	uint iSrCamDummy__0; // used for 1) A-Buffer prefix computations /*deprecated*/ or 2) beta (asfloat) for merging operation
 
 	float near_plane;
 	float far_plane;
 	uint iSrCamDummy__1; // used for the N-buffer index or SSAO setting for DOF
-	uint iSrCamDummy__2;
+	uint iSrCamDummy__2; // scale_z_res
 };
 
 struct HxCB_EnvState
@@ -1932,6 +1933,11 @@ float GetVZThickness(const float z, const float vz_thick)
 			vz_thickness = -res;
 		else
 			vz_thickness = -floor(res * 100000.0f) / 100000.0f;
+
+		vz_thickness *= 2.0; // refer to Section 4.1 "z-thickness value determination"
+
+		const float scale_factor = asfloat(g_cbCamState.iSrCamDummy__2);
+		vz_thickness *= scale_factor;
 	}
 	return vz_thickness;
 }
