@@ -132,7 +132,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		descRaster.DepthBiasClamp = 0;
 		descRaster.SlopeScaledDepthBias = 0;
 		descRaster.DepthClipEnable = TRUE;
-		descRaster.ScissorEnable = TRUE;
+		descRaster.ScissorEnable = FALSE;
 		descRaster.MultisampleEnable = FALSE;
 		descRaster.AntialiasedLineEnable = FALSE;
 		descRaster.ForcedSampleCount = 0;
