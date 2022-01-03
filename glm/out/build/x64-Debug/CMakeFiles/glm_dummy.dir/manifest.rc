@@ -1,0 +1,2 @@
+#pragma code_page(65001)
+1 /* CREATEPROCESS_MANIFEST_RESOURCE_ID */ 24 /* RT_MANIFEST */ "C:/Users/user/Documents/Visual Studio 2019/My Projects/VizMotive/VmProjects/hybrid_rendering_engine/glm/out/build/x64-Debug/CMakeFiles/glm_dummy.dir/embed.manifest"

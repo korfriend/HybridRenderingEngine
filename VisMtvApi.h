@@ -30,7 +30,8 @@ DAMAGE.
 
 #pragma once
 #define __dojostatic extern "C" __declspec(dllexport)
-#define __dojosclass class __declspec(dllexport)
+#define __dojoclass class __declspec(dllexport)
+#define __dojostruct struct __declspec(dllexport)
 
 #define __FP (float*)&
 
@@ -215,7 +216,14 @@ namespace vzm
 	__dojostatic bool PickObjectAlongRay(float* pos_pick, const int pick_obj_id, const float* pos_ray, const float* dir_ray, const int scene_id);
 
 	// only for the contributor's (by DongJoon Kim) test info.
-	__dojostatic void SetRenderTestParam(const std::string& _script, const std::any& value, const size_t size_bytes, const int scene_id, const int cam_id, const int obj_id = -1);
+	__dojostatic void SetRenderTestParam(const std::string& _script, const void* pvalue, const size_t size_bytes, const int scene_id, const int cam_id, const int obj_id = -1);
+	template<typename T> void SetRenderTestParam2(const std::string& _script, const std::any& value, const int scene_id, const int cam_id, const int obj_id = -1) {
+		T value_ = std::any_cast<T>(value);
+		SetRenderTestParam(_script, &value_, sizeof(T), scene_id, cam_id, obj_id);
+	}
+	template<typename T> void SetRenderTestParam3(const std::string& _script, const T& value, const int scene_id, const int cam_id, const int obj_id = -1) {
+		SetRenderTestParam(_script, &value, sizeof(T), scene_id, cam_id, obj_id);
+	}
 	__dojostatic bool GetRenderTestParam(const std::string& _script, void* pvalue, const size_t size_bytes,  const int scene_id, const int cam_id, const int obj_id = -1);
 	__dojostatic void DisplayConsoleMessages(const bool is_display);
 
@@ -265,7 +273,16 @@ namespace helpers
 		float pos[3], view[3], up[3]; // WS coordinates
 	};
 
-	__dojosclass arcball
+	__dojostruct ortho_box_transform
+	{
+		float pos_maxbox_ws[3];
+		float pos_minbox_ws[3];
+		float dir_y[3];
+		float dir_z[3];
+		void ComputeBoxTransformMatrix(float* matWS2BS);
+	};
+
+	__dojoclass arcball
 	{
 	public:
 		arcball();

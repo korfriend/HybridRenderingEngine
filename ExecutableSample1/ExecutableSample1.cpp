@@ -35,7 +35,7 @@ void EngineSetting()
 {
 	// loading model resources
 	int loaded_vol_id = 0;
-	vzm::LoadModelFile(".\\data\\result(dcm)\\FILE0.dcm", loaded_vol_id, true);
+	vzm::LoadModelFile("C:\\Users\\user\\Documents\\Visual Studio 2019\\My Projects\\Prototype_Sample_1\\data\\result(dcm)\\FILE0.dcm", loaded_vol_id, true);
 
 	glm::fmat4x4 mat_vs2ws;
 	vzm::GetRenderTestParam("_matrix_originalOS2WS", &mat_vs2ws, sizeof(glm::fmat4x4), 0, 0, loaded_vol_id);
@@ -47,11 +47,11 @@ void EngineSetting()
 	//vzm::GenerateEmptyVolume()
 
 	int loaded_mesh_id = 0;
-	vzm::LoadModelFile(".\\data\\stl\\PreparationScan_simple2.stl", loaded_mesh_id, true);
+	vzm::LoadModelFile("C:\\Users\\user\\Documents\\Visual Studio 2019\\My Projects\\Prototype_Sample_1\\data\\stl\\PreparationScan_simple2.stl", loaded_mesh_id, true);
 
 	int vr_tmap_id = 0;
 	std::vector<glm::fvec2> alpha_ctrs;
-	alpha_ctrs.push_back(glm::fvec2(0, 2050));
+	alpha_ctrs.push_back(glm::fvec2(0, 1050));
 	alpha_ctrs.push_back(glm::fvec2(1.0, 5160));
 	alpha_ctrs.push_back(glm::fvec2(1.0, 65536));
 	alpha_ctrs.push_back(glm::fvec2(0, 65537));
@@ -80,9 +80,9 @@ void EngineSetting()
 
 	vzm::CameraParameters cam_params;
 
-	*(glm::fvec3*)&cam_params.pos = glm::fvec3(0, -300, 0);
-	*(glm::fvec3*)&cam_params.up = glm::fvec3(0, 0, 1);
-	*(glm::fvec3*)&cam_params.view = glm::fvec3(0, 1, 0);
+	*(glm::fvec3*)cam_params.pos = glm::fvec3(0, -300, 0);
+	*(glm::fvec3*)cam_params.up = glm::fvec3(0, 0, 1);
+	*(glm::fvec3*)cam_params.view = glm::fvec3(0, 1, 0);
 	cam_params.np = 0.10f;
 	cam_params.fp = 1000.f;
 
@@ -100,19 +100,34 @@ void EngineSetting()
 	vzm::SceneEnvParameters scn_env_params;
 	scn_env_params.is_on_camera = true;
 	scn_env_params.is_pointlight = true;
-	*(glm::fvec3*)&scn_env_params.pos_light = *(glm::fvec3*)&cam_params.pos;
-	*(glm::fvec3*)&scn_env_params.dir_light = *(glm::fvec3*)&cam_params.view;
+	*(glm::fvec3*)scn_env_params.pos_light = *(glm::fvec3*)cam_params.pos;
+	*(glm::fvec3*)scn_env_params.dir_light = *(glm::fvec3*)cam_params.view;
 
 	vzm::SetSceneEnvParameters(0, scn_env_params);
 	vzm::SetCameraParameters(0, cam_params, 0);
 
-	glm::dmat4x4 matClipWS2BS = glm::dmat4x4();
-	glm::dvec3 posOrthoMax = glm::dvec3(10, 10, 10);
+
+	helpers::ortho_box_transform boxTr;
+	*(glm::fvec3*)boxTr.pos_minbox_ws = glm::dvec3(-10);
+	*(glm::fvec3*)boxTr.pos_maxbox_ws = glm::dvec3(10);
+	*(glm::fvec3*)boxTr.dir_y = glm::dvec3(0, 1, 0);
+	*(glm::fvec3*)boxTr.dir_z = glm::dvec3(0, 0, 1);
+
+	glm::fmat4x4 matClipWS2BS;
+	boxTr.ComputeBoxTransformMatrix((float*)&matClipWS2BS);
+
+	//glm::dmat4x4 dmatClipWS2BS = matClipWS2BS;
+	//glm::dvec3 dposOrthoMaxWS = *(glm::fvec3*)boxTr.pos_maxbox_ws;
 
 	// _int_ClippingMode
-	vzm::SetRenderTestParam("_int_ClippingMode", (int)2, sizeof(int), 0, 0, loaded_vol_id);
-	vzm::SetRenderTestParam("_matrix44_MatrixClipWS2BS", matClipWS2BS, sizeof(glm::dmat4x4), 0, 0, loaded_vol_id);
-	vzm::SetRenderTestParam("_double3_PosClipBoxMaxWS", posOrthoMax, sizeof(glm::dvec3), 0, 0, loaded_vol_id);
+	vzm::SetRenderTestParam3("_int_ClippingMode", (int)2, 0, 0, loaded_vol_id);
+	vzm::SetRenderTestParam3("_matrix44_MatrixClipWS2BS", glm::dmat4x4(matClipWS2BS), 0, 0, loaded_vol_id);
+	vzm::SetRenderTestParam3("_double3_PosClipBoxMaxWS", glm::dvec3(*(glm::fvec3*)boxTr.pos_maxbox_ws), 0, 0, loaded_vol_id);
+	
+	vzm::SetRenderTestParam3("_int_ClippingMode", 2, 0, 0, loaded_mesh_id);
+	vzm::SetRenderTestParam3("_matrix44_MatrixClipWS2BS", glm::dmat4x4(matClipWS2BS), 0, 0, loaded_mesh_id);
+	vzm::SetRenderTestParam3("_double3_PosClipBoxMaxWS", glm::dvec3(*(glm::fvec3*)boxTr.pos_maxbox_ws), 0, 0, loaded_mesh_id);
+
 
 	//vzm::SetRenderTestParam("_bool_UseSpinLock", false, sizeof(bool), -1, -1);
 	//vzm::SetRenderTestParam("_double_VZThickness", 0.0, sizeof(double), -1, -1);
@@ -319,9 +334,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		aball_vr.intializer((float*)&scene_stage_center, scene_stage_scale);
 
 		helpers::cam_pose arc_cam_pose;
-		glm::fvec3 pos = *(glm::fvec3*)&arc_cam_pose.pos = *(glm::fvec3*)&cam_params.pos;
-		*(glm::fvec3*)&arc_cam_pose.up = *(glm::fvec3*)&cam_params.up;
-		*(glm::fvec3*)&arc_cam_pose.view = *(glm::fvec3*)&cam_params.view;
+		glm::fvec3 pos = *(glm::fvec3*)arc_cam_pose.pos = *(glm::fvec3*)cam_params.pos;
+		*(glm::fvec3*)arc_cam_pose.up = *(glm::fvec3*)cam_params.up;
+		*(glm::fvec3*)arc_cam_pose.view = *(glm::fvec3*)cam_params.view;
 		glm::ivec2 pos_ss = glm::ivec2(x, y);
 		glm::fvec2 screen_size = glm::fvec2(cam_params.w / 1, cam_params.h / 1);
 		aball_vr.start((int*)&pos_ss, (float*)&screen_size, arc_cam_pose);
@@ -341,9 +356,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			else if (wParam & MK_RBUTTON)
 				aball_vr.move((int*)&pos_ss, arc_cam_pose);
 
-			*(glm::fvec3*)&cam_params.pos = *(glm::fvec3*)&arc_cam_pose.pos;
-			*(glm::fvec3*)&cam_params.up = *(glm::fvec3*)&arc_cam_pose.up;
-			*(glm::fvec3*)&cam_params.view = *(glm::fvec3*)&arc_cam_pose.view;
+			*(glm::fvec3*)cam_params.pos = *(glm::fvec3*)arc_cam_pose.pos;
+			*(glm::fvec3*)cam_params.up = *(glm::fvec3*)arc_cam_pose.up;
+			*(glm::fvec3*)cam_params.view = *(glm::fvec3*)arc_cam_pose.view;
 
 			vzm::SetCameraParameters(0, cam_params, 0);
 
@@ -359,9 +374,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
 		int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
 		if (zDelta > 0)
-			*(glm::fvec3*)&cam_params.pos += scene_stage_scale * 0.01f * (*(glm::fvec3*)&cam_params.view);
+			*(glm::fvec3*)cam_params.pos += scene_stage_scale * 0.01f * (*(glm::fvec3*)cam_params.view);
 		else
-			*(glm::fvec3*)&cam_params.pos -= scene_stage_scale * 0.01f * (*(glm::fvec3*)&cam_params.view);
+			*(glm::fvec3*)cam_params.pos -= scene_stage_scale * 0.01f * (*(glm::fvec3*)cam_params.view);
 		vzm::SetCameraParameters(0, cam_params, 0);
 		vzm::RenderScene(0, 0);
 
