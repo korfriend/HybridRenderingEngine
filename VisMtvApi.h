@@ -193,7 +193,7 @@ namespace vzm
 	__dojostatic bool GetSceneBoundingBox(const std::list<int>& io_obj_ids, const int scene_id, float* pos_aabb_min_ws, float* pos_aabb_max_ws);
 	__dojostatic bool RemoveSceneObject(const int scene_id, const int obj_id);
 	__dojostatic bool RemoveScene(const int scene_id);
-	__dojostatic bool DeleteObject(const int obj_id); // the obj is deleted in memory
+	__dojostatic bool DeleteVmObject(const int obj_id); // the obj is deleted in memory
 	__dojostatic bool SetSceneEnvParameters(const int scene_id, const SceneEnvParameters& env_params);
 	__dojostatic bool GetSceneEnvParameters(const int scene_id, SceneEnvParameters& env_params);
 	// cam id is corresponding to a specific renderer and ip states

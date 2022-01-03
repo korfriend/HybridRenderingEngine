@@ -111,7 +111,9 @@ void CallBackFunc_Mouse(int event, int x, int y, int flags, void* userdata)
 		glm::fvec3 pos = __cv3__ arc_cam_pose.pos = __cv3__ cam_params.pos;
 		__cv3__ arc_cam_pose.up = __cv3__ cam_params.up;
 		__cv3__ arc_cam_pose.view = __cv3__ cam_params.view;
-		aball_vr.start((int*)&glm::ivec2(x, y), (float*)&glm::fvec2(cam_params.w / 2, cam_params.h / 2), arc_cam_pose);
+		glm::ivec2 pos_ss = glm::ivec2(x, y);
+		glm::fvec2 screen_size = glm::fvec2(cam_params.w / 1, cam_params.h / 1);
+		aball_vr.start((int*)&pos_ss, (float*)&screen_size, arc_cam_pose);
 	}
 	else if (event == EVENT_MBUTTONDOWN)
 	{
@@ -129,10 +131,11 @@ void CallBackFunc_Mouse(int event, int x, int y, int flags, void* userdata)
 		if ((flags & EVENT_FLAG_LBUTTON) || (flags & EVENT_FLAG_RBUTTON))
 		{
 			helpers::cam_pose arc_cam_pose;
+			glm::ivec2 pos_ss = glm::ivec2(x, y);
 			if (flags & EVENT_FLAG_LBUTTON)
-				aball_vr.pan_move((int*)&glm::ivec2(x, y), arc_cam_pose);
+				aball_vr.pan_move((int*)&pos_ss, arc_cam_pose);
 			else if (flags & EVENT_FLAG_RBUTTON)
-				aball_vr.move((int*)&glm::ivec2(x, y), arc_cam_pose);
+				aball_vr.move((int*)&pos_ss, arc_cam_pose);
 
 			__cv3__ cam_params.pos = __cv3__ arc_cam_pose.pos;
 			__cv3__ cam_params.up = __cv3__ arc_cam_pose.up;
@@ -166,7 +169,9 @@ void CallBackFunc_CamMouse(int event, int x, int y, int flags, void* userdata)
 		glm::fvec3 pos = __cv3__ arc_cam_pose.pos = __cv3__ cam_params.pos;
 		__cv3__ arc_cam_pose.up = __cv3__ cam_params.up;
 		__cv3__ arc_cam_pose.view = __cv3__ cam_params.view;
-		aball_vr.start((int*)&glm::ivec2(x, y), (float*)&glm::fvec2(cam_params.w / 2, cam_params.h / 2), arc_cam_pose);
+		glm::ivec2 pos_ss = glm::ivec2(x, y);
+		glm::fvec2 screen_size = glm::fvec2(cam_params.w, cam_params.h);
+		aball_vr.start((int*)&pos_ss, (float*)&screen_size, arc_cam_pose);
 	}
 	else if (event == EVENT_MBUTTONDOWN)
 	{
@@ -184,10 +189,11 @@ void CallBackFunc_CamMouse(int event, int x, int y, int flags, void* userdata)
 		if ((flags & EVENT_FLAG_LBUTTON) || (flags & EVENT_FLAG_RBUTTON))
 		{
 			helpers::cam_pose arc_cam_pose;
+			glm::ivec2 pos_ss = glm::ivec2(x, y);
 			if (flags & EVENT_FLAG_LBUTTON)
-				aball_vr.pan_move((int*)&glm::ivec2(x, y), arc_cam_pose);
+				aball_vr.pan_move((int*)&pos_ss, arc_cam_pose);
 			else if (flags & EVENT_FLAG_RBUTTON)
-				aball_vr.move((int*)&glm::ivec2(x, y), arc_cam_pose);
+				aball_vr.move((int*)&pos_ss, arc_cam_pose);
 
 			__cv3__ cam_params.pos = __cv3__ arc_cam_pose.pos;
 			__cv3__ cam_params.up = __cv3__ arc_cam_pose.up;
