@@ -1108,7 +1108,8 @@ int Fig_HybridVR()
 {
 	int loaded_vol_id = 0;
 	std::string preset_file = GetSolutionPath() + ".\\data\\preset_hybrid_backpack.txt";
-	vzm::LoadModelFile(GetSolutionPath() + ".\\data\\backpack16_512x512x373_0.0039064x0.0039064x0.005_ushort.den", loaded_vol_id, true);
+	//vzm::LoadModelFile(GetSolutionPath() + ".\\data\\backpack16_512x512x373_0.0039064x0.0039064x0.005_ushort.den", loaded_vol_id, true);
+	vzm::LoadModelFile("D:\\Data\\Dental\\CT and STL\\P1\\result(dcm)\\FILE0.dcm", loaded_vol_id, true);
 	int loaded_mesh_id = 0;
 	vzm::LoadModelFile(GetSolutionPath() + ".\\data\\hairball_colored.ply", loaded_mesh_id, true);
 	int loaded_surfel_id= 0;
@@ -1876,10 +1877,10 @@ int main()
 	//Fig_OitIntersection();
 	//Test2();
 	//Test();
-	Fig_OitPerformance();
+	//Fig_OitPerformance();
 	//Fig_LocalDepthBlending();
 	//Fig_GhostedIllustration();
-	//Fig_HybridVR();
+	Fig_HybridVR();
 	//Fig_Dof();
 	
 	vzm::DeinitEngineLib();
