@@ -70,8 +70,8 @@ void EngineSetting()
 	alpha_ctrs[0] = glm::fvec2(0, 550);
 	alpha_ctrs[1] = glm::fvec2(1.0, 7000);
 	rgb_ctrs.clear();
-	rgb_ctrs[0] = glm::fvec4(1, 1, 1, 0);
-	rgb_ctrs[1] = glm::fvec4(1, 1, 1, 65535);
+	rgb_ctrs.push_back(glm::fvec4(1, 1, 1, 0));
+	rgb_ctrs.push_back(glm::fvec4(1, 1, 1, 65535));
 	vzm::GenerateMappingTable(65537, alpha_ctrs.size(), (float*)&alpha_ctrs[0], rgb_ctrs.size(), (float*)&rgb_ctrs[0], mpr_tmap_id);
 
 	vzm::ObjStates volume_state;
@@ -80,11 +80,16 @@ void EngineSetting()
 	volume_state.is_visible = true; // see ObjStates
 
 	// register objects in scene ID = 0
-	vzm::ReplaceOrAddSceneObject(0, loaded_vol_id, volume_state);
+	//vzm::ReplaceOrAddSceneObject(0, loaded_vol_id, volume_state);
 	vzm::ObjStates obj_state;
 	obj_state.color[3] = 0.7f; // control for transparency
 	vzm::ReplaceOrAddSceneObject(0, loaded_mesh_id, obj_state);
 
+	int iso_mesh_id = 0;
+	vzm::GenerateIsoSurfaceObject(loaded_vol_id, 2500, 2, 0, 0, NULL, iso_mesh_id);
+
+	*(glm::fvec4*)obj_state.color = glm::fvec4(0, 0.5, 1, 1);
+	vzm::ReplaceOrAddSceneObject(0, iso_mesh_id, obj_state);
 	//vzm::SetRenderTestParam("_bool_GpuProfile", true, sizeof(bool), -1, -1);
 	//vzm::SetRenderTestParam("_double_UserSampleRate", 1.0, sizeof(double), -1, -1);
 	//vzm::SetRenderTestParam("_bool_ApplySampleRateToGradient", false, sizeof(bool), -1, -1);
@@ -127,10 +132,10 @@ void EngineSetting()
 	*(glm::fvec3*)scn_env_params.dir_light = *(glm::fvec3*)vr_cam_params.view;
 
 	vzm::SetSceneEnvParameters(0, scn_env_params);
-	vzm::SetCameraParameters(0, vr_cam_params, 1);
-	vzm::SetCameraParameters(0, mpr_cam_params, 0);
+	vzm::SetCameraParameters(0, vr_cam_params, 0);
+	vzm::SetCameraParameters(0, mpr_cam_params, 1);
 
-	helpers::ortho_box_transform boxTr;
+	vzm::ortho_box_transform boxTr;
 	*(glm::fvec3*)boxTr.pos_minbox_ws = glm::dvec3(-20);
 	*(glm::fvec3*)boxTr.pos_maxbox_ws = glm::dvec3(20);
 	*(glm::fvec3*)boxTr.dir_y = glm::dvec3(0, 1, 0);
@@ -143,9 +148,9 @@ void EngineSetting()
 	//glm::dvec3 dposOrthoMaxWS = *(glm::fvec3*)boxTr.pos_maxbox_ws;
 
 	// for mpr
-	vzm::SetRenderTestParam3("_double_PlaneThickness", (double)30.0, 0, 0, -1);
+	//vzm::SetRenderTestParam3("_double_PlaneThickness", (double)30.0, 0, 0, -1);
 	// default: 100, ray_sum: 110, mip: 111, 
-	vzm::SetRenderTestParam3("_int_RendererType", (int)111, 0, 0, loaded_vol_id);
+	//vzm::SetRenderTestParam3("_int_RendererType", (int)111, 0, 0, loaded_vol_id);
 
 	// for vr, clipping
 	//vzm::SetRenderTestParam3("_int_ClippingMode", (int)2, 0, 0, loaded_vol_id);
