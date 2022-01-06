@@ -420,7 +420,7 @@ namespace vmobjects
 		 */
 		data_type origin_dtype;
 		/**
-		 * @brief Volume을 저장한 2D array
+		 * @brief Volume을 저장한 2D array (safe sample version)
 		 * @details
 		 * 실제 할당된 x 축 방향 크기 = i3VolumeSize.x + i3SizeExtraBoundary.x*2 \n
 		 * 실제 할당된 y 축 방향 크기 = i3VolumeSize.y + i3SizeExtraBoundary.y*2 \n

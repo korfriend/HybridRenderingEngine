@@ -34,24 +34,27 @@ INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
 void EngineSetting()
 {
 	// loading model resources
-	int loaded_vol_id = 0;
-	vzm::LoadModelFile("C:\\Users\\user\\Documents\\Visual Studio 2019\\My Projects\\Prototype_Sample_1\\data\\result(dcm)\\FILE0.dcm", loaded_vol_id, true);
+	int loaded_vol2_id = 0;
+	vzm::LoadModelFile("C:\\Users\\user\\Documents\\Visual Studio 2019\\My Projects\\Prototype_Sample_1\\data\\result(dcm)\\FILE0.dcm", loaded_vol2_id, true);
 
-	glm::fmat4x4 mat_vs2ws;
-	vzm::GetRenderTestParam("_matrix_originalOS2WS", &mat_vs2ws, sizeof(glm::fmat4x4), 0, 0, loaded_vol_id);
-	unsigned short** pSlices;
+	unsigned short** slices;
 	int stride;
 	int vol_size[3];
 	float vox_pitch[3];
-	vzm::GetVolumeInfo(loaded_vol_id, (void***)&pSlices, vol_size, vox_pitch, &stride);
-	//vzm::GenerateEmptyVolume()
+	vzm::GetVolumeInfo(loaded_vol2_id, (void***)&slices, vol_size, vox_pitch, &stride, NULL);
+	int loaded_vol_id = 0;
+	vzm::GenerateVolumeFromData(loaded_vol_id, (const void**)slices, "USHORT", vol_size, vox_pitch,
+		(const float*)glm::value_ptr(glm::fvec3(1, 0, 0)), (const float*)glm::value_ptr(glm::fvec3(0, 1, 0)), true, true);
+
+	glm::dmat4x4 dmat_vs2ws;
+	vzm::GetObjectParam("_matrix_originalOS2WS", loaded_vol2_id , &dmat_vs2ws);
 
 	int loaded_mesh_id = 0;
 	vzm::LoadModelFile("C:\\Users\\user\\Documents\\Visual Studio 2019\\My Projects\\Prototype_Sample_1\\data\\stl\\PreparationScan_simple2.stl", loaded_mesh_id, true);
 
 	int vr_tmap_id = 0;
 	std::vector<glm::fvec2> alpha_ctrs;
-	alpha_ctrs.push_back(glm::fvec2(0, 1050));
+	alpha_ctrs.push_back(glm::fvec2(0, 2050));
 	alpha_ctrs.push_back(glm::fvec2(1.0, 5160));
 	alpha_ctrs.push_back(glm::fvec2(1.0, 65536));
 	alpha_ctrs.push_back(glm::fvec2(0, 65537));
@@ -63,8 +66,17 @@ void EngineSetting()
 	rgb_ctrs.push_back(glm::fvec4(1, 1, 1, 65536));
 	vzm::GenerateMappingTable(65537, alpha_ctrs.size(), (float*)&alpha_ctrs[0], rgb_ctrs.size(), (float*)&rgb_ctrs[0], vr_tmap_id);
 
+	int mpr_tmap_id = 0;
+	alpha_ctrs[0] = glm::fvec2(0, 550);
+	alpha_ctrs[1] = glm::fvec2(1.0, 7000);
+	rgb_ctrs.clear();
+	rgb_ctrs[0] = glm::fvec4(1, 1, 1, 0);
+	rgb_ctrs[1] = glm::fvec4(1, 1, 1, 65535);
+	vzm::GenerateMappingTable(65537, alpha_ctrs.size(), (float*)&alpha_ctrs[0], rgb_ctrs.size(), (float*)&rgb_ctrs[0], mpr_tmap_id);
+
 	vzm::ObjStates volume_state;
 	volume_state.associated_obj_ids[vzm::ObjStates::VR_OTF] = vr_tmap_id;
+	volume_state.associated_obj_ids[vzm::ObjStates::MPR_WINDOWING] = mpr_tmap_id;
 	volume_state.is_visible = true; // see ObjStates
 
 	// register objects in scene ID = 0
@@ -78,38 +90,49 @@ void EngineSetting()
 	//vzm::SetRenderTestParam("_bool_ApplySampleRateToGradient", false, sizeof(bool), -1, -1);
 	//vzm::SetRenderTestParam("_int_RendererType", (int)3, sizeof(int), 0, 0, loaded_vol_id);
 
-	vzm::CameraParameters cam_params;
-
-	*(glm::fvec3*)cam_params.pos = glm::fvec3(0, -300, 0);
-	*(glm::fvec3*)cam_params.up = glm::fvec3(0, 0, 1);
-	*(glm::fvec3*)cam_params.view = glm::fvec3(0, 1, 0);
-	cam_params.np = 0.10f;
-	cam_params.fp = 1000.f;
-
-	//cam_params.ip_w; cam_params.ip_h;//
-
-	cam_params.fov_y = 3.141592654f / 4.f;
-	cam_params.projection_mode = 2;
-
 	RECT rc;
 	GetClientRect(hWnd, &rc);
-	cam_params.w = rc.right - rc.left;
-	cam_params.h = rc.bottom - rc.top;
-	cam_params.aspect_ratio = (float)cam_params.w / (float)cam_params.h;
+	int w = rc.right - rc.left;
+	int h = rc.bottom - rc.top;
+
+	vzm::CameraParameters vr_cam_params;
+	*(glm::fvec3*)vr_cam_params.pos = glm::fvec3(0, -300, 0);
+	*(glm::fvec3*)vr_cam_params.up = glm::fvec3(0, 0, 1);
+	*(glm::fvec3*)vr_cam_params.view = glm::fvec3(0, 1, 0);
+	vr_cam_params.np = 0.10f;
+	vr_cam_params.fp = 1000.f;
+	vr_cam_params.fov_y = 3.141592654f / 4.f;
+	vr_cam_params.projection_mode = 2;
+	vr_cam_params.w = w;
+	vr_cam_params.h = h;
+	vr_cam_params.aspect_ratio = (float)vr_cam_params.w / (float)vr_cam_params.h;
+
+	// mpr cam (image slicer) setting
+	vzm::CameraParameters mpr_cam_params;
+	*(glm::fvec3*)mpr_cam_params.pos = glm::fvec3(0, 0, 0);
+	*(glm::fvec3*)mpr_cam_params.up = glm::fvec3(0, 0, 1);
+	*(glm::fvec3*)mpr_cam_params.view = glm::fvec3(0, 1, 0);
+	mpr_cam_params.np = 0;
+	mpr_cam_params.fp = 10.f;
+	mpr_cam_params.ip_w = 300;
+	mpr_cam_params.ip_h = vr_cam_params.ip_w * (float)h / (float)w;
+	mpr_cam_params.projection_mode = 4;
+	mpr_cam_params.w = w;
+	mpr_cam_params.h = h;
 
 	vzm::SceneEnvParameters scn_env_params;
 	scn_env_params.is_on_camera = true;
 	scn_env_params.is_pointlight = true;
-	*(glm::fvec3*)scn_env_params.pos_light = *(glm::fvec3*)cam_params.pos;
-	*(glm::fvec3*)scn_env_params.dir_light = *(glm::fvec3*)cam_params.view;
+	*(glm::fvec3*)scn_env_params.pos_light = *(glm::fvec3*)vr_cam_params.pos;
+	*(glm::fvec3*)scn_env_params.dir_light = *(glm::fvec3*)vr_cam_params.view;
 
 	vzm::SetSceneEnvParameters(0, scn_env_params);
-	vzm::SetCameraParameters(0, cam_params, 0);
-
+	vzm::SetCameraParameters(0, vr_cam_params, 1);
+	vzm::SetCameraParameters(0, mpr_cam_params, 0);
 
 	helpers::ortho_box_transform boxTr;
-	*(glm::fvec3*)boxTr.pos_minbox_ws = glm::dvec3(-10);
-	*(glm::fvec3*)boxTr.pos_maxbox_ws = glm::dvec3(10);
+	*(glm::fvec3*)boxTr.pos_minbox_ws = glm::dvec3(-20);
+	*(glm::fvec3*)boxTr.pos_maxbox_ws = glm::dvec3(20);
 	*(glm::fvec3*)boxTr.dir_y = glm::dvec3(0, 1, 0);
 	*(glm::fvec3*)boxTr.dir_z = glm::dvec3(0, 0, 1);
 
@@ -119,14 +142,19 @@ void EngineSetting()
 	//glm::dmat4x4 dmatClipWS2BS = matClipWS2BS;
 	//glm::dvec3 dposOrthoMaxWS = *(glm::fvec3*)boxTr.pos_maxbox_ws;
 
-	// _int_ClippingMode
-	vzm::SetRenderTestParam3("_int_ClippingMode", (int)2, 0, 0, loaded_vol_id);
-	vzm::SetRenderTestParam3("_matrix44_MatrixClipWS2BS", glm::dmat4x4(matClipWS2BS), 0, 0, loaded_vol_id);
-	vzm::SetRenderTestParam3("_double3_PosClipBoxMaxWS", glm::dvec3(*(glm::fvec3*)boxTr.pos_maxbox_ws), 0, 0, loaded_vol_id);
-	
-	vzm::SetRenderTestParam3("_int_ClippingMode", 2, 0, 0, loaded_mesh_id);
-	vzm::SetRenderTestParam3("_matrix44_MatrixClipWS2BS", glm::dmat4x4(matClipWS2BS), 0, 0, loaded_mesh_id);
-	vzm::SetRenderTestParam3("_double3_PosClipBoxMaxWS", glm::dvec3(*(glm::fvec3*)boxTr.pos_maxbox_ws), 0, 0, loaded_mesh_id);
+	// for mpr
+	vzm::SetRenderTestParam3("_double_PlaneThickness", (double)30.0, 0, 0, -1);
+	// default: 100, ray_sum: 110, mip: 111, 
+	vzm::SetRenderTestParam3("_int_RendererType", (int)111, 0, 0, loaded_vol_id);
+
+	// for vr, clipping
+	//vzm::SetRenderTestParam3("_int_ClippingMode", (int)2, 0, 0, loaded_vol_id);
+	//vzm::SetRenderTestParam3("_matrix44_MatrixClipWS2BS", glm::dmat4x4(matClipWS2BS), 0, 0, loaded_vol_id);
+	//vzm::SetRenderTestParam3("_double3_PosClipBoxMaxWS", glm::dvec3(*(glm::fvec3*)boxTr.pos_maxbox_ws), 0, 0, loaded_vol_id);
+	//
+	//vzm::SetRenderTestParam3("_int_ClippingMode", (int)2, 0, 0, loaded_mesh_id);
+	//vzm::SetRenderTestParam3("_matrix44_MatrixClipWS2BS", glm::dmat4x4(matClipWS2BS), 0, 0, loaded_mesh_id);
+	//vzm::SetRenderTestParam3("_double3_PosClipBoxMaxWS", glm::dvec3(*(glm::fvec3*)boxTr.pos_maxbox_ws), 0, 0, loaded_mesh_id);
 
 
 	//vzm::SetRenderTestParam("_bool_UseSpinLock", false, sizeof(bool), -1, -1);

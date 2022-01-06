@@ -171,6 +171,9 @@ namespace vzm
 	__dojostatic bool LoadMultipleModelsFile(const std::string& filename, std::list<int>& obj_ids, const bool unify_redundancy = false);
 	// data_type "CHAR" "BYTE" "SHORT" "USHORT" "INT" "FLOAT"
 	__dojostatic bool GenerateEmptyVolume(int& vol_id, const int ref_vol_id = 0, const std::string& data_type = "", const double min_v = 0, const double max_v = 0, const double fill_v = 0);
+	// note that redundant safe-bnd to slices is not allowed
+	// data_type "CHAR" "BYTE" "SHORT" "USHORT" "INT" "FLOAT"
+	__dojostatic bool GenerateVolumeFromData(int& vol_id, const void** vol_slices_2darray, const std::string& data_type, const int* size_xyz, const float* pitch_xyz, const float* axis_x_ws, const float* axis_y_ws, const bool is_rhs, const bool is_safe_bnd);
 	__dojostatic bool GenerateEmptyPrimitive(int& prim_id);
 	__dojostatic bool GenerateArrowObject(const float* pos_s, const float* pos_e, const float radius_body, const float radius_head, int& obj_id);
 	// optional : rgb_list (if NULL, this is not used)
@@ -207,7 +210,8 @@ namespace vzm
 
 	// etc
 	__dojostatic bool GetPModelData(const int obj_id, float** pos_vtx, float** nrl_vtx, float** rgb_vtx, float** tex_vtx, int& num_vtx, unsigned int** idx_prims, int& num_prims, int& stride_prim_idx);
-	__dojostatic bool GetVolumeInfo(const int obj_id, void*** vol_slices_2darray_pointer, int* size_xyz, float* pitch_xyz, int* stride_bytes);
+	__dojostatic bool GetVolumeInfo(const int obj_id, void*** vol_slices_2darray_pointer, int* size_xyz, float* pitch_xyz, int* stride_bytes, bool* safe_bnd);
+	__dojostatic bool GetObjectParam(const std::string& _script, const int obj_id, void* pvalue);
 
 	// picking
 	__dojostatic bool ValidatePickTarget(const int obj_id);
