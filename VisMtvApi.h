@@ -30,7 +30,8 @@ DAMAGE.
 
 #pragma once
 #define __dojostatic extern "C" __declspec(dllexport)
-#define __dojosclass class __declspec(dllexport)
+#define __dojoclass class __declspec(dllexport)
+#define __dojostruct struct __declspec(dllexport)
 
 #define __FP (float*)&
 
@@ -39,7 +40,7 @@ DAMAGE.
 #include <any>
 #include <list>
 
-#define VERSION "2.0" // released at 20.09.05
+#define VERSION "2.0" // released at 22.01.10
 
 // Dongjoon's VisMotive interface.
 namespace vzm
@@ -162,6 +163,16 @@ namespace vzm
 		}
 	};
 
+	__dojostruct ortho_box_transform
+	{
+		float pos_maxbox_ws[3];
+		float pos_minbox_ws[3];
+		float dir_y[3];
+		float dir_z[3];
+		void ComputeBoxTransformMatrix(float* matWS2BS);
+		ortho_box_transform() { ZeroMemory(dir_y, sizeof(float) * 3); }
+	};
+
 	__dojostatic bool InitEngineLib();
 	__dojostatic bool DeinitEngineLib();
 
@@ -170,6 +181,9 @@ namespace vzm
 	__dojostatic bool LoadMultipleModelsFile(const std::string& filename, std::list<int>& obj_ids, const bool unify_redundancy = false);
 	// data_type "CHAR" "BYTE" "SHORT" "USHORT" "INT" "FLOAT"
 	__dojostatic bool GenerateEmptyVolume(int& vol_id, const int ref_vol_id = 0, const std::string& data_type = "", const double min_v = 0, const double max_v = 0, const double fill_v = 0);
+	// note that redundant safe-bnd to slices is not allowed
+	// data_type "CHAR" "BYTE" "SHORT" "USHORT" "INT" "FLOAT"
+	__dojostatic bool GenerateVolumeFromData(int& vol_id, const void** vol_slices_2darray, const std::string& data_type, const int* size_xyz, const float* pitch_xyz, const float* axis_x_ws, const float* axis_y_ws, const bool is_rhs, const bool is_safe_bnd);
 	__dojostatic bool GenerateEmptyPrimitive(int& prim_id);
 	__dojostatic bool GenerateArrowObject(const float* pos_s, const float* pos_e, const float radius_body, const float radius_head, int& obj_id);
 	// optional : rgb_list (if NULL, this is not used)
@@ -183,6 +197,7 @@ namespace vzm
 	__dojostatic bool GeneratePrimitiveObject(const float* xyz_list, const float* nrl_list, const float* rgb_list, const float* tex_list, const int num_vtx, const unsigned int* idx_prims, const int num_prims, const int stride_prim_idx, int& obj_id);
 	// optional : nrl_list, rgb_list (if NULL, this is not used)
 	__dojostatic bool GeneratePointCloudObject(const float* xyz_list, const float* nrl_list, const float* rgb_list, const int num_points, int& obj_id);
+	__dojostatic bool GenerateIsoSurfaceObject(const int vol_id, const float iso_value, const int downsample_offset, const int mask_id, const int mask_value, ortho_box_transform* boxTr, int& obj_id);
 	__dojostatic bool GenerateTextObject(const float* xyz_LT_view_up, const std::string& text, const float font_height, const bool bold, const bool italic, int& obj_id, const bool center_aligned = false);
 	__dojostatic bool GenerateMappingTable(const int table_size, const int num_alpha_ctrs, const float* ctr_alpha_idx_list, const int num_rgb_ctrs, const float* ctr_rgb_idx_list, int& tmap_id);
 	__dojostatic bool GenerateCopiedObject(const int obj_src_id, int& obj_id);
@@ -193,7 +208,7 @@ namespace vzm
 	__dojostatic bool GetSceneBoundingBox(const std::list<int>& io_obj_ids, const int scene_id, float* pos_aabb_min_ws, float* pos_aabb_max_ws);
 	__dojostatic bool RemoveSceneObject(const int scene_id, const int obj_id);
 	__dojostatic bool RemoveScene(const int scene_id);
-	__dojostatic bool DeleteObject(const int obj_id); // the obj is deleted in memory
+	__dojostatic bool DeleteVmObject(const int obj_id); // the obj is deleted in memory
 	__dojostatic bool SetSceneEnvParameters(const int scene_id, const SceneEnvParameters& env_params);
 	__dojostatic bool GetSceneEnvParameters(const int scene_id, SceneEnvParameters& env_params);
 	// cam id is corresponding to a specific renderer and ip states
@@ -206,7 +221,8 @@ namespace vzm
 
 	// etc
 	__dojostatic bool GetPModelData(const int obj_id, float** pos_vtx, float** nrl_vtx, float** rgb_vtx, float** tex_vtx, int& num_vtx, unsigned int** idx_prims, int& num_prims, int& stride_prim_idx);
-	__dojostatic bool GetVolumeInfo(const int obj_id, void*** vol_slices_2darray_pointer, int* size_xyz, float* pitch_xyz, int* stride_bytes);
+	__dojostatic bool GetVolumeInfo(const int obj_id, void*** vol_slices_2darray_pointer, int* size_xyz, float* pitch_xyz, int* stride_bytes, bool* safe_bnd);
+	__dojostatic bool GetObjectParam(const std::string& _script, const int obj_id, void* pvalue);
 
 	// picking
 	__dojostatic bool ValidatePickTarget(const int obj_id);
@@ -215,7 +231,14 @@ namespace vzm
 	__dojostatic bool PickObjectAlongRay(float* pos_pick, const int pick_obj_id, const float* pos_ray, const float* dir_ray, const int scene_id);
 
 	// only for the contributor's (by DongJoon Kim) test info.
-	__dojostatic void SetRenderTestParam(const std::string& _script, const std::any& value, const size_t size_bytes, const int scene_id, const int cam_id, const int obj_id = -1);
+	__dojostatic void SetRenderTestParam(const std::string& _script, const void* pvalue, const size_t size_bytes, const int scene_id, const int cam_id, const int obj_id = -1);
+	template<typename T> void SetRenderTestParam2(const std::string& _script, const std::any& value, const int scene_id, const int cam_id, const int obj_id = -1) {
+		T value_ = std::any_cast<T>(value);
+		SetRenderTestParam(_script, &value_, sizeof(T), scene_id, cam_id, obj_id);
+	}
+	template<typename T> void SetRenderTestParam3(const std::string& _script, const T& value, const int scene_id, const int cam_id, const int obj_id = -1) {
+		SetRenderTestParam(_script, &value, sizeof(T), scene_id, cam_id, obj_id);
+	}
 	__dojostatic bool GetRenderTestParam(const std::string& _script, void* pvalue, const size_t size_bytes,  const int scene_id, const int cam_id, const int obj_id = -1);
 	__dojostatic void DisplayConsoleMessages(const bool is_display);
 
@@ -265,7 +288,7 @@ namespace helpers
 		float pos[3], view[3], up[3]; // WS coordinates
 	};
 
-	__dojosclass arcball
+	__dojoclass arcball
 	{
 	public:
 		arcball();
