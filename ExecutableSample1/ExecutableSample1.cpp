@@ -31,26 +31,45 @@ BOOL                InitInstance(HINSTANCE, int);
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
 
+auto transformPos = [](const glm::fvec3& pos, const glm::fmat4x4& m)
+{
+	glm::fvec4 pos4 = glm::fvec4(pos, 1);
+	pos4 = m * pos4;
+	pos4 /= pos4.w;
+	return glm::fvec3(pos4);
+};
+
+auto transformVec = [](const glm::fvec3& vec, const glm::fmat4x4& m)
+{
+	glm::fvec4 vec4 = glm::fvec4(vec, 0);
+	vec4 = m * vec4;
+	return glm::fvec3(vec4);
+};
+
 void EngineSetting()
 {
 	// loading model resources
 	int loaded_vol2_id = 0;
-	vzm::LoadModelFile("C:\\Users\\user\\Documents\\Visual Studio 2019\\My Projects\\Prototype_Sample_1\\data\\result(dcm)\\FILE0.dcm", loaded_vol2_id, true);
+	vzm::LoadModelFile("..\\..\\..\\data\\result(dcm)\\FILE0.dcm", loaded_vol2_id, true);
 
 	unsigned short** slices;
 	int stride;
 	int vol_size[3];
 	float vox_pitch[3];
 	vzm::GetVolumeInfo(loaded_vol2_id, (void***)&slices, vol_size, vox_pitch, &stride, NULL);
+	glm::dmat4x4 dmat_vs2ws;
+	vzm::GetObjectParam("_matrix_originalOS2WS", loaded_vol2_id, &dmat_vs2ws);
+	glm::fvec3 dir_x = transformVec(glm::fvec3(1, 0, 0), dmat_vs2ws);
+	glm::fvec3 dir_y = transformVec(glm::fvec3(0, 1, 0), dmat_vs2ws);
+	glm::fvec3 dir_z = transformVec(glm::fvec3(0, 0, 1), dmat_vs2ws);
+	bool is_rhs = glm::dot(glm::cross(dir_x, dir_y), dir_z) > 0;
 	int loaded_vol_id = 0;
 	vzm::GenerateVolumeFromData(loaded_vol_id, (const void**)slices, "USHORT", vol_size, vox_pitch,
-		(const float*)glm::value_ptr(glm::fvec3(1, 0, 0)), (const float*)glm::value_ptr(glm::fvec3(0, 1, 0)), true, true);
+		(const float*)glm::value_ptr(dir_x), (const float*)glm::value_ptr(dir_y), is_rhs, true);
 
-	glm::dmat4x4 dmat_vs2ws;
-	vzm::GetObjectParam("_matrix_originalOS2WS", loaded_vol2_id , &dmat_vs2ws);
 
 	int loaded_mesh_id = 0;
-	vzm::LoadModelFile("C:\\Users\\user\\Documents\\Visual Studio 2019\\My Projects\\Prototype_Sample_1\\data\\stl\\PreparationScan_simple2.stl", loaded_mesh_id, true);
+	vzm::LoadModelFile("..\\..\\..\\data\\stl\\PreparationScan_simple2.stl", loaded_mesh_id, true);
 
 	int vr_tmap_id = 0;
 	std::vector<glm::fvec2> alpha_ctrs;
@@ -80,13 +99,13 @@ void EngineSetting()
 	volume_state.is_visible = true; // see ObjStates
 
 	// register objects in scene ID = 0
-	//vzm::ReplaceOrAddSceneObject(0, loaded_vol_id, volume_state);
+	vzm::ReplaceOrAddSceneObject(0, loaded_vol_id, volume_state);
 	vzm::ObjStates obj_state;
 	obj_state.color[3] = 0.7f; // control for transparency
 	vzm::ReplaceOrAddSceneObject(0, loaded_mesh_id, obj_state);
 
 	int iso_mesh_id = 0;
-	vzm::GenerateIsoSurfaceObject(loaded_vol_id, 2500, 2, 0, 0, NULL, iso_mesh_id);
+	vzm::GenerateIsoSurfaceObject(loaded_vol_id, 2500, 4, 0, 0, NULL, iso_mesh_id);
 
 	*(glm::fvec4*)obj_state.color = glm::fvec4(0, 0.5, 1, 1);
 	vzm::ReplaceOrAddSceneObject(0, iso_mesh_id, obj_state);

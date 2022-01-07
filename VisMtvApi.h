@@ -197,7 +197,7 @@ namespace vzm
 	__dojostatic bool GeneratePrimitiveObject(const float* xyz_list, const float* nrl_list, const float* rgb_list, const float* tex_list, const int num_vtx, const unsigned int* idx_prims, const int num_prims, const int stride_prim_idx, int& obj_id);
 	// optional : nrl_list, rgb_list (if NULL, this is not used)
 	__dojostatic bool GeneratePointCloudObject(const float* xyz_list, const float* nrl_list, const float* rgb_list, const int num_points, int& obj_id);
-	__dojostatic bool GenerateIsoSurfaceObject(const int vol_id, const float iso_value, const int downsample_offset, const int mask_id, const int mask_value, ortho_box_transform* boxTr, int& obj_id);
+	__dojostatic bool GenerateIsoSurfaceObject(const int vol_id, const float iso_value, const int downsample_offset, const int mask_id, const int mask_value, const ortho_box_transform* boxTr, int& obj_id);
 	__dojostatic bool GenerateTextObject(const float* xyz_LT_view_up, const std::string& text, const float font_height, const bool bold, const bool italic, int& obj_id, const bool center_aligned = false);
 	__dojostatic bool GenerateMappingTable(const int table_size, const int num_alpha_ctrs, const float* ctr_alpha_idx_list, const int num_rgb_ctrs, const float* ctr_rgb_idx_list, int& tmap_id);
 	__dojostatic bool GenerateCopiedObject(const int obj_src_id, int& obj_id);
