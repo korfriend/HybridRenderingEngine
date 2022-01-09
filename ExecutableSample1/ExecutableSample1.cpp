@@ -113,6 +113,10 @@ void EngineSetting()
 	//vzm::SetRenderTestParam("_double_UserSampleRate", 1.0, sizeof(double), -1, -1);
 	//vzm::SetRenderTestParam("_bool_ApplySampleRateToGradient", false, sizeof(bool), -1, -1);
 	//vzm::SetRenderTestParam("_int_RendererType", (int)3, sizeof(int), 0, 0, loaded_vol_id);
+	std::map<std::string, std::any> test_parameters;
+	test_parameters["test"] = (int)4747;
+	vzm::ExecuteModule2("vismtv_meshextraction", "ExtractMeshViaMC",
+		std::list<int>{ loaded_vol_id, iso_mesh_id }, test_parameters);
 
 	RECT rc;
 	GetClientRect(hWnd, &rc);
