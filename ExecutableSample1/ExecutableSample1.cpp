@@ -46,11 +46,31 @@ auto transformVec = [](const glm::fvec3& vec, const glm::fmat4x4& m)
 	return glm::fvec3(vec4);
 };
 
+std::string GetDataPath()
+{
+	using namespace std;
+	char ownPth[2048];
+	GetModuleFileNameA(NULL, ownPth, (sizeof(ownPth)));
+	string exe_path = ownPth;
+	size_t pos = 0;
+	std::string token;
+	string delimiter = "\\";
+	string sol_path = "";
+	while ((pos = exe_path.find(delimiter)) != std::string::npos) {
+		token = exe_path.substr(0, pos);
+		if (token.find(".exe") != std::string::npos) break;
+		exe_path += token + "\\";
+		exe_path.erase(0, pos + delimiter.length());
+	}
+	return sol_path + "..\\..\\data\\";
+}
+
+
 void EngineSetting()
 {
 	// loading model resources
 	int loaded_vol2_id = 0;
-	vzm::LoadModelFile("..\\..\\..\\data\\result(dcm)\\FILE0.dcm", loaded_vol2_id, true);
+	vzm::LoadModelFile(GetDataPath() + "result(dcm)\\FILE0.dcm", loaded_vol2_id, true);
 
 	unsigned short** slices;
 	int stride;
@@ -69,7 +89,7 @@ void EngineSetting()
 
 
 	int loaded_mesh_id = 0;
-	vzm::LoadModelFile("..\\..\\..\\data\\stl\\PreparationScan_simple2.stl", loaded_mesh_id, true);
+	vzm::LoadModelFile(GetDataPath() + "stl\\PreparationScan_simple2.stl", loaded_mesh_id, true);
 
 	int vr_tmap_id = 0;
 	std::vector<glm::fvec2> alpha_ctrs;
@@ -155,8 +175,8 @@ void EngineSetting()
 	*(glm::fvec3*)scn_env_params.dir_light = *(glm::fvec3*)vr_cam_params.view;
 
 	vzm::SetSceneEnvParameters(0, scn_env_params);
-	vzm::SetCameraParameters(0, vr_cam_params, 0);
-	vzm::SetCameraParameters(0, mpr_cam_params, 1);
+	vzm::SetCameraParameters(0, vr_cam_params, 1);
+	vzm::SetCameraParameters(0, mpr_cam_params, 0);
 
 	vzm::ortho_box_transform boxTr;
 	*(glm::fvec3*)boxTr.pos_minbox_ws = glm::dvec3(-20);
