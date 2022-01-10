@@ -52,17 +52,18 @@ std::string GetDataPath()
 	char ownPth[2048];
 	GetModuleFileNameA(NULL, ownPth, (sizeof(ownPth)));
 	string exe_path = ownPth;
+	string exe_path_;
 	size_t pos = 0;
 	std::string token;
 	string delimiter = "\\";
-	string sol_path = "";
 	while ((pos = exe_path.find(delimiter)) != std::string::npos) {
 		token = exe_path.substr(0, pos);
 		if (token.find(".exe") != std::string::npos) break;
 		exe_path += token + "\\";
+		exe_path_ += token + "\\";
 		exe_path.erase(0, pos + delimiter.length());
 	}
-	return sol_path + "..\\..\\data\\";
+	return exe_path_ + "..\\..\\data\\";
 }
 
 
@@ -127,7 +128,7 @@ void EngineSetting()
 	int iso_mesh_id = 0;
 	vzm::GenerateIsoSurfaceObject(loaded_vol_id, 2500, 4, 0, 0, NULL, iso_mesh_id);
 
-	*(glm::fvec4*)obj_state.color = glm::fvec4(0, 0.5, 1, 1);
+	*(glm::fvec4*)obj_state.color = glm::fvec4(0, 0.5, 1, 0.3);
 	vzm::ReplaceOrAddSceneObject(0, iso_mesh_id, obj_state);
 	//vzm::SetRenderTestParam("_bool_GpuProfile", true, sizeof(bool), -1, -1);
 	//vzm::SetRenderTestParam("_double_UserSampleRate", 1.0, sizeof(double), -1, -1);
@@ -135,8 +136,8 @@ void EngineSetting()
 	//vzm::SetRenderTestParam("_int_RendererType", (int)3, sizeof(int), 0, 0, loaded_vol_id);
 	std::map<std::string, std::any> test_parameters;
 	test_parameters["test"] = (int)4747;
-	vzm::ExecuteModule2("vismtv_meshextraction", "ExtractMeshViaMC",
-		std::list<int>{ loaded_vol_id, iso_mesh_id }, test_parameters);
+	//vzm::ExecuteModule2("test_module", "ExtractMeshViaMC",
+	//	std::list<int>{ loaded_vol_id, iso_mesh_id }, test_parameters);
 
 	RECT rc;
 	GetClientRect(hWnd, &rc);
@@ -175,8 +176,8 @@ void EngineSetting()
 	*(glm::fvec3*)scn_env_params.dir_light = *(glm::fvec3*)vr_cam_params.view;
 
 	vzm::SetSceneEnvParameters(0, scn_env_params);
-	vzm::SetCameraParameters(0, vr_cam_params, 1);
-	vzm::SetCameraParameters(0, mpr_cam_params, 0);
+	vzm::SetCameraParameters(0, vr_cam_params, 0);
+	vzm::SetCameraParameters(0, mpr_cam_params, 1);
 
 	vzm::ortho_box_transform boxTr;
 	*(glm::fvec3*)boxTr.pos_minbox_ws = glm::dvec3(-20);
@@ -196,9 +197,9 @@ void EngineSetting()
 	//vzm::SetRenderTestParam3("_int_RendererType", (int)111, 0, 0, loaded_vol_id);
 
 	// for vr, clipping
-	//vzm::SetRenderTestParam3("_int_ClippingMode", (int)2, 0, 0, loaded_vol_id);
-	//vzm::SetRenderTestParam3("_matrix44_MatrixClipWS2BS", glm::dmat4x4(matClipWS2BS), 0, 0, loaded_vol_id);
-	//vzm::SetRenderTestParam3("_double3_PosClipBoxMaxWS", glm::dvec3(*(glm::fvec3*)boxTr.pos_maxbox_ws), 0, 0, loaded_vol_id);
+	vzm::SetRenderTestParam3("_int_ClippingMode", (int)2, 0, 0, loaded_vol_id);
+	vzm::SetRenderTestParam3("_matrix44_MatrixClipWS2BS", glm::dmat4x4(matClipWS2BS), 0, 0, loaded_vol_id);
+	vzm::SetRenderTestParam3("_double3_PosClipBoxMaxWS", glm::dvec3(*(glm::fvec3*)boxTr.pos_maxbox_ws), 0, 0, loaded_vol_id);
 	//
 	//vzm::SetRenderTestParam3("_int_ClippingMode", (int)2, 0, 0, loaded_mesh_id);
 	//vzm::SetRenderTestParam3("_matrix44_MatrixClipWS2BS", glm::dmat4x4(matClipWS2BS), 0, 0, loaded_mesh_id);
