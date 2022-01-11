@@ -31,47 +31,46 @@ BOOL                InitInstance(HINSTANCE, int);
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
 
-auto transformPos = [](const glm::fvec3& pos, const glm::fmat4x4& m)
-{
-	glm::fvec4 pos4 = glm::fvec4(pos, 1);
-	pos4 = m * pos4;
-	pos4 /= pos4.w;
-	return glm::fvec3(pos4);
-};
-
-auto transformVec = [](const glm::fvec3& vec, const glm::fmat4x4& m)
-{
-	glm::fvec4 vec4 = glm::fvec4(vec, 0);
-	vec4 = m * vec4;
-	return glm::fvec3(vec4);
-};
-
-std::string GetDataPath()
-{
-	using namespace std;
-	char ownPth[2048];
-	GetModuleFileNameA(NULL, ownPth, (sizeof(ownPth)));
-	string exe_path = ownPth;
-	string exe_path_;
-	size_t pos = 0;
-	std::string token;
-	string delimiter = "\\";
-	while ((pos = exe_path.find(delimiter)) != std::string::npos) {
-		token = exe_path.substr(0, pos);
-		if (token.find(".exe") != std::string::npos) break;
-		exe_path += token + "\\";
-		exe_path_ += token + "\\";
-		exe_path.erase(0, pos + delimiter.length());
-	}
-	return exe_path_ + "..\\..\\data\\";
-}
-
-
 void EngineSetting()
 {
+	auto getdatapath = []()
+	{
+		using namespace std;
+		char ownPth[2048];
+		GetModuleFileNameA(NULL, ownPth, (sizeof(ownPth)));
+		string exe_path = ownPth;
+		string exe_path_;
+		size_t pos = 0;
+		std::string token;
+		string delimiter = "\\";
+		while ((pos = exe_path.find(delimiter)) != std::string::npos) {
+			token = exe_path.substr(0, pos);
+			if (token.find(".exe") != std::string::npos) break;
+			exe_path += token + "\\";
+			exe_path_ += token + "\\";
+			exe_path.erase(0, pos + delimiter.length());
+		}
+		return exe_path_ + "..\\..\\data\\";
+	};
+
+	auto transformPos = [](const glm::fvec3& pos, const glm::fmat4x4& m)
+	{
+		glm::fvec4 pos4 = glm::fvec4(pos, 1);
+		pos4 = m * pos4;
+		pos4 /= pos4.w;
+		return glm::fvec3(pos4);
+	};
+
+	auto transformVec = [](const glm::fvec3& vec, const glm::fmat4x4& m)
+	{
+		glm::fvec4 vec4 = glm::fvec4(vec, 0);
+		vec4 = m * vec4;
+		return glm::fvec3(vec4);
+	};
+
 	// loading model resources
 	int loaded_vol2_id = 0;
-	vzm::LoadModelFile(GetDataPath() + "result(dcm)\\FILE0.dcm", loaded_vol2_id, true);
+	vzm::LoadModelFile(getdatapath() + "result(dcm)\\FILE0.dcm", loaded_vol2_id, true);
 
 	unsigned short** slices;
 	int stride;
@@ -90,7 +89,7 @@ void EngineSetting()
 
 
 	int loaded_mesh_id = 0;
-	vzm::LoadModelFile(GetDataPath() + "stl\\PreparationScan_simple2.stl", loaded_mesh_id, true);
+	vzm::LoadModelFile(getdatapath() + "stl\\PreparationScan_simple2.stl", loaded_mesh_id, true);
 
 	int vr_tmap_id = 0;
 	std::vector<glm::fvec2> alpha_ctrs;
