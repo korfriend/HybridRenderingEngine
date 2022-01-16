@@ -1570,6 +1570,71 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 	return true;
 }
 
+bool grd_helper::UpdateSwapChain(GpuRes& gres, const VmIObject* iobj, const HWND hwnd)
+{
+	gres.vm_src_id = iobj->GetObjectID();
+	gres.res_name = "SCBackBuffer";
+
+	if (g_pCGpuManager->UpdateGpuResource(gres))
+		return true;
+
+	IDXGIFactory2* pdxgiFactory2 = NULL;
+	g_pCGpuManager->GetDeviceInformation(&pdxgiFactory2, "DEVICE_DXGI2");
+
+	vmint2 fb_size;
+	((VmIObject*)iobj)->GetFrameBufferInfo(&fb_size);
+
+	DXGI_SWAP_CHAIN_DESC1 sd = {};
+	sd.Width = fb_size.x;
+	sd.Height = fb_size.y;
+	sd.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	sd.SampleDesc.Count = 1;
+	sd.SampleDesc.Quality = 0;
+	sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+	sd.BufferCount = 2;
+
+	IDXGISwapChain* dxgiSwapChain;
+	IDXGISwapChain1* dxgiSwapChain1;
+
+	HRESULT hr = pdxgiFactory2->CreateSwapChainForHwnd(g_pvmCommonParams->dx11Device, hwnd, &sd, nullptr, nullptr, &dxgiSwapChain1);
+	if (SUCCEEDED(hr))
+		hr = dxgiSwapChain1->QueryInterface(IID_PPV_ARGS(&dxgiSwapChain));
+
+}
+
+bool grd_helper::UpdateBackBuffer(GpuRes& gres, const VmIObject* iobj, const HWND hwnd) 
+{
+	// resize 대신 재생성으로 테스트...
+	gres.vm_src_id = iobj->GetObjectID();
+	gres.res_name = "SCBackBuffer";
+
+	if (g_pCGpuManager->UpdateGpuResource(gres))
+		return true;
+
+	IDXGIFactory2* pdxgiFactory2 = NULL;
+	g_pCGpuManager->GetDeviceInformation(&pdxgiFactory2, "DEVICE_DXGI2");
+
+	vmint2 fb_size;
+	((VmIObject*)iobj)->GetFrameBufferInfo(&fb_size);
+
+	DXGI_SWAP_CHAIN_DESC1 sd = {};
+	sd.Width = fb_size.x;
+	sd.Height = fb_size.y;
+	sd.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	sd.SampleDesc.Count = 1;
+	sd.SampleDesc.Quality = 0;
+	sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+	sd.BufferCount = 2;
+
+	IDXGISwapChain* dxgiSwapChain;
+	IDXGISwapChain1* dxgiSwapChain1;
+
+	HRESULT hr = pdxgiFactory2->CreateSwapChainForHwnd(g_pvmCommonParams->dx11Device, hwnd, &sd, nullptr, nullptr, &dxgiSwapChain1);
+	if (SUCCEEDED(hr))
+		hr = dxgiSwapChain1->QueryInterface(IID_PPV_ARGS(&dxgiSwapChain));
+
+}
+
 bool grd_helper::UpdateFrameBuffer(GpuRes& gres,
 	const VmIObject* iobj,
 	const string& res_name,

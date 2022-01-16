@@ -66,6 +66,11 @@ static D3D_FEATURE_LEVEL g_eFeatureLevel = (D3D_FEATURE_LEVEL)0xb300;
 static DXGI_ADAPTER_DESC g_adapterDesc;
 static GPUResMap g_mapVmResources;
 
+IDXGIDevice* g_pdxgiDevice = NULL;
+IDXGIAdapter* g_pdxgiAdapter = NULL;
+IDXGIFactory1* g_pdxgiFactory = NULL;
+IDXGIFactory2* g_pdxgiFactory2 = NULL;
+
 bool __InitializeDevice()
 {
 	if (g_pdx11Device || g_pdx11DeviceImmContext)
@@ -150,13 +155,11 @@ bool __InitializeDevice()
 	debugDev->ReportLiveDeviceObjects(D3D11_RLDO_IGNORE_INTERNAL );
 #endif
 
-	IDXGIDevice * pDXGIDevice;
-	g_pdx11Device->QueryInterface(__uuidof(IDXGIDevice), (void **)&pDXGIDevice);
-	IDXGIAdapter * pDXGIAdapter;
-	pDXGIDevice->GetAdapter(&pDXGIAdapter);
-	pDXGIAdapter->GetDesc(&g_adapterDesc);
-	VMSAFE_RELEASE(pDXGIDevice);
-	VMSAFE_RELEASE(pDXGIAdapter);
+	g_pdx11Device->QueryInterface(IID_PPV_ARGS(&g_pdxgiDevice));
+	g_pdxgiDevice->GetAdapter(&g_pdxgiAdapter);
+	g_pdxgiAdapter->GetParent(IID_PPV_ARGS(&g_pdxgiFactory));
+	g_pdxgiFactory->QueryInterface(IID_PPV_ARGS(&g_pdxgiFactory2));
+	g_pdxgiAdapter->GetDesc(&g_adapterDesc);
 
 	// 0x10DE : NVIDIA
 	// 0x1002, 0x1022 : AMD ATI
@@ -182,6 +185,12 @@ bool __DeinitializeDevice()
 	__ReleaseAllGpuResources();
 	g_pdx11DeviceImmContext->Flush();
 	g_pdx11DeviceImmContext->ClearState();
+
+	VMSAFE_RELEASE(g_pdxgiFactory);
+	VMSAFE_RELEASE(g_pdxgiFactory2);
+	VMSAFE_RELEASE(g_pdxgiDevice);
+	VMSAFE_RELEASE(g_pdxgiAdapter);
+
 #ifdef USE_DX11_3
 	VMSAFE_RELEASE(g_pdx11DeviceImmContext3);
 	VMSAFE_RELEASE(g_pdx11Device3);
@@ -209,34 +218,40 @@ bool __GetGpuMemoryBytes(uint* dedicatedGpuMemory, uint* freeMemory)
 
 bool __GetDeviceInformation(void* devInfo, const string& devSpecification)
 {
-	if (devSpecification.compare(("DEVICE_POINTER")) == 0)
+	if (devSpecification.compare("DEVICE_POINTER") == 0)
 	{
 		void** ppvDev = (void**)devInfo;
 		*ppvDev = (void*)g_pdx11Device;
 	}
-	else if (devSpecification.compare(("DEVICE_CONTEXT_POINTER")) == 0)
+	else if (devSpecification.compare("DEVICE_CONTEXT_POINTER") == 0)
 	{
 		void** ppvDev = (void**)devInfo;
 		*ppvDev = (void*)g_pdx11DeviceImmContext;
 	}
 #ifdef USE_DX11_3
-	else if (devSpecification.compare(("DEVICE_POINTER_3")) == 0)
+	else if (devSpecification.compare("DEVICE_POINTER_3") == 0)
 	{
 		void** ppvDev = (void**)devInfo;
 		*ppvDev = (void*)g_pdx11Device3;
 	}
-	else if (devSpecification.compare(("DEVICE_CONTEXT_POINTER_3")) == 0)
+	else if (devSpecification.compare("DEVICE_CONTEXT_POINTER_3") == 0)
 	{
 		void** ppvDev = (void**)devInfo;
 		*ppvDev = (void*)g_pdx11DeviceImmContext3;
 	}
 #endif
-	else if (devSpecification.compare(("DEVICE_ADAPTER_DESC")) == 0)
+	else if (devSpecification.compare("DEVICE_ADAPTER_DESC") == 0)
 	{
 		DXGI_ADAPTER_DESC* pdx11Adapter = (DXGI_ADAPTER_DESC*)devInfo;
 		*pdx11Adapter = g_adapterDesc;
 	}
-	else if (devSpecification.compare(("FEATURE_LEVEL")) == 0)
+	else if (devSpecification.compare("DEVICE_DXGI2") == 0)
+	{
+		void** ppvDev = (void**)devInfo;
+		*ppvDev = g_pdxgiFactory2;
+		//*ppvDev = g_pdxgiFactory2 ? (void*)g_pdxgiFactory2 : (void*)g_pdxgiFactory;
+	}
+	else if (devSpecification.compare("FEATURE_LEVEL") == 0)
 	{
 		D3D_FEATURE_LEVEL* pdx11FeatureLevel = (D3D_FEATURE_LEVEL*)devInfo;
 		*pdx11FeatureLevel = g_eFeatureLevel;
@@ -578,6 +593,8 @@ bool __ReleaseGpuResource(GpuRes& gres, const bool call_clearstate)
 		return false;
 
 	g_pdx11DeviceImmContext->Flush();
+
+	// add swapchain case...
 
 	std::map<DesType, void*>& alloc_res_ptrs = itrResDX11->second.alloc_res_ptrs;
 	for (auto it = alloc_res_ptrs.begin(); it != alloc_res_ptrs.end(); it++)

@@ -151,6 +151,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #pragma endregion // SHADER SETTING
 
 #pragma region // IOBJECT OUT
+	HWND hWnd = (HWND)_fncontainer->GetParamValue("_hwnd_WindowHandle", (HWND)NULL);
+
 	while (iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, 1) != NULL)
 		iobj->DeleteFrameBuffer(FrameBufferUsageRENDEROUT, 1);
 	if (!iobj->ReplaceFrameBuffer(FrameBufferUsageRENDEROUT, 0, data_type::dtype<vmbyte4>(), ("common render out frame buffer : defined in vismtv_inbuilt_renderergpudx module")))

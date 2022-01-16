@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iostream>
 #include <cmath>
+#include <windows.h>
 //#include <opencv2/imgproc.hpp>
 //#include <opencv2/highgui.hpp>
 
@@ -846,7 +847,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	double* run_time_ptr)
 {
 	using namespace std::chrono;
-	
+
 	vector<VmObject*> input_pobjs;
 	_fncontainer->GetVmObjectList(&input_pobjs, VmObjKey(ObjectTypePRIMITIVE, true));
 
@@ -953,7 +954,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #define SET_PS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(PIXEL_SHADER, NAME), __S, true)
 #define SET_CS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(COMPUTE_SHADER, NAME), __S, true)
 #define SET_GS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GEOMETRY_SHADER, NAME), __S, true)
-		
+
 		string strNames_VS[VS_NUM] = {
 			   "SR_OIT_P_vs_5_0"
 			  ,"SR_OIT_PN_vs_5_0"
@@ -1073,33 +1074,33 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			  ,"SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ROV_ps_5_0"
 
 			  ,"SR_SINGLE_LAYER_ps_5_0"
-			  //,"SR_OIT_KDEPTH_NPRGHOST_ps_5_0"
+			//,"SR_OIT_KDEPTH_NPRGHOST_ps_5_0"
 
-			  ,"SR_OIT_ABUFFER_FRAGCOUNTER_ps_5_0"
-			  ,"SR_OIT_ABUFFER_FRAGCOUNTER_MTT_ps_5_0"
-			  ,"SR_OIT_ABUFFER_PHONGBLINN_ps_5_0"
-			  ,"SR_OIT_ABUFFER_DASHEDLINE_ps_5_0"
-			  ,"SR_OIT_ABUFFER_MULTITEXTMAPPING_ps_5_0"
-			  ,"SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0"
-			  ,"SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0"
+			,"SR_OIT_ABUFFER_FRAGCOUNTER_ps_5_0"
+			,"SR_OIT_ABUFFER_FRAGCOUNTER_MTT_ps_5_0"
+			,"SR_OIT_ABUFFER_PHONGBLINN_ps_5_0"
+			,"SR_OIT_ABUFFER_DASHEDLINE_ps_5_0"
+			,"SR_OIT_ABUFFER_MULTITEXTMAPPING_ps_5_0"
+			,"SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0"
+			,"SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0"
 
-			  ,"SR_MOMENT_GEN_ps_5_0"
-			  ,"SR_MOMENT_GEN_TEXT_ps_5_0"
-			  ,"SR_MOMENT_GEN_MTT_ps_5_0"
-			  ,"SR_MOMENT_OIT_PHONGBLINN_ps_5_0"
-			  ,"SR_MOMENT_OIT_DASHEDLINE_ps_5_0"
-			  ,"SR_MOMENT_OIT_MULTITEXTMAPPING_ps_5_0"
-			  ,"SR_MOMENT_OIT_TEXTMAPPING_ps_5_0"
-			  ,"SR_MOMENT_OIT_TEXTUREIMGMAP_ps_5_0"
+			,"SR_MOMENT_GEN_ps_5_0"
+			,"SR_MOMENT_GEN_TEXT_ps_5_0"
+			,"SR_MOMENT_GEN_MTT_ps_5_0"
+			,"SR_MOMENT_OIT_PHONGBLINN_ps_5_0"
+			,"SR_MOMENT_OIT_DASHEDLINE_ps_5_0"
+			,"SR_MOMENT_OIT_MULTITEXTMAPPING_ps_5_0"
+			,"SR_MOMENT_OIT_TEXTMAPPING_ps_5_0"
+			,"SR_MOMENT_OIT_TEXTUREIMGMAP_ps_5_0"
 
-			  ,"SR_MOMENT_GEN_ROV_ps_5_0"
-			  ,"SR_MOMENT_GEN_TEXT_ROV_ps_5_0"
-			  ,"SR_MOMENT_GEN_MTT_ROV_ps_5_0"
-			  ,"SR_MOMENT_OIT_PHONGBLINN_ROV_ps_5_0"
-			  ,"SR_MOMENT_OIT_DASHEDLINE_ROV_ps_5_0"
-			  ,"SR_MOMENT_OIT_MULTITEXTMAPPING_ROV_ps_5_0"
-			  ,"SR_MOMENT_OIT_TEXTMAPPING_ROV_ps_5_0"
-			  ,"SR_MOMENT_OIT_TEXTUREIMGMAP_ROV_ps_5_0"
+			,"SR_MOMENT_GEN_ROV_ps_5_0"
+			,"SR_MOMENT_GEN_TEXT_ROV_ps_5_0"
+			,"SR_MOMENT_GEN_MTT_ROV_ps_5_0"
+			,"SR_MOMENT_OIT_PHONGBLINN_ROV_ps_5_0"
+			,"SR_MOMENT_OIT_DASHEDLINE_ROV_ps_5_0"
+			,"SR_MOMENT_OIT_MULTITEXTMAPPING_ROV_ps_5_0"
+			,"SR_MOMENT_OIT_TEXTMAPPING_ROV_ps_5_0"
+			,"SR_MOMENT_OIT_TEXTUREIMGMAP_ROV_ps_5_0"
 		};
 
 		for (int i = 0; i < PS_NUM; i++)
@@ -1128,7 +1129,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				VMSAFE_DELETEARRAY(pyRead);
 			}
 		}
-		
+
 		string strNames_CS[CS_NUM] = {
 			   "OIT_SKBZ_RESOLVE_cs_5_0"
 			  ,"SR_SINGLE_LAYER_TO_SKBTZ_cs_5_0"
@@ -1211,6 +1212,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #pragma endregion // Shader Setting
 
 #pragma region // IOBJECT CPU
+	HWND hWnd = (HWND)_fncontainer->GetParamValue("_hwnd_WindowHandle", (HWND)NULL);
+
 	while (iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, 1) != NULL)
 		iobj->DeleteFrameBuffer(FrameBufferUsageRENDEROUT, 1);
 	if (!iobj->ReplaceFrameBuffer(FrameBufferUsageRENDEROUT, 0, data_type::dtype<vmbyte4>(), ("common render out frame buffer : defined in vismtv_inbuilt_renderergpudx module")))

@@ -92,7 +92,6 @@ namespace grd_helper
 #ifdef __DX_DEBUG_QUERY
 		ID3D11InfoQueue* debug_info_queue;
 #endif
-
 		std::function<void(GpuhelperResType res_type, ID3D11DeviceChild* res)> __check_and_release = [](GpuhelperResType res_type, ID3D11DeviceChild* res)
 		{
 			res->Release();
@@ -257,6 +256,8 @@ namespace grd_helper
 			for (int i = 0; i < MAXSTAMPS; i++)
 				dx11qr_timestamps[i] = NULL;
 			dx11qr_disjoint = NULL;
+			dxgiSwapChain = NULL;
+			dxgiSwapChain1 = NULL;
 		}
 
 		void Delete()
@@ -341,6 +342,8 @@ namespace grd_helper
 		const int fb_flag,
 		const int num_frags_perpixel = 1,
 		const int structured_stride = 0);
+
+	bool UpdateBackBuffer(GpuRes& gres, const VmIObject* iobj, const HWND hwnd);
 
 	bool CheckOtfAndVolBlobkUpdate(VmVObjectVolume* vobj, VmTObject* tobj);
 
