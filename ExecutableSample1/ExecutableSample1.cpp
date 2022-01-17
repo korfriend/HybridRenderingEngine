@@ -175,6 +175,7 @@ void EngineSetting()
 	mpr_cam_params.projection_mode = 4;
 	mpr_cam_params.w = w;
 	mpr_cam_params.h = h;
+	mpr_cam_params.hWnd = hWnd;
 
 	vzm::SceneEnvParameters scn_env_params;
 	scn_env_params.is_on_camera = true;
