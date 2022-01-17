@@ -39,6 +39,7 @@ DAMAGE.
 #include <map>
 #include <any>
 #include <list>
+#include <windows.h>
 
 #define VERSION "2.0" // released at 22.01.10
 
@@ -65,10 +66,13 @@ namespace vzm
 		float np, fp; // the scale difference is recommended : ~100000 (in a single precision (float))
 		int w, h; // resolution. note that the aspect ratio is recomputed w.r.t. w and h during the camera setting.
 		bool is_rgba_write; // if false, use BGRA order
+		HWND hWnd; // if NULL, offscreen rendering is performed
 		CameraParameters() {
 			projection_mode = 0; is_rgba_write = false; 
 			np = 0.01f, fp = 1000.f;
+			hWnd = NULL;
 		};
+
 	};
 
 	struct ObjStates
@@ -219,6 +223,8 @@ namespace vzm
 	__dojostatic bool RenderScene(const int scene_id, const int cam_id = 0);
 	__dojostatic bool GetRenderBufferPtrs(const int scene_id, unsigned char** ptr_rgba, float** ptr_zdepth, int* fbuf_w, int* fbuf_h, const int cam_id = 0, size_t* render_count = NULL);
 
+	__dojostatic bool RemoveDXGI(const HWND hWnd);
+	__dojostatic bool PresentDXGI(const HWND hWnd);
 	// etc
 	__dojostatic bool GetPModelData(const int obj_id, float** pos_vtx, float** nrl_vtx, float** rgb_vtx, float** tex_vtx, int& num_vtx, unsigned int** idx_prims, int& num_prims, int& stride_prim_idx);
 	__dojostatic bool GetVolumeInfo(const int obj_id, void*** vol_slices_2darray_pointer, int* size_xyz, float* pitch_xyz, int* stride_bytes, bool* safe_bnd);

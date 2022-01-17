@@ -53,8 +53,20 @@ struct _gp_lobj_buffer {
 	int elements;
 };
 
+struct _gp_dxgiPresenter {
+	DXGI_SWAP_CHAIN_DESC1 sd;
+	IDXGISwapChain* dxgiSwapChain;
+	IDXGISwapChain1* dxgiSwapChain1;
+	IDXGIFactory1* pdxgiFactory = NULL;
+	IDXGIFactory2* pdxgiFactory2 = NULL;
+	ID3D11Texture2D* pBackBuffer = NULL; // used for CopyResource
+	ID3D11RenderTargetView* pRTView = NULL;
+};
+
 typedef map<RES_INDICATOR, GpuRes, valueComp> GPUResMap;
 map<string, _gp_lobj_buffer> g_mapCustomParameters;
+
+map<HWND, _gp_dxgiPresenter> g_mapDxgiPrensentor;
 
 static ID3D11Device* g_pdx11Device = NULL;
 static ID3D11DeviceContext* g_pdx11DeviceImmContext = NULL;
@@ -68,8 +80,6 @@ static GPUResMap g_mapVmResources;
 
 IDXGIDevice* g_pdxgiDevice = NULL;
 IDXGIAdapter* g_pdxgiAdapter = NULL;
-IDXGIFactory1* g_pdxgiFactory = NULL;
-IDXGIFactory2* g_pdxgiFactory2 = NULL;
 
 bool __InitializeDevice()
 {
@@ -157,8 +167,6 @@ bool __InitializeDevice()
 
 	g_pdx11Device->QueryInterface(IID_PPV_ARGS(&g_pdxgiDevice));
 	g_pdxgiDevice->GetAdapter(&g_pdxgiAdapter);
-	g_pdxgiAdapter->GetParent(IID_PPV_ARGS(&g_pdxgiFactory));
-	g_pdxgiFactory->QueryInterface(IID_PPV_ARGS(&g_pdxgiFactory2));
 	g_pdxgiAdapter->GetDesc(&g_adapterDesc);
 
 	// 0x10DE : NVIDIA
@@ -186,8 +194,6 @@ bool __DeinitializeDevice()
 	g_pdx11DeviceImmContext->Flush();
 	g_pdx11DeviceImmContext->ClearState();
 
-	VMSAFE_RELEASE(g_pdxgiFactory);
-	VMSAFE_RELEASE(g_pdxgiFactory2);
 	VMSAFE_RELEASE(g_pdxgiDevice);
 	VMSAFE_RELEASE(g_pdxgiAdapter);
 
@@ -247,8 +253,8 @@ bool __GetDeviceInformation(void* devInfo, const string& devSpecification)
 	}
 	else if (devSpecification.compare("DEVICE_DXGI2") == 0)
 	{
-		void** ppvDev = (void**)devInfo;
-		*ppvDev = g_pdxgiFactory2;
+		//void** ppvDev = (void**)devInfo;
+		//*ppvDev = g_pdxgiFactory2;
 		//*ppvDev = g_pdxgiFactory2 ? (void*)g_pdxgiFactory2 : (void*)g_pdxgiFactory;
 	}
 	else if (devSpecification.compare("FEATURE_LEVEL") == 0)
@@ -275,6 +281,126 @@ ullong __GetUsedGpuMemorySizeBytes()
 		}
 	}
 	return (ullong)(ullSizeBytes);
+}
+
+bool __UpdateDXGI(void** ppBackBuffer, void** ppRTView, const HWND hwnd, const int w, const int h)
+{
+	// g_mapDxgiPrensentor
+	// g_pdxgiFactory
+	auto it = g_mapDxgiPrensentor.find(hwnd);
+	int w_prev = w, h_prev = h;
+	if (it == g_mapDxgiPrensentor.end())
+	{
+		_gp_dxgiPresenter _dxgi = {};
+		g_pdxgiAdapter->GetParent(IID_PPV_ARGS(&_dxgi.pdxgiFactory));
+		_dxgi.pdxgiFactory->QueryInterface(IID_PPV_ARGS(&_dxgi.pdxgiFactory2));
+
+		// create and register
+		_dxgi.sd = {};
+		_dxgi.sd.Width = w;
+		_dxgi.sd.Height = h;
+		_dxgi.sd.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		_dxgi.sd.SampleDesc.Count = 1;
+		_dxgi.sd.SampleDesc.Quality = 0;
+		_dxgi.sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+		_dxgi.sd.BufferCount = 2;
+
+		HRESULT hr = _dxgi.pdxgiFactory2->CreateSwapChainForHwnd(g_pdx11Device, hwnd, &_dxgi.sd, nullptr, nullptr, &_dxgi.dxgiSwapChain1);
+		if (SUCCEEDED(hr))
+			hr = _dxgi.dxgiSwapChain1->QueryInterface(IID_PPV_ARGS(&_dxgi.dxgiSwapChain));
+
+		hr = _dxgi.dxgiSwapChain->GetBuffer(0, IID_PPV_ARGS(&_dxgi.pBackBuffer));
+		if (FAILED(hr))
+			return false;
+		
+		hr = g_pdx11Device->CreateRenderTargetView(_dxgi.pBackBuffer, nullptr, &_dxgi.pRTView);
+		if (FAILED(hr))
+			return false;
+
+		g_mapDxgiPrensentor.insert(pair<HWND, _gp_dxgiPresenter>(hwnd, _dxgi));
+	}
+	else {
+		w_prev = (int)it->second.sd.Width;
+		h_prev = (int)it->second.sd.Height;
+
+		if (w_prev == w && h_prev == h) {
+			// no changes
+			*ppBackBuffer = it->second.pBackBuffer;
+			*ppRTView = it->second.pRTView;
+			return true;
+		}
+	}
+
+	_gp_dxgiPresenter& dxgiPresenter = g_mapDxgiPrensentor[hwnd];
+
+	if (w != w_prev || h != h_prev) {
+		VMSAFE_RELEASE(dxgiPresenter.pRTView);
+		VMSAFE_RELEASE(dxgiPresenter.pBackBuffer);
+		// resize case ...
+		// the output resources must be released priorly
+		dxgiPresenter.sd.Width = w;
+		dxgiPresenter.sd.Height = h;
+
+		HRESULT hr = dxgiPresenter.dxgiSwapChain->ResizeBuffers(dxgiPresenter.sd.BufferCount, 
+			w, h, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+
+		if (FAILED(hr))
+			return false;
+
+		hr = dxgiPresenter.dxgiSwapChain->GetBuffer(0, IID_PPV_ARGS(&dxgiPresenter.pBackBuffer));
+		if (FAILED(hr))
+			return false;
+
+		hr = g_pdx11Device->CreateRenderTargetView(dxgiPresenter.pBackBuffer, nullptr, &dxgiPresenter.pRTView);
+		if (FAILED(hr))
+			return false;
+	}
+
+	*ppBackBuffer = dxgiPresenter.pBackBuffer;
+	*ppRTView = dxgiPresenter.pRTView;
+
+	return true;
+}
+
+bool __PresentBackBuffer(const HWND hwnd)
+{
+	auto it = g_mapDxgiPrensentor.find(hwnd);
+	if (it == g_mapDxgiPrensentor.end())
+		return false;
+
+	it->second.dxgiSwapChain->Present(0, 0);
+	return true;
+}
+
+bool __ReleaseDXGI(const HWND hwnd)
+{
+	auto it = g_mapDxgiPrensentor.find(hwnd);
+	if (it == g_mapDxgiPrensentor.end())
+		return false;
+
+	VMSAFE_RELEASE(it->second.pBackBuffer);
+	VMSAFE_RELEASE(it->second.pRTView);
+	VMSAFE_RELEASE(it->second.dxgiSwapChain1);
+	VMSAFE_RELEASE(it->second.dxgiSwapChain);
+	VMSAFE_RELEASE(it->second.pdxgiFactory2);
+	VMSAFE_RELEASE(it->second.pdxgiFactory);
+
+	return true;
+}
+
+bool __ReleaseAllDXGIs()
+{
+	for (auto it = g_mapDxgiPrensentor.begin(); it != g_mapDxgiPrensentor.end(); it++) {
+		VMSAFE_RELEASE(it->second.pBackBuffer);
+		VMSAFE_RELEASE(it->second.pRTView);
+		VMSAFE_RELEASE(it->second.dxgiSwapChain1);
+		VMSAFE_RELEASE(it->second.dxgiSwapChain);
+		VMSAFE_RELEASE(it->second.pdxgiFactory2);
+		VMSAFE_RELEASE(it->second.pdxgiFactory);
+	}
+	g_mapDxgiPrensentor.clear();
+
+	return true;
 }
 
 bool __UpdateGpuResource(GpuRes& gres)
@@ -668,6 +794,8 @@ bool __ReleaseAllGpuResources()
 		__ReleaseGpuResource(itrResDX11->second, false);
 		itrResDX11 = g_mapVmResources.begin();
 	}
+
+	__ReleaseAllDXGIs();
 
 	g_pdx11DeviceImmContext->Flush();
 	g_pdx11DeviceImmContext->ClearState();

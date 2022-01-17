@@ -256,8 +256,6 @@ namespace grd_helper
 			for (int i = 0; i < MAXSTAMPS; i++)
 				dx11qr_timestamps[i] = NULL;
 			dx11qr_disjoint = NULL;
-			dxgiSwapChain = NULL;
-			dxgiSwapChain1 = NULL;
 		}
 
 		void Delete()
@@ -342,8 +340,6 @@ namespace grd_helper
 		const int fb_flag,
 		const int num_frags_perpixel = 1,
 		const int structured_stride = 0);
-
-	bool UpdateBackBuffer(GpuRes& gres, const VmIObject* iobj, const HWND hwnd);
 
 	bool CheckOtfAndVolBlobkUpdate(VmVObjectVolume* vobj, VmTObject* tobj);
 

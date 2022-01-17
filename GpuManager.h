@@ -106,10 +106,23 @@ namespace vmgpuinterface
 		 * @brief 해당 VmObject 와 관련된 모든 GPU resource를 얻음
 		 * @param src_id [in] \n int \n VmObject의 ID
 		 * @param gres_list [out] \n vector<SVXGPUResourceArchive*> \n 해당 VXObject 와 관련된 모든 GPU resource가 vector list로 저장
-		 * @return uint \n GPU resource로 등록된 자료구조를 성공적으로 얻으면 true, 그렇지 않으면 false 반환
+		 * @return uint \n GPU resource로 등록된 자료구조의 개수
 		 * @remarks 모든 GPU SDK에 대하여 동작
 		 */
 		int UpdateGpuResourcesBySrcID(const int src_id, vector<GpuRes>& gres_list/*out*/);
+		
+		/*!
+		 * @brief 윈도우 핸들로부터 DXGI 리소스 설정 (Swapchain). 윈도우 리사이즈 시에도 호출.
+		 * @param ppBackBuffer [out] \n void \n Swapchain 에 연결된 Backbuffer (Texture2D) 를 가리키는 Pointer
+		 * @param ppRTView [out] \n void \n *ppBackBuffer 로부터 만들어진 Rendertarget View Pointer
+		 * @return bool \n GPU resource로 등록된 자료구조를 성공적으로 얻으면 true, 그렇지 않으면 false 반환
+		 * @remarks DX11 GPU SDK에 대하여 동작
+		 */
+		bool UpdateDXGI(void** ppBackBuffer, void** ppRTView, const HWND hwnd, const int w, const int h);
+		bool PresentBackBuffer(const HWND hwnd);
+		bool ReleaseDXGI(const HWND hwnd);
+		bool ReleaseAllDXGIs();
+
 		/*!
 		 * @brief GPU resource를 생성 및 등록하는 함수
 		 * @param gres [in/out] \n GpuRes \n 내부의 res_name 및 vm_src_id 으로 정의되어 있는 resouece 를 저장

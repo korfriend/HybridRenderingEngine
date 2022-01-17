@@ -119,13 +119,19 @@ void EngineSetting()
 	volume_state.is_visible = true; // see ObjStates
 
 	// register objects in scene ID = 0
-	vzm::ReplaceOrAddSceneObject(0, loaded_vol_id, volume_state);
+	//vzm::ReplaceOrAddSceneObject(0, loaded_vol_id, volume_state);
 	vzm::ObjStates obj_state;
 	obj_state.color[3] = 0.7f; // control for transparency
 	vzm::ReplaceOrAddSceneObject(0, loaded_mesh_id, obj_state);
 
 	int iso_mesh_id = 0;
 	vzm::GenerateIsoSurfaceObject(loaded_vol_id, 2500, 4, 0, 0, NULL, iso_mesh_id);
+
+	glm::fvec3 *pos_vtx = NULL, *nrl_vtx = NULL, *clr_vtx = NULL, *tex_vtx = NULL;
+	unsigned int* idx_mesh = NULL;
+	int num_vtx, num_tris, stride_idx;
+	vzm::GetPModelData(iso_mesh_id, (float**)&pos_vtx, (float**)&nrl_vtx, (float**)&clr_vtx, (float**)&tex_vtx,
+		num_vtx, &idx_mesh, num_tris, stride_idx);
 
 	*(glm::fvec4*)obj_state.color = glm::fvec4(0, 0.5, 1, 0.3);
 	vzm::ReplaceOrAddSceneObject(0, iso_mesh_id, obj_state);
@@ -153,6 +159,8 @@ void EngineSetting()
 	vr_cam_params.projection_mode = 2;
 	vr_cam_params.w = w;
 	vr_cam_params.h = h;
+	vr_cam_params.hWnd = hWnd;
+
 	vr_cam_params.aspect_ratio = (float)vr_cam_params.w / (float)vr_cam_params.h;
 
 	// mpr cam (image slicer) setting
@@ -175,8 +183,8 @@ void EngineSetting()
 	*(glm::fvec3*)scn_env_params.dir_light = *(glm::fvec3*)vr_cam_params.view;
 
 	vzm::SetSceneEnvParameters(0, scn_env_params);
-	vzm::SetCameraParameters(0, vr_cam_params, 0);
-	vzm::SetCameraParameters(0, mpr_cam_params, 1);
+	vzm::SetCameraParameters(0, vr_cam_params, 1);
+	vzm::SetCameraParameters(0, mpr_cam_params, 0);
 
 	vzm::ortho_box_transform boxTr;
 	*(glm::fvec3*)boxTr.pos_minbox_ws = glm::dvec3(-20);
@@ -191,14 +199,14 @@ void EngineSetting()
 	//glm::dvec3 dposOrthoMaxWS = *(glm::fvec3*)boxTr.pos_maxbox_ws;
 
 	// for mpr
-	//vzm::SetRenderTestParam3("_double_PlaneThickness", (double)30.0, 0, 0, -1);
-	// default: 100, ray_sum: 110, mip: 111, 
-	//vzm::SetRenderTestParam3("_int_RendererType", (int)111, 0, 0, loaded_vol_id);
+	vzm::SetRenderTestParam3("_double_PlaneThickness", (double)60.0, 0, 0, -1);
+	//// default: 100, ray_sum: 110, mip: 111, 
+	vzm::SetRenderTestParam3("_int_RendererType", (int)111, 0, 0, loaded_vol_id);
 
 	// for vr, clipping
-	vzm::SetRenderTestParam3("_int_ClippingMode", (int)2, 0, 0, loaded_vol_id);
-	vzm::SetRenderTestParam3("_matrix44_MatrixClipWS2BS", glm::dmat4x4(matClipWS2BS), 0, 0, loaded_vol_id);
-	vzm::SetRenderTestParam3("_double3_PosClipBoxMaxWS", glm::dvec3(*(glm::fvec3*)boxTr.pos_maxbox_ws), 0, 0, loaded_vol_id);
+	//vzm::SetRenderTestParam3("_int_ClippingMode", (int)2, 0, 0, loaded_vol_id);
+	//vzm::SetRenderTestParam3("_matrix44_MatrixClipWS2BS", glm::dmat4x4(matClipWS2BS), 0, 0, loaded_vol_id);
+	//vzm::SetRenderTestParam3("_double3_PosClipBoxMaxWS", glm::dvec3(*(glm::fvec3*)boxTr.pos_maxbox_ws), 0, 0, loaded_vol_id);
 	//
 	//vzm::SetRenderTestParam3("_int_ClippingMode", (int)2, 0, 0, loaded_mesh_id);
 	//vzm::SetRenderTestParam3("_matrix44_MatrixClipWS2BS", glm::dmat4x4(matClipWS2BS), 0, 0, loaded_mesh_id);
@@ -215,6 +223,9 @@ void EngineSetting()
 
 void UpdateRenderingResult()
 {
+	vzm::PresentDXGI(hWnd);
+	return;
+
 	unsigned char* ptr_rgba;
 	float* ptr_zdepth;
 	int w, h;
@@ -271,6 +282,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 	EngineSetting();
 	vzm::RenderScene(0, 0);
+
 	UpdateRenderingResult();
 
 	HACCEL hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_EXECUTABLESAMPLE1));
@@ -457,6 +469,25 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		vzm::RenderScene(0, 0);
 
 		InvalidateRect(hWnd, NULL, FALSE);
+		UpdateWindow(hWnd);
+	}
+	break;
+	case WM_SIZE:
+	{
+		RECT rc;
+		GetClientRect(hWnd, &rc);
+		UINT width = rc.right - rc.left;
+		UINT height = rc.bottom - rc.top;
+
+		vzm::CameraParameters camParam;
+		vzm::GetCameraParameters(0, camParam, 0);
+		camParam.w = width;
+		camParam.h = height;
+		vzm::SetCameraParameters(0, camParam, 0);
+
+		vzm::RenderScene(0, 0);
+
+		InvalidateRect(hWnd, NULL, FALSE); // can be removed???
 		UpdateWindow(hWnd);
 	}
 	break;

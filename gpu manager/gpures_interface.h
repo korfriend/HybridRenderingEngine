@@ -19,6 +19,11 @@ __vmstatic ullong __GetUsedGpuMemorySizeBytes();
 __vmstatic bool __UpdateGpuResource(GpuRes& gres);
 __vmstatic int __UpdateGpuResourcesBySrcID(const int src_id, vector<GpuRes>& gres_list);
 
+__vmstatic bool __UpdateDXGI(void** ppBackBuffer, void** ppRTView, const HWND hwnd, const int w, const int h);
+__vmstatic bool __PresentBackBuffer(const HWND hwnd);
+__vmstatic bool __ReleaseDXGI(const HWND hwnd);
+__vmstatic bool __ReleaseAllDXGIs();
+
 __vmstatic bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress = NULL);
 
 __vmstatic bool __ReleaseGpuResource(GpuRes& gres, const bool call_clearstate);

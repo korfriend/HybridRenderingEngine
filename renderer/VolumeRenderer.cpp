@@ -151,8 +151,6 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #pragma endregion // SHADER SETTING
 
 #pragma region // IOBJECT OUT
-	HWND hWnd = (HWND)_fncontainer->GetParamValue("_hwnd_WindowHandle", (HWND)NULL);
-
 	while (iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, 1) != NULL)
 		iobj->DeleteFrameBuffer(FrameBufferUsageRENDEROUT, 1);
 	if (!iobj->ReplaceFrameBuffer(FrameBufferUsageRENDEROUT, 0, data_type::dtype<vmbyte4>(), ("common render out frame buffer : defined in vismtv_inbuilt_renderergpudx module")))
@@ -912,7 +910,19 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		profile_map["end dvr"] = gpu_profilecount;
 		gpu_profilecount++;
 	}
-	const bool is_system_out = true;
+	bool is_system_out = true;
+	// APPLY HWND MODE
+	HWND hWnd = (HWND)_fncontainer->GetParamValue("_hwnd_WindowHandle", (HWND)NULL);
+	if (is_system_out && hWnd)
+	{
+		ID3D11Texture2D* pTex2dHwndRT = NULL;
+		ID3D11RenderTargetView* pHwndRTV = NULL;
+		gpu_manager->UpdateDXGI((void**)&pTex2dHwndRT, (void**)&pHwndRTV, hWnd, fb_size_cur.x, fb_size_cur.y);
+
+		dx11DeviceImmContext->CopyResource(pTex2dHwndRT, (ID3D11Texture2D*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RES]);
+
+		is_system_out = false;
+	}
 	if (is_system_out)
 	{
 		FrameBuffer* fb_rout = (FrameBuffer*)iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, 0);

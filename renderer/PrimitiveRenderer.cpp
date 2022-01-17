@@ -1212,8 +1212,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #pragma endregion // Shader Setting
 
 #pragma region // IOBJECT CPU
-	HWND hWnd = (HWND)_fncontainer->GetParamValue("_hwnd_WindowHandle", (HWND)NULL);
-
 	while (iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, 1) != NULL)
 		iobj->DeleteFrameBuffer(FrameBufferUsageRENDEROUT, 1);
 	if (!iobj->ReplaceFrameBuffer(FrameBufferUsageRENDEROUT, 0, data_type::dtype<vmbyte4>(), ("common render out frame buffer : defined in vismtv_inbuilt_renderergpudx module")))
@@ -2934,6 +2932,20 @@ RENDERER_LOOP_EXIT:
 
 	//cout << "TEST VZ : " << v_thickness << endl;
 	iobj->RegisterCustomParameter("_int_NumCallRenders", count_call_render);
+
+	// APPLY HWND MODE
+	HWND hWnd = (HWND)_fncontainer->GetParamValue("_hwnd_WindowHandle", (HWND)NULL);
+	if (is_final_renderer && hWnd)
+	{
+		ID3D11Texture2D* pTex2dHwndRT = NULL;
+		ID3D11RenderTargetView* pHwndRTV = NULL;
+		gpu_manager->UpdateDXGI((void**)&pTex2dHwndRT, (void**)&pHwndRTV, hWnd, fb_size_cur.x, fb_size_cur.y);
+
+		dx11DeviceImmContext->CopyResource(pTex2dHwndRT, (ID3D11Texture2D*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RES]);
+
+		is_system_out = false;
+	}
+
 	if (is_system_out)
 	{
 		FrameBuffer* fb_rout = (FrameBuffer*)iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, 0);
