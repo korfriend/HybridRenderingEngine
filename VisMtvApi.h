@@ -212,6 +212,7 @@ namespace vzm
 	__dojostatic bool GetSceneBoundingBox(const std::list<int>& io_obj_ids, const int scene_id, float* pos_aabb_min_ws, float* pos_aabb_max_ws);
 	__dojostatic bool RemoveSceneObject(const int scene_id, const int obj_id);
 	__dojostatic bool RemoveScene(const int scene_id);
+	__dojostatic bool RemoveCamera(const int scene_id, const int cam_id);
 	__dojostatic bool DeleteVmObject(const int obj_id); // the obj is deleted in memory
 	__dojostatic bool SetSceneEnvParameters(const int scene_id, const SceneEnvParameters& env_params);
 	__dojostatic bool GetSceneEnvParameters(const int scene_id, SceneEnvParameters& env_params);
@@ -223,8 +224,8 @@ namespace vzm
 	__dojostatic bool RenderScene(const int scene_id, const int cam_id = 0);
 	__dojostatic bool GetRenderBufferPtrs(const int scene_id, unsigned char** ptr_rgba, float** ptr_zdepth, int* fbuf_w, int* fbuf_h, const int cam_id = 0, size_t* render_count = NULL);
 
-	__dojostatic bool RemoveDXGI(const HWND hWnd);
-	__dojostatic bool PresentDXGI(const HWND hWnd);
+	__dojostatic bool RemoveResHWND(const HWND hWnd);
+	__dojostatic bool PresentHWND(const HWND hWnd);
 	// etc
 	__dojostatic bool GetPModelData(const int obj_id, float** pos_vtx, float** nrl_vtx, float** rgb_vtx, float** tex_vtx, int& num_vtx, unsigned int** idx_prims, int& num_prims, int& stride_prim_idx);
 	__dojostatic bool GetVolumeInfo(const int obj_id, void*** vol_slices_2darray_pointer, int* size_xyz, float* pitch_xyz, int* stride_bytes, bool* safe_bnd);
