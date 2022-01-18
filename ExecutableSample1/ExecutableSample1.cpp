@@ -119,7 +119,7 @@ void EngineSetting()
 	volume_state.is_visible = true; // see ObjStates
 
 	// register objects in scene ID = 0
-	//vzm::ReplaceOrAddSceneObject(0, loaded_vol_id, volume_state);
+	vzm::ReplaceOrAddSceneObject(0, loaded_vol_id, volume_state);
 	vzm::ObjStates obj_state;
 	obj_state.color[3] = 0.7f; // control for transparency
 	vzm::ReplaceOrAddSceneObject(0, loaded_mesh_id, obj_state);
@@ -204,7 +204,7 @@ void EngineSetting()
 	int cam_id = 0;
 	vzm::SetRenderTestParam3("_double_PlaneThickness", (double)60.0, scene_id, cam_id, -1);
 	//// default: 100, ray_sum: 110, mip: 111, 
-	vzm::SetRenderTestParam3("_int_RendererType", (int)111, scene_id, cam_id, loaded_vol_id);
+	vzm::SetRenderTestParam3("_int_RendererType", (int)111, 0, 0, loaded_vol_id);
 
 	// for vr, clipping
 	//vzm::SetRenderTestParam3("_int_ClippingMode", (int)2, 0, 0, loaded_vol_id);
@@ -226,7 +226,7 @@ void EngineSetting()
 
 void UpdateRenderingResult()
 {
-	vzm::PresentDXGI(hWnd);
+	vzm::PresentHWND(hWnd);
 	return;
 
 	unsigned char* ptr_rgba;
@@ -490,8 +490,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		vzm::RenderScene(0, 0);
 
-		InvalidateRect(hWnd, NULL, FALSE); // can be removed???
-		UpdateWindow(hWnd);
+		//InvalidateRect(hWnd, NULL, FALSE); // can be removed???
+		//UpdateWindow(hWnd);
 	}
 	break;
 	case WM_DESTROY:
