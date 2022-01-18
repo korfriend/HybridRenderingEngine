@@ -184,8 +184,8 @@ void EngineSetting()
 	*(glm::fvec3*)scn_env_params.dir_light = *(glm::fvec3*)vr_cam_params.view;
 
 	vzm::SetSceneEnvParameters(0, scn_env_params);
-	vzm::SetCameraParameters(0, vr_cam_params, 1);
-	vzm::SetCameraParameters(0, mpr_cam_params, 0);
+	vzm::SetCameraParameters(0, vr_cam_params, 0);
+	vzm::SetCameraParameters(0, mpr_cam_params, 1);
 
 	vzm::ortho_box_transform boxTr;
 	*(glm::fvec3*)boxTr.pos_minbox_ws = glm::dvec3(-20);
@@ -200,9 +200,11 @@ void EngineSetting()
 	//glm::dvec3 dposOrthoMaxWS = *(glm::fvec3*)boxTr.pos_maxbox_ws;
 
 	// for mpr
-	vzm::SetRenderTestParam3("_double_PlaneThickness", (double)60.0, 0, 0, -1);
+	int scene_id = 0;
+	int cam_id = 0;
+	vzm::SetRenderTestParam3("_double_PlaneThickness", (double)60.0, scene_id, cam_id, -1);
 	//// default: 100, ray_sum: 110, mip: 111, 
-	vzm::SetRenderTestParam3("_int_RendererType", (int)111, 0, 0, loaded_vol_id);
+	vzm::SetRenderTestParam3("_int_RendererType", (int)111, scene_id, cam_id, loaded_vol_id);
 
 	// for vr, clipping
 	//vzm::SetRenderTestParam3("_int_ClippingMode", (int)2, 0, 0, loaded_vol_id);
