@@ -19,6 +19,7 @@
 
 #define MAX_LOADSTRING 100
 
+
 // Global Variables:
 HINSTANCE hInst;                                // current instance
 HWND hWnd;
@@ -31,8 +32,71 @@ BOOL                InitInstance(HINSTANCE, int);
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
 
+
+struct PARAM_INTERFACE {
+	std::string name;
+};
+struct PARAM_0 : PARAM_INTERFACE
+{
+	PARAM_0() {
+		name = "PARAM_0";
+	}
+
+	enum PARAM_0_TYPE {
+		AA,
+		BB,
+		CC,
+	};
+
+	std::map<PARAM_0_TYPE, std::any> params;
+
+	int thickness;
+	int type;
+	float etc;
+};
+struct PARAM_1 : PARAM_INTERFACE
+{
+	PARAM_1() {
+		name = "PARAM_1";
+	}
+
+	int gg;
+	int gl;
+};
+
+void test_func(PARAM_INTERFACE& test_in) {
+
+}
+#include <type_traits>
+#include <typeindex>
+#include <typeinfo>
+#include <iostream>
+template <typename T> T param_cast(std::any p, T default_v) {
+	T ret_v = default_v;
+	try {
+		ret_v = std::any_cast<T>(p);
+	}
+	catch (const std::exception& e){}
+	return ret_v;
+}
+
 void EngineSetting()
 {
+	//PARAM_0 a;
+	//a.params[PARAM_0::AA] = 5.0;
+	//a.thickness = 1;
+	//std::any gg, gl;
+	//gg = std::string("__undef");
+	//gl = (int)88;
+	//
+	//int ff = param_cast<int>(gl, 0);
+	//std::string kk = std::any_cast<std::string>(gl);
+	//if (std::any_cast<std::string>(gg) == "__undef") 
+	//	return;
+	////std::cout << std::type_index(gg.type()) << std::endl;
+	//gg = 1.0;
+	//test_func(a);
+
 	auto getdatapath = []()
 	{
 		using namespace std;
@@ -84,8 +148,8 @@ void EngineSetting()
 	glm::fvec3 dir_z = transformVec(glm::fvec3(0, 0, 1), dmat_vs2ws);
 	bool is_rhs = glm::dot(glm::cross(dir_x, dir_y), dir_z) > 0;
 	int loaded_vol_id = 0;
-	vzm::GenerateVolumeFromData(loaded_vol_id, (const void**)slices, "USHORT", vol_size, vox_pitch,
-		(const float*)glm::value_ptr(dir_x), (const float*)glm::value_ptr(dir_y), is_rhs, true);
+	//vzm::GenerateVolumeFromData(loaded_vol_id, (const void**)slices, "USHORT", vol_size, vox_pitch,
+	//	(const float*)glm::value_ptr(dir_x), (const float*)glm::value_ptr(dir_y), is_rhs, true);
 
 
 	int loaded_mesh_id = 0;
@@ -119,13 +183,13 @@ void EngineSetting()
 	volume_state.is_visible = true; // see ObjStates
 
 	// register objects in scene ID = 0
-	vzm::ReplaceOrAddSceneObject(0, loaded_vol_id, volume_state);
+	vzm::ReplaceOrAddSceneObject(0, loaded_vol2_id, volume_state);
 	vzm::ObjStates obj_state;
 	obj_state.color[3] = 0.7f; // control for transparency
 	vzm::ReplaceOrAddSceneObject(0, loaded_mesh_id, obj_state);
 
 	int iso_mesh_id = 0;
-	vzm::GenerateIsoSurfaceObject(loaded_vol_id, 2500, 4, 0, 0, NULL, iso_mesh_id);
+	vzm::GenerateIsoSurfaceObject(loaded_vol2_id, 2500, 4, 0, 0, NULL, iso_mesh_id);
 
 	glm::fvec3 *pos_vtx = NULL, *nrl_vtx = NULL, *clr_vtx = NULL, *tex_vtx = NULL;
 	unsigned int* idx_mesh = NULL;
@@ -200,11 +264,11 @@ void EngineSetting()
 	//glm::dvec3 dposOrthoMaxWS = *(glm::fvec3*)boxTr.pos_maxbox_ws;
 
 	// for mpr
-	int scene_id = 0;
-	int cam_id = 0;
-	vzm::SetRenderTestParam3("_double_PlaneThickness", (double)60.0, scene_id, cam_id, -1);
+	//int scene_id = 0;
+	//int cam_id = 0;
+	//vzm::SetRenderTestParam3("_double_PlaneThickness", (double)60.0, scene_id, cam_id, -1);
 	//// default: 100, ray_sum: 110, mip: 111, 
-	vzm::SetRenderTestParam3("_int_RendererType", (int)111, 0, 0, loaded_vol_id);
+	//vzm::SetRenderTestParam3("_int_RendererType", (int)111, 0, 0, loaded_vol_id);
 
 	// for vr, clipping
 	//vzm::SetRenderTestParam3("_int_ClippingMode", (int)2, 0, 0, loaded_vol_id);
