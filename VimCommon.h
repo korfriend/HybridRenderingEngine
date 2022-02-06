@@ -23,6 +23,9 @@
  */
  
 #pragma once
+ //#define __VERSION "0.x beta" // released at 22.01.10
+#define __VERSION "1.0" // released at 22.02.5
+
 #define _HAS_STD_BYTE 0
 
 #include <map>

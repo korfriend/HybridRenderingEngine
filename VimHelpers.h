@@ -225,10 +225,11 @@ namespace vmhelpers {
 	 * @param ptr_dst [out] \n void** @n 할당된 메모리에 대한 2D 포인터
 	 * @param array_length_2d [in] \n int \n [v][] , y dimension
 	 * @param array_sizebytes_1d [in] \n int \n [][v] (bytes), x dimension
+	 * @param clear_zero [in] \n bool \n set zeros to the allocated memory
 	 * @remarks
 	 * 할당된 메모리 포인터에 대해 (x, y) 의 indexing 은 (*pppVoidTarget)[y][x]으로 으루어 짐
 	*/
-	__staticinline void AllocateVoidPointer2D(void*** ptr_dst, const int array_length_2d, const int array_sizebytes_1d);
+	__staticinline void AllocateVoidPointer2D(void*** ptr_dst, const int array_length_2d, const int array_sizebytes_1d, const bool clear_zero = false);
 
 	/*!
 	 * @fn void vxhelpers::GetSystemMemoryInfo(double* free_bytes, double* valid_sysmem_bytes)
