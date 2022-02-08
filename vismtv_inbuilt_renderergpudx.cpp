@@ -45,6 +45,7 @@ bool InitModule(fncontainer::VmFnContainer& _fncontainer)
 		DeInitModule(fncontainer::VmFnContainer());
 		return false;
 	}
+	std::cout << "Plugin: GPU DX11 Renderer using Core v(" << __VERSION << ")" << std::endl;
 
 	return true;
 }
@@ -355,5 +356,10 @@ void InteropCustomWork(fncontainer::VmFnContainer& _fncontainer)
 	{
 		*pdRunTimeVRs = g_dRunTimeVRs;
 		g_dRunTimeVRs = 0;
+	}
+
+	string* pstrVersion = (string*)_fncontainer.ReadRmwBufferPtr("_out_string_CoreVersion", (string*)NULL);
+	if (pstrVersion) {
+		*pstrVersion = string(__VERSION);
 	}
 }
