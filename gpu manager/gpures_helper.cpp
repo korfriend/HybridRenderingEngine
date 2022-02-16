@@ -10,6 +10,9 @@ namespace grd_helper
 	static VmGpuManager* g_pCGpuManager = NULL;
 }
 
+//#include <DirectXColors.h>
+//#include <DirectXCollision.h>
+
 HRESULT PresetCompiledShader(__ID3D11Device* pdx11Device, HMODULE hModule, LPCWSTR pSrcResource, LPCSTR strShaderProfile, ID3D11DeviceChild** ppdx11Shader/*out*/
 	, D3D11_INPUT_ELEMENT_DESC* pInputLayoutDesc, uint num_elements, ID3D11InputLayout** ppdx11LayoutInputVS)
 {
@@ -2336,4 +2339,38 @@ void grd_helper::__TestOutErrors()
 {	
 //#if (defined(_DEBUG) || defined(DEBUG)) && !defined(SDK_REDISTRIBUTE)
 //#endif
+}
+
+bool grd_helper::CollisionCheck(const vmmat44f& matWS2OS, const AaBbMinMax& aabb_os, const vmfloat3& ray_origin_ws, const vmfloat3& ray_dir_ws) 
+{
+//	struct CollisionAABox
+//	{
+//		BoundingBox aabox;
+//		ContainmentType collision;
+//	};
+//
+//	struct CollisionRay
+//	{
+//		XMVECTOR origin;
+//		XMVECTOR direction;
+//	};
+//
+//	vmfloat3 pos_center_os = vmfloat3((aabb_os.pos_min + aabb_os.pos_max) * 0.5);
+//	vmfloat3 ext_os = vmfloat3(aabb_os.pos_max) - pos_center_os;
+//	vmfloat3 ray_origin_os, ray_dir_os;
+//	vmmath::fTransformPoint(&ray_origin_os, &ray_origin_ws, &matWS2OS);
+//	vmmath::fTransformVector(&ray_dir_os, &ray_dir_ws, &matWS2OS);
+//
+//	CollisionAABox dxAabb;
+//	dxAabb.aabox.Center = XMFLOAT3(pos_center_os.x, pos_center_os.y, pos_center_os.z);
+//	dxAabb.aabox.Extents = XMFLOAT3(ext_os.x, ext_os.y, ext_os.z);
+//	dxAabb.collision = DISJOINT;
+//
+//	CollisionRay dxRay;
+//	dxRay.origin = XMVectorSet(ray_origin_os.x, ray_origin_os.y, ray_origin_os.z, 1.f);
+//	dxRay.direction = XMVectorSet(ray_dir_os.x, ray_dir_os.y, ray_dir_os.z, 0);
+//	float fDist = 0;
+//	if (dxAabb.aabox.Intersects(dxRay.origin, dxRay.direction, fDist))
+		return true;
+	return false;
 }

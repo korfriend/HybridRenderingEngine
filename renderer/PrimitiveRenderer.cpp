@@ -886,6 +886,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	mode_OIT = (MFR_MODE)min((int)mode_OIT, (int)MFR_MODE::MOMENT);
 	//if (mode_OIT == MFR_MODE::STATIC_KB_FM) apply_fragmerge = true;
 
+	bool is_picking_routine = _fncontainer->GetParamValue("_bool_IsPickingRoutine", false);
+	vmint2 picking_pos_ss = _fncontainer->GetParamValue("_int2_PickingPosSS", vmint2(-1, -1));
+
 	int buf_ex_scale = _fncontainer->GetParamValue("_int_BufExScale", (int)8); // scaling the capacity of the k-buffer for _bool_PixelTransmittance
 	bool use_blending_option_MomentOIT = _fncontainer->GetParamValue("_bool_UseBlendingOptionMomentOIT", false);
 	bool check_pixel_transmittance = _fncontainer->GetParamValue("_bool_PixelTransmittance", false);
@@ -1449,6 +1452,17 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	//float fv_thickness = v_thickness_abs <= 0 ? v_copthickness_abs <= 0 ? (float)(len_diagonal_max * v_thickness) : fv_copthickness * v_thickness / v_copthickness : (float)v_thickness_abs;
 
 	VmCObject* cam_obj = iobj->GetCameraObject();
+	vmfloat3 picking_ray_origin, picking_ray_dir;
+	if (is_picking_routine) {
+		vmmat44 dmatSS2PS, dmatPS2CS, dmatCS2WS;
+		cam_obj->GetMatrixSStoWS(&dmatSS2PS, &dmatPS2CS, &dmatCS2WS);
+		vmmat44f matSS2WS = vmmat44f(dmatSS2PS * dmatPS2CS * dmatCS2WS);
+		cam_obj->GetCameraExtStatef(&picking_ray_origin, NULL, NULL);
+		vmfloat3 pos_picking_ws, pos_picking_ss(picking_pos_ss.x, picking_pos_ss.y, 0);
+		vmmath::fTransformPoint(&pos_picking_ws, &pos_picking_ss, &matSS2WS);
+		picking_ray_dir = pos_picking_ws - picking_ray_origin;
+		vmmath::fNormalizeVector(&picking_ray_dir, &picking_ray_dir);		
+	}
 
 	CB_EnvState cbEnvState;
 	grd_helper::SetCb_Env(cbEnvState, cam_obj, _fncontainer, (vmfloat3)global_light_factors);
@@ -1460,8 +1474,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	dx11DeviceImmContext->Unmap(cbuf_env_state, 0);
 	dx11DeviceImmContext->PSSetConstantBuffers(7, 1, &cbuf_env_state);
 	dx11DeviceImmContext->CSSetConstantBuffers(7, 1, &cbuf_env_state);
-
-
 
 	vmmat44f matWS2SS, matWS2PS, matSS2WS;
 	CB_CameraState cbCamState;
@@ -1635,6 +1647,14 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		lobj->GetDstObjValue(pobj_id, "_bool_visibility", &is_visible);
 		if (!is_visible)
 			continue;
+
+		if (is_picking_routine) {
+			vmmat44f matWS2OS = pobj->GetMatrixWS2OSf();
+			if(!grd_helper::CollisionCheck(matWS2OS, prim_data->aabb_os, picking_ray_origin, picking_ray_dir))
+				continue;
+			// test //
+			std::cout << "###### obb ray intersection : " << pobj_id << std::endl;
+		}
 
 		VmVObjectVolume* vol_obj = (VmVObjectVolume*)find_asscociated_obj(vobj_id);
 		VmTObject* tobj = (VmTObject*)find_asscociated_obj(tobj_id);
