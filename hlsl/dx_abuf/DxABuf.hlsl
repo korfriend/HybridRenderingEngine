@@ -157,3 +157,21 @@ void OIT_A_BUFFER_FILL(__VS_OUT input)
 	STORE1_RBB(ConvertFloat4ToUInt(v_rgba), 2 * nDeepBufferPos + 0);
 	STORE1_RBB(asuint(z_depth), 2 * nDeepBufferPos + 1);
 }
+
+void PICKING_A_BUFFER_FILL(__VS_OUT input)
+{
+	if (g_cbPobj.alpha < 0.00001) clip(-1);
+	int2 tex2d_xy = int2(input.f4PosSS.xy);
+	int x_pick_ss = g_cbCamState.iSrCamDummy__1 & 0xFFFF;
+	int y_pick_ss = g_cbCamState.iSrCamDummy__1 >> 16;
+	if(x_pick_ss != tex2d_xy.x || y_pick_ss != tex2d_xy.y) clip(-1);
+
+	POBJ_PRE_CONTEXT;
+
+	// Atomically allocate space in the deep buffer
+	uint fc = 0;
+	InterlockedAdd(fragment_counter[tex2d_xy], 1, fc);
+
+	STORE1_RBB(g_cbPobj.pobj_dummy_0, 2 * fc + 0);
+	STORE1_RBB(asuint(z_depth), 2 * fc + 1);
+}

@@ -10,8 +10,8 @@ namespace grd_helper
 	static VmGpuManager* g_pCGpuManager = NULL;
 }
 
-//#include <DirectXColors.h>
-//#include <DirectXCollision.h>
+#include <DirectXColors.h>
+#include <DirectXCollision.h>
 
 HRESULT PresetCompiledShader(__ID3D11Device* pdx11Device, HMODULE hModule, LPCWSTR pSrcResource, LPCSTR strShaderProfile, ID3D11DeviceChild** ppdx11Shader/*out*/
 	, D3D11_INPUT_ELEMENT_DESC* pInputLayoutDesc, uint num_elements, ID3D11InputLayout** ppdx11LayoutInputVS)
@@ -418,6 +418,12 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11023), "SR_OIT_ABUFFER_MULTITEXTMAPPING_ps_5_0", "ps_5_0"), SR_OIT_ABUFFER_MULTITEXTMAPPING_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11024), "SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0", "ps_5_0"), SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11025), "SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0", "ps_5_0"), SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0);
+
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11321), "PICKING_ABUFFER_PHONGBLINN_ps_5_0", "ps_5_0"), PICKING_ABUFFER_PHONGBLINN_ps_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11322), "PICKING_ABUFFER_DASHEDLINE_ps_5_0", "ps_5_0"), PICKING_ABUFFER_DASHEDLINE_ps_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11323), "PICKING_ABUFFER_MULTITEXTMAPPING_ps_5_0", "ps_5_0"), PICKING_ABUFFER_MULTITEXTMAPPING_ps_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11324), "PICKING_ABUFFER_TEXTMAPPING_ps_5_0", "ps_5_0"), PICKING_ABUFFER_TEXTMAPPING_ps_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11325), "PICKING_ABUFFER_TEXTUREIMGMAP_ps_5_0", "ps_5_0"), PICKING_ABUFFER_TEXTUREIMGMAP_ps_5_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11101), "SR_OIT_ABUFFER_PREFIX_0_cs_5_0", "cs_5_0"), SR_OIT_ABUFFER_PREFIX_0_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11102), "SR_OIT_ABUFFER_PREFIX_1_cs_5_0", "cs_5_0"), SR_OIT_ABUFFER_PREFIX_1_cs_5_0);
@@ -2343,34 +2349,34 @@ void grd_helper::__TestOutErrors()
 
 bool grd_helper::CollisionCheck(const vmmat44f& matWS2OS, const AaBbMinMax& aabb_os, const vmfloat3& ray_origin_ws, const vmfloat3& ray_dir_ws) 
 {
-//	struct CollisionAABox
-//	{
-//		BoundingBox aabox;
-//		ContainmentType collision;
-//	};
-//
-//	struct CollisionRay
-//	{
-//		XMVECTOR origin;
-//		XMVECTOR direction;
-//	};
-//
-//	vmfloat3 pos_center_os = vmfloat3((aabb_os.pos_min + aabb_os.pos_max) * 0.5);
-//	vmfloat3 ext_os = vmfloat3(aabb_os.pos_max) - pos_center_os;
-//	vmfloat3 ray_origin_os, ray_dir_os;
-//	vmmath::fTransformPoint(&ray_origin_os, &ray_origin_ws, &matWS2OS);
-//	vmmath::fTransformVector(&ray_dir_os, &ray_dir_ws, &matWS2OS);
-//
-//	CollisionAABox dxAabb;
-//	dxAabb.aabox.Center = XMFLOAT3(pos_center_os.x, pos_center_os.y, pos_center_os.z);
-//	dxAabb.aabox.Extents = XMFLOAT3(ext_os.x, ext_os.y, ext_os.z);
-//	dxAabb.collision = DISJOINT;
-//
-//	CollisionRay dxRay;
-//	dxRay.origin = XMVectorSet(ray_origin_os.x, ray_origin_os.y, ray_origin_os.z, 1.f);
-//	dxRay.direction = XMVectorSet(ray_dir_os.x, ray_dir_os.y, ray_dir_os.z, 0);
-//	float fDist = 0;
-//	if (dxAabb.aabox.Intersects(dxRay.origin, dxRay.direction, fDist))
+	struct CollisionAABox
+	{
+		BoundingBox aabox;
+		ContainmentType collision;
+	};
+
+	struct CollisionRay
+	{
+		XMVECTOR origin;
+		XMVECTOR direction;
+	};
+
+	vmfloat3 pos_center_os = vmfloat3((aabb_os.pos_min + aabb_os.pos_max) * 0.5);
+	vmfloat3 ext_os = vmfloat3(aabb_os.pos_max) - pos_center_os;
+	vmfloat3 ray_origin_os, ray_dir_os;
+	vmmath::fTransformPoint(&ray_origin_os, &ray_origin_ws, &matWS2OS);
+	vmmath::fTransformVector(&ray_dir_os, &ray_dir_ws, &matWS2OS);
+
+	CollisionAABox dxAabb;
+	dxAabb.aabox.Center = XMFLOAT3(pos_center_os.x, pos_center_os.y, pos_center_os.z);
+	dxAabb.aabox.Extents = XMFLOAT3(ext_os.x, ext_os.y, ext_os.z);
+	dxAabb.collision = DISJOINT;
+
+	CollisionRay dxRay;
+	dxRay.origin = XMVectorSet(ray_origin_os.x, ray_origin_os.y, ray_origin_os.z, 1.f);
+	dxRay.direction = XMVectorSet(ray_dir_os.x, ray_dir_os.y, ray_dir_os.z, 0);
+	float fDist = 0;
+	if (dxAabb.aabox.Intersects(dxRay.origin, dxRay.direction, fDist))
 		return true;
 	return false;
 }

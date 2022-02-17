@@ -887,6 +887,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	//if (mode_OIT == MFR_MODE::STATIC_KB_FM) apply_fragmerge = true;
 
 	bool is_picking_routine = _fncontainer->GetParamValue("_bool_IsPickingRoutine", false);
+	if (is_picking_routine) mode_OIT == DYNAMIC_FB;
 	vmint2 picking_pos_ss = _fncontainer->GetParamValue("_int2_PickingPosSS", vmint2(-1, -1));
 
 	int buf_ex_scale = _fncontainer->GetParamValue("_int_BufExScale", (int)8); // scaling the capacity of the k-buffer for _bool_PixelTransmittance
@@ -938,7 +939,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			hlslobj_path += token + "\\";
 			exe_path.erase(0, pos + delimiter.length());
 		}
-		hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
+		hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
 		//cout << hlslobj_path << endl;
 
 		string prefix_path = hlslobj_path;
@@ -951,7 +952,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 #define VS_NUM 5
 #define GS_NUM 3
-#define PS_NUM 64
+#define PS_NUM 69
 #define CS_NUM 26
 #define SET_VS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(VERTEX_SHADER, NAME), __S, true)
 #define SET_PS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(PIXEL_SHADER, NAME), __S, true)
@@ -1104,6 +1105,12 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			,"SR_MOMENT_OIT_MULTITEXTMAPPING_ROV_ps_5_0"
 			,"SR_MOMENT_OIT_TEXTMAPPING_ROV_ps_5_0"
 			,"SR_MOMENT_OIT_TEXTUREIMGMAP_ROV_ps_5_0"
+
+			,"PICKING_ABUFFER_PHONGBLINN_ps_5_0"
+			,"PICKING_ABUFFER_DASHEDLINE_ps_5_0"
+			,"PICKING_ABUFFER_MULTITEXTMAPPING_ps_5_0"
+			,"PICKING_ABUFFER_TEXTMAPPING_ps_5_0"
+			,"PICKING_ABUFFER_TEXTUREIMGMAP_ps_5_0"
 		};
 
 		for (int i = 0; i < PS_NUM; i++)
@@ -1284,6 +1291,64 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	grd_helper::UpdateFrameBuffer(gres_fb_ubk_buffer, iobj, "BUFFER_RW_UBK_BUF", RTYPE_BUFFER,
 		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, k_value * 2 * 8);
 
+	GpuRes gres_picking_buffer;
+	if (is_picking_routine) {
+		gres_picking_buffer.vm_src_id = iobj->GetObjectID();
+		gres_picking_buffer.res_name = "BUFFER_RW_PICKING_BUF";
+
+		if (!g_pCGpuManager->UpdateGpuResource(gres_picking_buffer)) {
+			gres_picking_buffer.rtype = RTYPE_BUFFER;
+			gres_picking_buffer.options["USAGE"] = (UPFB_RAWBYTE & UPFB_SYSOUT) ? D3D11_USAGE_STAGING : D3D11_USAGE_DEFAULT;
+			gres_picking_buffer.options["CPU_ACCESS_FLAG"] = (UPFB_RAWBYTE & UPFB_SYSOUT) ? D3D11_CPU_ACCESS_READ : NULL;
+			gres_picking_buffer.options["BIND_FLAG"] = UPFB_RAWBYTE;
+			gres_picking_buffer.options["FORMAT"] = dx_format;
+			uint stride_bytes = 0;
+			switch (gres_type)
+			{
+			case RTYPE_BUFFER:
+				if (fb_flag & UPFB_NFPP_BUFFERSIZE) gres.res_dvalues["NUM_ELEMENTS"] = num_frags_perpixel;
+				else gres.res_dvalues["NUM_ELEMENTS"] = num_frags_perpixel > 0 ? fb_size.x * fb_size.y * num_frags_perpixel : fb_size.x * fb_size.y;
+				switch (dx_format)
+				{
+				case DXGI_FORMAT_R32_UINT: stride_bytes = sizeof(uint); break;
+				case DXGI_FORMAT_R32_FLOAT: stride_bytes = sizeof(float); break;
+				case DXGI_FORMAT_D32_FLOAT:	stride_bytes = sizeof(float); break;
+				case DXGI_FORMAT_R32G32B32A32_FLOAT: stride_bytes = sizeof(vmfloat4); break;
+				case DXGI_FORMAT_R8G8B8A8_UNORM: stride_bytes = sizeof(vmbyte4); break;
+				case DXGI_FORMAT_R8_UNORM: stride_bytes = sizeof(byte); break;
+				case DXGI_FORMAT_R8_UINT: stride_bytes = sizeof(byte); break;
+				case DXGI_FORMAT_R16_UNORM: stride_bytes = sizeof(ushort); break;
+				case DXGI_FORMAT_R16_UINT: stride_bytes = sizeof(ushort); break;
+				case DXGI_FORMAT_R32G32B32A32_UINT: stride_bytes = sizeof(vmuint4); break;
+				case DXGI_FORMAT_UNKNOWN: stride_bytes = structured_stride; break;
+				case DXGI_FORMAT_R32_TYPELESS: stride_bytes = sizeof(uint); break;
+				default:
+					return false;
+				}
+				if (fb_flag & UPFB_RAWBYTE) gres.options["RAW_ACCESS"] = 1;
+				if (stride_bytes == 0) return false;
+				gres.res_dvalues["STRIDE_BYTES"] = (double)(stride_bytes);
+				break;
+			case RTYPE_TEXTURE2D:
+				gres.res_dvalues["WIDTH"] = ((fb_flag & UPFB_HALF) || (fb_flag & UPFB_HALF_W)) ? fb_size.x / 2 : fb_size.x;
+				gres.res_dvalues["HEIGHT"] = ((fb_flag & UPFB_HALF) || (fb_flag & UPFB_HALF_H)) ? fb_size.y / 2 : fb_size.y;
+				if (fb_flag & UPFB_NFPP_TEXTURESTACK) gres.res_dvalues["DEPTH"] = num_frags_perpixel;
+				if (fb_flag & UPFB_MIPMAP) gres.options["MIP_GEN"] = 1;
+				if (fb_flag & UPFB_HALF) gres.options["HALF_GEN"] = 1;
+				break;
+			default:
+				::MessageBoxA(NULL, "Not supported Data Type", NULL, MB_OK);
+				return false;
+			}
+
+			g_pCGpuManager->GenerateGpuResource(gres);
+		}
+
+
+		grd_helper::UpdateFrameBuffer(gres_fb_sys_deep_k, iobj, "SYSTEM_OUT_K_BUF", RTYPE_BUFFER,
+			NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT, num_frags_perpixel);
+	}
+
 	// SSAO
 	{
 		//GpuRes gres_fb_ao_texs, gres_fb_ao_blf_texs;
@@ -1452,17 +1517,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	//float fv_thickness = v_thickness_abs <= 0 ? v_copthickness_abs <= 0 ? (float)(len_diagonal_max * v_thickness) : fv_copthickness * v_thickness / v_copthickness : (float)v_thickness_abs;
 
 	VmCObject* cam_obj = iobj->GetCameraObject();
-	vmfloat3 picking_ray_origin, picking_ray_dir;
-	if (is_picking_routine) {
-		vmmat44 dmatSS2PS, dmatPS2CS, dmatCS2WS;
-		cam_obj->GetMatrixSStoWS(&dmatSS2PS, &dmatPS2CS, &dmatCS2WS);
-		vmmat44f matSS2WS = vmmat44f(dmatSS2PS * dmatPS2CS * dmatCS2WS);
-		cam_obj->GetCameraExtStatef(&picking_ray_origin, NULL, NULL);
-		vmfloat3 pos_picking_ws, pos_picking_ss(picking_pos_ss.x, picking_pos_ss.y, 0);
-		vmmath::fTransformPoint(&pos_picking_ws, &pos_picking_ss, &matSS2WS);
-		picking_ray_dir = pos_picking_ws - picking_ray_origin;
-		vmmath::fNormalizeVector(&picking_ray_dir, &picking_ray_dir);		
-	}
 
 	CB_EnvState cbEnvState;
 	grd_helper::SetCb_Env(cbEnvState, cam_obj, _fncontainer, (vmfloat3)global_light_factors);
@@ -1475,11 +1529,25 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	dx11DeviceImmContext->PSSetConstantBuffers(7, 1, &cbuf_env_state);
 	dx11DeviceImmContext->CSSetConstantBuffers(7, 1, &cbuf_env_state);
 
+	vmfloat3 picking_ray_origin, picking_ray_dir;
 	vmmat44f matWS2SS, matWS2PS, matSS2WS;
 	CB_CameraState cbCamState;
 	grd_helper::SetCb_Camera(cbCamState, matWS2PS, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, gi_v_thickness);
 	cbCamState.iSrCamDummy__0 = *(uint*)&merging_beta;
 	cbCamState.iSrCamDummy__2 = *(uint*)&scale_z_res;
+	if (is_picking_routine) {
+		vmmat44 dmatSS2PS, dmatPS2CS, dmatCS2WS;
+		cam_obj->GetMatrixSStoWS(&dmatSS2PS, &dmatPS2CS, &dmatCS2WS);
+		vmmat44f matSS2WS = vmmat44f(dmatSS2PS * dmatPS2CS * dmatCS2WS);
+		cam_obj->GetCameraExtStatef(&picking_ray_origin, NULL, NULL);
+		vmfloat3 pos_picking_ws, pos_picking_ss(picking_pos_ss.x, picking_pos_ss.y, 0);
+		vmmath::fTransformPoint(&pos_picking_ws, &pos_picking_ss, &matSS2WS);
+		picking_ray_dir = pos_picking_ws - picking_ray_origin;
+		vmmath::fNormalizeVector(&picking_ray_dir, &picking_ray_dir);
+
+		cbCamState.iSrCamDummy__1 = (picking_pos_ss.x & 0xFFFF | picking_pos_ss.y << 16);
+		cbCamState.cam_flag |= (0x1 << 5);
+	}
 	if (!is_final_renderer || check_pixel_transmittance 
 		|| cbEnvState.r_kernel_ao > 0 
 		|| (cbEnvState.dof_lens_r > 0 && cam_obj->IsPerspective())) // which means the k-buffer will be used for the following renderer
@@ -1865,6 +1933,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	int count_call_render = 0;
 	int RENDERER_LOOP = 0;
 	bool is_frag_counter_buffer = mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB;
+	if (is_picking_routine) is_frag_counter_buffer = false;
 	bool is_MOMENT_gen_buffer = mode_OIT == MFR_MODE::MOMENT;
 
 	if (gpu_profile)
@@ -2036,6 +2105,7 @@ BEGIN_RENDERER_LOOP:
 
 		CB_PolygonObject cbPolygonObj;
 		cbPolygonObj.tex_map_enum = tex_map_enum;
+		cbPolygonObj.pobj_dummy_0 = pobj_id; // used for picking
 		vmmat44f matOS2WS = pobj->GetMatrixOS2WSf();
 		grd_helper::SetCb_PolygonObj(cbPolygonObj, pobj, lobj, matOS2WS, matWS2SS, matWS2PS, render_obj_info, default_point_thickness, default_line_thickness, is_surfel? default_surfel_size : -1.0);
 		if (RENDERER_LOOP == 1 && render_obj_info.show_outline)
@@ -2095,7 +2165,7 @@ BEGIN_RENDERER_LOOP:
 			if (render_obj_info.is_annotation_obj && dx11InputLayer_Target == dx11LI_PNT)
 				switch (mode_OIT)
 				{
-				case MFR_MODE::DYNAMIC_FB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0); break;
+				case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine? GETPS(PICKING_ABUFFER_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0); break;
 				case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_MOMENT_OIT_TEXTMAPPING_ps_5_0) : GETPS(SR_MOMENT_OIT_TEXTMAPPING_ROV_ps_5_0); break;
 				case MFR_MODE::DYNAMIC_KB: 
 					if(apply_fragmerge)
@@ -2114,7 +2184,7 @@ BEGIN_RENDERER_LOOP:
 			else if(render_obj_info.has_texture_img && dx11InputLayer_Target == dx11LI_PNT)
 				switch (mode_OIT)
 				{
-				case MFR_MODE::DYNAMIC_FB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0); break;
+				case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0); break;
 				case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_MOMENT_OIT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_MOMENT_OIT_TEXTUREIMGMAP_ROV_ps_5_0); break;
 				case MFR_MODE::DYNAMIC_KB:
 					if (apply_fragmerge)
@@ -2133,7 +2203,7 @@ BEGIN_RENDERER_LOOP:
 			else
 				switch (mode_OIT)
 				{
-				case MFR_MODE::DYNAMIC_FB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
+				case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
 				case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0) : GETPS(SR_MOMENT_OIT_PHONGBLINN_ROV_ps_5_0); break;
 				case MFR_MODE::DYNAMIC_KB:
 					if (apply_fragmerge)
@@ -2162,7 +2232,7 @@ BEGIN_RENDERER_LOOP:
 
 				switch (mode_OIT)
 				{
-				case MFR_MODE::DYNAMIC_FB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_MULTITEXTMAPPING_ps_5_0); break;
+				case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_ABUFFER_MULTITEXTMAPPING_ps_5_0); break;
 				case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_MOMENT_OIT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_MOMENT_OIT_MULTITEXTMAPPING_ROV_ps_5_0); break;
 				case MFR_MODE::DYNAMIC_KB:
 					if (apply_fragmerge)
@@ -2189,7 +2259,7 @@ BEGIN_RENDERER_LOOP:
 				if (render_obj_info.is_annotation_obj)
 					switch (mode_OIT)
 					{
-					case MFR_MODE::DYNAMIC_FB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0); break;
+					case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0); break;
 					case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_TEXTMAPPING_ps_5_0) : GETPS(SR_MOMENT_OIT_TEXTMAPPING_ROV_ps_5_0); break;
 					case MFR_MODE::DYNAMIC_KB:
 						if (apply_fragmerge)
@@ -2208,7 +2278,7 @@ BEGIN_RENDERER_LOOP:
 				else if ((cbPolygonObj.pobj_flag & (0x1 << 19)) && prim_data->ptype == PrimitiveTypeLINE)
 					switch (mode_OIT)
 					{
-					case MFR_MODE::DYNAMIC_FB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_DASHEDLINE_ps_5_0); break;
+					case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_ABUFFER_DASHEDLINE_ps_5_0); break;
 					case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch? GETPS(SR_MOMENT_OIT_DASHEDLINE_ps_5_0) : GETPS(SR_MOMENT_OIT_DASHEDLINE_ROV_ps_5_0); break;
 					case MFR_MODE::DYNAMIC_KB:
 						if (apply_fragmerge)
@@ -2227,7 +2297,7 @@ BEGIN_RENDERER_LOOP:
 				else
 					switch (mode_OIT)
 					{
-					case MFR_MODE::DYNAMIC_FB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
+					case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
 					case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0) : GETPS(SR_MOMENT_OIT_PHONGBLINN_ROV_ps_5_0); break;
 					case MFR_MODE::DYNAMIC_KB:
 						if (apply_fragmerge)
@@ -2252,7 +2322,7 @@ BEGIN_RENDERER_LOOP:
 			dx11VS_Target = dx11VShader_P;
 			switch (mode_OIT)
 			{
-			case MFR_MODE::DYNAMIC_FB: dx11PS_Target = GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
+			case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
 			case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0) : GETPS(SR_MOMENT_OIT_PHONGBLINN_ROV_ps_5_0); break;
 			case MFR_MODE::DYNAMIC_KB:
 				if (apply_fragmerge)

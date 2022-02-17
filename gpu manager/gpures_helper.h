@@ -402,17 +402,20 @@ namespace grd_helper
 
 		float cam_vz_thickness;
 		uint k_value; // used for max k for DK+B algorithm
-		// 1st bit : 0 (orthogonal), 1 : (perspective)
+		// 1st bit : 0 : (orthogonal), 1 : (perspective)
 		// 2nd bit : for RT to k-buffer : 0 (just RT), 1 : (after silhouette processing)
 		// 3rd bit : for dynamic K value // deprecated... (this will be treated as a separate shader
 		// 4th bit : for storing the final fragments to the k buffer, which is used for sequentially coming renderer (e.g., DVR) : 0 (skipping), 1 (storing)
 		// 5th bit : only for DFB without (S)FM. stores all fragments into the framebuffer (using offset table)
+		// 6th bit : 0 : (normal rendering), 1 : picking mode
 		uint cam_flag;
-		uint iSrCamDummy__0; // used for 1) A-Buffer prefix computations /*deprecated*/ or 2) beta (asfloat) for merging operation
+		// used for 1) A-Buffer prefix computations /*deprecated*/ or 2) beta (asfloat) for merging operation
+		uint iSrCamDummy__0; 
 
 		float near_plane;
 		float far_plane;
-		uint iSrCamDummy__1; // used for the level of MIPMAP generation
+		// used for 1) the level of MIPMAP generation (only for SSAO rendering), or 2) picking xy (16bit, 16bit)
+		uint iSrCamDummy__1; 
 		uint iSrCamDummy__2; // scaling factor (asfloat) for the z-thickness value determined by the z-resolution
 
 		ZERO_SET(CB_CameraState)
@@ -513,7 +516,7 @@ namespace grd_helper
 		float pix_thickness; // only for POINT and LINE TOPOLOGY
 		float vz_thickness;
 		uint num_safe_loopexit;
-		uint pobj_dummy_0;
+		uint pobj_dummy_0; // pobj_id used for picking
 
 		ZERO_SET(CB_PolygonObject)
 	};

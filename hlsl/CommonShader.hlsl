@@ -41,11 +41,14 @@ struct HxCB_CameraState // Hlsl dX Contant Buffer
 	// 3rd bit : for DK+B // deprecated... (this will be treated as a separate shader
 	// 4th bit : for storing the final fragments to the k buffer, which is used for sequentially coming renderer (e.g., DVR) : 0 (skipping), 1 (storing)
 	// 5th bit : only for DFB without (S)FM. stores all fragments into the framebuffer (using offset table)
+	// 6th bit : 0 : (normal rendering), 1 : picking mode
 	uint cam_flag;
-	uint iSrCamDummy__0; // used for 1) A-Buffer prefix computations /*deprecated*/ or 2) beta (asfloat) for merging operation
+	// used for 1) A-Buffer prefix computations /*deprecated*/ or 2) beta (asfloat) for merging operation
+	uint iSrCamDummy__0; 
 
 	float near_plane;
 	float far_plane;
+	// used for 1) the level of MIPMAP generation (only for SSAO rendering), or 2) picking xy (16bit, 16bit)
 	uint iSrCamDummy__1; // used for the N-buffer index or SSAO setting for DOF
 	uint iSrCamDummy__2; // scale_z_res
 };
@@ -135,7 +138,7 @@ struct HxCB_PolygonObject
     float pix_thickness; // only for POINT and LINE TOPOLOGY
     float vz_thickness;
     uint num_safe_loopexit;
-    uint pobj_dummy_0;
+    uint pobj_dummy_0; // pobj_id used for picking
 };
 
 struct HxCB_VolumeObject
