@@ -1288,65 +1288,20 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	const int num_frags_perpixel = k_value * 4 * buffer_ex;
 	grd_helper::UpdateFrameBuffer(gres_fb_k_buffer, iobj, "BUFFER_RW_K_BUF", RTYPE_BUFFER,
 		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, num_frags_perpixel);
-	grd_helper::UpdateFrameBuffer(gres_fb_ubk_buffer, iobj, "BUFFER_RW_UBK_BUF", RTYPE_BUFFER,
+	grd_helper::UpdateFrameBuffer(gres_fb_ubk_buffer, iobj, "BUFFER_RW_UBK_BUF", RTYPE_BUFFER, // here, ubk refers to UnBounded-K
 		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, k_value * 2 * 8);
 
-	GpuRes gres_picking_buffer;
+	const int max_picking_layers = 2048;
+	GpuRes gres_picking_buffer, gres_picking_system_buffer;
 	if (is_picking_routine) {
-		gres_picking_buffer.vm_src_id = iobj->GetObjectID();
-		gres_picking_buffer.res_name = "BUFFER_RW_PICKING_BUF";
+		// those picking layers contain depth (4bytes) and id (4bytes) information
+		grd_helper::UpdateFrameBuffer(gres_picking_buffer, iobj, "BUFFER_RW_PICKING_BUF", RTYPE_BUFFER,
+			D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, UPFB_NFPP_BUFFERSIZE, max_picking_layers * 2);
+		grd_helper::UpdateFrameBuffer(gres_picking_system_buffer, iobj, "SYSTEM_OUT_RW_PICKING_BUF", RTYPE_BUFFER,
+			NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT | UPFB_NFPP_BUFFERSIZE, max_picking_layers * 2);
 
-		if (!g_pCGpuManager->UpdateGpuResource(gres_picking_buffer)) {
-			gres_picking_buffer.rtype = RTYPE_BUFFER;
-			gres_picking_buffer.options["USAGE"] = (UPFB_RAWBYTE & UPFB_SYSOUT) ? D3D11_USAGE_STAGING : D3D11_USAGE_DEFAULT;
-			gres_picking_buffer.options["CPU_ACCESS_FLAG"] = (UPFB_RAWBYTE & UPFB_SYSOUT) ? D3D11_CPU_ACCESS_READ : NULL;
-			gres_picking_buffer.options["BIND_FLAG"] = UPFB_RAWBYTE;
-			gres_picking_buffer.options["FORMAT"] = dx_format;
-			uint stride_bytes = 0;
-			switch (gres_type)
-			{
-			case RTYPE_BUFFER:
-				if (fb_flag & UPFB_NFPP_BUFFERSIZE) gres.res_dvalues["NUM_ELEMENTS"] = num_frags_perpixel;
-				else gres.res_dvalues["NUM_ELEMENTS"] = num_frags_perpixel > 0 ? fb_size.x * fb_size.y * num_frags_perpixel : fb_size.x * fb_size.y;
-				switch (dx_format)
-				{
-				case DXGI_FORMAT_R32_UINT: stride_bytes = sizeof(uint); break;
-				case DXGI_FORMAT_R32_FLOAT: stride_bytes = sizeof(float); break;
-				case DXGI_FORMAT_D32_FLOAT:	stride_bytes = sizeof(float); break;
-				case DXGI_FORMAT_R32G32B32A32_FLOAT: stride_bytes = sizeof(vmfloat4); break;
-				case DXGI_FORMAT_R8G8B8A8_UNORM: stride_bytes = sizeof(vmbyte4); break;
-				case DXGI_FORMAT_R8_UNORM: stride_bytes = sizeof(byte); break;
-				case DXGI_FORMAT_R8_UINT: stride_bytes = sizeof(byte); break;
-				case DXGI_FORMAT_R16_UNORM: stride_bytes = sizeof(ushort); break;
-				case DXGI_FORMAT_R16_UINT: stride_bytes = sizeof(ushort); break;
-				case DXGI_FORMAT_R32G32B32A32_UINT: stride_bytes = sizeof(vmuint4); break;
-				case DXGI_FORMAT_UNKNOWN: stride_bytes = structured_stride; break;
-				case DXGI_FORMAT_R32_TYPELESS: stride_bytes = sizeof(uint); break;
-				default:
-					return false;
-				}
-				if (fb_flag & UPFB_RAWBYTE) gres.options["RAW_ACCESS"] = 1;
-				if (stride_bytes == 0) return false;
-				gres.res_dvalues["STRIDE_BYTES"] = (double)(stride_bytes);
-				break;
-			case RTYPE_TEXTURE2D:
-				gres.res_dvalues["WIDTH"] = ((fb_flag & UPFB_HALF) || (fb_flag & UPFB_HALF_W)) ? fb_size.x / 2 : fb_size.x;
-				gres.res_dvalues["HEIGHT"] = ((fb_flag & UPFB_HALF) || (fb_flag & UPFB_HALF_H)) ? fb_size.y / 2 : fb_size.y;
-				if (fb_flag & UPFB_NFPP_TEXTURESTACK) gres.res_dvalues["DEPTH"] = num_frags_perpixel;
-				if (fb_flag & UPFB_MIPMAP) gres.options["MIP_GEN"] = 1;
-				if (fb_flag & UPFB_HALF) gres.options["HALF_GEN"] = 1;
-				break;
-			default:
-				::MessageBoxA(NULL, "Not supported Data Type", NULL, MB_OK);
-				return false;
-			}
-
-			g_pCGpuManager->GenerateGpuResource(gres);
-		}
-
-
-		grd_helper::UpdateFrameBuffer(gres_fb_sys_deep_k, iobj, "SYSTEM_OUT_K_BUF", RTYPE_BUFFER,
-			NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT, num_frags_perpixel);
+		uint clr_unit4[4] = { 0, 0, 0, 0 };
+		dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_picking_buffer.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 	}
 
 	// SSAO
@@ -1804,7 +1759,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			single_layer_routine_objs.push_back(render_obj_info);
 		//render_obj_info.show_outline = false;
 		//general_oit_routine_objs.push_back(render_obj_info);
-		if (is_foremost_surfaces) foremost_surfaces_routine_objs.push_back(render_obj_info);
+		if (is_foremost_surfaces && !is_picking_routine) foremost_surfaces_routine_objs.push_back(render_obj_info);
 		else general_oit_routine_objs.push_back(render_obj_info);
 	}
 
@@ -2531,6 +2486,8 @@ BEGIN_RENDERER_LOOP:
 				// weird //mode_OIT == MFR_MODE::DXAB ? (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV] : NULL
 				//dx11UAVs_1st_pass[3] = (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV];
 				dx11DeviceImmContext->PSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]); // search why this does not work
+				if(is_picking_routine)
+					dx11DeviceImmContext->PSSetShaderResources(51, 1, (ID3D11ShaderResourceView**)&gres_picking_buffer.alloc_res_ptrs[DTYPE_UAV]); // search why this does not work
 			}
 
 			ID3D11RenderTargetView* dx11RTVs[2] = {
@@ -2569,8 +2526,10 @@ BEGIN_RENDERER_LOOP:
 
 		dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
 		dx11DeviceImmContext->PSSetShaderResources(50, 1, dx11SRVs_NULL);
-		//dx11DeviceImmContext->CSSetShaderResources(50, 1, dx11SRVs_NULL);
+		if(is_picking_routine)
+			dx11DeviceImmContext->CSSetShaderResources(51, 1, dx11SRVs_NULL);
 
+		// note that if is_picking_routine == true, the following branch will not be allowed!
 		if (RENDERER_LOOP == 1 && 
 			(mode_OIT == MFR_MODE::STATIC_KB || mode_OIT == MFR_MODE::DYNAMIC_KB))
 		{
@@ -2865,6 +2824,7 @@ BEGIN_RENDERER_LOOP:
 	else if (RENDERER_LOOP == 2 && foremost_surfaces_routine_objs.size() > 0)
 	{
 		// note that we use mode_OIT == MFR_MODE::MOMENT and MFR_MODE::DYNAMIC_FB WITHOUT FM just for the experimental comparison
+		// our official recommended version is to use MFR_MODE::DYNAMIC_FB WITH FM or static K-buffer with FM!!
 		if ((mode_OIT == MFR_MODE::DYNAMIC_FB && !apply_fragmerge) || mode_OIT == MFR_MODE::MOMENT)
 		{
 			VMERRORMESSAGE("DOES NOT SUPPORT!! for OPAQUE SURFACE FOREMOST RENDERER");
@@ -2941,7 +2901,7 @@ RENDERER_LOOP_EXIT:
 			, NULL//mode_OIT == MFR_MODE::DXAB ? (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV] : NULL
 			, mode_OIT == MFR_MODE::DYNAMIC_FB ? (ID3D11UnorderedAccessView*)gres_fb_ubk_buffer.alloc_res_ptrs[DTYPE_UAV] : NULL
 	};
-	if (mode_OIT != MFR_MODE::MOMENT)
+	if (mode_OIT != MFR_MODE::MOMENT && !is_picking_routine)
 	{
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], 0); // trimming may occur 
 		// resolve pass
@@ -3025,7 +2985,7 @@ RENDERER_LOOP_EXIT:
 
 	// APPLY HWND MODE
 	HWND hWnd = (HWND)_fncontainer->GetParamValue("_hwnd_WindowHandle", (HWND)NULL);
-	if (is_final_renderer && hWnd)
+	if (is_final_renderer && hWnd && !is_picking_routine)
 	{
 		ID3D11Texture2D* pTex2dHwndRT = NULL;
 		ID3D11RenderTargetView* pHwndRTV = NULL;
@@ -3036,7 +2996,50 @@ RENDERER_LOOP_EXIT:
 		is_system_out = false;
 	}
 
-	if (is_system_out)
+	if (is_picking_routine)
+	{
+		dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_picking_system_buffer.alloc_res_ptrs[DTYPE_RES],
+			(ID3D11Buffer*)gres_picking_buffer.alloc_res_ptrs[DTYPE_RES]);
+
+		map<int, float> picking_layers_id_depth;
+		map<float, int> picking_layers_depth_id;
+		D3D11_MAPPED_SUBRESOURCE mappedResSysPicking;
+		HRESULT hr = dx11DeviceImmContext->Map((ID3D11Buffer*)gres_picking_system_buffer.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysPicking);
+		uint* picking_buf = (uint*)mappedResSysPicking.pData;
+		int num_layers = 0;
+		for (int i = 0; i < max_picking_layers; i += 2) {
+			uint obj_id = picking_buf[i];
+			if (obj_id == 0) break;
+
+			float pick_depth = *(float*)&picking_buf[i + 1];
+
+			auto it = picking_layers_id_depth.find(obj_id);
+			if (it != picking_layers_id_depth.end()) {
+				picking_layers_id_depth.insert(pair<int, float>(obj_id, pick_depth));
+			}
+			else {
+				if (pick_depth < it->second) it->second = pick_depth;
+			}
+			num_layers++;
+		}
+		dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_picking_system_buffer.alloc_res_ptrs[DTYPE_RES], 0);
+
+		cout << "### NUM PICKING LAYERS : " << num_layers << endl;
+		cout << "### NUM PICKING UNIQUE ID LAYERS : " << picking_layers_id_depth.size() << endl;
+		for (auto& it : picking_layers_id_depth) {
+			picking_layers_depth_id[it.second] = it.first;
+		}
+
+		vector<vmfloat4> picking_out;
+		for (auto& it : picking_layers_depth_id) {
+			vmfloat3 pos_pick = picking_ray_origin + picking_ray_dir * it.first;
+			vmfloat4 encoded(pos_pick, it.second);
+			picking_out.push_back(encoded);
+		}
+
+		lobj->ReplaceOrAddBufferPtr("_vlist_float4_PickPosAndId", &picking_out[0], picking_out.size(), sizeof(vmfloat4));
+	}
+	else if (is_system_out)
 	{
 		FrameBuffer* fb_rout = (FrameBuffer*)iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, 0);
 		FrameBuffer* fb_dout = (FrameBuffer*)iobj->GetFrameBuffer(FrameBufferUsageDEPTH, 0);

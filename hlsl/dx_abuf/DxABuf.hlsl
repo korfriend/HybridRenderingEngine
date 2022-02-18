@@ -3,6 +3,9 @@
 RWTexture2D<uint> fragment_counter : register(u2);
 RWByteAddressBuffer deep_ubk_buf : register(u4);
 
+Buffer<uint> sr_offsettable_buf : register(t50);
+RWBuffer<uint> picking_buf : register(u51);
+
 #define STORE1_RBB(V, ADDR) deep_ubk_buf.Store((ADDR) * 4, V)
 
 void OIT_A_BUFFER_CNF_FRAGS(__VS_OUT input)
@@ -20,8 +23,6 @@ void OIT_A_BUFFER_CNF_FRAGS(__VS_OUT input)
 	int2 tex2d_xy = int2(input.f4PosSS.xy);
 	InterlockedAdd(fragment_counter[tex2d_xy.xy], 1);
 }
-
-Buffer<uint> sr_offsettable_buf : register(t50);
 
 void OIT_A_BUFFER_FILL(__VS_OUT input)
 {
@@ -172,6 +173,7 @@ void PICKING_A_BUFFER_FILL(__VS_OUT input)
 	uint fc = 0;
 	InterlockedAdd(fragment_counter[tex2d_xy], 1, fc);
 
-	STORE1_RBB(g_cbPobj.pobj_dummy_0, 2 * fc + 0);
-	STORE1_RBB(asuint(z_depth), 2 * fc + 1);
+	//picking_buf
+	picking_buf[2 * fc + 0] = g_cbPobj.pobj_dummy_0;
+	picking_buf[2 * fc + 1] = asuint(z_depth);
 }

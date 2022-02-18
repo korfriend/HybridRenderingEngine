@@ -329,7 +329,7 @@ namespace grd_helper
 #define UPFB_HALF 0x8    // texture only
 #define UPFB_HALF_W 0x10    // texture only
 #define UPFB_HALF_H 0x20    // texture only
-#define UPFB_NFPP_BUFFERSIZE 0x40 // buffer only
+#define UPFB_NFPP_BUFFERSIZE 0x40 // buffer only //
 #define UPFB_NFPP_TEXTURESTACK 0x80 // texture only
 	// framebuffer structure
 	bool UpdateFrameBuffer(GpuRes& gres, const VmIObject* iobj,
