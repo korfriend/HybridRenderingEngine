@@ -167,7 +167,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 #pragma region // IOBJECT GPU
 	//int buffer_ex = 1, buffer_ex_old = 0; // optimal for K is 1
-	int buffer_ex = (!check_pixel_transmittance && mode_OIT == MFR_MODE::DYNAMIC_FB) ? buf_ex_scale : 1, buffer_ex_old = 0; // optimal for K is 1
+	int buffer_ex = (check_pixel_transmittance && mode_OIT == MFR_MODE::DYNAMIC_FB) ? buf_ex_scale : 1, buffer_ex_old = 0; // optimal for K is 1
 	// 'cause we do not support the dynamic version of k+ buffer
 	// it always uses static number of k!!
 	// note that DFB uses a simple fragment model (vis and depth) and the stored simple fragments are extended into the z-thickness model fragments in the resolve pass

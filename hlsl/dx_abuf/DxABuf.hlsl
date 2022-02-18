@@ -2,9 +2,9 @@
 
 RWTexture2D<uint> fragment_counter : register(u2);
 RWByteAddressBuffer deep_ubk_buf : register(u4);
+RWBuffer<uint> picking_buf : register(u5);
 
 Buffer<uint> sr_offsettable_buf : register(t50);
-RWBuffer<uint> picking_buf : register(u51);
 
 #define STORE1_RBB(V, ADDR) deep_ubk_buf.Store((ADDR) * 4, V)
 

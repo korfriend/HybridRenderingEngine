@@ -1237,7 +1237,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	__ID3D11DeviceContext* dx11DeviceImmContext = dx11CommonParams->dx11DeviceImmContext;
 
 #pragma region // IOBJECT GPU
-	int buffer_ex = (!check_pixel_transmittance && mode_OIT == MFR_MODE::DYNAMIC_FB)? buf_ex_scale : 1, buffer_ex_old = 0; // optimal for K is 1
+	int buffer_ex = (check_pixel_transmittance && mode_OIT == MFR_MODE::DYNAMIC_FB) ? buf_ex_scale : 1, buffer_ex_old = 0; // optimal for K is 1
 	// 'cause we now do not support the dynamic version of k+ buffer
 	// it always uses static number of k!!
 	// note that DFB uses a simple fragment model (vis and depth) and the stored simple fragments are extended into the z-thickness model fragments in the resolve pass
@@ -2433,7 +2433,7 @@ BEGIN_RENDERER_LOOP:
 				(ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV]
 				, use_spinlock_pixsynch ? (ID3D11UnorderedAccessView*)gres_fb_spinlock.alloc_res_ptrs[DTYPE_UAV] : NULL
 				, mode_OIT == MFR_MODE::DYNAMIC_FB? (ID3D11UnorderedAccessView*)gres_fb_ubk_buffer.alloc_res_ptrs[DTYPE_UAV] : (ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]
-				, NULL 
+				, is_picking_routine? (ID3D11UnorderedAccessView*)gres_picking_buffer.alloc_res_ptrs[DTYPE_UAV] : NULL
 		};
 
 		if (mode_OIT == MFR_MODE::MOMENT)
@@ -2486,8 +2486,6 @@ BEGIN_RENDERER_LOOP:
 				// weird //mode_OIT == MFR_MODE::DXAB ? (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV] : NULL
 				//dx11UAVs_1st_pass[3] = (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV];
 				dx11DeviceImmContext->PSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]); // search why this does not work
-				if(is_picking_routine)
-					dx11DeviceImmContext->PSSetShaderResources(51, 1, (ID3D11ShaderResourceView**)&gres_picking_buffer.alloc_res_ptrs[DTYPE_UAV]); // search why this does not work
 			}
 
 			ID3D11RenderTargetView* dx11RTVs[2] = {
@@ -3014,7 +3012,7 @@ RENDERER_LOOP_EXIT:
 			float pick_depth = *(float*)&picking_buf[i + 1];
 
 			auto it = picking_layers_id_depth.find(obj_id);
-			if (it != picking_layers_id_depth.end()) {
+			if (it == picking_layers_id_depth.end()) {
 				picking_layers_id_depth.insert(pair<int, float>(obj_id, pick_depth));
 			}
 			else {
@@ -3030,14 +3028,16 @@ RENDERER_LOOP_EXIT:
 			picking_layers_depth_id[it.second] = it.first;
 		}
 
-		vector<vmfloat4> picking_out;
+		vector<vmdouble4> picking_out;
 		for (auto& it : picking_layers_depth_id) {
 			vmfloat3 pos_pick = picking_ray_origin + picking_ray_dir * it.first;
-			vmfloat4 encoded(pos_pick, it.second);
+			vmdouble4 encoded(pos_pick.x, pos_pick.y, pos_pick.z, (double)it.second);
 			picking_out.push_back(encoded);
 		}
+		if(picking_out.size() == 0)
+			picking_out.push_back(vmdouble4(0, 0, 0, 0));
 
-		lobj->ReplaceOrAddBufferPtr("_vlist_float4_PickPosAndId", &picking_out[0], picking_out.size(), sizeof(vmfloat4));
+		lobj->ReplaceOrAddBufferPtr("_vlist_DOUBLE4_PickPosAndId", &picking_out[0], picking_out.size(), sizeof(vmdouble4));
 	}
 	else if (is_system_out)
 	{
