@@ -17,6 +17,9 @@
     <ClCompile Include="renderer\VolumeRenderer.cpp">
       <Filter>renderer</Filter>
     </ClCompile>
+    <ClCompile Include="SSRenderer.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="resource.h">

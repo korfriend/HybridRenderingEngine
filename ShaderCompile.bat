@@ -88,6 +88,7 @@ fxc /E KB_SSDOF_RT /T cs_5_0 "./hlsl/layered dof/SSDOF.hlsl" /Fo ./shader_compil
 fxc /E FillHistogram /T cs_5_0 ./hlsl/kbuf/KplusB.hlsl /Fo ./shader_compiled_objs/SR_FillHistogram_cs_5_0
 fxc /E CreateOffsetTableKpB /T cs_5_0 ./hlsl/kbuf/KplusB.hlsl /Fo ./shader_compiled_objs/SR_CreateOffsetTableKpB_cs_5_0
 
+//fxc /E DFB_PRESET /T cs_5_0 ./hlsl/dx_abuf/DxABuf.hlsl /Fo ./shader_compiled_objs/SR_SINGLE_LAYER_TO_DFB_cs_5_0 
 fxc /E SortAndRenderCS /T cs_5_0 ./hlsl/dx_abuf/DxABuf_Sort.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_SORT2SENDER_cs_5_0 /D DX_11_STYLE=0 /D FRAG_MERGING=0
 fxc /E SortAndRenderCS /T cs_5_0 ./hlsl/dx_abuf/DxABuf_Sort.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_SORT2SENDER_SFM_cs_5_0 /D DX_11_STYLE=0 /D FRAG_MERGING=1
 fxc /E OIT_A_BUFFER_CNF_FRAGS /T ps_5_0 ./hlsl/dx_abuf/DxABuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_FRAGCOUNTER_ps_5_0 /D DX_11_STYLE=0 

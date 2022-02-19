@@ -163,13 +163,67 @@ VS_OUTPUT_TTT CommonVS_PTTT(VS_INPUT_PTTT input)
 Texture2D<float4> sr_fragment_vis : register(t10);
 Texture2D<float> sr_fragment_zdepth : register(t11);
 
+float4 OutlineTest2(const in int2 tex2d_xy, inout float depth_c, const in float discont_depth_criterion)
+{
+    const float3 edge_color = float3(1, 0, 0);
+    float4 vout = (float4) 0;
+    if (depth_c < 1000000)
+    {
+        const int thick = 5;// 15;
+        float depth_h0 = sr_fragment_zdepth[tex2d_xy.xy + int2(0, thick)].r;
+        float depth_h1 = sr_fragment_zdepth[tex2d_xy.xy - int2(0, thick)].r;
+        float depth_w0 = sr_fragment_zdepth[tex2d_xy.xy + int2(thick, 0)].r;
+        float depth_w1 = sr_fragment_zdepth[tex2d_xy.xy - int2(thick, 0)].r;
+
+        const float outline_thres = discont_depth_criterion;
+        float depth_min = min(min(depth_h0, depth_h1), min(depth_w0, depth_w1));
+        float depth_max = max(max(depth_h0, depth_h1), max(depth_w0, depth_w1));
+        //if (abs(depth_c - depth_min) > outline_thres * 1)
+        //    return (float4)0;
+        //float diff_max = max(abs(depth_h0 - depth_h1), abs(depth_w0 - depth_w1));
+        //if (diff_max < outline_thres * 1)
+        //    return (float4) 0;
+#if SILHOUETTE_EDGE == 1
+        const int thick2 = 1;
+        float3 nor_c = normalize(sr_fragment_vis[tex2d_xy.xy + int2(0, 0)].xyz * 2.f - (float3)1.f);
+        float3 nor_h0 = normalize(sr_fragment_vis[tex2d_xy.xy + int2(0, thick2)].xyz * 2.f - (float3)1.f);
+        float3 nor_h1 = normalize(sr_fragment_vis[tex2d_xy.xy - int2(0, thick2)].xyz * 2.f - (float3)1.f);
+        float3 nor_w0 = normalize(sr_fragment_vis[tex2d_xy.xy + int2(thick2, 0)].xyz * 2.f - (float3)1.f);
+        float3 nor_w1 = normalize(sr_fragment_vis[tex2d_xy.xy - int2(thick2, 0)].xyz * 2.f - (float3)1.f);
+        //float dot_h = dot(nor_h0, nor_h1);
+        //float dot_v = dot(nor_w0, nor_w1);
+        //float dotv = dot_h + dot_v;
+        float dot_h0 = dot(nor_c, nor_h0);
+        float dot_v0 = dot(nor_c, nor_w0);
+        float dot_h1 = dot(nor_c, nor_h1);
+        float dot_v1 = dot(nor_c, nor_w1);
+        float dotv = dot_h0 + dot_v0 + dot_h1 + dot_v1;
+        depth_c = depth_min;
+#endif
+
+        if (abs(depth_max - depth_min) < outline_thres)
+        {
+            vout = (float4) 0;
+#if SILHOUETTE_EDGE == 1
+            if (dotv < 3.90)
+                vout = float4(edge_color, 1);
+#endif
+        }
+        else vout = float4(edge_color, 1);
+        //vout = float4(nor_c, 1);
+        //vout = float4(depth_h0 / 40, depth_h0 / 40, depth_h0 / 40, 1);
+    }
+
+    return vout;
+}
+
 float4 OutlineTest(const in int2 tex2d_xy, const in float depth_c, const in float discont_depth_criterion)
 {
 	const float3 edge_color = float3(1, 0, 0);
 	float4 vout = (float4) 0;
 	if (depth_c < 1000000)
 	{
-		const int thick = 2;// 15;
+		const int thick = 5;// 15;
 		float depth_h0 = sr_fragment_zdepth[tex2d_xy.xy + int2(0, thick)].r;
 		float depth_h1 = sr_fragment_zdepth[tex2d_xy.xy - int2(0, thick)].r;
 		float depth_w0 = sr_fragment_zdepth[tex2d_xy.xy + int2(thick, 0)].r;

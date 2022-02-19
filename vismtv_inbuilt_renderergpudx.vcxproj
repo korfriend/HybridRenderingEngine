@@ -24,6 +24,7 @@
     <ClCompile Include="renderer\RendererHeader.cpp" />
     <ClCompile Include="renderer\PrimitiveRenderer.cpp" />
     <ClCompile Include="renderer\VolumeRenderer.cpp" />
+    <ClCompile Include="SSRenderer.cpp" />
     <ClCompile Include="vismtv_inbuilt_renderergpudx.cpp" />
   </ItemGroup>
   <ItemGroup>

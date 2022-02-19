@@ -413,6 +413,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11020), "SR_OIT_ABUFFER_FRAGCOUNTER_ps_5_0", "ps_5_0"), SR_OIT_ABUFFER_FRAGCOUNTER_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11026), "SR_OIT_ABUFFER_FRAGCOUNTER_MTT_ps_5_0", "ps_5_0"), SR_OIT_ABUFFER_FRAGCOUNTER_MTT_ps_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11027), "SR_SINGLE_LAYER_TO_DFB_cs_5_0", "cs_5_0"), SR_SINGLE_LAYER_TO_DFB_cs_5_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11021), "SR_OIT_ABUFFER_PHONGBLINN_ps_5_0", "ps_5_0"), SR_OIT_ABUFFER_PHONGBLINN_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11022), "SR_OIT_ABUFFER_DASHEDLINE_ps_5_0", "ps_5_0"), SR_OIT_ABUFFER_DASHEDLINE_ps_5_0);
@@ -2060,7 +2061,7 @@ void grd_helper::SetCb_RenderingEffect(CB_RenderingEffect& cb_reffect, VmVObject
 {
 	const int obj_id = obj->GetObjectID();
 
-	cb_reffect.outline_mode = rendering_obj_info.show_outline? 1 : 0; // DOJO TO DO , encoding
+	cb_reffect.outline_mode = rendering_obj_info.outline_thickness > 0 ? 1 : 0; // DOJO TO DO , encoding
 
 	bool apply_occ = false;
 	lobj->GetDstObjValue(obj_id, "_bool_ApplyAO", &apply_occ);
