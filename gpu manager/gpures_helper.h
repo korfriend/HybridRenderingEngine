@@ -412,7 +412,7 @@ namespace grd_helper
 		// 4th bit : for storing the final fragments to the k buffer, which is used for sequentially coming renderer (e.g., DVR) : 0 (skipping), 1 (storing)
 		// 5th bit : only for DFB without (S)FM. stores all fragments into the framebuffer (using offset table)
 		// 6th bit : 0 : (normal rendering), 1 : picking mode
-		// 7th bit : 0 : (stores the final RGBA and depth to RT), 1 : (does not store them)
+		// 7th bit : 0 : (stores the final RGBA and depth to RT), 1 : (does not store them) // will be deprecated
 		uint cam_flag;
 		// used for 1) A-Buffer prefix computations /*deprecated*/ or 2) beta (asfloat) for merging operation
 		uint iSrCamDummy__0; 
@@ -660,7 +660,7 @@ namespace grd_helper
 
 	// Compute Constant Buffers //
 	// global 
-	void SetCb_Camera(CB_CameraState& cb_cam, vmmat44f& matWS2PS, vmmat44f& matWS2SS, vmmat44f& matSS2WS, VmCObject* ccobj, const vmint2& fb_size, const int k_value, const float vz_thickness);
+	void SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, const vmmat44f& matSS2WS, VmCObject* ccobj, const vmint2& fb_size, const int k_value, const float vz_thickness);
 	void SetCb_Env(CB_EnvState& cb_env, VmCObject* ccobj, VmFnContainer* _fncontainer, vmfloat3 simple_light_intensities);
 	// each object
 	void SetCb_TMap(CB_TMAP& cb_tmap, VmTObject* tobj);

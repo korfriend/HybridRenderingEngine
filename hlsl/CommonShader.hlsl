@@ -42,7 +42,7 @@ struct HxCB_CameraState // Hlsl dX Contant Buffer
 	// 4th bit : for storing the final fragments to the k buffer, which is used for sequentially coming renderer (e.g., DVR) : 0 (skipping), 1 (storing)
 	// 5th bit : only for DFB without (S)FM. stores all fragments into the framebuffer (using offset table)
 	// 6th bit : 0 : (normal rendering), 1 : picking mode
-	// 7th bit : 0 : (stores the final RGBA and depth to RT), 1 : (does not store them)
+	// 7th bit : 0 : (stores the final RGBA and depth to RT), 1 : (does not store them) // will be deprecated
 	uint cam_flag;
 	// used for 1) A-Buffer prefix computations /*deprecated*/ or 2) beta (asfloat) for merging operation
 	uint iSrCamDummy__0; 

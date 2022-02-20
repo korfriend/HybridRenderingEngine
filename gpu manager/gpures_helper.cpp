@@ -1673,17 +1673,8 @@ bool grd_helper::CheckOtfAndVolBlobkUpdate(VmVObjectVolume* vobj, VmTObject* tob
 //#define *(vmfloat4*)&
 //#define *(XMMATRIX*)&
 
-void grd_helper::SetCb_Camera(CB_CameraState& cb_cam, vmmat44f& matWS2PS, vmmat44f& matWS2SS, vmmat44f& matSS2WS, VmCObject* ccobj, const vmint2& fb_size, const int k_value, const float vz_thickness)
+void grd_helper::SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, const vmmat44f& matSS2WS, VmCObject* ccobj, const vmint2& fb_size, const int k_value, const float vz_thickness)
 {
-	vmmat44 dmatWS2CS, dmatCS2PS, dmatPS2SS;
-	vmmat44 dmatSS2PS, dmatPS2CS, dmatCS2WS;
-	ccobj->GetMatrixWStoSS(&dmatWS2CS, &dmatCS2PS, &dmatPS2SS);
-	ccobj->GetMatrixSStoWS(&dmatSS2PS, &dmatPS2CS, &dmatCS2WS);
-	vmmat44 dmatWS2PS = dmatWS2CS * dmatCS2PS;
-	matWS2PS = dmatWS2PS;
-	matWS2SS = dmatWS2PS * dmatPS2SS;
-	matSS2WS = (dmatSS2PS * dmatPS2CS) * dmatCS2WS;
-
 	cb_cam.mat_ss2ws = TRANSPOSE(matSS2WS);
 	cb_cam.mat_ws2ss = TRANSPOSE(matWS2SS);
 
