@@ -21,8 +21,8 @@ RWTexture2D<uint> fragment_counter : register(u0);
 [numthreads(GRIDSIZE, GRIDSIZE, 1)]
 void CreatePrefixSum_Pass0_CS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID, uint3 nGTid : SV_GroupThreadID)
 {
-	//if (nDTid.x >= g_cbCamState.rt_width || nDTid.y >= g_cbCamState.rt_height)
-	//    return;
+	if (nDTid.x >= g_cbCamState.rt_width || nDTid.y >= g_cbCamState.rt_height)
+	    return;
 	uint nThreadNum = nDTid.y * g_cbCamState.rt_width + nDTid.x;
 	if (nThreadNum % 2 == 0)
 	{
@@ -46,6 +46,8 @@ void CreatePrefixSum_Pass0_CS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_Dispatch
 [numthreads(GRIDSIZE, GRIDSIZE, 1)]
 void CreatePrefixSum_Pass1_CS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID, uint3 nGTid : SV_GroupThreadID)
 {
+	if (nDTid.x >= g_cbCamState.rt_width || nDTid.y >= g_cbCamState.rt_height)
+		return;
 	int nThreadNum = nDTid.x + nDTid.y * g_cbCamState.rt_width;
 	uint g_nPassSize = g_cbCamState.iSrCamDummy__0;
 	uint nValue = offsettable_buf[nThreadNum * g_nPassSize + g_nPassSize / 2 - 1];
@@ -60,6 +62,8 @@ groupshared int __offset = 0;
 [numthreads(GRIDSIZE, GRIDSIZE, 1)]
 void CreateOffsetTable_CS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID, uint3 nGTid : SV_GroupThreadID)
 {
+	if (nDTid.x >= g_cbCamState.rt_width || nDTid.y >= g_cbCamState.rt_height)
+		return;
 	uint nThreadId = nDTid.y * g_cbCamState.rt_width + nDTid.x;
 	uint num_frags = sr_fragment_counter[nDTid.xy];
 	if (num_frags == 0 
@@ -121,6 +125,8 @@ Buffer<uint> sr_offsettable_buf : register(t50); // gres_fb_ref_pidx
 [numthreads(GRIDSIZE, GRIDSIZE, 1)]
 void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID, uint3 nGTid : SV_GroupThreadID)
 {
+	if (nDTid.x >= g_cbCamState.rt_width || nDTid.y >= g_cbCamState.rt_height)
+		return;
 	uint nThreadNum = nDTid.y * g_cbCamState.rt_width + nDTid.x; // pixel_id
 	if (nThreadNum == 0) // we used 0th pixel for temporal synch //
 		return;

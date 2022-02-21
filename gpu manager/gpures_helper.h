@@ -514,14 +514,14 @@ namespace grd_helper
 		// 24th bit : 0 (static alpha) 1 (dynamic alpha using mask t50) ... mode 2
 		// 31~32th bit : max components for dashed line : 0 ==> x, 1 ==> y, 2 ==> z
 		uint pobj_flag;
-		uint num_letters;
+		uint num_letters;	// for text object 
 		float dash_interval;
-		float depth_forward_bias;	// deprecated!
+		float depth_thres;	// for outline!
 
-		float pix_thickness; // only for POINT and LINE TOPOLOGY
-		float vz_thickness;
-		uint num_safe_loopexit;
-		uint pobj_dummy_0; // pobj_id used for picking
+		float pix_thickness; // 1) for POINT and LINE TOPOLOGY, 2) outline thickness (in pixel)
+		float vz_thickness; 
+		uint num_safe_loopexit; 
+		uint pobj_dummy_0; // 1) pobj_id used for picking, 2) outline color
 
 		ZERO_SET(CB_PolygonObject)
 	};
@@ -645,6 +645,7 @@ namespace grd_helper
 		int __dummy1;
 		int __dummy2;
 	};
+
 	struct CB_HotspotMask
 	{
 		HotspotMask mask_info_[2];

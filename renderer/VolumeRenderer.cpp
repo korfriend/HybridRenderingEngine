@@ -835,6 +835,18 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			break;
 		}
 
+		int outline_thickness;
+		lobj->GetDstObjValue(vobj_id, "_int_SilhouetteThickness", &outline_thickness);
+		if (outline_thickness > 0) {
+			double doutline_depthThres;
+			lobj->GetDstObjValue(vobj_id, "_double_SilhouetteDepthThres", &doutline_depthThres);
+			float outline_depthThres = (float)doutline_depthThres;
+			vmdouble3 doutline_color;
+			lobj->GetDstObjValue(vobj_id, "_double3_SilhouetteColor", &doutline_color);
+			vmfloat3 outline_color = doutline_color;
+			// to do //
+		}
+
 		ID3D11UnorderedAccessView* dx11UAVs[4] = {
 				  (ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV]
 				, (ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]

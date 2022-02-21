@@ -134,12 +134,12 @@ struct HxCB_PolygonObject
     uint pobj_flag;
     uint num_letters;
     float dash_interval;
-    float depth_forward_bias;
+    float depth_thres; // for outline!
 
-    float pix_thickness; // only for POINT and LINE TOPOLOGY
+    float pix_thickness; // 1) for POINT and LINE TOPOLOGY, 2) outline thickness (in pixel)
     float vz_thickness;
     uint num_safe_loopexit;
-    uint pobj_dummy_0; // pobj_id used for picking
+    uint pobj_dummy_0; // 1) pobj_id used for picking, 2) outline color
 };
 
 struct HxCB_VolumeObject

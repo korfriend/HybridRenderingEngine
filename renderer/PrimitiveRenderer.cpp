@@ -1438,7 +1438,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		if (prim_data->GetVerticeDefinition("TEXCOORD0") == NULL)
 			render_obj_info.use_vertex_color = false;
 
-		//lobj->GetDstObjValue(pobj_id, "_bool_ShowOutline", &render_obj_info.show_outline); // legacy
 		lobj->GetDstObjValue(pobj_id, "_int_SilhouetteThickness", &render_obj_info.outline_thickness);
 		if (render_obj_info.outline_thickness > 0) {
 			double doutline_depthThres;
@@ -1719,6 +1718,10 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			{
 				//cbPolygonObj.depth_forward_bias = (float)v_discont_depth;
 				cbPolygonObj.pobj_flag |= 0x1;
+
+				cbPolygonObj.pix_thickness = (float)render_obj_info.outline_thickness;
+				cbPolygonObj.depth_thres = render_obj_info.outline_depthThres;
+				cbPolygonObj.pobj_dummy_0 = (int)(render_obj_info.outline_color.r * 255.f) + (int)(render_obj_info.outline_color.g * 255.f) << 8 + (int)(render_obj_info.outline_color.b * 255.f) << 16;
 			}
 
 			if (is_ghost_mode && !IS_SAFE_OBJ(pobj_id))

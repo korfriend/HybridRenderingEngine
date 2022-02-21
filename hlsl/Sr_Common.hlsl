@@ -217,13 +217,11 @@ float4 OutlineTest2(const in int2 tex2d_xy, inout float depth_c, const in float 
     return vout;
 }
 
-float4 OutlineTest(const in int2 tex2d_xy, const in float depth_c, const in float discont_depth_criterion)
+float4 OutlineTest_old(const in int2 tex2d_xy, const in float depth_c, const in float discont_depth_criterion, const in float3 edge_color, const in int thick)
 {
-	const float3 edge_color = float3(1, 0, 0);
 	float4 vout = (float4) 0;
 	if (depth_c < 1000000)
 	{
-		const int thick = 5;// 15;
 		float depth_h0 = sr_fragment_zdepth[tex2d_xy.xy + int2(0, thick)].r;
 		float depth_h1 = sr_fragment_zdepth[tex2d_xy.xy - int2(0, thick)].r;
 		float depth_w0 = sr_fragment_zdepth[tex2d_xy.xy + int2(thick, 0)].r;
@@ -267,6 +265,46 @@ float4 OutlineTest(const in int2 tex2d_xy, const in float depth_c, const in floa
 		//vout = float4(depth_h0 / 40, depth_h0 / 40, depth_h0 / 40, 1);
 	}
         
+    return vout;
+}
+
+float4 OutlineTest(const in int2 tex2d_xy, inout float depth_c, const in float discont_depth_criterion, const in float3 edge_color, const in int thick)
+{
+    float2 min_rect = (float2)0;
+    float2 max_rect = float2(g_cbCamState.rt_width - 1, g_cbCamState.rt_height - 1);
+    
+    float4 vout = (float4) 0;
+    if (depth_c > 100000)
+    {
+        int count = 0;
+        float depth_min = FLT_MAX;
+
+        for (int y = -thick; y <= thick; y++) {
+            for (int x = -thick; x <= thick; x++) {
+                float2 sample_pos = tex2d_xy.xy + float2(x, y);
+                float2 v1 = min_rect - sample_pos;
+                float2 v2 = max_rect - sample_pos;
+                float2 v12 = v1 * v2;
+                if (v12.x >= 0 || v12.y >= 0)
+                    continue;
+                float depth = sr_fragment_zdepth[sample_pos].r;
+                if (depth < 100000) {
+                    count++;
+                    depth_min = min(depth_min, depth);
+                }
+            }
+        }
+
+        float w = 2 * thick + 1;
+        float alpha = min((floaT)count / (w * w / 2.f), 1.f);
+        //alpha *= alpha;
+
+        vout = float4(edge_color * alpha, alpha);
+        depth_c = depth_min;
+        //vout = float4(nor_c, 1);
+        //vout = float4(depth_h0 / 40, depth_h0 / 40, depth_h0 / 40, 1);
+    }
+
     return vout;
 }
 

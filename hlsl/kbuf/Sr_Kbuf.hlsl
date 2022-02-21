@@ -640,6 +640,8 @@ __IES(ADDR + (K) * NUM_ELES_PER_FRAG * 4, 1, asuint(F.z)); }
 [numthreads(GRIDSIZE, GRIDSIZE, 1)]
 void OIT_PRESET(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
 {
+	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
+		return;
 	int2 tex2d_xy = int2(DTid.xy);
 
 	//float4 v_rgba = sr_fragment_vis[tex2d_xy];
@@ -648,8 +650,10 @@ void OIT_PRESET(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	float depth_res = GetVZThickness(depthcs, g_cbPobj.vz_thickness);
 
 	float4 v_rgba = (float4)0;
-	if (BitCheck(g_cbCamState.cam_flag, 1))
-		v_rgba = OutlineTest(tex2d_xy, depthcs, depth_res * 100.f);
+	if (BitCheck(g_cbCamState.cam_flag, 1)) {
+		float4 outline_color = (float4)1;// ConvertUIntToFloat4(g_cbPobj.pobj_dummy_0);
+		v_rgba = OutlineTest(tex2d_xy, depthcs, g_cbPobj.depth_thres, outline_color.rgb, (int)g_cbPobj.pix_thickness);
+	}
 	else
 		v_rgba = sr_fragment_vis[tex2d_xy.xy];
 	//if(v_rgba.a == 0)
@@ -659,6 +663,8 @@ void OIT_PRESET(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		return;
 
 	float vz_thickness = depth_res;
+	//v_rgba = float4(1, 1, 0, 0.1);
+	//v_rgba.a = 0.1;
 	Fill_kBuffer(tex2d_xy, g_cbCamState.k_value, v_rgba, depthcs, vz_thickness);
 }
 
