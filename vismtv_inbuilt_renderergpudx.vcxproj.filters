@@ -61,9 +61,6 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <Filter Include="hlsl source code">
-      <UniqueIdentifier>{e1d70379-9e94-4e4e-8bb4-34d60a3bbf22}</UniqueIdentifier>
-    </Filter>
     <Filter Include="resources">
       <UniqueIdentifier>{d8402e17-d728-4204-8a1c-b2cad8627fcb}</UniqueIdentifier>
     </Filter>
@@ -76,14 +73,17 @@
     <Filter Include="gpu manager\legacy">
       <UniqueIdentifier>{5c3050f7-28fb-43a2-aeda-6c506b4fe8ef}</UniqueIdentifier>
     </Filter>
+    <Filter Include="bat">
+      <UniqueIdentifier>{a59a4be1-fce7-4f35-96fc-ee08cd7491d0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="hlsl source code">
+      <UniqueIdentifier>{e1d70379-9e94-4e4e-8bb4-34d60a3bbf22}</UniqueIdentifier>
+    </Filter>
     <Filter Include="hlsl source code\Moment">
       <UniqueIdentifier>{3d60a282-de0d-4f81-971e-a82270d4889c}</UniqueIdentifier>
     </Filter>
     <Filter Include="hlsl source code\k buf">
       <UniqueIdentifier>{6b7e8c65-0712-4e0a-aa2c-33139f24a953}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="bat">
-      <UniqueIdentifier>{a59a4be1-fce7-4f35-96fc-ee08cd7491d0}</UniqueIdentifier>
     </Filter>
     <Filter Include="hlsl source code\dvr">
       <UniqueIdentifier>{2fd27554-a32f-4802-b970-efc91079d1c3}</UniqueIdentifier>
