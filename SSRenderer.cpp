@@ -5,18 +5,32 @@ void ComputeSSAO(__ID3D11DeviceContext* dx11DeviceImmContext,
 	int num_grid_x, int num_grid_y,
 	GpuRes& gres_fb_counter, GpuRes& gres_fb_deep_k_buffer, GpuRes& gres_fb_rgba, bool blur_SSAO,
 	GpuRes& gres_fb_vr_depth, GpuRes& gres_fb_vr_ao, GpuRes& gres_fb_vr_ao_blf, bool involve_vr, bool apply_fragmerge,
-	map<string, int>& profile_map, bool gpu_profile)
+	map<string, vmint2>& profile_map, bool gpu_profile)
 {
-	if (gpu_profile)
-	{
-		int gpu_profilecount = (int)profile_map.size();
-		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
-		profile_map["begin SSAO"] = gpu_profilecount;
-		//gpu_profilecount++;
-	}
+	auto ___GpuProfile = [&gpu_profile, &dx11DeviceImmContext, &profile_map, &dx11CommonParams](const string& profile_name, const bool is_closed = false) {
+		if (gpu_profile)
+		{
+			int stamp_idx = 0;
+			auto it = profile_map.find(profile_name);
+			if (it == profile_map.end()) {
+				assert(is_closed == false);
+				int gpu_profilecount = (int)profile_map.size() * 2;
+				profile_map[profile_name] = vmint2(gpu_profilecount, -1);
+				stamp_idx = gpu_profilecount;
+			}
+			else {
+				assert(it->second.y == -1 && is_closed == true);
+				it->second.y = it->second.x + 1;
+				stamp_idx = it->second.y;
+			}
+
+			dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[stamp_idx]);
+			//gpu_profilecount++;
+		}
+	};
 
 #define MAX_LAYERS_SSAO 8
-
+	___GpuProfile("SSAO Sampling");
 	GpuRes gres_fb_ao_texs, gres_fb_ao_blf_texs;
 	grd_helper::UpdateFrameBuffer(gres_fb_ao_texs, iobj, "RW_TEXS_AO", RTYPE_TEXTURE2D,
 		D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8_UNORM, UPFB_NFPP_TEXTURESTACK, MAX_LAYERS_SSAO);
@@ -72,15 +86,11 @@ void ComputeSSAO(__ID3D11DeviceContext* dx11DeviceImmContext,
 	dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(KB_SSAO_FM_cs_5_0) : GETCS(KB_SSAO_cs_5_0), NULL, 0);
 	dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
 
-	if (gpu_profile)
-	{
-		int gpu_profilecount = (int)profile_map.size();
-		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
-		profile_map["end SSAO sample"] = gpu_profilecount;
-		//gpu_profilecount++;
-	}
+	___GpuProfile("SSAO Sampling", true);
+	
 	if (blur_SSAO)
 	{
+		___GpuProfile("SSAO Blurring");
 		// BLUR process
 		//dx11DeviceImmContext->Flush();
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(25, 2, &dx11UAVs_SSAO[2], 0);
@@ -100,13 +110,7 @@ void ComputeSSAO(__ID3D11DeviceContext* dx11DeviceImmContext,
 		dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(KB_SSAO_BLUR_FM_cs_5_0) : GETCS(KB_SSAO_BLUR_cs_5_0), NULL, 0);
 		dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
 
-		if (gpu_profile)
-		{
-			int gpu_profilecount = (int)profile_map.size();
-			dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
-			profile_map["end SSAO blur filter"] = gpu_profilecount;
-			//gpu_profilecount++;
-		}
+		___GpuProfile("SSAO Blurring", true);
 	}
 
 	dx11DeviceImmContext->CSSetShaderResources(10, 2, &dx11SRVs_SSAO[2]);
@@ -130,8 +134,30 @@ void ComputeDOF(__ID3D11DeviceContext* dx11DeviceImmContext,
 	GpuRes& gres_fb_vr_depth, GpuRes& gres_fb_vr_ao, GpuRes& gres_fb_vr_ao_blf,
 	CB_CameraState& cbCamState, ID3D11Buffer* cbuf_cam_state, int __BLOCKSIZE,
 	bool involve_vr,
-	map<string, int>& profile_map, bool gpu_profile)
+	map<string, vmint2>& profile_map, bool gpu_profile)
 {
+	auto ___GpuProfile = [&gpu_profile, &dx11DeviceImmContext, &profile_map, &dx11CommonParams](const string& profile_name, const bool is_closed = false) {
+		if (gpu_profile)
+		{
+			int stamp_idx = 0;
+			auto it = profile_map.find(profile_name);
+			if (it == profile_map.end()) {
+				assert(is_closed == false);
+				int gpu_profilecount = (int)profile_map.size() * 2;
+				profile_map[profile_name] = vmint2(gpu_profilecount, -1);
+				stamp_idx = gpu_profilecount;
+			}
+			else {
+				assert(it->second.y == -1 && is_closed == true);
+				it->second.y = it->second.x + 1;
+				stamp_idx = it->second.y;
+			}
+
+			dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[stamp_idx]);
+			//gpu_profilecount++;
+		}
+	};
+
 	VmCObject* cam_obj = iobj->GetCameraObject();
 	vmmat44 dmatWS2CS, dmatCS2PS, dmatPS2SS;
 	vmmat44 dmatSS2PS, dmatPS2CS, dmatCS2WS;
@@ -168,14 +194,6 @@ void ComputeDOF(__ID3D11DeviceContext* dx11DeviceImmContext,
 	float clr_float_zero_4[4] = { 0, 0, 0, 0 };
 	dx11DeviceImmContext->ClearUnorderedAccessViewFloat((ID3D11UnorderedAccessView*)gres_fb_z_minmax_mipmap_nbtex.alloc_res_ptrs[DTYPE_UAV], clr_float_zero_4);
 
-	if (gpu_profile)
-	{
-		int gpu_profilecount = (int)profile_map.size();
-		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
-		profile_map["begin SSDOF"] = gpu_profilecount;
-		//gpu_profilecount++;
-	}
-
 	ID3D11ShaderResourceView* dx11SRVs_DOF[3] = {};
 	ID3D11ShaderResourceView* dx11SRVs_NULL[3] = {};
 	dx11SRVs_DOF[0] = (ID3D11ShaderResourceView*)gres_fb_counter.alloc_res_ptrs[DTYPE_SRV];
@@ -204,15 +222,8 @@ void ComputeDOF(__ID3D11DeviceContext* dx11DeviceImmContext,
 	uint texMm_num_grid_y = __BLOCKSIZE == 1 ? half_h : (uint)ceil(half_h / (float)__BLOCKSIZE);
 	dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(KB_MINMAXTEXTURE_FM_cs_5_0) : GETCS(KB_MINMAXTEXTURE_cs_5_0), NULL, 0);
 	dx11DeviceImmContext->Dispatch(texMm_num_grid_x, texMm_num_grid_y, 1);
-
-	if (gpu_profile)
-	{
-		int gpu_profilecount = (int)profile_map.size();
-		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
-		profile_map["end minmax z texture (half)"] = gpu_profilecount;
-		//gpu_profilecount++;
-	}
-
+	
+	___GpuProfile("SSAO: MinMax Z (half)");
 	dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(KB_MINMAX_NBUF_FM_cs_5_0) : GETCS(KB_MINMAX_NBUF_cs_5_0), NULL, 0);
 	int max_wh = max(half_w, half_w);
 	int nbuf_step = 1;
@@ -231,14 +242,7 @@ void ComputeDOF(__ID3D11DeviceContext* dx11DeviceImmContext,
 		dx11DeviceImmContext->Flush();
 		max_wh >>= 1;
 	}
-
-	if (gpu_profile)
-	{
-		int gpu_profilecount = (int)profile_map.size();
-		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
-		profile_map["end minmax z texture nbuffer"] = gpu_profilecount;
-		//gpu_profilecount++;
-	}
+	___GpuProfile("SSAO: MinMax Z (half)", true);
 
 	dx11DeviceImmContext->CSSetUnorderedAccessViews(15, 2, dx11UAVs_NULL, 0);
 	dx11SRVs_DOF[0] = (ID3D11ShaderResourceView*)gres_fb_globalminmax.alloc_res_ptrs[DTYPE_SRV];
@@ -257,13 +261,6 @@ void ComputeDOF(__ID3D11DeviceContext* dx11DeviceImmContext,
 
 	dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(KB_SSDOF_RT_FM_cs_5_0) : GETCS(KB_SSDOF_RT_cs_5_0), NULL, 0);
 	dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
-	if (gpu_profile)
-	{
-		int gpu_profilecount = (int)profile_map.size();
-		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
-		profile_map["end SSDOF"] = gpu_profilecount;
-		//gpu_profilecount++;
-	}
 
 	dx11DeviceImmContext->CSSetShaderResources(10, 3, dx11SRVs_NULL);
 	dx11DeviceImmContext->CSSetUnorderedAccessViews(10, 1, dx11UAVs_NULL, 0);

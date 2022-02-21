@@ -42,7 +42,7 @@ void ComputeSSAO(__ID3D11DeviceContext* dx11DeviceImmContext,
 	int num_grid_x, int num_grid_y,
 	GpuRes& gres_fb_counter, GpuRes& gres_fb_deep_k_buffer, GpuRes& gres_fb_rgba, bool blur_SSAO,
 	GpuRes& gres_fb_vr_depth, GpuRes& gres_fb_vr_ao, GpuRes& gres_fb_vr_ao_blf, bool involve_vr, bool apply_fragmerge,
-	map<string, int>& profile_map, bool gpu_profile);
+	map<string, vmint2>& profile_map, bool gpu_profile);
 
 void ComputeDOF(__ID3D11DeviceContext* dx11DeviceImmContext,
 	grd_helper::GpuDX11CommonParameters* dx11CommonParams, VmIObject* iobj,
@@ -52,7 +52,7 @@ void ComputeDOF(__ID3D11DeviceContext* dx11DeviceImmContext,
 	GpuRes& gres_fb_vr_depth, GpuRes& gres_fb_vr_ao, GpuRes& gres_fb_vr_ao_blf,
 	CB_CameraState& cbCamState, ID3D11Buffer* cbuf_cam_state, int __BLOCKSIZE,
 	bool involve_vr,
-	map<string, int>& profile_map, bool gpu_profile);
+	map<string, vmint2>& profile_map, bool gpu_profile);
 
 #define IS_SAFE_OBJ(OBJID) ((OBJID & 0xFFFF) >= 65536 - 4096)
 
@@ -65,7 +65,7 @@ enum MFR_MODE
 };
 
 enum RENDER_GEOPASS {
-	PASS1 = 0,
-	PASS2 = 1,
-	PASS3 = 2
+	PASS_OPAQUESURFACES = 0,
+	PASS_OIT = 1,
+	PASS_SINGLELAYERS = 2,
 };

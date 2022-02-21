@@ -359,9 +359,17 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	uint num_grid_y = __BLOCKSIZE == 1 ? fb_size_cur.y : (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
 
 	VmCObject* cam_obj = iobj->GetCameraObject();
-	vmmat44f matWS2SS, matWS2PS, matSS2WS;
+	vmmat44 dmatWS2CS, dmatCS2PS, dmatPS2SS;
+	vmmat44 dmatSS2PS, dmatPS2CS, dmatCS2WS;
+	cam_obj->GetMatrixWStoSS(&dmatWS2CS, &dmatCS2PS, &dmatPS2SS);
+	cam_obj->GetMatrixSStoWS(&dmatSS2PS, &dmatPS2CS, &dmatCS2WS);
+	vmmat44 dmatWS2PS = dmatWS2CS * dmatCS2PS;
+	vmmat44f matWS2PS = dmatWS2PS;
+	vmmat44f matWS2SS = dmatWS2PS * dmatPS2SS;
+	vmmat44f matSS2WS = (dmatSS2PS * dmatPS2CS) * dmatCS2WS;
+
 	CB_CameraState cbCamState;
-	grd_helper::SetCb_Camera(cbCamState, matWS2PS, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, v_thickness <= 0? min_pitch : (float)v_thickness);
+	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, v_thickness <= 0? min_pitch : (float)v_thickness);
 	cbCamState.iSrCamDummy__0 = *(uint*)&merging_beta;
 	
 	D3D11_MAPPED_SUBRESOURCE mappedResCamState;
@@ -393,15 +401,38 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	}
 #pragma endregion // Light & Shadow Setting
 
-	int gpu_profilecount = 0;
-	map<string, int> profile_map;
+	map<string, vmint2> profile_map;
 	if (gpu_profile)
 	{
+		int gpu_profilecount = (int)profile_map.size();
 		dx11DeviceImmContext->Begin(dx11CommonParams->dx11qr_disjoint);
-		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
-		profile_map["begin"] = gpu_profilecount;
-		gpu_profilecount++;
+		//gpu_profilecount++;
 	}
+
+
+	auto ___GpuProfile = [&gpu_profile, &dx11DeviceImmContext, &profile_map, &dx11CommonParams](const string& profile_name, const bool is_closed = false) {
+		if (gpu_profile)
+		{
+			int stamp_idx = 0;
+			auto it = profile_map.find(profile_name);
+			if (it == profile_map.end()) {
+				assert(is_closed == false);
+				int gpu_profilecount = (int)profile_map.size() * 2;
+				profile_map[profile_name] = vmint2(gpu_profilecount, -1);
+				stamp_idx = gpu_profilecount;
+			}
+			else {
+				assert(it->second.y == -1 && is_closed == true);
+				it->second.y = it->second.x + 1;
+				stamp_idx = it->second.y;
+			}
+
+			dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[stamp_idx]);
+			//gpu_profilecount++;
+		}
+	};
+
+	___GpuProfile("VR Begin");
 
 	// Initial Setting of Frame Buffers //
 	int count_call_render = 0;
@@ -894,13 +925,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 	//dx11DeviceImmContext->Flush();
 	//printf("# Textures : %d, # Drawing : %d, # RTBuffer Change : %d, # Merging : %d\n", iNumTexureLayers, iCountRendering, iCountRTBuffers, iCountMerging);
-	
-	if (gpu_profile)
-	{
-		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
-		profile_map["end dvr"] = gpu_profilecount;
-		gpu_profilecount++;
-	}
+	___GpuProfile("VR Begin", true);
+
 	bool is_system_out = true;
 	// APPLY HWND MODE
 	HWND hWnd = (HWND)_fncontainer->GetParamValue("_hwnd_WindowHandle", (HWND)NULL);
@@ -1028,13 +1054,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #pragma endregion
 		}	// if (iCountDrawing == 0)
 	}
-
-	if(gpu_profile)
+	if (gpu_profile)
 	{
-		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[gpu_profilecount]);
-		profile_map["end"] = gpu_profilecount;
-		gpu_profilecount++;
-
 		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_disjoint);
 
 		// Wait for data to be available
@@ -1048,40 +1069,31 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->GetData(dx11CommonParams->dx11qr_disjoint, &tsDisjoint, sizeof(tsDisjoint), 0);
 		if (!tsDisjoint.Disjoint)
 		{
-			UINT64 tsBeginFrame = 0, tsEndDVR = 0, tsEndFrame = 0, tsBeginSSAO = 0, tsEndSSAOsample = 0, tsEndSSAPBlur = 0;
-
-			auto GetTimeGpuProfile = [&profile_map, &dx11DeviceImmContext, &dx11CommonParams](const string& name, UINT64& ts) -> bool
-			{
-				auto it = profile_map.find(name);
-				if (it == profile_map.end())
-				{
-					ts = 0;
-					return false;
-				}
-
-				dx11DeviceImmContext->GetData(dx11CommonParams->dx11qr_timestamps[it->second], &ts, sizeof(UINT64), 0);
-			};
-
-			GetTimeGpuProfile("begin", tsBeginFrame);
-			GetTimeGpuProfile("end dvr", tsEndDVR);
-			GetTimeGpuProfile("end", tsEndFrame);
-			GetTimeGpuProfile("begin SSAO", tsBeginSSAO);
-			GetTimeGpuProfile("end SSAO sample", tsEndSSAOsample);
-			GetTimeGpuProfile("end SSAO blur filter", tsEndSSAPBlur);
-			UINT64 __dummny;
-			for (int i = 0; i < MAXSTAMPS; i++)
-				dx11DeviceImmContext->GetData(dx11CommonParams->dx11qr_timestamps[i], &__dummny, sizeof(UINT64), 0);
-
 			auto DisplayDuration = [&tsDisjoint](UINT64 tsS, UINT64 tsE, const string& _test)
 			{
 				if (tsS == 0 || tsE == 0) return;
 				cout << _test << " : " << float(tsE - tsS) / float(tsDisjoint.Frequency) * 1000.0f << " ms" << endl;
 			};
-			//DisplayDuration(tsBeginFrame, tsEndFrame, "#GPU# Total (including copyback) Time");
-			DisplayDuration(tsBeginFrame, tsEndDVR, "#GPU# Direct Volume Render Time");
-			DisplayDuration(tsBeginSSAO, tsEndSSAOsample, "#GPU# SSAO Sample Time");
-			DisplayDuration(tsEndSSAOsample, tsEndSSAPBlur, "#GPU# SSAO Blur Time");
-			DisplayDuration(tsEndDVR, tsEndFrame, "#GPU# CopyBack Time");
+
+			for (auto& it : profile_map) {
+				UINT64 ts, te;
+				dx11DeviceImmContext->GetData(dx11CommonParams->dx11qr_timestamps[it.second.x], &ts, sizeof(UINT64), 0);
+				dx11DeviceImmContext->GetData(dx11CommonParams->dx11qr_timestamps[it.second.y], &te, sizeof(UINT64), 0);
+
+				DisplayDuration(ts, te, it.first);
+			}
+
+			//if (test_fps_profiling)
+			//{
+			//	auto it = profile_map.find("SR Render");
+			//	UINT64 ts, te;
+			//	dx11DeviceImmContext->GetData(dx11CommonParams->dx11qr_timestamps[it->second.x], &ts, sizeof(UINT64), 0);
+			//	dx11DeviceImmContext->GetData(dx11CommonParams->dx11qr_timestamps[it->second.y], &te, sizeof(UINT64), 0);
+			//	ofstream file_rendertime;
+			//	file_rendertime.open(".\\data\\frames_profile_rendertime.txt", std::ios_base::app);
+			//	file_rendertime << float(te - ts) / float(tsDisjoint.Frequency) * 1000.0f << endl;
+			//	file_rendertime.close();
+			//}
 		}
 	}
 

@@ -83,7 +83,7 @@ namespace grd_helper
 		D3D_FEATURE_LEVEL dx11_featureLevel;
 		DXGI_ADAPTER_DESC dx11_adapter;
 
-#define MAXSTAMPS 20
+#define MAXSTAMPS 50
 		ID3D11Query* dx11qr_disjoint;
 		ID3D11Query* dx11qr_timestamps[MAXSTAMPS];
 

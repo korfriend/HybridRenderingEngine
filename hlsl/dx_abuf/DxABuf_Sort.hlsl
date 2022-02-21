@@ -258,8 +258,10 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 	}
 	if (store_to_kbuf) fragment_counter[nDTid.xy] = cnt_stored_fs;
 
-	fragment_blendout[nDTid.xy] = vis_out;
-	fragment_zdepth[nDTid.xy] = fragments[0].z;
+	if (!store_to_kbuf) {
+		fragment_blendout[nDTid.xy] = vis_out;
+		fragment_zdepth[nDTid.xy] = fragments[0].z;
+	}
 #if TEST == 1
 	if (g_cbEnv.env_dummy_2 >= 1)
 	{
