@@ -85,7 +85,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			hlslobj_path += token + "\\";
 			exe_path.erase(0, pos + delimiter.length());
 		}
-		hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
+		hlslobj_path += "..\\..\\VmModuleProjects\\renderer_gpudx11\\shader_compiled_objs\\";
 		//cout << hlslobj_path << endl;
 
 		string prefix_path = hlslobj_path;
@@ -182,7 +182,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		gpu_profile = _fncontainer->GetParamValue("_bool_GpuProfile", false);
 	}
 
-	GpuRes gres_fb_rgba, gres_fb_depthcs;
+	GpuRes gres_fb_rgba, gres_fb_depthcs, gres_fb_vrdepthcs;
 	GpuRes gres_fb_k_buffer, gres_fb_counter;
 	GpuRes gres_fb_ao_texs[2], gres_fb_ao_blf_texs[2];
 	//GpuRes gres_fb_mip_a_halftexs[2], gres_fb_mip_z_halftexs[2]; // deprecated
@@ -193,6 +193,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D,
 		D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
 	grd_helper::UpdateFrameBuffer(gres_fb_depthcs, iobj, "RENDER_OUT_DEPTH_0", RTYPE_TEXTURE2D,
+		D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_FLOAT, 0);
+	grd_helper::UpdateFrameBuffer(gres_fb_vrdepthcs, iobj, "RENDER_OUT_DEPTH_1", RTYPE_TEXTURE2D,
 		D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_FLOAT, 0);
 	grd_helper::UpdateFrameBuffer(gres_fb_counter, iobj, "RW_COUNTER", RTYPE_TEXTURE2D,
 		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
@@ -327,6 +329,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		//dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 		dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 		dx11DeviceImmContext->ClearUnorderedAccessViewFloat((ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV], clr_float_fltmax_4);
+		// note that gres_fb_vrdepthcs is supposed to be initialized in VR_SURFACE
 	}
 
 	ID3D11Buffer* cbuf_cam_state = dx11CommonParams->get_cbuf("CB_CameraState");
@@ -348,8 +351,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	dx11DeviceImmContext->CSSetSamplers(2, 1, &sampler_LC);
 	dx11DeviceImmContext->CSSetSamplers(3, 1, &sampler_PC);
 
-	ID3D11UnorderedAccessView* dx11UAVs_NULL[6] = { NULL, NULL, NULL, NULL, NULL, NULL };
-	ID3D11ShaderResourceView* dx11SRVs_NULL[6] = { NULL, NULL, NULL, NULL, NULL, NULL };
+	ID3D11UnorderedAccessView* dx11UAVs_NULL[10] = { NULL };
+	ID3D11ShaderResourceView* dx11SRVs_NULL[10] = { NULL };
 #pragma region // Camera & Environment 
 // 	const int __BLOCKSIZE = 8;
 // 	uint num_grid_x = (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
@@ -835,18 +838,6 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			break;
 		}
 
-		int outline_thickness;
-		lobj->GetDstObjValue(vobj_id, "_int_SilhouetteThickness", &outline_thickness);
-		if (outline_thickness > 0) {
-			double doutline_depthThres;
-			lobj->GetDstObjValue(vobj_id, "_double_SilhouetteDepthThres", &doutline_depthThres);
-			float outline_depthThres = (float)doutline_depthThres;
-			vmdouble3 doutline_color;
-			lobj->GetDstObjValue(vobj_id, "_double3_SilhouetteColor", &doutline_color);
-			vmfloat3 outline_color = doutline_color;
-			// to do //
-		}
-
 		ID3D11UnorderedAccessView* dx11UAVs[4] = {
 				  (ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV]
 				, (ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]
@@ -862,8 +853,50 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			&& render_type != __RM_RAYMAX
 			&& render_type != __RM_RAYSUM)
 		{
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(4, 1, (ID3D11UnorderedAccessView**)&gres_fb_vrdepthcs.alloc_res_ptrs[DTYPE_UAV], (UINT*)(&dx11UAVs));
+
 			dx11DeviceImmContext->CSSetShader(GETCS(VR_SURFACE_cs_5_0), NULL, 0);
 			dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(4, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs));
+			dx11DeviceImmContext->CSSetShaderResources(6, 1, (ID3D11ShaderResourceView**)&gres_fb_vrdepthcs.alloc_res_ptrs[DTYPE_SRV]);
+
+			int outline_thickness = 0;
+			lobj->GetDstObjValue(vobj_id, "_int_SilhouetteThickness", &outline_thickness);
+			if (outline_thickness > 0) {
+				double doutline_depthThres = 100000.;
+				lobj->GetDstObjValue(vobj_id, "_double_SilhouetteDepthThres", &doutline_depthThres);
+				float outline_depthThres = (float)doutline_depthThres;
+				vmdouble3 doutline_color = vmdouble3(1, 1, 1);
+				lobj->GetDstObjValue(vobj_id, "_double3_SilhouetteColor", &doutline_color);
+				vmfloat3 outline_color = doutline_color;
+
+				cbVolumeObj.vobj_dummy_2 = (uint)(outline_color.r * 255.f) | ((uint)(outline_color.g * 255.f) << 8) | ((uint)(outline_color.b * 255.f) << 16) | (uint)(outline_thickness << 24);
+
+				dx11DeviceImmContext->Map(cbuf_vobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResVolObj);
+				CB_VolumeObject* cbVolumeObjData = (CB_VolumeObject*)mappedResVolObj.pData;
+				memcpy(cbVolumeObjData, &cbVolumeObj, sizeof(CB_VolumeObject));
+				dx11DeviceImmContext->Unmap(cbuf_vobj, 0);
+
+				//CB_PolygonObject cbPolygonObj;
+				//cbPolygonObj.pix_thickness = (float)outline_thickness;
+				//cbPolygonObj.depth_thres = outline_depthThres;
+				//cbPolygonObj.pobj_dummy_0 = (int)(outline_color.r * 255.f) + (int)(outline_color.g * 255.f) << 8 + (int)(outline_color.b * 255.f) << 16;
+				//D3D11_MAPPED_SUBRESOURCE mappedResPobjData;
+				//dx11DeviceImmContext->Map(cbuf_pobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResPobjData);
+				//CB_PolygonObject* cbPolygonObjData = (CB_PolygonObject*)mappedResPobjData.pData;
+				//memcpy(cbPolygonObjData, &cbPolygonObj, sizeof(CB_PolygonObject));
+				//dx11DeviceImmContext->Unmap(cbuf_pobj, 0);
+				//dx11DeviceImmContext->CSSetConstantBuffers(1, 1, &cbuf_pobj); // for silhouette or A-buffer test
+				//dx11DeviceImmContext->CSSetUnorderedAccessViews(2, 1, dx11UAVs, (UINT*)(&dx11UAVs));
+				//dx11DeviceImmContext->CSSetUnorderedAccessViews(4, 1, dx11UAVs, (UINT*)(&dx11UAVs));
+				//
+				//UINT UAVInitialCounts = 0;
+				//if (mode_OIT == MFR_MODE::STATIC_KB)
+				//	dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(SR_SINGLE_LAYER_TO_SKBTZ_cs_5_0) : GETCS(SR_SINGLE_LAYER_TO_SKBT_cs_5_0), NULL, 0);
+				//else if (mode_OIT == MFR_MODE::DYNAMIC_KB)
+				//	dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(SR_SINGLE_LAYER_TO_DKBTZ_cs_5_0) : GETCS(SR_SINGLE_LAYER_TO_DKBT_cs_5_0), NULL, 0);
+			}
 		}
 
 		if (i == num_main_vrs - 1 && cbEnvState.r_kernel_ao > 0)
@@ -900,6 +933,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		count_call_render++;
 
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+		dx11DeviceImmContext->CSSetShaderResources(6, 1, dx11SRVs_NULL);
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(50, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 #pragma endregion // Renderer
 	}

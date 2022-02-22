@@ -671,7 +671,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			hlslobj_path += token + "\\";
 			exe_path.erase(0, pos + delimiter.length());
 		}
-		hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
+		hlslobj_path += "..\\..\\VmModuleProjects\\renderer_gpudx11\\shader_compiled_objs\\";
 		//cout << hlslobj_path << endl;
 
 		string prefix_path = hlslobj_path;
@@ -1181,14 +1181,17 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 	vmfloat3 picking_ray_origin, picking_ray_dir;
 	if (is_picking_routine) {
-		vmmat44 dmatSS2PS, dmatPS2CS, dmatCS2WS;
-		cam_obj->GetMatrixSStoWS(&dmatSS2PS, &dmatPS2CS, &dmatCS2WS);
-		vmmat44f matSS2WS = vmmat44f(dmatSS2PS * dmatPS2CS * dmatCS2WS);
-		cam_obj->GetCameraExtStatef(&picking_ray_origin, NULL, NULL);
+		cam_obj->GetCameraExtStatef(&picking_ray_origin, &picking_ray_dir, NULL);
 		vmfloat3 pos_picking_ws, pos_picking_ss(picking_pos_ss.x, picking_pos_ss.y, 0);
 		vmmath::fTransformPoint(&pos_picking_ws, &pos_picking_ss, &matSS2WS);
-		picking_ray_dir = pos_picking_ws - picking_ray_origin;
-		vmmath::fNormalizeVector(&picking_ray_dir, &picking_ray_dir);
+
+		if (cam_obj->IsPerspective()) {
+			picking_ray_dir = pos_picking_ws - picking_ray_origin;
+			vmmath::fNormalizeVector(&picking_ray_dir, &picking_ray_dir);
+		}
+		else {
+			picking_ray_origin = pos_picking_ws;
+		}
 	}
 
 	CB_EnvState cbEnvState;
@@ -1721,7 +1724,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 				cbPolygonObj.pix_thickness = (float)render_obj_info.outline_thickness;
 				cbPolygonObj.depth_thres = render_obj_info.outline_depthThres;
-				cbPolygonObj.pobj_dummy_0 = (int)(render_obj_info.outline_color.r * 255.f) + (int)(render_obj_info.outline_color.g * 255.f) << 8 + (int)(render_obj_info.outline_color.b * 255.f) << 16;
+				cbPolygonObj.pobj_dummy_0 = (int)(render_obj_info.outline_color.r * 255.f) | (int)(render_obj_info.outline_color.g * 255.f) << 8 | (int)(render_obj_info.outline_color.b * 255.f) << 16;
 			}
 
 			if (is_ghost_mode && !IS_SAFE_OBJ(pobj_id))
@@ -2641,6 +2644,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			if (single_layer_routine_objs.size() > 0) {
 				cbCamState.cam_flag |= (0x1 << 1); // 2nd bit : perform RT to k-buffer : 0 (just RT), 1 : (perform after silhouette processing)
 				SetCamConstBuf(cbCamState);
+
+				//dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV], clr_float_fltmax_4);
+				dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
 				
 				___GpuProfile("Single Layer Pass");
 				RenderStage1(&single_layer_routine_objs, MFR_MODE::STATIC_KB, RENDER_GEOPASS::PASS_SINGLELAYERS

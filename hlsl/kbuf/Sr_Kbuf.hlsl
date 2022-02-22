@@ -647,11 +647,10 @@ void OIT_PRESET(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	//float4 v_rgba = sr_fragment_vis[tex2d_xy];
 	float depthcs = sr_fragment_zdepth[tex2d_xy];
 
-	float depth_res = GetVZThickness(depthcs, g_cbPobj.vz_thickness);
 
 	float4 v_rgba = (float4)0;
 	if (BitCheck(g_cbCamState.cam_flag, 1)) {
-		float4 outline_color = (float4)1;// ConvertUIntToFloat4(g_cbPobj.pobj_dummy_0);
+		float4 outline_color = ConvertUIntToFloat4(g_cbPobj.pobj_dummy_0);
 		v_rgba = OutlineTest(tex2d_xy, depthcs, g_cbPobj.depth_thres, outline_color.rgb, (int)g_cbPobj.pix_thickness);
 	}
 	else
@@ -662,6 +661,7 @@ void OIT_PRESET(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	if (v_rgba.a <= 0.01)
 		return;
 
+	float depth_res = GetVZThickness(depthcs, g_cbPobj.vz_thickness);
 	float vz_thickness = depth_res;
 	//v_rgba = float4(1, 1, 0, 0.1);
 	//v_rgba.a = 0.1;

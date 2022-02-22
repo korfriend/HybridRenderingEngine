@@ -552,8 +552,8 @@ namespace grd_helper
 
 		uint iso_value;
 		float ao_intensity;
-		uint vobj_dummy_1;
-		uint vobj_dummy_2;
+		uint vobj_dummy_1; // 
+		uint vobj_dummy_2; // 
 
 		// light properties
 		vmfloat4 pb_shading_factor;	// x : Ambient, y : Diffuse, z : Specular, w : Specular power

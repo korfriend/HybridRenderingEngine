@@ -7,22 +7,66 @@ Texture3D tex3D_volmask : register(t2);
 Buffer<float4> buf_otf : register(t3); // unorm 으로 변경하기
 Buffer<float4> buf_windowing : register(t4);
 Buffer<int> buf_ids : register(t5); // Mask OTFs
+Texture2D<float> vr_fragment_1sthit_read : register(t6);
 
 RWTexture2D<uint> fragment_counter : register(u0);
 RWByteAddressBuffer deep_k_buf : register(u1);
 RWTexture2D<float4> fragment_vis : register(u2);
 RWTexture2D<float> fragment_zdepth : register(u3);
 
+RWTexture2D<float> vr_fragment_1sthit_write : register(u4);
+
 #define AO_MAX_LAYERS 8 
 
 Texture2DArray<unorm float> ao_textures : register(t10);
 Texture2D<unorm float> ao_vr_texture : register(t20);
 
+// same as Sr_Common.hlsl
+float4 VrOutlineTest(const in int2 tex2d_xy, inout float depth_c, const in float discont_depth_criterion, const in float3 edge_color, const in int thick)
+{
+	float2 min_rect = (float2)0;
+	float2 max_rect = float2(g_cbCamState.rt_width - 1, g_cbCamState.rt_height - 1);
+
+	float4 vout = (float4) 0;
+	if (depth_c > 100000)
+	{
+		int count = 0;
+		float depth_min = FLT_MAX;
+
+		for (int y = -thick; y <= thick; y++) {
+			for (int x = -thick; x <= thick; x++) {
+				float2 sample_pos = tex2d_xy.xy + float2(x, y);
+				float2 v1 = min_rect - sample_pos;
+				float2 v2 = max_rect - sample_pos;
+				float2 v12 = v1 * v2;
+				if (v12.x >= 0 || v12.y >= 0)
+					continue;
+				float depth = vr_fragment_1sthit_read[int2(sample_pos)].r;
+				if (depth < 100000) {
+					count++;
+					depth_min = min(depth_min, depth);
+				}
+			}
+		}
+
+		float w = 2 * thick + 1;
+		float alpha = min((floaT)count / (w * w / 2.f), 1.f);
+		//alpha *= alpha;
+
+		vout = float4(edge_color * alpha, alpha);
+		depth_c = depth_min;
+		//vout = float4(nor_c, 1);
+		//vout = float4(depth_h0 / 40, depth_h0 / 40, depth_h0 / 40, 1);
+	}
+
+	return vout;
+}
+
 #if DYNAMIC_K_MODE == 1
 Buffer<uint> sr_offsettable_buf : register(t50);// gres_fb_ref_pidx
 #define VR_MAX_LAYERS 400 
 #else
-#define VR_MAX_LAYERS 9 // SKBTZ
+#define VR_MAX_LAYERS 9 // SKBTZ, +1 for DVR 
 #endif
 
 #if MBT == 1
@@ -299,7 +343,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
     {
         uint i_vis = 0;
 		Fragment f;
-		GET_FRAG(f, addr_base, i);
+		GET_FRAG(f, addr_base, i); // from K-buffer
         float4 vis_in = ConvertUIntToFloat4(f.i_vis);
 		if (g_cbEnv.r_kernel_ao > 0)
 		{
@@ -339,7 +383,29 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 	float3 vbos_hit_start_pos = pos_ip_ws;
 #if RAYMODE == 0 // DVR
-	depth_out = fragment_zdepth[DTid.xy];
+	//depth_out = fragment_zdepth[DTid.xy];
+	depth_out = vr_fragment_1sthit_read[DTid.xy];
+	
+
+	float4 outline_test = ConvertUIntToFloat4(g_cbVobj.vobj_dummy_2);
+	if (outline_test.w > 0 && vr_hit_enc == 0) {
+		// note that the outline appears over background of the DVR front-surface
+		float4 outline_color = VrOutlineTest(tex2d_xy, depth_out, 100000.f, outline_test.rgb, (int)(outline_test.w*255.f));
+		uint idx_dlayer = 0;
+		int num_ray_samples = VR_MAX_LAYERS;
+		vis_out = (float4)0;
+#if FRAG_MERGING == 1
+		Fragment f_dly = fs[0]; // if no frag, the z-depth is infinite
+		INTERMIX(vis_out, idx_dlayer, num_frags, outline_color, depth_out, g_cbVobj.sample_dist, fs, merging_beta);
+#else
+		INTERMIX_V1(vis_out, idx_dlayer, num_frags, outline_color, depth_out, fs);
+#endif
+		REMAINING_MIX(vis_out, idx_dlayer, num_frags, fs);
+		fragment_vis[tex2d_xy] = vis_out;
+		fragment_zdepth[tex2d_xy] = min(depth_out, fs[0].z);
+		return;
+	}
+	
 	vbos_hit_start_pos = pos_ip_ws + dir_sample_unit_ws * depth_out;
 	fragment_zdepth[tex2d_xy] = fs[0].z;
 
@@ -508,7 +574,7 @@ void VR_SURFACE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 {
 	int2 tex2d_xy = int2(DTid.xy);
 
-	fragment_zdepth[DTid.xy] = FLT_MAX;
+	vr_fragment_1sthit_write[DTid.xy] = FLT_MAX;
 
 	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
 		return;
@@ -541,7 +607,7 @@ void VR_SURFACE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	SurfaceRefinement(pos_hit_ws, sample_v, pos_start_ws + dir_sample_ws * (float)hit_step, dir_sample_ws, SURFACEREFINEMENTNUM);
 	float depth_hit = length(pos_hit_ws - pos_ip_ws);
 
-	fragment_zdepth[DTid.xy] = depth_hit;
+	vr_fragment_1sthit_write[DTid.xy] = depth_hit;
 	uint fcnt = fragment_counter[DTid.xy];
 	uint dvr_hit_enc = hit_step == 0 ? 2 : 1;
 	fragment_counter[DTid.xy] = fcnt | (dvr_hit_enc << 24);
