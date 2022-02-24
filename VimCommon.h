@@ -1121,17 +1121,6 @@ namespace vmobjects
 		}
 	};
 
-	/**
-	* @struct VmVObjectBaseCustomData
-	* @brief VmVObject 에 저장되는 Custom Data 의 기본 자료 구조
-	* @remarks VmVObject 삭제 시 VmVObjectBaseCustomData::Delete 가 호출
-	* @sa vmobjects::VmVObject, vmobjects::VmVObject::ReplaceOrAddCustumDataStructure, vmobjects::VmVObject::GetCustumDataStructure
-	*/
-	struct VmVObjectBaseCustomData
-	{
-		virtual void Delete() = 0; // must call delete this.
-	};
-
 	struct VObjectArchive;
 	/**
 	 * @class VmVObject
@@ -1180,28 +1169,6 @@ namespace vmobjects
 		 */
 		vmmat44 GetMatrixWS2OS();
 		vmmat44f GetMatrixWS2OSf();
-		/*!
-		* @brief VmVObject VmVObjectVolume 및 VmVObjectPrimitive 에서 정의하지 않는 추가 자료구조를 저장
-		* @param _key [in] \n wstring \n 메모리에 할당된 Custom 자료구조를 위한 식별자
-		* @param _data [in] \n void \n 메모리에 할당된 Custom 자료구조를 저장하고 있는 void 의 포인터
-		* @remarks _data 는 단순 allocated pool pointer 이며 저장하는 별도의 array 및 custom allocator 에 대응하는 deallocator 를 갖는 자료구조이어야 함
-		*/
-		void ReplaceOrAddCustumDataStructure(const std::string& _key, VmVObjectBaseCustomData* _data);
-		/*!
-		* @brief 저장된 VmVObject 의 VmVObjectVolume 및 VmVObjectPrimitive 에서 정의하지 않는 추가 자료구조의 access 포인터를 얻음
-		* @param _key [in] \n string \n 메모리에 할당된 Custom 자료구조를 위한 식별자
-		* @return void \n VmVObject::ReplaceOrAddCustumDataStructure 에서 저장한 데이터의 포인터
-		*/
-		VmVObjectBaseCustomData* GetCustumDataStructure(const std::string& _key);
-		/*!
-		* @brief 저장된 VmVObject 의 VmVObjectBaseCustomData 자료구조를 없앰
-		* @param _key [in] \n string \n 메모리에 할당된 Custom 자료구조를 위한 식별자
-		*/
-		void RemoveCustomDataStructure(const std::string& _key);
-		/*!
-		* @brief 저장된 VXVObject 의 SVXVObjectBaseCustomData 자료구조 전부를 없앰
-		*/
-		void RemoveCustomDataStructures();
 	};
 
 	struct VObjectVolumeArchive;
@@ -1678,9 +1645,11 @@ namespace vmobjects
 		void GetPrimitiveWireframeVisibilityColor(bool* is_wireframe, vmdouble4* color);
 
 		bool HasKDTree(int* num_updated = NULL);
-		void UpdateKDTree();
+		void UpdateKDTree(); // just for point cloud
 		uint KDTSearchRadius(const vmfloat3& p_src, const float r_sq, const bool is_sorted, std::vector<std::pair<size_t, float>>& ret_matches);
 		uint KDTSearchKnn(const vmfloat3& p_src, const int k, size_t* out_ids, float* out_dists);
+		void UpdateBVHTree(int min_size = -1, int max_size = -1); // for primitives
+		void* GetBVHTree();
 	};
 
 	struct LObjectArchive;
