@@ -104,9 +104,6 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="hlsl\kbuf\Sr_Kbuf.hlsl">
-      <Filter>hlsl source code\k buf</Filter>
-    </FxCompile>
     <FxCompile Include="hlsl\kbuf\KbufResolve.hlsl">
       <Filter>hlsl source code\k buf</Filter>
     </FxCompile>
@@ -139,6 +136,9 @@
     </FxCompile>
     <FxCompile Include="hlsl\layered DOF\SSDOF.hlsl">
       <Filter>hlsl source code\layered DOF</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\kbuf\Sr_Kbuf.hlsl">
+      <Filter>hlsl source code\k buf</Filter>
     </FxCompile>
   </ItemGroup>
 </Project>

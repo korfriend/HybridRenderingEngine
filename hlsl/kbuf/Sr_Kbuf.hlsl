@@ -297,6 +297,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 			}
 		}
 	}
+
 	// memory write section
 #if FURTHER_OVERLAPS == 1 && FRAG_MERGING == 1
 	if (core_max_idx == -3)
@@ -321,12 +322,13 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 		}
 	}
 #endif
+
 	if (store_index >= 0)
 	{
 		SET_FRAG(addr_base, store_index, f_in);
 
 #if FRAG_MERGING == 0 && TAIL_HANDLING == 1
-		if(store_index == (int)k_value - 1)
+		if (store_index == (int)k_value - 1)
 			deep_k_buf.Store(addr_tail, asuint(tail_opacity_sum));
 #endif
 	}
@@ -644,9 +646,12 @@ void OIT_PRESET(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		return;
 	int2 tex2d_xy = int2(DTid.xy);
 
-	//float4 v_rgba = sr_fragment_vis[tex2d_xy];
-	float depthcs = sr_fragment_zdepth[tex2d_xy];
+//	float4 __v_rgba = sr_fragment_vis[tex2d_xy];
+//	float __depthcs = 10.f;// sr_fragment_zdepth[tex2d_xy];
+//	Fill_kBuffer(tex2d_xy, 8, __v_rgba, __depthcs, 0.1);
+//	return;
 
+	float depthcs = sr_fragment_zdepth[tex2d_xy];
 
 	float4 v_rgba = (float4)0;
 	if (BitCheck(g_cbCamState.cam_flag, 1)) {
@@ -656,15 +661,12 @@ void OIT_PRESET(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	else
 		v_rgba = sr_fragment_vis[tex2d_xy.xy];
 	//if(v_rgba.a == 0)
-	//	v_rgba = float4(1, 0, 0, 1);
 
 	if (v_rgba.a <= 0.01)
 		return;
 
 	float depth_res = GetVZThickness(depthcs, g_cbPobj.vz_thickness);
 	float vz_thickness = depth_res;
-	//v_rgba = float4(1, 1, 0, 0.1);
-	//v_rgba.a = 0.1;
 	Fill_kBuffer(tex2d_xy, g_cbCamState.k_value, v_rgba, depthcs, vz_thickness);
 }
 

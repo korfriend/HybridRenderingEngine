@@ -3,7 +3,8 @@
     BlockSkip BLK = ComputeBlockSkip(P, V, g_cbVobj.volblk_size_ts, g_cbVobj.volblk_value_range, tex3D_volblk);\
     BLK.num_skip_steps = min(max(1, BLK.num_skip_steps), N - I);
 
-
+// NOTE THAT current low-res GPUs shows unexpected behavior when using sort_insert. 
+// Instead, Do USE sort_insertOpt and sort_shellOpt
 #define sort_insert(num, fragments, FRAG) {					\
 	[loop]												\
 	for (int j = 1; j < num; ++j)						\
@@ -21,6 +22,26 @@
 	}													\
 }
 
+
+#define sort_insertOpt(num, fragments, FRAG) {			\
+	[loop]												\
+	for (int j = 1; j < num; ++j)						\
+	{													\
+		FRAG key = fragments[j];						\
+		int i = j - 1;									\
+		FRAG df = fragments[i];							\
+		[loop]											\
+		while (i >= 0 && df.z > key.z)					\
+		{												\
+			fragments[i + 1] = df;						\
+			--i;										\
+			df = fragments[i];							\
+		}												\
+		fragments[i + 1] = key;							\
+	}													\
+}
+
+
 #define sort_shell(num, fragments, FRAG) {								\
 	int inc = num >> 1;												\
 	[loop]															\
@@ -33,10 +54,36 @@
 																	\
 			int j = i;												\
 			[loop]													\
-			while (j >= inc && fragments[j - inc].z > tmp.z)\
+			while (j >= inc && fragments[j - inc].z > tmp.z)		\
 			{														\
 				fragments[j] = fragments[j - inc];					\
 				j -= inc;											\
+			}														\
+			fragments[j] = tmp;										\
+		}															\
+		inc = int(inc / 2.2f + 0.5f);								\
+	}																\
+}
+
+
+#define sort_shellOpt(num, fragments, FRAG) {								\
+	int inc = num >> 1;												\
+	[loop]															\
+	while (inc > 0)													\
+	{																\
+		[loop]														\
+		for (int i = inc; i < num; ++i)								\
+		{															\
+			FRAG tmp = fragments[i];							\
+																	\
+			int j = i;												\
+			FRAG dfrag = fragments[j - inc];						\
+			[loop]													\
+			while (j >= inc && dfrag.z > tmp.z)						\
+			{														\
+				fragments[j] = fragments[j - inc];					\
+				j -= inc;											\
+				dfrag = fragments[j - inc];							\
 			}														\
 			fragments[j] = tmp;										\
 		}															\
@@ -83,9 +130,9 @@
 
 #define sort(num, fragments, FRAG) {	   \
 	if (num <= 16)				   \
-		sort_insert(num, fragments, FRAG)\
+		sort_insertOpt(num, fragments, FRAG)\
 	else						   \
-		sort_shell(num, fragments, FRAG)\
+		sort_shellOpt(num, fragments, FRAG)\
 }
 
 #define INTERMIX_OLD(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, thick_sample, fs, merging_beta) {\

@@ -49,7 +49,7 @@ void OIT_RESOLVE_OLD(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, u
 {
     if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
 		return;
-	
+
 	uint frag_cnt = fragment_counter[DTid.xy];
 	if (frag_cnt == 0)
 	{
@@ -260,6 +260,7 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 		// ==> therefore, we do not clear the k-buffer here, reducing the overhead of memory-write.
 		return;
 	}
+
 #ifdef DEBUG__
 	else if (frag_cnt == 7777777)
 	{
@@ -312,6 +313,23 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 	}
 
 	sort((int)frag_cnt, fs, Fragment);
+
+	//fragment_blendout[DTid.xy] = ConvertUIntToFloat4(fs[0].i_vis);
+	//return;
+
+	//if (frag_cnt == 2)
+	//	fragment_blendout[DTid.xy] = float4(1, 0, 0, 1);
+	//else if (frag_cnt == 3)
+	//	fragment_blendout[DTid.xy] = float4(0, 1, 0, 1);
+	//else if (frag_cnt == 4)
+	//	fragment_blendout[DTid.xy] = float4(0, 0, 1, 1);
+	//else if (frag_cnt == 5)
+	//	fragment_blendout[DTid.xy] = float4(0, 1, 1, 1);
+	//fragment_blendout[DTid.xy] = ConvertUIntToFloat4(fs[0].i_vis);
+	//return;
+
+
+
 
 	int valid_frag_cnt = frag_cnt;
 	//int mer_cnt = 0;
