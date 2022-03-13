@@ -244,11 +244,11 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		mapVolumes.insert(pair<int, VmVObjectVolume*>(pCVolume->GetObjectID(), pCVolume));
 	}
 
-	map<int, VmTObject*> mapTObjects;
+	map<int, VmObject*> mapTObjects;
 	for (int i = 0; i < (int)input_tobjs.size(); i++)
 	{
-		VmTObject* pCTObject = (VmTObject*)input_tobjs[i];
-		mapTObjects.insert(pair<int, VmTObject*>(pCTObject->GetObjectID(), pCTObject));
+		VmObject* pCTObject = (VmObject*)input_tobjs[i];
+		mapTObjects.insert(pair<int, VmObject*>(pCTObject->GetObjectID(), pCTObject));
 	}
 
 	auto Get_Lbuffer = [&lobj](const string& name, auto** pp, int& num_elements)
@@ -550,7 +550,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 #pragma region // Main TObject Custom Parameters
 		////// 여기서 부터 토요일!
-		VmTObject* main_tobj = NULL;
+		VmObject* main_tobj = NULL;
 		
 		auto itrTObject = mapTObjects.find(main_tobj_id);
 		if (itrTObject == mapTObjects.end())
@@ -623,7 +623,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				continue;
 			}
 
-			VmTObject* windowing_tobj = itrTObject->second;
+			VmObject* windowing_tobj = itrTObject->second;
 
 			bool is_windowing_changed = GET_LDVALUE("_bool_IsTfChanged", false, windowing_tobj_id);
 			is_windowing_changed |= grd_helper::CheckOtfAndVolBlobkUpdate(main_vol_obj, windowing_tobj);

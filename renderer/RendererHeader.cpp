@@ -1,6 +1,6 @@
 #include "RendererHeader.h"
 
-void RegisterVolumeRes(VmVObjectVolume* vol_obj, VmTObject* tobj, VmLObject* lobj, VmGpuManager* pCGpuManager, ID3D11DeviceContext* pdx11DeviceImmContext,
+void RegisterVolumeRes(VmVObjectVolume* vol_obj, VmObject* tobj, VmLObject* lobj, VmGpuManager* pCGpuManager, ID3D11DeviceContext* pdx11DeviceImmContext,
 	map<int, VmObject*>& mapAssociatedObjects, map<int, GpuRes>& mapGpuRes, LocalProgress* progress)
 {
 	if (vol_obj)
@@ -25,8 +25,8 @@ void RegisterVolumeRes(VmVObjectVolume* vol_obj, VmTObject* tobj, VmLObject* lob
 			is_otf_changed |= grd_helper::CheckOtfAndVolBlobkUpdate(vol_obj, tobj);
 
 			// TObject which is not 'preintegrated' one
-			map<int, VmTObject*> tobj_map;
-			tobj_map.insert(pair<int, VmTObject*>(tobj->GetObjectID(), tobj));
+			map<int, VmObject*> tobj_map;
+			tobj_map.insert(pair<int, VmObject*>(tobj->GetObjectID(), tobj));
 
 			GpuRes gres_tmap;
 			grd_helper::UpdateTMapBuffer(gres_tmap, tobj, tobj_map, NULL, NULL, 0, is_otf_changed);

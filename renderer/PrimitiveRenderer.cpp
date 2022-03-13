@@ -653,6 +653,10 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 	float global_test_alpha = (float)_fncontainer->GetParamValue("_double_GlobalTestAlpha", -1.0);
 
+	float sample_rate = (float)_fncontainer->GetParamValue("_double_UserSampleRate", 0.0);
+	if (sample_rate <= 0) sample_rate = 1.0f;
+	bool apply_samplerate2gradient = _fncontainer->GetParamValue("_bool_ApplySampleRateToGradient", false);
+
 #pragma region // Shader Setting
 	// Shader Re-Compile Setting //
 	bool reload_hlsl_objs = _fncontainer->GetParamValue("_bool_ReloadHLSLObjFiles", false);
@@ -1367,7 +1371,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		}
 
 		VmVObjectVolume* vol_obj = (VmVObjectVolume*)find_asscociated_obj(vobj_id);
-		VmTObject* tobj = (VmTObject*)find_asscociated_obj(tobj_id);
+		VmObject* tobj = (VmObject*)find_asscociated_obj(tobj_id);
 		RegisterVolumeRes(vol_obj, tobj, lobj, gpu_manager, dx11DeviceImmContext, associated_objs, mapGpuRes_VolumeAndTMap, progress);
 
 		GpuRes gres_vtx, gres_idx;
@@ -1644,7 +1648,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				auto itrVolume = associated_objs.find(vobj_id);
 				auto itrTObject = associated_objs.find(tobj_id);
 				VmVObjectVolume* vobj = (VmVObjectVolume*)itrVolume->second;
-				VmTObject* tobj = (VmTObject*)itrTObject->second;
+				VmObject* tobj = (VmObject*)itrTObject->second;
 
 				bool high_samplerate = gres_vobj.res_dvalues["SAMPLE_OFFSET_X"] > 1.f ||
 					gres_vobj.res_dvalues["SAMPLE_OFFSET_Y"] > 1.f || gres_vobj.res_dvalues["SAMPLE_OFFSET_Z"] > 1.f;

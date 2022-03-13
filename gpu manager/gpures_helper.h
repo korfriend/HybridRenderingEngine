@@ -308,17 +308,17 @@ namespace grd_helper
 	void DeinitializePresettings();
 
 	// volume/block structure
-	bool UpdateOtfBlocks(GpuRes& gres, const VmVObjectVolume* vobj, const VmTObject	* tobj,
+	bool UpdateOtfBlocks(GpuRes& gres, const VmVObjectVolume* vobj, const VmObject	* tobj,
 		const bool update_blks, const int sculpt_value, LocalProgress* progress = NULL);
 	bool UpdateOtfBlocks(GpuRes& gres, const VmVObjectVolume* main_vobj, const VmVObjectVolume* mask_vobj,
-		const map<int, VmTObject*>& mapTObjects, const int main_tmap_id, const double* mask_tmap_ids, const int num_mask_tmap_ids,
+		const map<int, VmObject*>& mapTObjects, const int main_tmap_id, const double* mask_tmap_ids, const int num_mask_tmap_ids,
 		const bool update_blks, const bool use_mask_otf, const int sculpt_value, LocalProgress* progress = NULL);
 	bool UpdateMinMaxBlocks(GpuRes& gres_min, GpuRes& gres_max, const VmVObjectVolume* vobj, LocalProgress* progress = NULL);
 	// bool UpdateAOMask(const VmVObjectVolume* vobj, LocalProgress* progress = NULL); // to do
 	bool UpdateVolumeModel(GpuRes& gres, const VmVObjectVolume* vobj, const bool use_nearest_max, LocalProgress* progress = NULL);
 
-	bool UpdateTMapBuffer(GpuRes& gres, const VmTObject* main_tobj,
-		const map<int, VmTObject*>& tobj_map, const double* series_ids, const double* visible_mask, const int otf_series, const bool update_tf_content, LocalProgress* progress = NULL);
+	bool UpdateTMapBuffer(GpuRes& gres, const VmObject* main_tobj,
+		const map<int, VmObject*>& tobj_map, const double* series_ids, const double* visible_mask, const int otf_series, const bool update_tf_content, LocalProgress* progress = NULL);
 
 	// primitive structure
 	bool UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<string, GpuRes>& map_gres_texs, VmVObjectPrimitive* pobj, LocalProgress* progress = NULL);
@@ -341,7 +341,7 @@ namespace grd_helper
 		const int num_frags_perpixel = 1,
 		const int structured_stride = 0);
 
-	bool CheckOtfAndVolBlobkUpdate(VmVObjectVolume* vobj, VmTObject* tobj);
+	bool CheckOtfAndVolBlobkUpdate(VmVObjectVolume* vobj, VmObject* tobj);
 
 #define ZERO_SET(T) T(){memset(this, 0, sizeof(T));}
 
@@ -359,38 +359,67 @@ namespace grd_helper
 		Fragment frags[MAX_LAYERS];
 	};
 
-	struct RenderObjInfo
-	{
-		VmVObjectPrimitive* pobj;
-		bool is_wireframe;
-		vmfloat4 fColor;
+	//struct RenderObjInfo
+	//{
+	//	VmVObjectPrimitive* pobj;
+	//	bool is_wireframe;
+	//	vmfloat4 fColor;
+	//
+	//	bool is_annotation_obj;
+	//	bool has_texture_img;
+	//	bool use_vertex_color;
+	//	bool abs_diffuse;
+	//	float vzthickness;
+	//	int outline_thickness;
+	//	float outline_depthThres;
+	//	vmfloat3 outline_color;
+	//
+	//	int num_safe_loopexit;
+	//
+	//	RenderObjInfo()
+	//	{
+	//		pobj = NULL;
+	//		is_wireframe = false;
+	//		fColor = vmfloat4(1.f);
+	//		is_annotation_obj = false;
+	//		use_vertex_color = true;
+	//		outline_thickness = 0;
+	//		outline_depthThres = 10000.f;
+	//		outline_color = vmfloat3(1.f, 1.f, 1.f);
+	//		abs_diffuse = false;
+	//		has_texture_img = false;
+	//		vzthickness = 0;
+	//		num_safe_loopexit = 100;
+	//	}
+	//};
 
-		bool is_annotation_obj;
-		bool has_texture_img;
-		bool use_vertex_color;
-		bool abs_diffuse;
-		float vzthickness;
-		int outline_thickness;
-		float outline_depthThres;
-		vmfloat3 outline_color;
+	struct LightSource {
+		bool is_on_camera = false; // _bool_IsLightOnCamera
+		bool is_soptlight = false; // _bool_IsPointSpotLight
+		vmfloat3 light_dir = vmfloat3(0); // _double3_VecLightWS
+		vmfloat3 light_pos = vmfloat3(0); // _double3_PosLightWS
 
-		int num_safe_loopexit;
+		vmfloat3 light_ambient_color = vmfloat3(1);
+		vmfloat3 light_diffuse_color = vmfloat3(1);
+		vmfloat3 light_specular_color = vmfloat3(1);
+	};
 
-		RenderObjInfo()
-		{
-			pobj = NULL;
-			is_wireframe = false;
-			fColor = vmfloat4(1.f);
-			is_annotation_obj = false;
-			use_vertex_color = true;
-			outline_thickness = 0;
-			outline_depthThres = 10000.f;
-			outline_color = vmfloat3(1.f, 1.f, 1.f);
-			abs_diffuse = false;
-			has_texture_img = false;
-			vzthickness = 0;
-			num_safe_loopexit = 100;
-		}
+	struct GlobalLighting {
+		bool apply_ssao = false; // _bool_ApplySSAO
+		float ssao_r_kernel = 1.f; // _double_SSAOKernalR
+		int ssao_num_dirs = 4; // _int_SSAONumDirs
+		int ssao_num_steps = 4; // _int_SSAONumSteps
+		float ssao_tangent_bias = (float)(VM_PI / 6.0); // _double_SSAOTangentBias
+		float ssao_intensity = 0.5f; // _double_SSAOIntensity
+		int ssao_debug = 0; // _int_SSAOOutput
+	};
+
+	struct LensEffect {
+		bool apply_ssdof = false; // _bool_ApplyDOF
+		float dof_lens_r = 3.f; // _double_DOFLensRadius
+		float dof_lens_F = 10.f; // _double_DOFFocalLength
+		int dof_ray_num_samples = 8; // _int_DOFLensRaySamples
+		float dof_focus_z = 20.f; // _double_DOFFocusZ
 	};
 
 	struct CB_CameraState
@@ -606,9 +635,9 @@ namespace grd_helper
 		uint		first_nonzeroalpha_index; // For ESS
 		uint		last_nonzeroalpha_index;
 		uint		tmap_size;
-		float		mapping_v_min;
+		float		mapping_v_min; // deprecated
 
-		float		mapping_v_max;
+		float		mapping_v_max; // deprecated
 		uint		tm_dummy_0;
 		uint		tm_dummy_1;
 		uint		tm_dummy_2;
@@ -662,17 +691,16 @@ namespace grd_helper
 	// Compute Constant Buffers //
 	// global 
 	void SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, const vmmat44f& matSS2WS, VmCObject* ccobj, const vmint2& fb_size, const int k_value, const float vz_thickness);
-	void SetCb_Env(CB_EnvState& cb_env, VmCObject* ccobj, VmFnContainer* _fncontainer, vmfloat3 simple_light_intensities);
+	void SetCb_Env(CB_EnvState& cb_env, VmCObject* ccobj, const LightSource& light_src, const GlobalLighting& global_lighting, const LensEffect& lens_effect);
 	// each object
-	void SetCb_TMap(CB_TMAP& cb_tmap, VmTObject* tobj);
+	void SetCb_TMap(CB_TMAP& cb_tmap, VmObject* tobj);
 	//bool SetCbVrShadowMap(CB_VrShadowMap* pCBVrShadowMap, CB_VrCameraState* pCBVrCamStateForShadowMap, vmfloat3 f3PosOverviewBoxMinWS, vmfloat3 f3PosOverviewBoxMaxWS, map<string, void*>* pmapCustomParameter);
-	void SetCb_ClipInfo(CB_ClipInfo& cb_clip, VmVObject* obj, VmLObject* lobj);
-	void SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vobj, VmLObject* lobj, VmFnContainer* _fncontainer, const bool high_samplerate, const vmint3& vol_size, const int iso_value, const float volblk_valuerange, const int sculpt_index = -1);
-	void SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimitive* pobj, VmLObject* lobj,
-		const vmmat44f& matOS2WS, const vmmat44f& matWS2SS, const vmmat44f& matWS2PS,
-		const RenderObjInfo& rendering_obj_info, const double default_point_thickness, const double default_line_thickness, const double default_surfel_size);
-	void SetCb_RenderingEffect(CB_RenderingEffect& cb_reffect, VmVObject* obj, VmLObject* lobj, const RenderObjInfo& rendering_obj_info);
-	void SetCb_VolumeRenderingEffect(CB_VolumeRenderingEffect& cb_vreffect, VmVObjectVolume* vobj, VmLObject* lobj);
+	void SetCb_ClipInfo(CB_ClipInfo& cb_clip, VmVObject* obj, VmActor* actor);
+	void SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vobj, VmActor* actor, const vmmat44f& matVS2WS, const vmmat44f& matWS2VS, const float sample_rate, const bool apply_samplerate2gradient, const bool high_samplerate, const vmint3& vol_size, const int iso_value, const float volblk_valuerange, const int sculpt_index = -1);
+	void SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimitive* pobj, VmActor* actor,
+		const vmmat44f& matOS2WS, const vmmat44f& matWS2SS, const vmmat44f& matWS2PS);
+	void SetCb_RenderingEffect(CB_RenderingEffect& cb_reffect, VmVObject* obj, VmActor* actor);
+	void SetCb_VolumeRenderingEffect(CB_VolumeRenderingEffect& cb_vreffect, VmVObjectVolume* vobj, VmActor* actor);
 	
 	void SetCb_HotspotMask(CB_HotspotMask& cb_hsmask, VmFnContainer* _fncontainer, const vmmat44f& matWS2SS);
 

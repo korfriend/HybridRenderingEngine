@@ -326,7 +326,7 @@ void InteropCustomWork(fncontainer::VmFnContainer& _fncontainer)
 					lobj->GetDstObjValue(prim_obj_id, ("_int_AssociatedTObjectID"), &iTObjectID);
 
 					VmVObjectVolume* vol_obj = (VmVObjectVolume*)find_asscociated_obj(iVolumeID);
-					VmTObject* tobj = (VmTObject*)find_asscociated_obj(iTObjectID);
+					VmObject* tobj = (VmObject*)find_asscociated_obj(iTObjectID);
 
 					g_LocalProgress.start = 0;
 					g_LocalProgress.range = 100;

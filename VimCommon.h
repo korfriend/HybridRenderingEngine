@@ -25,7 +25,8 @@
 #pragma once
  //#define __VERSION "0.x beta" // released at 22.01.10
 //#define __VERSION "1.00" // released at 22.02.5
-#define __VERSION "1.01" // released at 22.02.15
+//#define __VERSION "1.01" // released at 22.02.15
+#define __VERSION "1.10_under_developing" //
 
 #define _HAS_STD_BYTE 0
 
@@ -37,6 +38,7 @@
 #include <math.h>
 #include <algorithm>
 #include <typeinfo>
+#include <typeindex>
 #include <any>
 
 #include "VimHelpers.h"
@@ -201,11 +203,9 @@ namespace vmenums {
 
 	/*! Module-Platform interoperation에 사용되는 VmObject의 type 종류 */
 	enum EvmObjectType {
-		ObjectTypeNONE = 0,/*!< Undefined */
+		ObjectTypeOBJECT = 0,/*!< Just an Object for archiving something */
 		ObjectTypeVOLUME,/*!< Volume Object */
 		ObjectTypePRIMITIVE,/*!< Polygon Object */
-		ObjectTypeBUFFER,/*!< 임의의 버퍼 자료구조 기반의 inter-operation을 위한 Object */
-		ObjectTypeTMAP,/*!< OTF를 정의하는 VmObject */
 		ObjectTypeIMAGEPLANE/*!< Image Plane을 정의하는 VmObject이며 Camera Object를 갖음 */
 	};
 
@@ -282,11 +282,6 @@ struct LocalProgress {
 
 typedef void(*VmDelegate)(void* pv);
 
-namespace voo
-{
-	template <typename T> static int get_num_from_bytes(const size_t size_bytes, const T* p = NULL) { return (int)(size_bytes / sizeof(T)); }
-};
-
 /**
  * @package vmobjects
  * @brief Framework의 Global Data Structures 및 VmObject Classes를 모은 namespace
@@ -298,27 +293,89 @@ namespace vmobjects
 	// Object Structures
 	//=========================
 
+	template <typename NAME, typename ANY> struct VmParamMap {
+	private:
+		std::string __PM_VERSION = "LIBI_1.2";
+		std::map<NAME, ANY> __params;
+	public:
+		template <typename SRCV> bool GetParamCheck(const NAME& param_name, SRCV& param) {
+			auto it = __params.find(param_name);
+			if (it == __params.end()) return false;
+			param = std::any_cast<SRCV&>(it->second);
+			return true;
+		}
+		template <typename SRCV> SRCV GetParam(const NAME& param_name, const SRCV& init_v) {
+			auto it = __params.find(param_name);
+			if (it == __params.end()) return init_v;
+			return std::any_cast<SRCV&>(it->second);
+		}
+		template <typename SRCV> SRCV* GetParamPtr(const NAME& param_name) {
+			auto it = __params.find(param_name);
+			if (it == __params.end()) return NULL;
+			return (SRCV*)&std::any_cast<SRCV&>(it->second);
+		}
+		template <typename SRCV, typename DSTV> bool GetParamCastingCheck(const NAME& param_name, DSTV& param) {
+			auto it = __params.find(param_name);
+			if (it == __params.end()) return false;
+			param = (DSTV)std::any_cast<SRCV&>(it->second);
+			return true;
+		}
+		template <typename SRCV, typename DSTV> DSTV GetParamCasting(const NAME& param_name, const DSTV& init_v) {
+			auto it = __params.find(param_name);
+			if (it == __params.end()) return init_v;
+			return (DSTV)std::any_cast<SRCV&>(it->second);
+		}
+		void SetParam(const NAME& param_name, const ANY& param) {
+			__params[param_name] = param;
+		}
+		void RemoveParam(const NAME& param_name) {
+			auto it = __params.find(param_name);
+			if (it != __params.end()) {
+				__params.erase(it);
+			}
+		}
+		void RemoveAll() {
+			__params.clean();
+		}
+		size_t Size() {
+			return __params.size();
+		}
+		std::string GetPMapVersion() {
+			return __PM_VERSION;
+		}
+
+		typedef std::map<NAME, ANY> MapType;
+		typename typedef MapType::iterator iterator;
+		typename typedef MapType::const_iterator const_iterator;
+		typename typedef MapType::reference reference;
+		iterator begin() { return __params.begin(); }
+		const_iterator begin() const { return __params.begin(); }
+		iterator end() { return __params.end(); }
+		const_iterator end() const { return __params.end(); }
+	};
+
 	struct data_type {
 		std::string type_name; // <typeinfo>
-		int type_bytes;
+		size_t type_hash;
+		size_t type_bytes;
 		data_type() {
-			type_name = ""; type_bytes = 0;
+			type_name = ""; type_hash = 0; type_bytes = 0;
 		}
-		data_type(const std::string& _dtype, const int _bytes_dtype) {
-			type_name = _dtype; type_bytes = _bytes_dtype;
+		data_type(const std::type_info& info, size_t type_size) {
+			type_name = info.name(); type_hash = info.hash_code(); type_bytes = type_size;
 		};
 		template<typename T>
 		static data_type dtype() {
-			data_type d(typeid(T).name(), sizeof(T));
+			data_type d(typeid(T), sizeof(T));
 			return d;
 		};
 		bool operator == (data_type other) const
 		{
-			return type_bytes == other.type_bytes && type_name == other.type_name;
+			return type_hash == other.type_hash;
 		}
 		bool operator != (data_type other) const
 		{
-			return type_bytes != other.type_bytes || type_name != other.type_name;
+			return type_hash != other.type_hash;
 		}
 	};
 	/**
@@ -481,8 +538,8 @@ namespace vmobjects
 		 */
 		VolumeData() {
 			vol_size = vox_pitch = bnd_size = vmdouble3(0);
-			store_dtype = data_type("", 0);
-			origin_dtype = data_type("", 0);
+			store_dtype = data_type(typeid(void), 0);
+			origin_dtype = data_type(typeid(void), 0);
 
 			store_Mm_values = actual_Mm_values = vmdouble2(DBL_MAX, -DBL_MAX);
 			vol_slices = NULL;
@@ -690,7 +747,7 @@ namespace vmobjects
 	 * @brief Framework에서 정의하는 OTF에 대한 상세 정보를 위한 자료구조
 	 * @sa vmobjects::VmTObject
 	 */
-	struct TMapData {
+	struct MapTable {
 		/**
 		 * @brief OTF array 의 pointer
 		 * @details
@@ -743,11 +800,57 @@ namespace vmobjects
 		/**
 		 * @brief constructor, 모두 0 (NULL or false)으로 초기화
 		 */
-		TMapData() {
+		MapTable() {
 			tmap_buffers = NULL;
 			num_dim = 0;
 			valid_min_idx = valid_max_idx = bin_size = vmdouble3(0);
 			array_lengths = vmint3(0);
+		}
+
+		// Static Helper Functions //
+		/*!
+		 * @brief VolumeData 에 저장되는 OTF array를 할당하는 static helper 함수
+		 * @param num_dim [in] \n int \n OTF dimension
+		 * @param dim_length [in] \n int 3 \n OTF dimension 의 크기
+		 * @param dtype [in] \n data_type \n OTF array의 data type
+		 * @param res_tmap [in] \n void \n 2D OTF array에 대한 void**의 포인터 (3D 포인터)
+		 * @return bool \n 성공하면 true, 실패하면 false 반환
+		 * @remarks OTF array 는 항상 2D OTF로 저장됨
+		 * @sa vmobjects::TMapData
+		 */
+		bool CreateTMapBuffer(const int num_dim, const vmint3& dim_length)
+		{
+			if (num_dim <= 0 || num_dim > 3)
+			{
+				printf("TMapData::CreateTMapBuffer - UNAVAILABLE INPUT");
+				return false;
+			}
+
+			switch (dtype.type_bytes)
+			{
+			case 1:
+			case 2:
+				if (dim_length.x <= 0 || dim_length.y <= 0)
+				{
+					printf("TMapData::CreateTMapBuffer - Type Error 2");
+					return false;
+				}
+				vmhelpers::AllocateVoidPointer2D(&tmap_buffers, dim_length.y, dtype.type_bytes * dim_length.x);
+				break;
+			case 3:
+				if (dim_length.x <= 0 || dim_length.y <= 0 || dim_length.z <= 0)
+				{
+					printf("TMapData::CreateTMapBuffer - Type Error 2");
+					return false;
+				}
+				vmhelpers::AllocateVoidPointer2D(&tmap_buffers, dim_length.z, dtype.type_bytes * dim_length.x * dim_length.y);
+				break;
+			default:
+				printf("TMapData::CreateTMapBuffer - UNAVAILABLE INPUT");
+				return false;
+			}
+
+			return true;
 		}
 
 		/*!
@@ -815,7 +918,7 @@ namespace vmobjects
 		 */
 		void* mM_blks;
 		/**
-		 * @brief TObject 별로 정의된, block 단위로 binary tag가 지정된 1D array
+		 * @brief Object 별로 정의된, block 단위로 binary tag가 지정된 1D array
 		 * @details
 		 * array의 크기는 block의 전체 개수와 동일, extra boundary을 고려하지 않음 \n
 		 * resource manager 에서 TObject 삭제 시, 등록된 Volume Object 의 Block 들에 대해 resouece 정리 수행 \n
@@ -869,9 +972,6 @@ namespace vmobjects
 		*/
 		bool ReplaceOrAddTaggedActivatedBlocks(const int tobj_id, byte* tflag_blks)
 		{
-			if ((EvmObjectType)((tobj_id >> 24) & 0xFF) != ObjectTypeTMAP)
-				return false;
-
 			std::map<int, byte*>::iterator itr = tflag_blks_map.find(tobj_id);
 			if (itr != tflag_blks_map.end())
 				VMSAFE_DELETEARRAY(itr->second);
@@ -998,7 +1098,6 @@ namespace vmobjects
 	// Global Objects
 	//=========================
 	struct ObjectArchive;
-	class VmLObject;
 	/**
 	 * @class VmObject
 	 * @brief VisMotive Framework Object 의 최상위 class 로 VmObject family 의 공통 parameter 를 갖음
@@ -1008,6 +1107,7 @@ namespace vmobjects
 	private:
 	protected:
 		ObjectArchive* oa_res;
+		std::any& GetObjParamA(const std::string& param_name, bool& ret);
 
 	public:
 		VmObject();
@@ -1015,10 +1115,8 @@ namespace vmobjects
 
 		/*!
 		 * @brief VmObject의 contents가 정의되어 있는가를 확인
-		 * @remarks contents는 VmObject를 상송 받는 최하위 VmObject에서 정의됨
+		 * @remarks contents는 VmObject를 상속 받는 최하위 VmObject에서 정의됨
 		 * @li @ref vmobjects::VmIObject
-		 * @li @ref vmobjects::VmLObject
-		 * @li @ref vmobjects::VmTObject
 		 * @li @ref vmobjects::VmVObjectVolume
 		 * @li @ref vmobjects::VmVObjectPrimitive
 		 */
@@ -1066,36 +1164,22 @@ namespace vmobjects
 		 */
 		EvmObjectType GetObjectType();
 
-		unsigned long long GetContentsUpdateTime();
+		unsigned long long GetContentUpdateTime();
 		
-		// Custom Parameter
-		/*!
-		 * @brief VmObject 에 임의의 문자열을 등록함
-		 * @param _key [in] \n string \n 임의로 저장할 data에 대한 key name
-		 * @param _data [in] \n ... \n 저장할 데이터
-		 * @return bool \n 등록이 성공하면 true, 그렇지 않으면 false
-		 * @remarks
-		 * ...
-		 */
-		bool RegisterCustomParameter(const std::string& _key, const std::string& _data);
-		bool RegisterCustomParameter(const std::string& _key, const bool _data);
-		bool RegisterCustomParameter(const std::string& _key, const int _data);
-		bool RegisterCustomParameter(const std::string& _key, const double _data);
-		bool RegisterCustomParameter(const std::string& _key, const __int64 _data);
+		bool SetObjParam(const std::string& param_name, const std::any& v);
 
-		// will be deprecated
-		bool RegisterCustomParameter(const std::string& _key, const vmint2 _data);
-		bool RegisterCustomParameter(const std::string& _key, const vmint3 _data);
-		bool RegisterCustomParameter(const std::string& _key, const vmint4 _data);
-		bool RegisterCustomParameter(const std::string& _key, const vmdouble2 _data);
-		bool RegisterCustomParameter(const std::string& _key, const vmdouble3 _data);
-		bool RegisterCustomParameter(const std::string& _key, const vmdouble4 _data);
-		bool RegisterCustomParameter(const std::string& _key, const vmmat44 _data);
+		template <typename T> T* GetObjParamPtr(const std::string& param_name) {
+			bool ret = false;
+			any& p = GetObjParamA(param_name, ret);
+			return ret? (T*)&any_cast<T&>(p) : NULL;
+		}
+		template <typename T> T GetObjParam(const std::string& param_name, const T& init_v) {
+			T* p = GetObjParamPtr<T>(param_name);
+			return p == NULL ? init_v : *p;
+		}
 
-		VmLObject* GetBufferObject();
-		void RemoveBufferObject();
-
-		bool GetCustomParameter(const std::string& _key, const data_type& dtype, void* _data) const;
+		bool RemoveObjParameters();
+		bool RemoveObjParameter(const std::string& _key);
 		// Static Helper Functions //
 		/*!
 		 * @brief VmObject ID 값으로부터 object type을 반환하는 static helper 함수
@@ -1113,12 +1197,6 @@ namespace vmobjects
 		 * VmObject ID 형식에 대해서 지원.\n
 		 */
 		static bool IsVObject(const int obj_id);
-		template <typename T> static T GetCustomParameterRet(const std::string& _key, VmObject* vmvobj, const T& init_v)
-		{
-			T _v = init_v;
-			vmvobj->GetCustomParameter(_key, data_type::dtype<T>(), &_v);
-			return init_v;
-		}
 	};
 
 	struct VObjectArchive;
@@ -1150,25 +1228,29 @@ namespace vmobjects
 		 */
 		bool IsGeometryDefined();
 	
+		// only to_model_space is available.. from ver. 1.10
+		// transforms between OS and WS are moved into actor parameters (stored in LObject)
+		// here, RS normally refers to volume space (indexing the memory address), and MS refers to dicom-specified model
 		// Transform //
 		/*!
-		 * @brief VmVObject의 OS와 WS의 변환을 정의하는 matrix를 설정
-		 * @param mat_os2ws [in] \n double44 \n OS와 WS의 변환을 정의하는 matrix를 저장
-		 * @remarks 내부적으로 OS와 WS 변환과 관련된 좌표계가 재설정되며 관련 matrix가 재설정됨
+		 * @brief VmVObject의 Resource Space (RS) 와 Model Space (MS) 의 변환을 정의하는 matrix를 설정
+		 * @param mat_os2ws [in] \n double44 \n RS와 MS의 변환을 정의하는 matrix를 저장
+		 * @remarks 내부적으로 RS와 MS 변환과 관련된 좌표계가 재설정되며 관련 matrix가 재설정됨
 		 */
-		void SetTransformMatrixOS2WS(const vmmat44& mat_os2ws);
+		void SetMatrixRS2OS(const vmmat44& mat_rs2os);
+		void SetMatrixRS2OSf(const vmmat44f& mat_rs2os);
 		/*!
-		 * @brief VmVObject에서 정의되어 있는 OS의 WS의 변환을 정의하는 matrix를 얻음
+		 * @brief VmVObject에서 정의되어 있는 RS의 MS의 변환을 정의하는 matrix를 얻음
 		 * @return double44 \n OS의 WS의 변환을 정의하는 matrix
 		 */
-		vmmat44 GetMatrixOS2WS();
-		vmmat44f GetMatrixOS2WSf();
+		vmmat44 GetMatrixRS2OS();
+		vmmat44f GetMatrixRS2OSf();
 		/*!
-		 * @brief VmVObject에서 정의되어 있는 WS의 OS의 변환을 정의하는 matrix를 얻음
-		 * @return double44 \n WS의 OS의 변환을 정의하는 matrix
+		 * @brief VmVObject에서 정의되어 있는 RS의 MS의 변환을 정의하는 matrix를 얻음
+		 * @return double44 \n MS의 RS의 변환을 정의하는 matrix
 		 */
-		vmmat44 GetMatrixWS2OS();
-		vmmat44f GetMatrixWS2OSf();
+		vmmat44 GetMatrixOS2RS();
+		vmmat44f GetMatrixOS2RSf();
 	};
 
 	struct VObjectVolumeArchive;
@@ -1281,51 +1363,6 @@ namespace vmobjects
 		*/
 		static bool FillHistogram(VolumeData& vol_data, LocalProgress* progress = NULL);
 		static bool FillMinMaxStoreValues(VolumeData& vol_data, LocalProgress* progress = NULL);
-	};
-
-	struct TObjectArchive;
-	/**
-	 * @class VmTObject
-	 * @brief VmObject를 상속 받으며 volume의 visibility 속성을 결정하는 OTF 관련 정보에 대한 class
-	 * @sa vmobjects::VmObject, vmobjects::VmVObjectVolume
-	 */
-	__vmstaticclass VmTObject : public VmObject
-	{
-	private:
-	protected:
-		TObjectArchive* toa_res;
-
-	public:
-		VmTObject();
-		~VmTObject();
-
-		/*!
-		 * @brief OTF 정보를 갖고 있는 @ref vmobjects::TMapData 자료 구조를 VmTObject에 등록함
-		 * @param tmap_data [in] \n TMapData \n OTF 정보가 정의된 TMapData
-		 * @param ref_obj_id [in] \n int \n
-		 * 일반적으로 하나의 VmTObject는 하나의 VmVObjectVolume에 특화되어 생성되며, 그것의 VmVObjectVolume의 ID \n
-		 * VmVObjectVolume와 data type 및 저장된 volume 의 값의 범위가 같을 경우 혼용해도 문제가 없음. \n
-		 * VmVObjectVolume에 의존하지 않고 독자적으로 구성될 경우 0을 넣음.
-		 */
-		bool RegisterTMap(const TMapData& tmap_data, int ref_obj_id);
-		/*!
-		 * @brief VmTObject에 정의되어 있는 OTF 정보를 얻음.
-		 * @return TMapData \n OTF 정보가 저장되어 있는 TMapData의 포인터
-		 */
-		TMapData* GetTMapData();
-
-		// Static Helper Functions //
-		/*!
-		 * @brief VolumeData 에 저장되는 OTF array를 할당하는 static helper 함수
-		 * @param num_dim [in] \n int \n OTF dimension
-		 * @param dim_length [in] \n int 3 \n OTF dimension 의 크기
-		 * @param dtype [in] \n data_type \n OTF array의 data type
-		 * @param res_tmap [in] \n void \n 2D OTF array에 대한 void**의 포인터 (3D 포인터)
-		 * @return bool \n 성공하면 true, 실패하면 false 반환
-		 * @remarks OTF array 는 항상 2D OTF로 저장됨
-		 * @sa vmobjects::TMapData
-		 */
-		static bool CreateTMapBuffer(const int num_dim, const vmint3& dim_length, const data_type& dtype, void*** res_tmap/*out*/);
 	};
 
 	struct CObjectArchive;
@@ -1466,7 +1503,8 @@ namespace vmobjects
 		 * @param mat_ps2ss [out] \n double 44 \n PS 에서 SS로 변환하는 matrix가 저장될 포인터
 		 * @remarks 얻고 싶지 않은 parameter에 대해 NULL을 넣으면 해당 parameter에 값을 저장 안 함.
 		 */
-	 	void GetMatrixWStoSS(vmmat44* mat_ws2cs, vmmat44* mat_cs2ps, vmmat44* mat_ps2ss);
+		void GetMatrixWStoSS(vmmat44* mat_ws2cs, vmmat44* mat_cs2ps, vmmat44* mat_ps2ss);
+		void GetMatrixWStoSSf(vmmat44f* mat_ws2cs, vmmat44f* mat_cs2ps, vmmat44f* mat_ps2ss);
 		/*!
 		 * @brief SS 에서 WS 로의 변환을 정의하는 matrix를 얻음
 		 * @param mat_ss2ps [out] \n double 44 \n SS 에서 PS로 변환하는 matrix가 저장될 포인터
@@ -1475,6 +1513,7 @@ namespace vmobjects
 		 * @remarks 얻고 싶지 않은 parameter에 대해 NULL을 넣으면 해당 parameter에 값을 저장 안 함.
 		 */
 		void GetMatrixSStoWS(vmmat44* mat_ss2ps, vmmat44* mat_ps2cs, vmmat44* mat_cs2ws);
+		void GetMatrixSStoWSf(vmmat44f* mat_ss2ps, vmmat44f* mat_ps2cs, vmmat44f* mat_cs2ws);
 		
 		/*!
 		 * @brief WS or CS or PS or SS 에서 정의되는 image plane의 rectangle을 정의하는 네 점을 얻음
@@ -1636,13 +1675,13 @@ namespace vmobjects
 		* @param bIsVibible [in] \n bool \n true 면 가시화, false 면 가시화되지 않음
 		* @param color [in] \n double 4 \n RGBA = XYZW. [min, max] = [0.0f, 1.0f]
 		*/
-		void SetPrimitiveWireframeVisibilityColor(const bool is_wireframe, const vmdouble4& color);
+		//void SetPrimitiveWireframeVisibilityColor(const bool is_wireframe, const vmdouble4& color);
 		/*!
 		* @brief VmVObjectPrimitive 의 가시화 시 wireframe 가시화 상태를 가져옴.
 		* @param is_wireframe [out](optional) \n bool \n 가시화 여부를 저장하는 pointer
 		* @param color [out](optional) \n double 4 \n 색상 정보를 저장하는 pointer
 		*/
-		void GetPrimitiveWireframeVisibilityColor(bool* is_wireframe, vmdouble4* color);
+		//void GetPrimitiveWireframeVisibilityColor(bool* is_wireframe, vmdouble4* color);
 
 		bool HasKDTree(int* num_updated = NULL);
 		void UpdateKDTree(); // just for point cloud
@@ -1650,117 +1689,6 @@ namespace vmobjects
 		uint KDTSearchKnn(const vmfloat3& p_src, const int k, size_t* out_ids, float* out_dists);
 		void UpdateBVHTree(int min_size = -1, int max_size = -1); // for primitives
 		void* GetBVHTree();
-	};
-
-	struct LObjectArchive;
-	/**
-	 * @class VmLObject
-	 * @brief VmObject를 상속 받는 customized buffer container 정보를 갖는 class.
-	 * @remarks 
-	 * Framework에서 정의하는 VmObject 자료 구조외의 값을 resource manager가 관리하는 자료구조로 사용하기 위해 쓰임 \n
-	 * value는 1d array container 로 구현되어 있음.
-	 * @sa vmobjects::VmObject
-	 */
-	__vmstaticclass VmLObject: public VmObject
-	{
-	private:
-	protected:
-		LObjectArchive* loa_res;
-	
-	public:
-		VmLObject();
-		~VmLObject();
-		
-		/*!
-		 * @brief 등록되어 있는 모든 buffer를 모두 해제
-		 * @remarks 
-		 */
-		void ClearAllBuffers();
-		/*!
-		 * @brief 해당 문자열의 key name을 갖는 buffer 만 해제
-		 * @param _key [in] \n string \n key name의 문자열
-		 * @return bool \n 해당 문자열의 key name을 갖는 buffer를 해제 성공하면 true, 그렇지 않으면 false 반환.
-		 */
-		bool RemoveBuffer(const std::string& _key);
-	
-		/*!
-		 * @brief 해당 문자열의 key name을 갖는 buffer 의 ptr를 얻음
-		 * @param _key [in] \n string \n key name의 문자열
-		 * @param buffer_ptr [out] \n void \n 해당 key에 대응하는 buffer ptr 를 받을 ptr
-		 * @param size_buffer [out] \n size_t \n 해당 key에 대응하는 buffer 의 bytes 크기
-		 * @return bool \n 해당 문자열의 key name을 갖는 buffer ptr 를 얻는데 성공하면 true, 그렇지 않으면 false 반환.
-		 */
-		bool LoadBufferPtr(const std::string& _key, void** buffer_ptr, size_t& size_buffer, int* num_elements = NULL);
-	
-		/*!
-		 * @brief 해당 문자열의 key name을 갖는 buffer 를 등록함 (copy)
-		 * @param _key [in] \n string \n key name의 문자열
-		 * @param buffer_ptr [in] \n void* \n 저장할 buffer 포인터 \n
-		 * @param num_elements [in] \n int \n buffer element 개수 
-		 * @param type_bytes [in] \n int \n type size bytes 
-		 * @param dst_ptr [in] \n void* \n 해당 버퍼 포인터를 내부에서 관리, \n
-		 * 만약 buffer_ptr 과 같으면 allocate / copy 없이 포인트를 내부에서 사용 \n
-		 * NULL 이면 내부에서 버퍼를 할당하여 copy
-		 * @remarks 버퍼 구조체는 deallocator 가 별도로 정의되면 안 됨!!!
-		 */
-		void ReplaceOrAddBufferPtr(const std::string& _key, const void* buffer_ptr, const int num_elements, const int type_bytes, void* dst_ptr = NULL);
-		  
-		/*!
-		 * @brief VmLObject 가 갖고 있는 모든 List element 의 합
-		 * @return size_t \n VmLObject 가 갖고 있는 모든 List element 의 합을 byte 로 반환
-		 */
-		size_t GetSizeOfRegisteredBuffers();
-
-		/*!
-		 * @brief dst_obj_id 단위로 저장된 parameter continer 모두 삭제 \n
-		 */
-		void ClearAllDstObjValues();
-
-		/*!
-		 * @brief dst_obj_id 단위로 저장된 parameter continer 에서 해당 ID 의 parameter values 를 삭제 \n
-		 * @param iTargetObjectID [in] \n int \n Custom Parameter 의 Target 이 되는 Object ID \n
-		 * @return bool \n 성공하면 true, 그렇지 않으면 false 반환 \n
-		 */
-		bool RemoveDstObjValues(const int dst_obj_id);
-
-		/*!
-		 * @brief dst_obj_id 단위로 저장된 parameter continer 에서 해당 ID 의 parameter values 중 _key 에 해당하는 value 를 삭제 \n
-		 * @param iTargetObjectID [in] \n int \n Custom Parameter 의 Target 이 되는 Object ID \n
-		 * @return bool \n 성공하면 true, 그렇지 않으면 false 반환 \n
-		 */
-		bool RemoveDstObjValue(const int dst_obj_id, const std::string& _key);
-
-		/*!
-		 * @brief dst_obj_id register a specific value to the parameter container
-		 * @param dst_obj_id [in] \n int \n object ID
-		 * @param _key [in] \n string \n container key
-		 * @param v_ptr [in] \n void \n value pointer
-		 * @param bytes_dstobj_value [in] \n int \n value data size bytes 
-		 * @param dst_ptr [in] \n void* \n the value pointer (allocated in memory) will be managed inside this VmLObject, \n
-		 * if the dst_ptr is the same as the buffer_ptr allocated in this VmLObject, the pointer will be used without 'allocate and copy' \n
-		 * if the dst_ptr is NULL, allocate and copy will be performed in this VmLObject
-		 * @remarks when using a user-defined data structure, do not use user-defined deallocator !!!
-		 */
-		void ReplaceOrAddDstObjValue(const int dst_obj_id, const std::string& _key, const void* v_ptr, const int bytes_dstobj_value, void* dst_ptr = NULL);
-		void ReplaceOrAddDstObjValue(const int dst_obj_id, const std::string& _key, const std::any& v, const int bytes_dstobj_value);
-
-		/*!
-		 * @brief dst_obj_id 단위로 저장된 parameter continer 의 값을 읽음
-		 * @param dst_obj_id [in] \n int \n parameter continer 의 Target 이 되는 Object ID
-		 * @param _key [in] \n string \n 해당 dst_obj_id 에 대해 저장되어 있는 map 의 Key
-		 * @param v_ptr [out] \n void \n dst_obj_id 의 parameter continer 에 _key 로 저장된 값을 저장할 포인터
-		 * @return bool \n 성공하면 true, 그렇지 않으면 false 반환 \n
-		 */
-		bool GetDstObjValue(const int dst_obj_id, const std::string& _key, void* v_ptr);
-		bool GetDstObjValueBufferPtr(const int dst_obj_id, const std::string& _key, void** vbuf_ptr, size_t& size_bytes);
-
-		void ReplaceOrAddStringBuffer(const std::string& _key, const std::string* str_buffer_ptr, const int num_elements);
-		bool GetStringBuffer(const std::string& _key, std::string** str_buffer_ptr, int& num_elements);
-		bool RemoveStringBuffer(const std::string& _key);
-
-		bool CopyFrom(const VmLObject& src_lobj);
-
-		ullong GetSizeOfAllLists();
 	};
 }; // namespace vmobjects
 
@@ -1776,81 +1704,127 @@ namespace vmgeom {
 
 
 //==========================================
-// Function Container : 2019.07.15
+// Function Container : 2022.03.10
 //==========================================
 namespace fncontainer
 {
-	struct VmObjKey
-	{
-		vmenums::EvmObjectType otype;
-		bool is_input;
+	struct VmActor {
+	private:
+		vmobjects::VmVObject* _geometry_res = NULL;
+		vmobjects::VmParamMap<std::string, std::any> _associated_res; // VmObject
+		vmobjects::VmParamMap<std::string, std::any> _vmparams;
+	public:
+		bool visible = true;
+		vmfloat4 color = vmfloat4(1.f);
+		vmmat44f matOS2WS = vmmat44f();
+		vmmat44f matWS2OS = vmmat44f();
+		std::string name = "No Name";
+		int actorId = 0;
 
-		VmObjKey()
-		{
-			otype = vmenums::EvmObjectType::ObjectTypeNONE;
-			is_input = true;
+		VmActor* parentActor = NULL;
+
+		vmobjects::VmVObject* GetGeometryRes() {
+			return _geometry_res;
 		}
-		VmObjKey(vmenums::EvmObjectType _otype, bool _is_input)
-		{
-			otype = _otype;
-			is_input = _is_input;
+
+		void SetGeometryRes(vmobjects::VmVObject* geometry_res) {
+			_geometry_res = geometry_res;
 		}
-		bool operator == (VmObjKey other) const
-		{
-			return otype == other.otype && is_input == other.is_input;
+
+		vmobjects::VmObject* GetAssociateRes(const std::string& name) {
+			return _associated_res.GetParam(name, (vmobjects::VmObject*)NULL);
 		}
-		bool operator < (VmObjKey other) const
+
+		void SetAssociatedRes(const std::string name, const vmobjects::VmObject* geometry_res) {
+			_associated_res.SetParam(name, (vmobjects::VmObject*)geometry_res);
+		}
+
+		template <typename T>
+		T GetParam(const std::string& param_name, const T _init)
 		{
-			return (int)otype + (((int)is_input) << 16) < (int)other.otype + (((int)other.is_input) << 16);
+			return _vmparams.GetParam(param_name, _init);
+		}
+
+		template <typename T>
+		bool GetParamCheck(const std::string& param_name, T& _v)
+		{
+			return _vmparams.GetParamCheck(param_name, _v);
+		}
+
+		template <typename T>
+		T* GetParamPtr(const std::string& param_name)
+		{
+			return _vmparams.GetParamPtr<T>(param_name);
+		}
+
+		template <typename S, typename T>
+		T GetParamCasting(const std::string& param_name, const T _init)
+		{
+			return _vmparams.GetParamCasting<S>(param_name, _init);
+		}
+
+		template <typename S, typename T>
+		T GetParamCastingCheck(const std::string& param_name, T& _v)
+		{
+			return _vmparams.GetParamCastingCheck<S>(param_name, _v);
+		}
+
+		template <typename T>
+		void SetParam(const std::string& param_name, const T _v)
+		{
+			if (_vmparams == NULL) return;
+			_vmparams.SetParam(param_name, _v);
 		}
 	};
 
 	struct VmFnContainer {
 		std::string descriptor;
-		std::map< VmObjKey, std::vector<vmobjects::VmObject*> > vmobjs;
-		std::map< std::string, void*> vmparams;
-		std::map< std::string, void*> rmw_buffers;
+
+		vmobjects::VmParamMap<int, VmActor>* sceneActors = NULL;
+		vmobjects::VmParamMap<std::string, std::any>* vmparams = NULL;
 
 		template <typename T>
-		T GetParamValue(const std::string& param_name, const T _init)
+		T GetParam(const std::string& param_name, const T _init)
 		{
-			auto it = vmparams.find(param_name);
-			if (it == vmparams.end()) return _init;
-			return *(T*)it->second;
-		}
-
-		template <typename T>
-		T ReadRmwBufferPtr(const std::string& buf_name, const T _init_ptr)
-		{
-			auto it = rmw_buffers.find(buf_name);
-			if (it == rmw_buffers.end()) return _init_ptr;
-			return (T)it->second;
+			if (vmparams == NULL) return _init;
+			T v = _init;
+			vmparams->GetParam(param_name, v);
+			return v;
 		}
 
 		template <typename T>
-		void WriteOrModifyRmwBufferPtr(const std::string& buf_name, const T _buf_ptr)
+		bool GetParamCheck(const std::string& param_name, T& _v)
 		{
-			auto it = rmw_buffers.find(buf_name);
-			if (it == rmw_buffers.end())  rmw_buffers[buf_name] = _buf_ptr;
-			else it->second = _buf_ptr;
+			return vmparams->GetParamCheck(param_name, _v);
 		}
 
-		int GetVmObjectList(std::vector<vmobjects::VmObject*>* _vmobjs, const VmObjKey& key)
+		template <typename T>
+		T* GetParamPtr(const std::string& param_name)
 		{
-			auto it = vmobjs.find(key);
-			if (it == vmobjs.end()) return 0;
-			*_vmobjs = it->second;
-			return (int)it->second.size();
+			if (vmparams == NULL) return NULL;
+			return vmparams->GetParamPtr<T>(param_name);
 		}
 
-		vmobjects::VmObject* GetVmObject(const VmObjKey& key, const int idx)
+		template <typename S, typename T>
+		T GetParamCasting(const std::string& param_name, const T _init)
 		{
-			auto it = vmobjs.find(key);
-			if (it == vmobjs.end()) return NULL;
-			if ((int)it->second.size() <= idx) return NULL;
-			return it->second[idx];
+			if (vmparams == NULL) return _init;
+			T v = _init;
+			vmparams->GetParamCasting<S>(param_name, v);
+			return v;
 		}
 
-		bool is_empty() { return vmobjs.size() + vmparams.size() + rmw_buffers.size() == 0; }
+		template <typename S, typename T>
+		bool GetParamCastingCheck(const std::string& param_name, T& _v)
+		{
+			return vmparams->GetParamCastingCheck<S>(param_name, _v);
+		}
+
+		template <typename T>
+		void SetParam(const std::string& param_name, const T _v)
+		{
+			if (vmparams == NULL) return;
+			vmparams->SetParam(param_name, _v);
+		}
 	};
 }
