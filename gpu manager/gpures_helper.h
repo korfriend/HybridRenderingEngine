@@ -390,10 +390,10 @@ namespace grd_helper
 	//};
 
 	struct LightSource {
-		bool is_on_camera = false; // _bool_IsLightOnCamera
-		bool is_soptlight = false; // _bool_IsPointSpotLight
-		vmfloat3 light_dir = vmfloat3(0); // _double3_VecLightWS
-		vmfloat3 light_pos = vmfloat3(0); // _double3_PosLightWS
+		bool is_on_camera = false; 
+		bool is_soptlight = false; 
+		vmfloat3 light_dir = vmfloat3(0); 
+		vmfloat3 light_pos = vmfloat3(0); 
 
 		vmfloat3 light_ambient_color = vmfloat3(1);
 		vmfloat3 light_diffuse_color = vmfloat3(1);
@@ -401,21 +401,22 @@ namespace grd_helper
 	};
 
 	struct GlobalLighting {
-		bool apply_ssao = false; // _bool_ApplySSAO
-		float ssao_r_kernel = 1.f; // _double_SSAOKernalR
-		int ssao_num_dirs = 4; // _int_SSAONumDirs
-		int ssao_num_steps = 4; // _int_SSAONumSteps
-		float ssao_tangent_bias = (float)(VM_PI / 6.0); // _double_SSAOTangentBias
-		float ssao_intensity = 0.5f; // _double_SSAOIntensity
-		int ssao_debug = 0; // _int_SSAOOutput
+		bool apply_ssao = false; 
+		float ssao_r_kernel = 1.f; 
+		int ssao_num_dirs = 4; 
+		int ssao_num_steps = 4; 
+		float ssao_tangent_bias = (float)(VM_PI / 6.0); 
+		float ssao_intensity = 0.5f; 
+		bool ssao_blur = true;
+		int ssao_debug = 0;
 	};
 
 	struct LensEffect {
-		bool apply_ssdof = false; // _bool_ApplyDOF
-		float dof_lens_r = 3.f; // _double_DOFLensRadius
-		float dof_lens_F = 10.f; // _double_DOFFocalLength
-		int dof_ray_num_samples = 8; // _int_DOFLensRaySamples
-		float dof_focus_z = 20.f; // _double_DOFFocusZ
+		bool apply_ssdof = false; 
+		float dof_lens_r = 3.f;
+		float dof_lens_F = 10.f; 
+		int dof_ray_num_samples = 8; 
+		float dof_focus_z = 20.f; 
 	};
 
 	struct CB_CameraState

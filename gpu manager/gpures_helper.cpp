@@ -1764,19 +1764,15 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 	cb_volume.vol_size = vmfloat3((float)vol_size.x, (float)vol_size.y, (float)vol_size.z);
 
 	// from pmapDValueVolume //
-	double dSamplePrecisionLevel = actor->GetParam("_double_SamplePrecisionLevel", (double)1.0);
-	double dThicknessVirtualzSlab = cb_volume.sample_dist;
-	double ssao_intensity = actor->GetParam("_double_SSAOIntensity", (double)0.5);;
-
-	float fSamplePrecisionLevel = (float)dSamplePrecisionLevel;
+	float fSamplePrecisionLevel = actor->GetParam("_float_SamplePrecisionLevel", 1.f);
 	if (fSamplePrecisionLevel > 0)
 	{
 		cb_volume.sample_dist /= fSamplePrecisionLevel;
 		cb_volume.opacity_correction /= fSamplePrecisionLevel;
 	}
-	cb_volume.vz_thickness = (float)dThicknessVirtualzSlab;	// 현재 HLSL 은 Sample Distance 를 강제로 사용 중...
+	cb_volume.vz_thickness = cb_volume.sample_dist;	// 현재 HLSL 은 Sample Distance 를 강제로 사용 중...
 	cb_volume.iso_value = iso_value;
-	cb_volume.ao_intensity = (float)ssao_intensity;
+	cb_volume.ao_intensity = actor->GetParam("_float_SSAOIntensity", 0.5f);
 
 	//printf("sample_rate : %f\n", sample_rate);
 	//printf("minDistSample : %f\n", minDistSample);
@@ -1867,7 +1863,7 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 		cb_polygon.Ns = (float)actor->GetParam("_double_Ns", (double)1.0);;
 	}
 
-	bool abs_diffuse = actor->GetParam("_bool_AbsDiffuse", false);
+	bool abs_diffuse = actor->GetParam("_bool_AbsDiffuse", false); // alpha 값에 따라...??
 	if (!abs_diffuse)
 		cb_polygon.pobj_flag |= (0x1 << 5);
 
