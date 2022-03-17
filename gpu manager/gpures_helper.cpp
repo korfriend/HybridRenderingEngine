@@ -1033,26 +1033,32 @@ RETRY:
 	return true;
 }
 
-bool grd_helper::UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, const bool update_tf_content, LocalProgress* progress)
+bool grd_helper::UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, LocalProgress* progress)
 {
 	gres.vm_src_id = tobj->GetObjectID();
 	gres.res_name = string("OTF_BUFFER");
 
-	if (g_pCGpuManager->UpdateGpuResource(gres) && !update_tf_content)
-		return true;
-
-	gres.rtype = RTYPE_BUFFER;
-	gres.options["USAGE"] = D3D11_USAGE_DYNAMIC;
-	gres.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
-	gres.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
-	gres.options["FORMAT"] = DXGI_FORMAT_R8G8B8A8_UNORM;
-
 	MapTable* tmap_data = tobj->GetObjParamPtr<MapTable>("_TableMap_OTF");
-	gres.res_dvalues["NUM_ELEMENTS"] = tmap_data->array_lengths.x * tmap_data->array_lengths.y;
-	gres.res_dvalues["STRIDE_BYTES"] = tmap_data->dtype.type_bytes;
+	if (g_pCGpuManager->UpdateGpuResource(gres)) {
 
-	if (!g_pCGpuManager->UpdateGpuResource(gres))
+		ullong _tp_cpu = tobj->GetContentUpdateTime(); 
+		gres.
+		ullong _tp_gpu = tobj->GetObjParam("_ullong_LatestTmapUpdateTime", (ullong)0);
+		if(_tp_gpu >= _tp_cpu)
+			return true;
+	}
+	else {
+		gres.rtype = RTYPE_BUFFER;
+		gres.options["USAGE"] = D3D11_USAGE_DYNAMIC;
+		gres.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
+		gres.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
+		gres.options["FORMAT"] = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+		gres.res_dvalues["NUM_ELEMENTS"] = tmap_data->array_lengths.x * (tmap_data->array_lengths.y);
+		gres.res_dvalues["STRIDE_BYTES"] = tmap_data->dtype.type_bytes;
+
 		g_pCGpuManager->GenerateGpuResource(gres);
+	}
 
 	D3D11_MAPPED_SUBRESOURCE d11MappedRes;
 	g_pvmCommonParams->dx11DeviceImmContext->Map((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes);
@@ -1063,8 +1069,7 @@ bool grd_helper::UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, const bool updat
 	}
 	g_pvmCommonParams->dx11DeviceImmContext->Unmap((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], 0);
 
-	ullong _tp = vmhelpers::GetCurrentTimePack();
-	tobj->SetObjParam("_ullong_LatestTmapUpdateTime", _tp);
+	tobj->SetObjParam("_ullong_LatestTmapUpdateTime", vmhelpers::GetCurrentTimePack());
 
 	return true;
 }
@@ -1597,24 +1602,6 @@ bool grd_helper::UpdateFrameBuffer(GpuRes& gres,
 	g_pCGpuManager->GenerateGpuResource(gres);
 
 	return true;
-}
-
-bool grd_helper::CheckOtfAndVolBlobkUpdate(VmVObjectVolume* vobj, VmObject* tobj)
-{
-	ullong latest_otf_update_time = tobj->GetObjParam("_ullong_LatestTmapUpdateTime", (ullong)17);
-
-	ullong latest_blk_update_time = vobj->GetObjParam("_ullong_LatestVolBlkUpdateTime", (ullong)17);
-	//if (latest_blk_update_time <= latest_otf_update_time)
-	//{
-	//	int v_ms = latest_blk_update_time & 0x3FF;
-	//	int o_ms = latest_otf_update_time & 0x3FF;
-	//	int v_s = (latest_blk_update_time >> 10) & 0x3F;
-	//	int o_s = (latest_otf_update_time >> 10) & 0x3F;
-	//	int v_m = (latest_blk_update_time >> 16) & 0x3F;
-	//	int o_m = (latest_otf_update_time >> 16) & 0x3F;
-	//	printf("** TMAP OBJ ID : %d, Volume %d:%d:%d vs OTF %d:%d:%d\n", tobj->GetObjectID(), v_m, v_s, v_ms, o_m, o_s, o_ms);
-	//}
-	return latest_blk_update_time <= latest_otf_update_time;
 }
 
 //#define *(vmfloat3*)&

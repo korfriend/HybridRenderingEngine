@@ -936,6 +936,7 @@ namespace vmobjects
 		 * >> byte tflag = tflag_blks[blk_idx];
 		 */
 		std::map<int, byte*> tflag_blks_map;
+		std::map<int, ullong> updatetime_map;
 
 		/// constructor, 모두 0 (NULL or false)으로 초기화
 		VolumeBlocks() {
@@ -952,6 +953,7 @@ namespace vmobjects
 			for (std::map<int, byte*>::iterator itr = tflag_blks_map.begin(); itr != tflag_blks_map.end(); itr++)
 				VMSAFE_DELETEARRAY(itr->second);
 			tflag_blks_map.clear();
+			updatetime_map.clear();
 		}
 
 		/*!
@@ -963,6 +965,14 @@ namespace vmobjects
 			std::map<int, byte*>::iterator itr = tflag_blks_map.find(tobj_id);
 			if (itr == tflag_blks_map.end())
 				return NULL;
+			return itr->second;
+		}
+
+		ullong GetUpdateTime(int tobj_id)
+		{
+			std::map<int, ullong>::iterator itr = updatetime_map.find(tobj_id);
+			if (itr == updatetime_map.end())
+				return 0;
 			return itr->second;
 		}
 
@@ -1165,6 +1175,8 @@ namespace vmobjects
 		EvmObjectType GetObjectType();
 
 		unsigned long long GetContentUpdateTime();
+
+		void SetContentUpdateTime();
 		
 		bool SetObjParam(const std::string& param_name, const std::any& v);
 
@@ -1770,7 +1782,14 @@ namespace fncontainer
 		}
 
 		template <typename T>
-		void SetParam(const std::string& param_name, const T _v)
+		void SetParam(const std::string& param_name, const T& _v)
+		{
+			if (_vmparams == NULL) return;
+			_vmparams.SetParam(param_name, _v);
+		}
+
+		template <typename T>
+		void SetParamV(const std::string& param_name, const T _v)
 		{
 			if (_vmparams == NULL) return;
 			_vmparams.SetParam(param_name, _v);
@@ -1821,7 +1840,14 @@ namespace fncontainer
 		}
 
 		template <typename T>
-		void SetParam(const std::string& param_name, const T _v)
+		void SetParam(const std::string& param_name, const T& _v)
+		{
+			if (vmparams == NULL) return;
+			vmparams->SetParam(param_name, _v);
+		}
+
+		template <typename T>
+		void SetParamV(const std::string& param_name, const T _v)
 		{
 			if (vmparams == NULL) return;
 			vmparams->SetParam(param_name, _v);

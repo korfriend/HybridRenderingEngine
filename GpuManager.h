@@ -59,7 +59,7 @@ namespace vmgpuinterface
 		std::string res_name;
 		GpuResType rtype;
 		std::map<std::string, uint> options;
-		std::map<std::string, double> res_dvalues;
+		std::map<std::string, std::any> res_values;
 		std::map<DesType, void*> alloc_res_ptrs;
 	};
 

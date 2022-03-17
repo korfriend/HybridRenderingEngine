@@ -314,7 +314,7 @@ namespace grd_helper
 	// bool UpdateAOMask(const VmVObjectVolume* vobj, LocalProgress* progress = NULL); // to do
 	bool UpdateVolumeModel(GpuRes& gres, VmVObjectVolume* vobj, const bool use_nearest_max, LocalProgress* progress = NULL);
 
-	bool UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, const bool update_tf_content, LocalProgress* progress = NULL);
+	bool UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, LocalProgress* progress = NULL);
 
 	// primitive structure
 	bool UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<string, GpuRes>& map_gres_texs, VmVObjectPrimitive* pobj, LocalProgress* progress = NULL);
@@ -336,8 +336,6 @@ namespace grd_helper
 		const int fb_flag,
 		const int num_frags_perpixel = 1,
 		const int structured_stride = 0);
-
-	bool CheckOtfAndVolBlobkUpdate(VmVObjectVolume* vobj, VmObject* tobj);
 
 #define ZERO_SET(T) T(){memset(this, 0, sizeof(T));}
 

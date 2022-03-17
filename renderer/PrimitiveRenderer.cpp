@@ -1500,9 +1500,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		&gres_fb_counter, &gres_fb_spinlock, &gres_fb_ubk_buffer, &gres_fb_ref_pidx, &gres_picking_buffer, &gres_fb_k_buffer, &gres_fb_rgba, &gres_fb_depthcs, &gres_fb_moment_rgba,
 		&cbuf_cam_state, &cbuf_env_state, &cbuf_clip, &cbuf_pobj, &cbuf_vobj, &cbuf_reffect, &cbuf_tmap, &cbuf_hsmask,
 		&num_grid_x, &num_grid_y, &matWS2PS, &matWS2SS, &matSS2WS,
-		&mapGpuRes_Idx, &mapGpuRes_Vtx, &mapGpuRes_Tex, &mapGpuRes_VolumeAndTMap, 
 		&light_src, &default_phong_lighting_coeff, &default_point_thickness, &default_surfel_size, &default_line_thickness, &default_color_cmmobj, &use_spinlock_pixsynch, &use_blending_option_MomentOIT,
-		&count_call_render,
+		&count_call_render, &progress,
 		&clr_float_zero_4, &clr_float_fltmax_4, &dx11DSVNULL, &dx11RTVsNULL, &dx11UAVs_NULL, &dx11SRVs_NULL
 		](
 		vector<VmActor*>& actor_list,
@@ -1512,13 +1511,41 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	{
 
 		// main geometry rendering process
-		for (uint pobj_idx = 0; pobj_idx < (int)actor_list->size(); pobj_idx++)
+		for (VmActor* actor : actor_list)
 		{
+			// note that the actor is visible (already checked)
+#pragma region GPU resource updates
+			VmVObjectPrimitive* pobj = (VmVObjectPrimitive*)actor->GetGeometryRes();
+			VmObject* tobj_otf = (VmObject*)actor->GetAssociateRes("_VmObject_OTF");
+			VmObject* tobj_maptable = (VmObject*)actor->GetAssociateRes("_VmObject_Maptable");
+			VmVObjectVolume* vobj = (VmVObjectVolume*)actor->GetAssociateRes("_VmObject_Volume");
+
+			GpuRes gres_vol, gres_tmap_otf;
+			if (vobj) {
+				grd_helper::UpdateVolumeModel(gres_vol, vobj, false, progress);
+				if (tobj_otf) {
+					grd_helper::UpdateTMapBuffer(gres_tmap_otf, tobj_otf);
+					ullong latest_otf_update_time = tobj_otf->GetObjParam("_ullong_LatestTmapUpdateTime", (ullong)17);
+					ullong latest_blk_update_time = vobj->GetObjParam("_ullong_LatestVolBlkUpdateTime", (ullong)17);
+					latest_blk_update_time <= latest_otf_update_time;
 
 
-			VmObject* tobj_windowing = (VmObject*)actor.GetAssociateRes("_VmObject_Windowing");
-			VmObject* tobj_otf = (VmObject*)actor.GetAssociateRes("_VmObject_OTF");
-			VmObject* vobj = (VmObject*)actor.GetAssociateRes("_VmObject_Volume");
+					GpuRes gres_volblk_otf;
+					grd_helper::UpdateOtfBlocks(gres_volblk_otf, vobj, NULL, mapTObjects, main_tobj->GetObjectID(), mask_otf_idmap, num_mask_otfs,
+						(is_otf_changed | update_volblk_sculptmask) && !force_to_skip_volblk_update, use_mask_otfs, sculpt_index);
+				}
+			}
+
+			GpuRes gres_tmap_maptble;
+			if(tobj_maptable) grd_helper::UpdateTMapBuffer(gres_tmap_maptble, tobj_maptable);
+
+
+#pragma endregion
+
+#pragma region Actor Parameters
+
+#pragma endregion
+
 
 			RegisterVolumeRes(vobj, tobj, lobj, gpu_manager, dx11DeviceImmContext, associated_objs, mapGpuRes_VolumeAndTMap, progress);
 
@@ -1533,6 +1560,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				mapGpuRes_Tex.insert(pair<int, map<string, GpuRes>>(pobj_id, map_gres_texs));
 
 
+			PrimitiveData* prim_data = pobj->GetPrimitiveData();
 			lobj->GetDstObjValue(pobj_id, "_bool_UseVertexWireColor", &render_obj_info.use_vertex_color);
 			vmdouble4 dColor(1.), dColorWire(1.);
 			pobj->GetObjParam("_double4_color", data_type::dtype<vmdouble4>(), &dColor);
