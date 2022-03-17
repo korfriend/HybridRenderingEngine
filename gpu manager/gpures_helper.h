@@ -308,17 +308,13 @@ namespace grd_helper
 	void DeinitializePresettings();
 
 	// volume/block structure
-	bool UpdateOtfBlocks(GpuRes& gres, const VmVObjectVolume* vobj, const VmObject	* tobj,
-		const bool update_blks, const int sculpt_value, LocalProgress* progress = NULL);
-	bool UpdateOtfBlocks(GpuRes& gres, const VmVObjectVolume* main_vobj, const VmVObjectVolume* mask_vobj,
-		const map<int, VmObject*>& mapTObjects, const int main_tmap_id, const double* mask_tmap_ids, const int num_mask_tmap_ids,
-		const bool update_blks, const bool use_mask_otf, const int sculpt_value, LocalProgress* progress = NULL);
+	bool UpdateOtfBlocks(GpuRes& gres, VmVObjectVolume* main_vobj, VmVObjectVolume* mask_vobj,
+		VmObject* tobj, const bool update_blks, const int sculpt_value, LocalProgress* progress = NULL);
 	bool UpdateMinMaxBlocks(GpuRes& gres_min, GpuRes& gres_max, const VmVObjectVolume* vobj, LocalProgress* progress = NULL);
 	// bool UpdateAOMask(const VmVObjectVolume* vobj, LocalProgress* progress = NULL); // to do
-	bool UpdateVolumeModel(GpuRes& gres, const VmVObjectVolume* vobj, const bool use_nearest_max, LocalProgress* progress = NULL);
+	bool UpdateVolumeModel(GpuRes& gres, VmVObjectVolume* vobj, const bool use_nearest_max, LocalProgress* progress = NULL);
 
-	bool UpdateTMapBuffer(GpuRes& gres, const VmObject* main_tobj,
-		const map<int, VmObject*>& tobj_map, const double* series_ids, const double* visible_mask, const int otf_series, const bool update_tf_content, LocalProgress* progress = NULL);
+	bool UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, const bool update_tf_content, LocalProgress* progress = NULL);
 
 	// primitive structure
 	bool UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<string, GpuRes>& map_gres_texs, VmVObjectPrimitive* pobj, LocalProgress* progress = NULL);
@@ -483,7 +479,7 @@ namespace grd_helper
 		float tangent_bias;
 
 		float ao_intensity;
-		uint env_dummy_0;
+		uint num_safe_loopexit;
 		uint env_dummy_1;
 		uint env_dummy_2;
 
@@ -549,8 +545,8 @@ namespace grd_helper
 
 		float pix_thickness; // 1) for POINT and LINE TOPOLOGY, 2) outline thickness (in pixel)
 		float vz_thickness; 
-		uint num_safe_loopexit; 
 		uint pobj_dummy_0; // 1) pobj_id used for picking, 2) outline color
+		uint pobj_dummy_1;
 
 		ZERO_SET(CB_PolygonObject)
 	};
@@ -696,10 +692,9 @@ namespace grd_helper
 	void SetCb_TMap(CB_TMAP& cb_tmap, VmObject* tobj);
 	//bool SetCbVrShadowMap(CB_VrShadowMap* pCBVrShadowMap, CB_VrCameraState* pCBVrCamStateForShadowMap, vmfloat3 f3PosOverviewBoxMinWS, vmfloat3 f3PosOverviewBoxMaxWS, map<string, void*>* pmapCustomParameter);
 	void SetCb_ClipInfo(CB_ClipInfo& cb_clip, VmVObject* obj, VmActor* actor);
-	void SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vobj, VmActor* actor, const vmmat44f& matVS2WS, const vmmat44f& matWS2VS, const float sample_rate, const bool apply_samplerate2gradient, const bool high_samplerate, const vmint3& vol_size, const int iso_value, const float volblk_valuerange, const int sculpt_index = -1);
-	void SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimitive* pobj, VmActor* actor,
-		const vmmat44f& matOS2WS, const vmmat44f& matWS2SS, const vmmat44f& matWS2PS);
-	void SetCb_RenderingEffect(CB_RenderingEffect& cb_reffect, VmVObject* obj, VmActor* actor);
+	void SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vobj, VmActor* actor, const float sample_rate, const bool apply_samplerate2gradient, const bool high_samplerate, const vmint3& vol_size, const int iso_value, const float volblk_valuerange, const int sculpt_index = -1);
+	void SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimitive* pobj, VmActor* actor, const vmmat44f& matWS2SS, const vmmat44f& matWS2PS, const bool is_annotation_obj, const bool use_vertex_color);
+	void SetCb_RenderingEffect(CB_RenderingEffect& cb_reffect, VmActor* actor);
 	void SetCb_VolumeRenderingEffect(CB_VolumeRenderingEffect& cb_vreffect, VmVObjectVolume* vobj, VmActor* actor);
 	
 	void SetCb_HotspotMask(CB_HotspotMask& cb_hsmask, VmFnContainer* _fncontainer, const vmmat44f& matWS2SS);

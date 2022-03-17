@@ -417,7 +417,7 @@ __IES(ADDR + (K) * NUM_ELES_PER_FRAG * 4, 1, asuint(F.z)); }
 #define __ADD_COUNT(CNT) { InterlockedExchange(fragment_counter[tex2d_xy], CNT + 1, __dummy); }
 #else
 	// allowing some synch errors but fast
-	// in my test, with STRICT_LOCKED and g_cbPobj.num_safe_loopexit = 5000000, same as the result of ROV mode
+	// in my test, with STRICT_LOCKED and g_cbEnv.num_safe_loopexit = 5000000, same as the result of ROV mode
 #define __SET_FRAG SET_FRAG
 #define __SET_ZEROFRAG SET_ZEROFRAG
 #define __ADD_COUNT(CNT) { fragment_counter[tex2d_xy] = CNT + 1; }
@@ -434,7 +434,7 @@ __IES(ADDR + (K) * NUM_ELES_PER_FRAG * 4, 1, asuint(F.z)); }
 	[loop]
 	while (keep_loop)
 	{
-		if (++safe_unlock_count > g_cbPobj.num_safe_loopexit)
+		if (++safe_unlock_count > g_cbEnv.num_safe_loopexit)
 		{
 			InterlockedExchange(fragment_spinlock[tex2d_xy.xy], 0, __dummy);
 			keep_loop = false;

@@ -578,86 +578,63 @@ int __UpdateBlocks(GpuRes& gres, const VmVObjectVolume* vobj, const string& vmod
 	return 1;
 }
 
-bool grd_helper::UpdateOtfBlocks(GpuRes& gres, const VmVObjectVolume* vobj, const VmObject	* tobj,
-	const bool update_blks, const int sculpt_value, LocalProgress* progress)
-{
-	map<int, VmObject*> mapTObjects;
-	mapTObjects.insert(pair<int, VmObject*>(tobj->GetObjectID(), (VmObject*)tobj));
-	return UpdateOtfBlocks(gres, vobj, NULL, mapTObjects, tobj->GetObjectID(), NULL, 0, update_blks, false, sculpt_value, progress);
-}
-
-bool grd_helper::UpdateOtfBlocks(GpuRes& gres, const VmVObjectVolume* main_vobj, const VmVObjectVolume* mask_vobj,
-	const map<int, VmObject*>& mapTObjects, const int main_tmap_id,
-	const double* mask_tmap_ids, const int num_mask_tmap_ids,
-	const bool update_blks, const bool use_mask_otf, const int sculpt_value, LocalProgress* progress)
+bool grd_helper::UpdateOtfBlocks(GpuRes& gres, VmVObjectVolume* main_vobj, VmVObjectVolume* mask_vobj,
+	VmObject* tobj, const bool update_blks, const int sculpt_value, LocalProgress* progress)
 {
 	int is_new = __UpdateBlocks(gres, main_vobj, "OTFTAG", progress);
 	if (!update_blks && is_new == 0) return true;
 
-	auto it = mapTObjects.find(main_tmap_id);
-	if (it == mapTObjects.end()) return false;
-	VmObject* main_tmap = (VmObject*)it->second;
+	int tobj_id = tobj->GetObjectID();
 	vmdouble2 otf_Mm_range = vmdouble2(DBL_MAX, -DBL_MAX);
-	TMapData* tmap_data = (main_tmap)->GetTMapData();
+	MapTable* tmap_data = tobj->GetObjParamPtr<MapTable>("_TableMap_OTF");
+
 	otf_Mm_range.x = tmap_data->valid_min_idx.x;
 	otf_Mm_range.y = tmap_data->valid_max_idx.x;
 
 	const int blk_level = 1;	// 0 : High Resolution, 1 : Low Resolution
 	VolumeBlocks* volblk = ((VmVObjectVolume*)main_vobj)->GetVolumeBlock(blk_level);
 	// MAIN UPDATE!
-	((VmVObjectVolume*)main_vobj)->UpdateTagBlocks(main_tmap->GetObjectID(), 0, otf_Mm_range, NULL);
-	((VmVObjectVolume*)main_vobj)->UpdateTagBlocks(main_tmap->GetObjectID(), 1, otf_Mm_range, NULL);
-	byte* tag_blks = volblk->GetTaggedActivatedBlocks(main_tmap->GetObjectID()); // set by OTF values
+	((VmVObjectVolume*)main_vobj)->UpdateTagBlocks(tobj_id, 0, otf_Mm_range, NULL);
+	((VmVObjectVolume*)main_vobj)->UpdateTagBlocks(tobj_id, 1, otf_Mm_range, NULL);
+	byte* tag_blks = volblk->GetTaggedActivatedBlocks(tobj_id); // set by OTF values
 
 	ullong _tp = vmhelpers::GetCurrentTimePack();
-	((VmVObjectVolume*)main_vobj)->RegisterCustomParameter("_int2_LatestVolBlkUpdateTime", *(vmint2*)&_tp);
+	main_vobj->SetObjParam("_ullong_LatestVolBlkUpdateTime", _tp);
 
-	if (use_mask_otf && mask_tmap_ids && num_mask_tmap_ids > 0 && mask_vobj) // Only Cares for Main Block of iLevelBlock
-	{
-		VolumeBlocks* mask_volblk = ((VmVObjectVolume*)mask_vobj)->GetVolumeBlock(blk_level);
-
-		vmint3 blk_vol_size = mask_volblk->blk_vol_size;
-		vmint3 blk_bnd_size = mask_volblk->blk_bnd_size;
-		int num_blk_units_x = blk_vol_size.x + blk_bnd_size.x * 2;
-		int num_blk_units_y = blk_vol_size.y + blk_bnd_size.y * 2;
-		int num_blk_units_z = blk_vol_size.z + blk_bnd_size.z * 2;
-		int num_blks = num_blk_units_x * num_blk_units_y * num_blk_units_z;
-
-		vmbyte2* mask_mM_blk_values = (vmbyte2*)mask_volblk->mM_blks;
-		int num_mask_otfs = (int)mapTObjects.size();
-		for (int j = 1; j < num_mask_otfs; j++)
-		{
-			int mask_tmap_id = (int)mask_tmap_ids[j];
-			auto it_mask_tmap = mapTObjects.find(mask_tmap_id);
-			if (it_mask_tmap == mapTObjects.end())
-			{
-				VMERRORMESSAGE("GPU DVR! - INVALID TOBJECT ID - MASK TF CHECK");
-				return false;
-			}
-
-			VmObject* pCTObjectMask = it_mask_tmap->second;
-
-			TMapData* pstTfArchiveMask = pCTObjectMask->GetTMapData();
-			ushort usMinOtf = (ushort)min(max(pstTfArchiveMask->valid_min_idx.x, 0), 65535);
-			ushort usMaxOtf = (ushort)max(min(pstTfArchiveMask->valid_max_idx.x, 65535), 0);
-
-			vmushort2* pus2MinMaxMainVolBlocks = (vmushort2*)volblk->mM_blks;
-
-			for (int iBlkIndex = 0; iBlkIndex < num_blks; iBlkIndex++)
-			{
-				//if (iSculptValue == 0 || iSculptValue > iSculptIndex)
-				vmbyte2 y2MinMaxBlockValue = mask_mM_blk_values[iBlkIndex];
-				if (y2MinMaxBlockValue.y >= j)
-				{
-					vmushort2 us2MinMaxVolBlockValue = pus2MinMaxMainVolBlocks[iBlkIndex];
-					if (us2MinMaxVolBlockValue.y < usMinOtf || us2MinMaxVolBlockValue.x > usMaxOtf)
-						tag_blks[iBlkIndex] = 0;
-					else
-						tag_blks[iBlkIndex] = 1;
-				}
-			}
-		}
-	}
+	//if (use_mask_otf && mask_tmap_ids && num_mask_tmap_ids > 0 && mask_vobj) // Only Cares for Main Block of iLevelBlock
+	//{
+	//	VolumeBlocks* mask_volblk = ((VmVObjectVolume*)mask_vobj)->GetVolumeBlock(blk_level);
+	//
+	//	vmint3 blk_vol_size = mask_volblk->blk_vol_size;
+	//	vmint3 blk_bnd_size = mask_volblk->blk_bnd_size;
+	//	int num_blk_units_x = blk_vol_size.x + blk_bnd_size.x * 2;
+	//	int num_blk_units_y = blk_vol_size.y + blk_bnd_size.y * 2;
+	//	int num_blk_units_z = blk_vol_size.z + blk_bnd_size.z * 2;
+	//	int num_blks = num_blk_units_x * num_blk_units_y * num_blk_units_z;
+	//
+	//	vmbyte2* mask_mM_blk_values = (vmbyte2*)mask_volblk->mM_blks;
+	//	for (int j = 1; j < tmap_data->array_lengths.y; j++)
+	//	{
+	//		ushort usMinOtf = (ushort)min(max(pstTfArchiveMask->valid_min_idx.x, 0), 65535);
+	//		ushort usMaxOtf = (ushort)max(min(pstTfArchiveMask->valid_max_idx.x, 65535), 0);
+	//
+	//		vmushort2* pus2MinMaxMainVolBlocks = (vmushort2*)volblk->mM_blks;
+	//
+	//		for (int iBlkIndex = 0; iBlkIndex < num_blks; iBlkIndex++)
+	//		{
+	//			//if (iSculptValue == 0 || iSculptValue > iSculptIndex)
+	//			vmbyte2 y2MinMaxBlockValue = mask_mM_blk_values[iBlkIndex];
+	//			if (y2MinMaxBlockValue.y >= j)
+	//			{
+	//				vmushort2 us2MinMaxVolBlockValue = pus2MinMaxMainVolBlocks[iBlkIndex];
+	//				if (us2MinMaxVolBlockValue.y < usMinOtf || us2MinMaxVolBlockValue.x > usMaxOtf)
+	//					tag_blks[iBlkIndex] = 0;
+	//				else
+	//					tag_blks[iBlkIndex] = 1;
+	//			}
+	//		}
+	//	}
+	//}
 
 	if (sculpt_value > 0 && mask_vobj)
 	{
@@ -949,10 +926,9 @@ template <typename GPUTYPE, typename CPUTYPE> bool __FillVolumeValues(CPUTYPE* g
 }
 
 
-bool grd_helper::UpdateVolumeModel(GpuRes& gres, const VmVObjectVolume* vobj, const bool use_nearest_max, LocalProgress* progress)
+bool grd_helper::UpdateVolumeModel(GpuRes& gres, VmVObjectVolume* vobj, const bool use_nearest_max, LocalProgress* progress)
 {
-	bool is_nearest_max_vol = use_nearest_max;
-	((VmVObjectVolume*)vobj)->GetCustomParameter("_bool_UseNearestMax", data_type::dtype<bool>(), &is_nearest_max_vol);
+	bool is_nearest_max_vol = vobj->GetObjParam("_bool_UseNearestMax", use_nearest_max);
 
 	gres.vm_src_id = vobj->GetObjectID();
 	gres.res_name = string("VOLUME_MODEL_") + (is_nearest_max_vol ? string("NEAREST_MAX") : string("DEFAULT"));
@@ -976,8 +952,7 @@ bool grd_helper::UpdateVolumeModel(GpuRes& gres, const VmVObjectVolume* vobj, co
 		return false;
 	}
 
-	double half_criteria_KB = 512.0 * 1024.0;
-	vobj->GetCustomParameter(("_double_ForcedHalfCriterionKB"), data_type::dtype<double>(), &half_criteria_KB);
+	double half_criteria_KB = vobj->GetObjParam("_double_ForcedHalfCriterionKB", (double)(512.0 * 1024.0));
 	half_criteria_KB = min(max(16.0 * 1024.0, half_criteria_KB), 256.0 * 1024.0);
 
 	//////////////////////////////
@@ -1058,14 +1033,9 @@ RETRY:
 	return true;
 }
 
-bool grd_helper::UpdateTMapBuffer(GpuRes& gres, const VmObject* main_tobj,
-	const map<int, VmObject*>& tobj_map, const double* series_ids, const double* visible_mask, const int otf_series, const bool update_tf_content, LocalProgress* progress)
+bool grd_helper::UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, const bool update_tf_content, LocalProgress* progress)
 {
-	int num_otf_series = 0;
-	main_tobj->GetCustomParameter("_int_NumOTFSeries", data_type::dtype<int>(), &num_otf_series);
-	num_otf_series = max(num_otf_series, 1);
-
-	gres.vm_src_id = main_tobj->GetObjectID();
+	gres.vm_src_id = tobj->GetObjectID();
 	gres.res_name = string("OTF_BUFFER");
 
 	if (g_pCGpuManager->UpdateGpuResource(gres) && !update_tf_content)
@@ -1077,8 +1047,8 @@ bool grd_helper::UpdateTMapBuffer(GpuRes& gres, const VmObject* main_tobj,
 	gres.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
 	gres.options["FORMAT"] = DXGI_FORMAT_R8G8B8A8_UNORM;
 
-	TMapData* tmap_data = ((VmObject*)main_tobj)->GetTMapData();
-	gres.res_dvalues["NUM_ELEMENTS"] = tmap_data->array_lengths.x * num_otf_series;
+	MapTable* tmap_data = tobj->GetObjParamPtr<MapTable>("_TableMap_OTF");
+	gres.res_dvalues["NUM_ELEMENTS"] = tmap_data->array_lengths.x * tmap_data->array_lengths.y;
 	gres.res_dvalues["STRIDE_BYTES"] = tmap_data->dtype.type_bytes;
 
 	if (!g_pCGpuManager->UpdateGpuResource(gres))
@@ -1087,30 +1057,14 @@ bool grd_helper::UpdateTMapBuffer(GpuRes& gres, const VmObject* main_tobj,
 	D3D11_MAPPED_SUBRESOURCE d11MappedRes;
 	g_pvmCommonParams->dx11DeviceImmContext->Map((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes);
 	vmbyte4* py4ColorTF = (vmbyte4*)d11MappedRes.pData;
-	if (tobj_map.size() <= 1 || otf_series <= 1 || !series_ids || !visible_mask)
+	for (int i = 0; i < tmap_data->array_lengths.y; i++)
 	{
-		memcpy(py4ColorTF, tmap_data->tmap_buffers[0], tmap_data->array_lengths.x * sizeof(vmbyte4));
-	}
-	else
-	{
-		for (int i = 0; i < otf_series; i++)
-		{
-			int tobj_id = (int)series_ids[i];
-			bool bVisibleMaskValue = visible_mask[i] != 0;
-			if (bVisibleMaskValue)
-			{
-				auto itrTObjectMask = tobj_map.find(tobj_id);
-				VmObject* pCTObjectMask = itrTObjectMask->second;
-				TMapData* tmap_mask = pCTObjectMask->GetTMapData();
-				memcpy(&py4ColorTF[i * tmap_data->array_lengths.x], tmap_mask->tmap_buffers[0], tmap_data->array_lengths.x * sizeof(vmbyte4));
-			}
-			else
-			{
-				memset(&py4ColorTF[i * tmap_data->array_lengths.x], 0, tmap_data->array_lengths.x * sizeof(vmbyte4));
-			}
-		}
+		memcpy(&py4ColorTF[i * tmap_data->array_lengths.x], tmap_data->tmap_buffers[i], tmap_data->array_lengths.x * sizeof(vmbyte4));
 	}
 	g_pvmCommonParams->dx11DeviceImmContext->Unmap((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], 0);
+
+	ullong _tp = vmhelpers::GetCurrentTimePack();
+	tobj->SetObjParam("_ullong_LatestTmapUpdateTime", _tp);
 
 	return true;
 }
@@ -1126,13 +1080,12 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 		unsigned long long _gpu_gen_timg = 0;
 		if (it != gres.res_dvalues.end())
 			_gpu_gen_timg = *(unsigned long long*)&it->second;
-		unsigned long long _cpu_gen_timg = pobj->GetContentsUpdateTime();
+		unsigned long long _cpu_gen_timg = pobj->GetContentUpdateTime();
 		if (_gpu_gen_timg < _cpu_gen_timg)
 		{
 			// now, at least update
 			update_data = true;
-			bool is_reuse_memory = false;
-			pobj->GetCustomParameter("_bool_ReuseGpuMemory", data_type::dtype<bool>(), &is_reuse_memory);
+			bool is_reuse_memory = pobj->GetObjParam("_bool_ReuseGpuMemory", false);
 			if (!is_reuse_memory)
 			{
 				regen_data = true;
@@ -1142,8 +1095,7 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 		}
 	};
 
-	bool update_data = false;
-	pobj->GetCustomParameter("_bool_UpdateData", data_type::dtype<bool>(), &update_data);
+	bool update_data = pobj->GetObjParam("_bool_UpdateData", false);
 	// always
 	{
 		gres_vtx.vm_src_id = pobj->GetObjectID();
@@ -1228,7 +1180,7 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 			//}
 			//g_VmCommonParams.dx11DeviceImmContext->Unmap(pdx11bufvtx, NULL);
 
-			pobj->RegisterCustomParameter("_bool_UpdateData", false);
+			pobj->SetObjParam("_bool_UpdateData", false);
 		}
 	}
 
@@ -1282,8 +1234,7 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 
 	//vmint3 tex_res_size;
 	//((VmVObjectPrimitive*)pobj)->GetCustomParameter("_int3_TextureWHN", data_type::dtype<vmint3>(), &tex_res_size);
-	bool has_texture_img = false;
-	pobj->GetCustomParameter("_bool_HasTextureMap", data_type::dtype<bool>(), &has_texture_img);
+	bool has_texture_img = pobj->GetObjParam("_bool_HasTextureMap", true);
 	if (prim_data->texture_res_info.size() > 0)
 	{
 		vmint2 tex_res_size;
@@ -1434,8 +1385,7 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 		}
 		else
 		{
-			double Ns;
-			pobj->GetCustomParameter("_double_Ns", data_type::dtype<double>(), &Ns);
+			double Ns = pobj->GetObjParam("_double_Ns", (double)0);
 
 			auto update_tex_res = [&Ns, &CheckReusability, &update_data](GpuRes& gres_tex, const string& mat_name, const vmint2& tex_res_size, const int byte_stride, const byte* texture_res)
 			{
@@ -1651,11 +1601,9 @@ bool grd_helper::UpdateFrameBuffer(GpuRes& gres,
 
 bool grd_helper::CheckOtfAndVolBlobkUpdate(VmVObjectVolume* vobj, VmObject* tobj)
 {
-	ullong latest_otf_update_time = 17;
-	tobj->GetCustomParameter("_int2_LatestTmapUpdateTime", data_type::dtype<vmint2>(), &latest_otf_update_time);
+	ullong latest_otf_update_time = tobj->GetObjParam("_ullong_LatestTmapUpdateTime", (ullong)17);
 
-	ullong latest_blk_update_time = 17;
-	vobj->GetCustomParameter("_int2_LatestVolBlkUpdateTime", data_type::dtype<vmint2>(), &latest_blk_update_time);
+	ullong latest_blk_update_time = vobj->GetObjParam("_ullong_LatestVolBlkUpdateTime", (ullong)17);
 	//if (latest_blk_update_time <= latest_otf_update_time)
 	//{
 	//	int v_ms = latest_blk_update_time & 0x3FF;
@@ -1749,7 +1697,7 @@ void grd_helper::SetCb_Env(CB_EnvState& cb_env, VmCObject* ccobj, const LightSou
 	//}
 }
 
-void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vobj, VmActor* actor, const vmmat44f& matVS2WS, const vmmat44f& matWS2VS, const float sample_rate, const bool apply_samplerate2gradient, const bool high_samplerate, const vmint3& vol_size, const int iso_value, const float volblk_valuerange, const int sculpt_index)
+void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vobj, VmActor* actor, const float sample_rate, const bool apply_samplerate2gradient, const bool high_samplerate, const vmint3& vol_size, const int iso_value, const float volblk_valuerange, const int sculpt_index)
 {
 	VolumeData* vol_data = vobj->GetVolumeData();
 
@@ -1759,6 +1707,9 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 	//	cb_volume.vobj_flag |= (0x1);
 	if (sculpt_index >= 0)
 		cb_volume.vobj_flag |= sculpt_index << 24;
+
+	vmmat44f matVS2WS = vobj->GetMatrixRS2OSf() * actor->matOS2WS;
+	vmmat44f matWS2VS = actor->matWS2OS * vobj->GetMatrixOS2RSf();
 
 	vmmat44f matVS2TS;
 	vmmat44f matShift, matScale;
@@ -1846,13 +1797,14 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 }
 
 void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimitive* pobj, VmActor* actor, 
-	const vmmat44f& matOS2WS, const vmmat44f& matWS2SS, const vmmat44f& matWS2PS)
+	const vmmat44f& matWS2SS, const vmmat44f& matWS2PS, 
+	const bool is_annotation_obj, const bool use_vertex_color)
 {
 	PrimitiveData* pobj_data = pobj->GetPrimitiveData();
 
-	cb_polygon.mat_os2ws = TRANSPOSE(matOS2WS);
+	cb_polygon.mat_os2ws = TRANSPOSE(actor->matOS2WS);
 
-	if (rendering_obj_info.is_annotation_obj)// && prim_data->texture_res)
+	if (is_annotation_obj)// && prim_data->texture_res)
 	{
 		vmint3 i3TextureWHN = pobj->GetObjParam("_int3_TextureWHN", vmint3(0));
 		cb_polygon.num_letters = i3TextureWHN.z;
@@ -1860,7 +1812,7 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 		{
 			vmfloat3* pos_vtx = pobj_data->GetVerticeDefinition("POSITION");
 			vmfloat3 f3Pos0SS, f3Pos1SS, f3Pos2SS;
-			vmmat44f matOS2SS = matOS2WS * matWS2SS;
+			vmmat44f matOS2SS = actor->matOS2WS * matWS2SS;
 
 			vmfloat3 pos_vtx_0_ss, pos_vtx_1_ss, pos_vtx_2_ss;
 			fTransformPoint(&pos_vtx_0_ss, &pos_vtx[0], &matOS2SS);
@@ -1901,21 +1853,22 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 	}
 	else
 	{
-		if (!rendering_obj_info.use_vertex_color)
+		if (!use_vertex_color)
 			cb_polygon.pobj_flag |= (0x1 << 3);
 	}
 
 	{
 		vmfloat3 illum_model = (vmfloat3)actor->GetParam("_double3_IllumWavefront", vmdouble3(0));
 		// material setting
-		cb_polygon.alpha = rendering_obj_info.fColor.a;
-		cb_polygon.Ka = (vmfloat3)actor->GetParam("_double3_Ka", vmdouble3(rendering_obj_info.fColor)) * illum_model.x;
-		cb_polygon.Kd = (vmfloat3)actor->GetParam("_double3_Kd", vmdouble3(rendering_obj_info.fColor)) * illum_model.y;
-		cb_polygon.Ks = (vmfloat3)actor->GetParam("_double3_Ks", vmdouble3(rendering_obj_info.fColor)) * illum_model.z;
+		cb_polygon.alpha = actor->color.a;
+		cb_polygon.Ka = (vmfloat3)actor->GetParam("_double3_Ka", vmdouble3(actor->color)) * illum_model.x;
+		cb_polygon.Kd = (vmfloat3)actor->GetParam("_double3_Kd", vmdouble3(actor->color)) * illum_model.y;
+		cb_polygon.Ks = (vmfloat3)actor->GetParam("_double3_Ks", vmdouble3(actor->color)) * illum_model.z;
 		cb_polygon.Ns = (float)actor->GetParam("_double_Ns", (double)1.0);;
 	}
 
-	if (!rendering_obj_info.abs_diffuse)
+	bool abs_diffuse = actor->GetParam("_bool_AbsDiffuse", false);
+	if (!abs_diffuse)
 		cb_polygon.pobj_flag |= (0x1 << 5);
 
 	if (pobj_data->ptype == vmenums::PrimitiveTypeLINE) {
@@ -1929,8 +1882,8 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 				cb_polygon.pobj_flag |= (0x1 << 20);
 
 			vmfloat3 pos_max_ws, pos_min_ws;
-			fTransformPoint(&pos_max_ws, &vmfloat3(pobj_data->aabb_os.pos_max), &matOS2WS);
-			fTransformPoint(&pos_min_ws, &vmfloat3(pobj_data->aabb_os.pos_min), &matOS2WS);
+			fTransformPoint(&pos_max_ws, &vmfloat3(pobj_data->aabb_os.pos_max), &actor->matOS2WS);
+			fTransformPoint(&pos_min_ws, &vmfloat3(pobj_data->aabb_os.pos_min), &actor->matOS2WS);
 			vmfloat3 diff = pos_max_ws - pos_min_ws;
 			diff.x = fabs(diff.x);
 			diff.y = fabs(diff.y);
@@ -1945,10 +1898,9 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 		}
 	}
 
-	cb_polygon.vz_thickness = rendering_obj_info.vzthickness;
-	cb_polygon.num_safe_loopexit = (uint)rendering_obj_info.num_safe_loopexit;
+	cb_polygon.vz_thickness = (float)actor->GetParam("_double_VZThickness", (double)0.0);
 
-	vmmat44f matOS2PS = matOS2WS * matWS2PS;
+	vmmat44f matOS2PS = actor->matOS2WS * matWS2PS;
 	cb_polygon.mat_os2ps = TRANSPOSE(matOS2PS);
 
 	bool force_to_pointsetrender = actor->GetParam("_bool_ForceToPointsetRender", false);
@@ -1958,8 +1910,8 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 		if (dPointThickness <= 0)
 		{
 			vmfloat3 pos_max_ws, pos_min_ws;
-			fTransformPoint(&pos_max_ws, &((vmfloat3)pobj_data->aabb_os.pos_max), &matOS2WS);
-			fTransformPoint(&pos_min_ws, &((vmfloat3)pobj_data->aabb_os.pos_min), &matOS2WS);
+			fTransformPoint(&pos_max_ws, &((vmfloat3)pobj_data->aabb_os.pos_max), &actor->matOS2WS);
+			fTransformPoint(&pos_min_ws, &((vmfloat3)pobj_data->aabb_os.pos_min), &actor->matOS2WS);
 			dPointThickness = fLengthVector(&(pos_max_ws - pos_min_ws)) * 0.002f;
 		}
 		cb_polygon.pix_thickness = (float)(dPointThickness / 2.);
@@ -1981,41 +1933,23 @@ void grd_helper::SetCb_TMap(CB_TMAP& cb_tmap, VmObject* tobj)
 	cb_tmap.last_color = vmfloat4(y4ColorEnd.x / 255.f, y4ColorEnd.y / 255.f, y4ColorEnd.z / 255.f, y4ColorEnd.w / 255.f);
 }
 
-void grd_helper::SetCb_RenderingEffect(CB_RenderingEffect& cb_reffect, VmVObject* obj, VmActor* actor)
+void grd_helper::SetCb_RenderingEffect(CB_RenderingEffect& cb_reffect, VmActor* actor)
 {
-	const int obj_id = obj->GetObjectID();
-
-	cb_reffect.outline_mode = rendering_obj_info.outline_thickness > 0 ? 1 : 0; // DOJO TO DO , encoding
-
-	bool apply_occ = false;
-	lobj->GetDstObjValue(obj_id, "_bool_ApplyAO", &apply_occ);
-	bool apply_brdf = false;
-	lobj->GetDstObjValue(obj_id, "_bool_ApplyBRDF", &apply_brdf);
+	bool apply_occ = actor->GetParam("_bool_ApplyAO", false);
+	bool apply_brdf = actor->GetParam("_bool_ApplyBRDF", false);
 	cb_reffect.rf_flag = (int)apply_occ | ((int)apply_brdf << 1);
 
 	if (apply_occ)
 	{
-		int occ_num_rays = 5;
-		lobj->GetDstObjValue(obj_id, "_int_OccNumRays", &occ_num_rays);
-		cb_reffect.occ_num_rays = (uint)occ_num_rays;
-		double occ_radius = 0;
-		lobj->GetDstObjValue(obj_id, "_double_OccRadius", &occ_radius);
-		cb_reffect.occ_radius = (float)occ_radius;
+		cb_reffect.occ_num_rays = (uint)actor->GetParam("_int_OccNumRays", (int)5);
+		cb_reffect.occ_radius = (float)actor->GetParam("_double_OccRadius", (double)0);
 	}
 	if (apply_brdf)
 	{
-		double dPhongBRDF_DiffuseRatio = 0.5;
-		lobj->GetDstObjValue(obj_id, ("_double_PhongBRDFDiffuseRatio"), &dPhongBRDF_DiffuseRatio);
-		cb_reffect.brdf_diffuse_ratio = (float)dPhongBRDF_DiffuseRatio;
-		double dPhongBRDF_ReflectanceRatio = 0.5;
-		lobj->GetDstObjValue(obj_id, ("_double_PhongBRDFReflectanceRatio"), &dPhongBRDF_ReflectanceRatio);
-		cb_reffect.brdf_reft_ratio = (float)dPhongBRDF_ReflectanceRatio;
-		double dPhongExpWeightU = 50;
-		lobj->GetDstObjValue(obj_id, ("_double_PhongExpWeightU"), &dPhongExpWeightU);
-		cb_reffect.brdf_expw_u = (float)dPhongExpWeightU;
-		double dPhongExpWeightV = 50;
-		lobj->GetDstObjValue(obj_id, ("_double_PhongExpWeightV"), &dPhongExpWeightV);
-		cb_reffect.brdf_expw_v = (float)dPhongExpWeightV;
+		cb_reffect.brdf_diffuse_ratio = (float)actor->GetParam("_double_PhongBRDFDiffuseRatio", (double)0.5);
+		cb_reffect.brdf_reft_ratio = (float)actor->GetParam("_double_PhongBRDFReflectanceRatio", (double)0.5);
+		cb_reffect.brdf_expw_u = (float)actor->GetParam("_double_PhongExpWeightU", (double)50.0);
+		cb_reffect.brdf_expw_v = (float)actor->GetParam("_double_PhongExpWeightV", (double)50.0);
 	}
 
 	// Curvature
@@ -2024,24 +1958,16 @@ void grd_helper::SetCb_RenderingEffect(CB_RenderingEffect& cb_reffect, VmVObject
 
 void grd_helper::SetCb_VolumeRenderingEffect(CB_VolumeRenderingEffect& cb_vreffect, VmVObjectVolume* vobj, VmActor* actor)
 {
-	const int vobj_id = vobj->GetObjectID();
-	double dVoxelSharpnessForAttributeVolume = 0.25;
-	lobj->GetDstObjValue(vobj_id, "_double_VoxelSharpnessForAttributeVolume", &dVoxelSharpnessForAttributeVolume);
-	cb_vreffect.attribute_voxel_sharpness = (float)dVoxelSharpnessForAttributeVolume;
+	cb_vreffect.attribute_voxel_sharpness = (float)actor->GetParam("_double_VoxelSharpnessForAttributeVolume", (double)0.25);
+	cb_vreffect.clip_plane_intensity = (float)actor->GetParam("_double_ClipPlaneIntensity", (double)1.0);
 
-	double dClipPlaneIntensity = 1.0;
-	lobj->GetDstObjValue(vobj_id, "_double_ClipPlaneIntensity", &dClipPlaneIntensity);
-	cb_vreffect.clip_plane_intensity = (float)dClipPlaneIntensity;
-
-	double dGradMagAmplifier = 1.0;
-	lobj->GetDstObjValue(vobj_id, "_double_GradMagAmplifier", &dGradMagAmplifier);
-
-	auto compute_grad_info = [](vmdouble2* d2GradientMagMinMax, VmVObjectVolume* vobj, LocalProgress* _progress)
+	auto compute_grad_info = [](vmdouble2& d2GradientMagMinMax, VmVObjectVolume* vobj, LocalProgress* _progress)
 	{
-		if (vobj->GetCustomParameter("_double2_GraidentMagMinMax", data_type::dtype<vmdouble2>(), d2GradientMagMinMax))
+		d2GradientMagMinMax = vobj->GetObjParam("_double2_GraidentMagMinMax", vmdouble2(1, -1));
+		if (d2GradientMagMinMax != vmdouble2(1, -1))
 			return;
 
-		if (d2GradientMagMinMax->y - d2GradientMagMinMax->x > 0)
+		if (d2GradientMagMinMax.y - d2GradientMagMinMax.x > 0)
 			return;
 
 		const VolumeData* vol_data = vobj->GetVolumeData();
@@ -2049,8 +1975,8 @@ void grd_helper::SetCb_VolumeRenderingEffect(CB_VolumeRenderingEffect& cb_vreffe
 		//assert(vol_data->store_dtype.type_name == data_type::dtype<ushort>().type_name);
 		if (vol_data->store_dtype.type_name != data_type::dtype<ushort>().type_name)
 		{
-			d2GradientMagMinMax->x = 0;
-			d2GradientMagMinMax->y = 255;
+			d2GradientMagMinMax.x = 0;
+			d2GradientMagMinMax.y = 255;
 			return;
 		}
 
@@ -2095,9 +2021,8 @@ void grd_helper::SetCb_VolumeRenderingEffect(CB_VolumeRenderingEffect& cb_vreffe
 				}
 			}
 		}
-
-		vobj->RegisterCustomParameter("_double2_GraidentMagMinMax", d2GradMagMinMax);
-		*d2GradientMagMinMax = d2GradMagMinMax;
+		vobj->SetObjParam("_double2_GraidentMagMinMax", d2GradMagMinMax);
+		d2GradientMagMinMax = d2GradMagMinMax;
 
 		if (_progress)
 		{
@@ -2108,19 +2033,11 @@ void grd_helper::SetCb_VolumeRenderingEffect(CB_VolumeRenderingEffect& cb_vreffe
 	};
 
 	vmdouble2 dGradientMagMinMax = vmdouble2(1, -1);
-	compute_grad_info(&dGradientMagMinMax, vobj, NULL);
-
+	compute_grad_info(dGradientMagMinMax, vobj, NULL);
 	cb_vreffect.mod_max_grad_size = (float)(dGradientMagMinMax.y / 65535.0);
-	cb_vreffect.mod_grad_mag_scale = (float)dGradMagAmplifier;
-
-
-	double occ_sample_dist_scale = 1.0;
-	lobj->GetDstObjValue(vobj_id, "_double_OccSampleDistScale", &occ_sample_dist_scale);
-	cb_vreffect.occ_sample_dist_scale = (float)occ_sample_dist_scale;
-
-	double sdm_sample_dist_scale = 1.0;
-	lobj->GetDstObjValue(vobj_id, "_double_SdmSampleDistScale", &sdm_sample_dist_scale);
-	cb_vreffect.sdm_sample_dist_scale = (float)sdm_sample_dist_scale;
+	cb_vreffect.mod_grad_mag_scale = (float)actor->GetParam("_double_GradMagAmplifier", (double)1.0);
+	cb_vreffect.occ_sample_dist_scale = (float)actor->GetParam("_double_OccSampleDistScale", (double)1.0);
+	cb_vreffect.sdm_sample_dist_scale = (float)actor->GetParam("_double_SdmSampleDistScale", (double)1.0);
 }
 
 void grd_helper::SetCb_ClipInfo(CB_ClipInfo& cb_clip, VmVObject* obj, VmActor* actor)
@@ -2152,17 +2069,17 @@ void grd_helper::SetCb_ClipInfo(CB_ClipInfo& cb_clip, VmVObject* obj, VmActor* a
 
 void grd_helper::SetCb_HotspotMask(CB_HotspotMask& cb_hsmask, VmFnContainer* _fncontainer, const vmmat44f& matWS2SS)
 {
-	vmfloat3 pos_3dtip_ws = _fncontainer->GetParamValue("_double3_3DTipPos", vmdouble3());
-	bool use_mask_3dtip = _fncontainer->GetParamValue("_bool_UseMask3DTip", false);
+	vmfloat3 pos_3dtip_ws = _fncontainer->GetParam("_double3_3DTipPos", vmdouble3());
+	bool use_mask_3dtip = _fncontainer->GetParam("_bool_UseMask3DTip", false);
 
-	vmdouble4 mask_center_rs_0 = _fncontainer->GetParamValue("_double4_MaskCenterRadius0", vmdouble4(150, 150, 200, 0.5f));
-	//vmdouble3 mask_center_rs_1 = _fncontainer->GetParamValue("_double4_MaskCenterRadius1", vmdouble3(fb_size / 4, fb_size.x / 5, 150, 3));
-	vmdouble3 hotspot_params_0 = _fncontainer->GetParamValue("_double3_HotspotParamsTKtKs0", vmdouble3(1.));
-	//vmdouble3 hotspot_params_1 = _fncontainer->GetParamValue("_double3_HotspotParamsTKtKs1", vmdouble3(1.));
-	bool show_silhuette_edge_0 = _fncontainer->GetParamValue("_bool_HotspotSilhuette0", false);
-	//bool show_silhuette_edge_1 = _fncontainer->GetParamValue("_bool_HotspotSilhuette1", false);
-	float mask_bnd = (float)_fncontainer->GetParamValue("_double_MaskBndDisplay", (double)1.0);
-	float inDepthVis = (float)_fncontainer->GetParamValue("_double_InDepthVis", (double)0.01);
+	vmdouble4 mask_center_rs_0 = _fncontainer->GetParam("_double4_MaskCenterRadius0", vmdouble4(150, 150, 200, 0.5f));
+	//vmdouble3 mask_center_rs_1 = _fncontainer->GetParam("_double4_MaskCenterRadius1", vmdouble3(fb_size / 4, fb_size.x / 5, 150, 3));
+	vmdouble3 hotspot_params_0 = _fncontainer->GetParam("_double3_HotspotParamsTKtKs0", vmdouble3(1.));
+	//vmdouble3 hotspot_params_1 = _fncontainer->GetParam("_double3_HotspotParamsTKtKs1", vmdouble3(1.));
+	bool show_silhuette_edge_0 = _fncontainer->GetParam("_bool_HotspotSilhuette0", false);
+	//bool show_silhuette_edge_1 = _fncontainer->GetParam("_bool_HotspotSilhuette1", false);
+	float mask_bnd = (float)_fncontainer->GetParam("_double_MaskBndDisplay", (double)1.0);
+	float inDepthVis = (float)_fncontainer->GetParam("_double_InDepthVis", (double)0.01);
 	auto __set_params = [&cb_hsmask, &matWS2SS, &pos_3dtip_ws, &use_mask_3dtip, &inDepthVis](int idx, const vmdouble4& mask_center_rs_0, const vmdouble3& hotspot_params, bool show_silhuette_edge, float mask_bnd)
 	{
 		const double max_smoothness = 30.;

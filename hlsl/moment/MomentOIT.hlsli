@@ -417,7 +417,7 @@ void Moment_GeneratePass(__VS_OUT input)
 	[loop]
 	while (keep_loop)
 	{
-		if (++safe_unlock_count > g_cbPobj.num_safe_loopexit)
+		if (++safe_unlock_count > g_cbEnv.num_safe_loopexit)
 		{
 			InterlockedExchange(fragment_spinlock[tex2d_xy.xy], 0, __dummy);
 			keep_loop = false;
@@ -839,7 +839,7 @@ PS_OUT Moment_ResolvePass(__VS_OUT input)
 	[loop]
 	while (keep_loop)
 	{
-		if (++safe_unlock_count > g_cbPobj.num_safe_loopexit)
+		if (++safe_unlock_count > g_cbEnv.num_safe_loopexit)
 		{
 			InterlockedExchange(fragment_spinlock[tex2d_xy.xy], 0, __dummy);
 			keep_loop = false;

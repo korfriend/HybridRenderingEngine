@@ -1199,8 +1199,16 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		}
 	}
 
+	LightSource light_src;
+	// TODO //
+	GlobalLighting global_lighting;
+	// TODO // global_light_factors
+	LensEffect lens_effect;
+	// TODO //
+
 	CB_EnvState cbEnvState;
-	grd_helper::SetCb_Env(cbEnvState, cam_obj, _fncontainer, (vmfloat3)global_light_factors);
+	grd_helper::SetCb_Env(cbEnvState, cam_obj, light_src, global_lighting, lens_effect);
+	cbEnvState.num_safe_loopexit = num_safe_loopexit;
 	cbEnvState.env_dummy_2 = i_test_shader;
 	D3D11_MAPPED_SUBRESOURCE mappedResEnvState;
 	dx11DeviceImmContext->Map(cbuf_env_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResEnvState);
@@ -1710,7 +1718,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			}
 
 			CB_RenderingEffect cbRenderEffect;
-			grd_helper::SetCb_RenderingEffect(cbRenderEffect, pobj, lobj, render_obj_info);
+			grd_helper::SetCb_RenderingEffect(cbRenderEffect, pobj, actor);
+			cbRenderEffect.outline_mode = rendering_obj_info.outline_thickness > 0 ? 1 : 0; // DOJO TO DO , encoding
 			D3D11_MAPPED_SUBRESOURCE mappedResRenderEffect;
 			dx11DeviceImmContext->Map(cbuf_reffect, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResRenderEffect);
 			CB_RenderingEffect* cbRenderEffectData = (CB_RenderingEffect*)mappedResRenderEffect.pData;

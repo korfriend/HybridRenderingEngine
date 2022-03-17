@@ -138,8 +138,8 @@ struct HxCB_PolygonObject
 
     float pix_thickness; // 1) for POINT and LINE TOPOLOGY, 2) outline thickness (in pixel)
     float vz_thickness;
-    uint num_safe_loopexit;
-    uint pobj_dummy_0; // 1) pobj_id used for picking, 2) outline color
+	uint pobj_dummy_0; // 1) pobj_id used for picking, 2) outline color
+	uint pobj_dummy_1; // 1) pobj_id used for picking, 2) outline color
 };
 
 struct HxCB_VolumeObject
