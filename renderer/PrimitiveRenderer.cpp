@@ -4,10 +4,10 @@
 //#include <opencv2/highgui.hpp>
 
 #define __SORT(num, fragments, FRAG) {	   				\
-	for (int j = 1; j < num; ++j)						\
+	for (uint j = 1; j < num; ++j)						\
 	{													\
 		FRAG key = fragments[j];						\
-		int i = j - 1;									\
+		uint i = j - 1;									\
 														\
 		while (i >= 0 && fragments[i].z > key.z)		\
 		{												\
@@ -111,15 +111,15 @@ namespace moment_lib
 		coeffs.z /= 3.0;
 
 		vmfloat3 delta = vmfloat3(mad(-coeffs.z, coeffs.z, coeffs.y), mad(-coeffs.z, coeffs.y, coeffs.x), coeffs.z * coeffs.x - coeffs.y * coeffs.y);
-		float discriminant = 4.0 * delta.x * delta.z - delta.y * delta.y;
+		float discriminant = 4.f * delta.x * delta.z - delta.y * delta.y;
 
 		vmfloat2 depressed = vmfloat2(delta.z, -coeffs.x * delta.y + 2.0 * coeffs.y * delta.z);
-		float theta = abs(atan2(coeffs.x * sqrt(discriminant), -depressed.y)) / 3.0;
+		float theta = abs(atan2(coeffs.x * sqrt(discriminant), -depressed.y)) / 3.f;
 		vmfloat2 sin_cos;
 		sin_cos.x = sin(theta);
 		sin_cos.y = cos(theta);
-		float tmp = 2.0 * sqrt(-depressed.x);
-		vmfloat2 x = vmfloat2(tmp * sin_cos.y, tmp * (-0.5 * sin_cos.y - 0.5 * sqrt(3.0) * sin_cos.x));
+		float tmp = 2.f * sqrt(-depressed.x);
+		vmfloat2 x = vmfloat2(tmp * sin_cos.y, tmp * (-0.5f * sin_cos.y - 0.5f * sqrt(3.f) * sin_cos.x));
 		vmfloat2 s = (x.x + x.y < 2.0 * coeffs.y) ? vmfloat2(-coeffs.x, x.x + coeffs.y) : vmfloat2(-coeffs.x, x.y + coeffs.y);
 
 		return  s.x / s.y;
@@ -137,20 +137,20 @@ namespace moment_lib
 		float E = coeffs[0] / coeffs[4];
 
 		// Compute coefficients of the cubic resolvent
-		float P = -2.0*C;
-		float Q = C * C + B * D - 4.0*E;
+		float P = -2.0f*C;
+		float Q = C * C + B * D - 4.0f*E;
 		float R = D * D + B * B*E - B * C*D;
 
 		// Obtain the smallest cubic root
 		float y = solveCubicBlinnSmallest(vmfloat4(R, Q, P, 1.0));
 
 		float BB = B * B;
-		float fy = 4.0 * y;
+		float fy = 4.0f * y;
 		float BB_fy = BB - fy;
 
 		float Z = C - y;
 		float ZZ = Z * Z;
-		float fE = 4.0 * E;
+		float fE = 4.f * E;
 		float ZZ_fE = ZZ - fE;
 
 		float G, g, H, h;
@@ -159,21 +159,21 @@ namespace moment_lib
 		// factorizations using the heuristic proposed by Herbison-Evans.
 		if (y < 0 || (ZZ + fE) * BB_fy > ZZ_fE * (BB + fy)) {
 			float tmp = sqrt(BB_fy);
-			G = (B + tmp) * 0.5;
-			g = (B - tmp) * 0.5;
+			G = (B + tmp) * 0.5f;
+			g = (B - tmp) * 0.5f;
 
-			tmp = (B*Z - 2.0*D) / (2.0*tmp);
-			H = mad(Z, 0.5, tmp);
-			h = mad(Z, 0.5, -tmp);
+			tmp = (B*Z - 2.0f*D) / (2.0f*tmp);
+			H = mad(Z, 0.5f, tmp);
+			h = mad(Z, 0.5f, -tmp);
 		}
 		else {
 			float tmp = sqrt(ZZ_fE);
-			H = (Z + tmp) * 0.5;
-			h = (Z - tmp) * 0.5;
+			H = (Z + tmp) * 0.5f;
+			h = (Z - tmp) * 0.5f;
 
-			tmp = (B*Z - 2.0*D) / (2.0*tmp);
-			G = mad(B, 0.5, tmp);
-			g = mad(B, 0.5, -tmp);
+			tmp = (B*Z - 2.0f*D) / (2.0f*tmp);
+			G = mad(B, 0.5f, tmp);
+			g = mad(B, 0.5f, -tmp);
 		}
 		// Solve the quadratics
 		return vmfloat4(solveQuadratic(vmfloat3(1.0, G, H)), solveQuadratic(vmfloat3(1.0, g, h)));
@@ -194,7 +194,7 @@ namespace moment_lib
 
 		// Compute a Cholesky factorization of the Hankel matrix B storing only non-trivial entries or related products
 		float D22 = mad(-b[0], b[0], b[1]);
-		float InvD22 = 1.0 / D22;
+		float InvD22 = 1.0f / D22;
 		float L32D22 = mad(-b[1], b[0], b[2]);
 		float L32 = L32D22 * InvD22;
 		float L42D22 = mad(-b[2], b[0], b[3]);
@@ -203,19 +203,19 @@ namespace moment_lib
 		float L52 = L52D22 * InvD22;
 
 		float D33 = mad(-L32, L32D22, mad(-b[1], b[1], b[3]));
-		float InvD33 = 1.0 / D33;
+		float InvD33 = 1.0f / D33;
 		float L43D33 = mad(-L42, L32D22, mad(-b[2], b[1], b[4]));
 		float L43 = L43D33 * InvD33;
 		float L53D33 = mad(-L52, L32D22, mad(-b[3], b[1], b[5]));
 		float L53 = L53D33 * InvD33;
 
 		float D44 = mad(-b[2], b[2], b[5]) - dot(vmfloat2(L42, L43), vmfloat2(L42D22, L43D33));
-		float InvD44 = 1.0 / D44;
+		float InvD44 = 1.0f / D44;
 		float L54D44 = mad(-b[3], b[2], b[6]) - dot(vmfloat2(L52, L53), vmfloat2(L42D22, L43D33));
 		float L54 = L54D44 * InvD44;
 
 		float D55 = mad(-b[3], b[3], b[7]) - dot(vmfloat3(L52, L53, L54), vmfloat3(L52D22, L53D33, L54D44));
-		float InvD55 = 1.0 / D55;
+		float InvD55 = 1.0f / D55;
 
 		// Construct the polynomial whose roots have to be points of support of the
 		// Canonical distribution:
@@ -506,7 +506,7 @@ namespace moment_lib
 			b_even /= b_0;
 			b_odd /= b_0;
 
-			const float bias_vector[6] = { 0, 0.48, 0, 0.451, 0, 0.45 };
+			const float bias_vector[6] = { 0.f, 0.48f, 0.f, 0.451f, 0.f, 0.45f };
 			transmittance_at_depth = computeTransmittanceAtDepthFrom6PowerMoments(b_0, b_even, b_odd, depth, moment_bias, overestimation, bias_vector);
 		}
 		else if (num_moment == 8)
@@ -524,7 +524,7 @@ namespace moment_lib
 
 			b_even /= b_0;
 			b_odd /= b_0;
-			const float bias_vector[8] = { 0, 0.75, 0, 0.67666666666666664, 0, 0.63, 0, 0.60030303030303034 };
+			const float bias_vector[8] = { 0.f, 0.75f, 0.f, 0.67666666666666664f, 0.f, 0.63f, 0.f, 0.60030303030303034f };
 			transmittance_at_depth = computeTransmittanceAtDepthFrom8PowerMoments(b_0, b_even, b_odd, depth, moment_bias, overestimation, bias_vector);
 		}
 
@@ -593,8 +593,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	int num_moments = _fncontainer->GetParam("_int_NumQueueLayers", num_moments_old);
 	int num_safe_loopexit = _fncontainer->GetParam("_int_SpinLockSafeLoops", (int)10000000);
 	bool is_final_renderer = _fncontainer->GetParam("_bool_IsFinalRenderer", true);
-	//double v_discont_depth = _fncontainer->GetParam("_double_DiscontDepth", -1.0);
-	float merging_beta = (float)_fncontainer->GetParam("_double_MergingBeta", 0.5);
+	//double v_discont_depth = _fncontainer->GetParam("_float_DiscontDepth", -1.0);
+	float merging_beta = _fncontainer->GetParam("_float_MergingBeta", 0.5f);
 	bool blur_SSAO = _fncontainer->GetParam("_bool_BlurSSAO", true);
 
 	bool apply_fragmerge = _fncontainer->GetParam("_bool_ApplyFragMerge", true);
@@ -603,19 +603,19 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	//if (mode_OIT == MFR_MODE::STATIC_KB_FM) apply_fragmerge = true;
 
 	bool is_picking_routine = _fncontainer->GetParam("_bool_IsPickingRoutine", false);
-	if (is_picking_routine) mode_OIT == DYNAMIC_FB;
+	if (is_picking_routine) mode_OIT = DYNAMIC_FB;
 	vmint2 picking_pos_ss = _fncontainer->GetParam("_int2_PickingPosSS", vmint2(-1, -1));
 
 	int buf_ex_scale = _fncontainer->GetParam("_int_BufExScale", (int)8); // scaling the capacity of the k-buffer for _bool_PixelTransmittance
 	bool use_blending_option_MomentOIT = _fncontainer->GetParam("_bool_UseBlendingOptionMomentOIT", false);
 	bool check_pixel_transmittance = _fncontainer->GetParam("_bool_PixelTransmittance", false);
 	//vr_level = 2;
-	vmdouble4 default_phong_lighting_coeff = vmdouble4(0.2, 1.0, 0.5, 5); // Emission, Diffusion, Specular, Specular Power
+	vmfloat4 default_phong_lighting_coeff = vmfloat4(0.2, 1.0, 0.5, 5); // Emission, Diffusion, Specular, Specular Power
 
-	double default_point_thickness = _fncontainer->GetParam("_double_PointThickness", 3.0);
-	double default_surfel_size = _fncontainer->GetParam("_double_SurfelSize", 0.0);
-	double default_line_thickness = _fncontainer->GetParam("_double_LineThickness", 2.0);
-	vmdouble3 default_color_cmmobj = _fncontainer->GetParam("_double3_CmmGlobalColor", vmdouble3(-1, -1, -1));
+	float default_point_thickness = _fncontainer->GetParam("_float_PointThickness", 3.0f);
+	float default_surfel_size = _fncontainer->GetParam("_float_SurfelSize", 0.0f);
+	float default_line_thickness = _fncontainer->GetParam("_float_LineThickness", 2.0f);
+	vmfloat3 default_color_cmmobj = _fncontainer->GetParam("_float3_CmmGlobalColor", vmfloat3(-1, -1, -1));
 	bool use_spinlock_pixsynch = _fncontainer->GetParam("_bool_UseSpinLock", false);
 	bool is_ghost_mode = _fncontainer->GetParam("_bool_GhostEffect", false);
 	bool is_rgba = _fncontainer->GetParam("_bool_IsRGBA", false); // false means bgra
@@ -632,15 +632,15 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			cout << _message << endl;
 	};
 
-	float sample_rate = (float)_fncontainer->GetParam("_double_UserSampleRate", 0.0);
+	float sample_rate = _fncontainer->GetParam("_float_UserSampleRate", 0.0f);
 	if (sample_rate <= 0) sample_rate = 1.0f;
 	bool apply_samplerate2gradient = _fncontainer->GetParam("_bool_ApplySampleRateToGradient", false);
 	bool reload_hlsl_objs = _fncontainer->GetParam("_bool_ReloadHLSLObjFiles", false);
 
 	int __BLOCKSIZE = _fncontainer->GetParam("_int_GpuThreadBlockSize", (int)8);
-	float v_thickness = (float)_fncontainer->GetParam("_double_VZThickness", 0.0);
-	float gi_v_thickness = (float)_fncontainer->GetParam("_double_GIVZThickness", (double)v_thickness);
-	float scale_z_res = (float)_fncontainer->GetParam("_double_zResScale", (double)1.0);
+	float v_thickness = _fncontainer->GetParam("_float_VZThickness", 0.0f);
+	float gi_v_thickness = _fncontainer->GetParam("_float_GIVZThickness", v_thickness);
+	float scale_z_res = _fncontainer->GetParam("_float_zResScale", 1.0f);
 
 	int i_test_shader = (int)_fncontainer->GetParam("_int_ShaderTest", (int)0);
 
@@ -657,7 +657,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	global_lighting.ssao_r_kernel = _fncontainer->GetParam("_float_SSAOKernalR", 1.f);
 	global_lighting.ssao_num_steps = _fncontainer->GetParam("_int_SSAONumSteps", (int)4);
 	global_lighting.ssao_num_dirs = _fncontainer->GetParam("_int_SSAONumDirs", (int)4);
-	global_lighting.ssao_tangent_bias = _fncontainer->GetParam("_double_SSAOTangentBias", (float)(VM_PI / 6.0));
+	global_lighting.ssao_tangent_bias = _fncontainer->GetParam("_float_SSAOTangentBias", (float)(VM_PI / 6.0));
 	global_lighting.ssao_blur = _fncontainer->GetParam("_bool_BlurSSAO", true);
 	global_lighting.ssao_intensity = _fncontainer->GetParam("_float_SSAOIntensity", 0.5f);
 	global_lighting.ssao_debug = _fncontainer->GetParam("_int_SSAOOutput", (int)0);
@@ -1114,11 +1114,11 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	//		}
 	//		if (updatemask)
 	//		{
-	//			vmdouble4 mask_center_rs_0 = _fncontainer->GetParam("_double4_MaskCenterRadius0", vmdouble4(fb_size / 2, fb_size.x / 5, 5));
-	//			//vmdouble4 mask_center_rs_1 = _fncontainer->GetParam("_double4_MaskCenterRadius1", vmdouble4(fb_size / 2, 0, 5));
-	//			vmdouble4 hotspot_params_0 = _fncontainer->GetParam("_double4_HotspotParamsTKtKsV0", vmdouble4(1., 1., 1., 1.));
-	//			//vmdouble4 hotspot_params_1 = _fncontainer->GetParam("_double4_HotspotParamsTKtKsV1", vmdouble4(1., 1., 1., 1.));
-	//			float mask_bnd = (float)_fncontainer->GetParam("_double_MaskBndDisplay", (double)1.0);
+	//			vmdouble4 mask_center_rs_0 = _fncontainer->GetParam("_float4_MaskCenterRadius0", vmdouble4(fb_size / 2, fb_size.x / 5, 5));
+	//			//vmdouble4 mask_center_rs_1 = _fncontainer->GetParam("_float4_MaskCenterRadius1", vmdouble4(fb_size / 2, 0, 5));
+	//			vmdouble4 hotspot_params_0 = _fncontainer->GetParam("_float4_HotspotParamsTKtKsV0", vmdouble4(1., 1., 1., 1.));
+	//			//vmdouble4 hotspot_params_1 = _fncontainer->GetParam("_float4_HotspotParamsTKtKsV1", vmdouble4(1., 1., 1., 1.));
+	//			float mask_bnd = (float)_fncontainer->GetParam("_float_MaskBndDisplay", (double)1.0);
 	//
 	//			D3D11_MAPPED_SUBRESOURCE d11MappedRes;
 	//			HRESULT hr = dx11CommonParams->dx11DeviceImmContext->Map((ID3D11Buffer*)gres.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes);
@@ -1235,7 +1235,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		cb_moment.moment_bias = 0.0025f;
 		double np, fp;
 		cam_obj->GetCameraIntState(NULL, &np, &fp, NULL);
-		mot_nf = _fncontainer->GetParam("_double2_MotNearFar", vmdouble2(np, fp));
+		mot_nf = _fncontainer->GetParam("_float2_MotNearFar", vmdouble2(np, fp));
 		cb_moment.warp_nf = mot_nf;
 		switch (num_moments)
 		{
@@ -1246,7 +1246,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		case 16: cb_moment.moment_bias = 0.00065f; break;
 		case 18: cb_moment.moment_bias = 0.00085f; break;
 		}
-		cb_moment.moment_bias = (float)_fncontainer->GetParam("_double_MomentBias", (double)cb_moment.moment_bias);
+		cb_moment.moment_bias = _fncontainer->GetParam("_float_MomentBias", cb_moment.moment_bias);
 		D3D11_MAPPED_SUBRESOURCE mappedMomentState;
 		dx11DeviceImmContext->Map(cbuf_moment_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedMomentState);
 		MomentOIT* cbMomentData = (MomentOIT*)mappedMomentState.pData;
@@ -1323,7 +1323,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		if (geo_obj == NULL ||
 			geo_obj->GetObjectType() != ObjectTypePRIMITIVE ||
 			!geo_obj->IsDefined() ||
-			!actor.visible)
+			!actor.visible || actor.color.a == 0)
 			continue;
 
 		VmVObjectPrimitive* pobj = (VmVObjectPrimitive*)geo_obj;
@@ -1365,7 +1365,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		}
 		actor.SetParam("_bool_IsWireframe", false);
 
-		bool outline_thickness = actor.GetParam("_int_SilhouetteThickness", (int)0);
+		int outline_thickness = actor.GetParam("_int_SilhouetteThickness", (int)0);
 		if (outline_thickness > 0) {
 			single_layer_routine_objs.push_back(&actor);
 		}
@@ -1513,159 +1513,113 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		// main geometry rendering process
 		for (VmActor* actor : actor_list)
 		{
-			// note that the actor is visible (already checked)
-#pragma region GPU resource updates
 			VmVObjectPrimitive* pobj = (VmVObjectPrimitive*)actor->GetGeometryRes();
+			PrimitiveData* prim_data = pobj->GetPrimitiveData();
+			// note that the actor is visible (already checked)
+#pragma region Actor Parameters
+			vmfloat4 material_phongCoeffs = actor->GetParam("_float4_PhongCoeffs", default_phong_lighting_coeff);
+			bool is_annotation_obj = actor->GetParam("_bool_IsAnnotationObj", false) && prim_data->texture_res_info.size() > 0;
+			bool has_texture_img = actor->GetParam("_bool_HasTextureMap", false);
+			bool use_vertex_color = actor->GetParam("_bool_UseVertexColor", false) && prim_data->GetVerticeDefinition("TEXCOORD0") != NULL;
+
+			int outline_thickness = actor->GetParam("_int_SilhouetteThickness", (int)0);
+			float outline_depthThres = actor->GetParam("_float_SilhouetteDepthThres", 10000.f);
+			vmfloat3 outline_color = actor->GetParam("_float3_SilhouetteColor", vmfloat3(1));
+
+			// Object Unit Conditions
+			bool cull_off = actor->GetParam("_bool_IsForcedCullOff", false);
+			bool is_surfel = actor->GetParam("_bool_PointToSurfel", true);
+
+			bool force_to_pointsetrender = actor->GetParam("_bool_ForceToPointsetRender", false); 
+			bool is_wireframe = actor->GetParam("_bool_IsWireframe", false);
+#pragma endregion
+
+#pragma region GPU resource updates
 			VmObject* tobj_otf = (VmObject*)actor->GetAssociateRes("_VmObject_OTF");
 			VmObject* tobj_maptable = (VmObject*)actor->GetAssociateRes("_VmObject_Maptable");
 			VmVObjectVolume* vobj = (VmVObjectVolume*)actor->GetAssociateRes("_VmObject_Volume");
 
 			if (vobj) {
-				GpuRes gres_vol, gres_tmap_otf, gres_volblk_otf;
+				GpuRes gres_vol, gres_tmap_otf;
 				grd_helper::UpdateVolumeModel(gres_vol, vobj, false, progress);
 				if (tobj_otf) {
-					ullong _tp_cpu = tobj_otf->GetContentUpdateTime();
-					ullong _tp_gpu = tobj_otf->GetObjParam("_ullong_LatestMapTableGpuUpdateTime", (ullong)0);
-					bool update_otf_res = if (_tp_gpu >= _tp_cpu)
-						return true;
-
 					grd_helper::UpdateTMapBuffer(gres_tmap_otf, tobj_otf);
+					//grd_helper::UpdateOtfBlocks(gres_volblk_otf, vobj, NULL, tobj_otf, 0);
+					dx11DeviceImmContext->VSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_tmap_otf.alloc_res_ptrs[DTYPE_SRV]);
+					dx11DeviceImmContext->PSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_tmap_otf.alloc_res_ptrs[DTYPE_SRV]);
 
-					grd_helper::UpdateOtfBlocks(gres_volblk_otf, vobj, NULL, tobj_otf, sculpt_index);
+					CB_TMAP cbTmap;
+					grd_helper::SetCb_TMap(cbTmap, tobj_otf);
+					D3D11_MAPPED_SUBRESOURCE mappedResTmap;
+					dx11DeviceImmContext->Map(cbuf_tmap, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResTmap);
+					CB_TMAP* cbTmapData = (CB_TMAP*)mappedResTmap.pData;
+					memcpy(cbTmapData, &cbTmap, sizeof(CB_TMAP));
+					dx11DeviceImmContext->Unmap(cbuf_tmap, 0);
+
+					dx11DeviceImmContext->PSSetConstantBuffers(5, 1, &cbuf_tmap);
 				}
-			}
 
-			GpuRes gres_tmap_maptble;
-			if(tobj_maptable) grd_helper::UpdateTMapBuffer(gres_tmap_maptble, tobj_maptable);
-
-
-#pragma endregion
-
-#pragma region Actor Parameters
-
-#pragma endregion
+				dx11DeviceImmContext->VSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
+				dx11DeviceImmContext->PSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
 
 
-			RegisterVolumeRes(vobj, tobj, lobj, gpu_manager, dx11DeviceImmContext, associated_objs, mapGpuRes_VolumeAndTMap, progress);
-
-			GpuRes gres_vtx, gres_idx;
-			map<string, GpuRes> map_gres_texs;
-			grd_helper::UpdatePrimitiveModel(gres_vtx, gres_idx, map_gres_texs, pobj);
-			if (gres_vtx.alloc_res_ptrs.size() > 0)
-				mapGpuRes_Vtx.insert(pair<int, GpuRes>(pobj_id, gres_vtx));
-			if (gres_idx.alloc_res_ptrs.size() > 0)
-				mapGpuRes_Idx.insert(pair<int, GpuRes>(pobj_id, gres_idx));
-			if (map_gres_texs.size() > 0)
-				mapGpuRes_Tex.insert(pair<int, map<string, GpuRes>>(pobj_id, map_gres_texs));
-
-
-			PrimitiveData* prim_data = pobj->GetPrimitiveData();
-			lobj->GetDstObjValue(pobj_id, "_bool_UseVertexWireColor", &render_obj_info.use_vertex_color);
-			vmdouble4 dColor(1.), dColorWire(1.);
-			pobj->GetObjParam("_double4_color", data_type::dtype<vmdouble4>(), &dColor);
-			bool use_original_obj_color = false;
-			pobj->GetObjParam("_bool_UseOriginalObjColor", data_type::dtype<bool>(), &use_original_obj_color);
-			if (!use_original_obj_color) lobj->GetDstObjValue(pobj_id, "_double4_color", &dColor);
-
-
-			vmdouble4 shading_factors; // temp
-			lobj->GetDstObjValue(pobj->GetObjectID(), "_float4_PhongCoeffs", &shading_factors);
-			vmdouble3 illum_model;
-			if (!pobj->GetObjParam("_double3_IllumWavefront", data_type::dtype<vmdouble3>(), &illum_model))
-				pobj->SetObjParam("_double_Ns", shading_factors.w);
-
-			pobj->GetObjParam("_bool_IsAnnotationObj", data_type::dtype<bool>(), &render_obj_info.is_annotation_obj);
-			pobj->GetObjParam("_bool_HasTextureMap", data_type::dtype<bool>(), &render_obj_info.has_texture_img);
-			if (render_obj_info.is_annotation_obj) render_obj_info.is_annotation_obj = prim_data->texture_res_info.size() > 0;
-
-
-
-			render_obj_info.use_vertex_color = true;
-			lobj->GetDstObjValue(pobj_id, "_bool_UseVertexColor", &render_obj_info.use_vertex_color);
-			if (prim_data->GetVerticeDefinition("TEXCOORD0") == NULL)
-				render_obj_info.use_vertex_color = false;
-
-
-			double doutline_depthThres;
-			lobj->GetDstObjValue(pobj_id, "_float_SilhouetteDepthThres", &doutline_depthThres);
-			render_obj_info.outline_depthThres = (float)doutline_depthThres;
-			vmdouble3 doutline_color;
-			lobj->GetDstObjValue(pobj_id, "_float3_SilhouetteColor", &doutline_color);
-
-			RenderObjInfo& render_obj_info = actor_list->at(pobj_idx);
-			VmVObjectPrimitive* pobj = render_obj_info.pobj;
-			PrimitiveData* prim_data = (PrimitiveData*)pobj->GetPrimitiveData();
-
-			int pobj_id = pobj->GetObjectID();
-
-			// Object Unit Conditions
-			bool cull_off = false;
-			bool is_clip_free = false;
-			bool apply_shadingfactors = true;
-			bool is_surfel = true;
-			int vobj_id = 0, tobj_id = 0;
-			pobj->GetObjParam("_bool_IsForcedCullOff", data_type::dtype<bool>(), &cull_off);
-			lobj->GetDstObjValue(pobj_id, "_int_AssociatedVolumeID", &vobj_id);
-			lobj->GetDstObjValue(pobj_id, "_int_AssociatedTObjectID", &tobj_id);
-			lobj->GetDstObjValue(pobj_id, "_bool_PointToSurfel", &is_surfel);
-			bool with_vobj = false;
-			auto itrGpuVolume = mapGpuRes_VolumeAndTMap.find(vobj_id);
-			auto itrGpuTObject = mapGpuRes_VolumeAndTMap.find(tobj_id);
-			with_vobj = itrGpuVolume != mapGpuRes_VolumeAndTMap.end() && itrGpuTObject != mapGpuRes_VolumeAndTMap.end();
-
-			if (with_vobj)
-			{
-				GpuRes& gres_vobj = itrGpuVolume->second;
-				GpuRes& gres_tobj = itrGpuTObject->second;
-				dx11DeviceImmContext->VSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_tobj.alloc_res_ptrs[DTYPE_SRV]);
-				dx11DeviceImmContext->PSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_tobj.alloc_res_ptrs[DTYPE_SRV]);
-				dx11DeviceImmContext->VSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_vobj.alloc_res_ptrs[DTYPE_SRV]);
-				dx11DeviceImmContext->PSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_vobj.alloc_res_ptrs[DTYPE_SRV]);
-
-				auto itrVolume = associated_objs.find(vobj_id);
-				auto itrTObject = associated_objs.find(tobj_id);
-				VmVObjectVolume* vobj = (VmVObjectVolume*)itrVolume->second;
-				VmObject* tobj = (VmObject*)itrTObject->second;
-
-				bool high_samplerate = gres_vobj.res_dvalues["SAMPLE_OFFSET_X"] > 1.f ||
-					gres_vobj.res_dvalues["SAMPLE_OFFSET_Y"] > 1.f || gres_vobj.res_dvalues["SAMPLE_OFFSET_Z"] > 1.f;
+				bool high_samplerate = gres_vol.res_values.GetParam("SAMPLE_OFFSET_X", (uint)1) > 1.f ||
+					gres_vol.res_values.GetParam("SAMPLE_OFFSET_Y", (uint)1) > 1.f || gres_vol.res_values.GetParam("SAMPLE_OFFSET_Z", (uint)1) > 1.f;
 
 				CB_VolumeObject cbVolumeObj;
-				vmint3 vol_sampled_size = vmint3(gres_vobj.res_dvalues["WIDTH"], gres_vobj.res_dvalues["HEIGHT"], gres_vobj.res_dvalues["DEPTH"]);
-				grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, lobj, _fncontainer, high_samplerate, vol_sampled_size, 0, 0);
-				cbVolumeObj.pb_shading_factor = global_light_factors;
+				vmint3 vol_sampled_size = vmint3(gres_vol.res_values.GetParam("WIDTH", (uint)0), 
+					gres_vol.res_values.GetParam("HEIGHT", (uint)0),
+					gres_vol.res_values.GetParam("DEPTH", (uint)0));
+				grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, actor, high_samplerate? 2.f : 1.f, false, 0, 1.f);
+				cbVolumeObj.pb_shading_factor = material_phongCoeffs;
 				D3D11_MAPPED_SUBRESOURCE mappedResVolObj;
 				dx11DeviceImmContext->Map(cbuf_vobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResVolObj);
 				CB_VolumeObject* cbVolumeObjData = (CB_VolumeObject*)mappedResVolObj.pData;
 				memcpy(cbVolumeObjData, &cbVolumeObj, sizeof(CB_VolumeObject));
 				dx11DeviceImmContext->Unmap(cbuf_vobj, 0);
 
+				dx11DeviceImmContext->PSSetConstantBuffers(4, 1, &cbuf_vobj);
+			}
+			else if (tobj_maptable){
+				GpuRes gres_tmap_maptble;
+				grd_helper::UpdateTMapBuffer(gres_tmap_maptble, tobj_maptable);
+
 				CB_TMAP cbTmap;
-				grd_helper::SetCb_TMap(cbTmap, tobj);
+				grd_helper::SetCb_TMap(cbTmap, tobj_maptable);
 				D3D11_MAPPED_SUBRESOURCE mappedResTmap;
 				dx11DeviceImmContext->Map(cbuf_tmap, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResTmap);
 				CB_TMAP* cbTmapData = (CB_TMAP*)mappedResTmap.pData;
 				memcpy(cbTmapData, &cbTmap, sizeof(CB_TMAP));
 				dx11DeviceImmContext->Unmap(cbuf_tmap, 0);
+
+				dx11DeviceImmContext->PSSetConstantBuffers(5, 1, &cbuf_tmap);
 			}
 
+			CB_RenderingEffect cbRenderEffect;
+			grd_helper::SetCb_RenderingEffect(cbRenderEffect, actor);
+			cbRenderEffect.outline_mode = outline_thickness > 0 ? 1 : 0; // DOJO TO DO , encoding
+			D3D11_MAPPED_SUBRESOURCE mappedResRenderEffect;
+			dx11DeviceImmContext->Map(cbuf_reffect, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResRenderEffect);
+			CB_RenderingEffect* cbRenderEffectData = (CB_RenderingEffect*)mappedResRenderEffect.pData;
+			memcpy(cbRenderEffectData, &cbRenderEffect, sizeof(CB_RenderingEffect));
+			dx11DeviceImmContext->Unmap(cbuf_reffect, 0);
+
+			GpuRes gres_vtx, gres_idx;
+			map<string, GpuRes> map_gres_texs;
+			grd_helper::UpdatePrimitiveModel(gres_vtx, gres_idx, map_gres_texs, pobj);
 			int tex_map_enum = 0;
-			if (render_obj_info.is_annotation_obj)
+			if (is_annotation_obj)
 			{
-				map<string, GpuRes>& map_gres_texs = mapGpuRes_Tex[pobj_id];
 				auto it_tex = map_gres_texs.find("MAP_COLOR4");
 				if (it_tex != map_gres_texs.end())
 				{
 					tex_map_enum = 1;
 					GpuRes& gres_tex = it_tex->second;
 					dx11DeviceImmContext->PSSetShaderResources(3, 1, (ID3D11ShaderResourceView**)&gres_tex.alloc_res_ptrs[DTYPE_SRV]);
-					if (default_color_cmmobj.x >= 0 && default_color_cmmobj.y >= 0 && default_color_cmmobj.z >= 0)
-						render_obj_info.fColor = vmfloat4(default_color_cmmobj, render_obj_info.fColor.a);
 				}
 			}
-			else if (render_obj_info.has_texture_img)
+			else if (has_texture_img)
 			{
-				map<string, GpuRes>& map_gres_texs = mapGpuRes_Tex[pobj_id];
 				auto it_tex = map_gres_texs.find("MAP_COLOR4");
 				if (it_tex != map_gres_texs.end())
 				{
@@ -1686,36 +1640,25 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				}
 			}
 
-			CB_RenderingEffect cbRenderEffect;
-			grd_helper::SetCb_RenderingEffect(cbRenderEffect, pobj, actor);
-			cbRenderEffect.outline_mode = rendering_obj_info.outline_thickness > 0 ? 1 : 0; // DOJO TO DO , encoding
-			D3D11_MAPPED_SUBRESOURCE mappedResRenderEffect;
-			dx11DeviceImmContext->Map(cbuf_reffect, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResRenderEffect);
-			CB_RenderingEffect* cbRenderEffectData = (CB_RenderingEffect*)mappedResRenderEffect.pData;
-			memcpy(cbRenderEffectData, &cbRenderEffect, sizeof(CB_RenderingEffect));
-			dx11DeviceImmContext->Unmap(cbuf_reffect, 0);
-
 			CB_PolygonObject cbPolygonObj;
 			cbPolygonObj.tex_map_enum = tex_map_enum;
-			cbPolygonObj.pobj_dummy_0 = pobj_id; // used for picking
-			vmmat44f matOS2WS = pobj->GetMatrixOS2WSf();
-			grd_helper::SetCb_PolygonObj(cbPolygonObj, pobj, lobj, matOS2WS, matWS2SS, matWS2PS, render_obj_info, default_point_thickness, default_line_thickness, is_surfel ? default_surfel_size : -1.0);
-			if (render_pass == RENDER_GEOPASS::PASS_SINGLELAYERS && render_obj_info.outline_thickness > 0)
+			cbPolygonObj.pobj_dummy_0 = pobj->GetObjectID(); // used for picking
+			grd_helper::SetCb_PolygonObj(cbPolygonObj, pobj, actor, matWS2SS, matWS2PS, is_annotation_obj, use_vertex_color);
+			if (default_color_cmmobj.x >= 0 && default_color_cmmobj.y >= 0 && default_color_cmmobj.z >= 0)
+				cbPolygonObj.Ka = cbPolygonObj.Kd = cbPolygonObj.Ks = default_color_cmmobj;
+			if (render_pass == RENDER_GEOPASS::PASS_SINGLELAYERS && outline_thickness > 0)
 			{
 				//cbPolygonObj.depth_forward_bias = (float)v_discont_depth;
 				cbPolygonObj.pobj_flag |= 0x1;
 
-				cbPolygonObj.pix_thickness = (float)render_obj_info.outline_thickness;
-				cbPolygonObj.depth_thres = render_obj_info.outline_depthThres;
-				cbPolygonObj.pobj_dummy_0 = (int)(render_obj_info.outline_color.r * 255.f) | (int)(render_obj_info.outline_color.g * 255.f) << 8 | (int)(render_obj_info.outline_color.b * 255.f) << 16;
+				cbPolygonObj.pix_thickness = (float)outline_thickness;
+				cbPolygonObj.depth_thres = outline_depthThres;
+				cbPolygonObj.pobj_dummy_0 = (int)(outline_color.r * 255.f) | (int)(outline_color.g * 255.f) << 8 | (int)(outline_color.b * 255.f) << 16;
 			}
-
-			if (is_ghost_mode && !IS_SAFE_OBJ(pobj_id))
+			if (is_ghost_mode && !IS_SAFE_OBJ(pobj->GetObjectID()))
 			{
-				bool is_ghost_surface = false;
-				lobj->GetDstObjValue(pobj_id, "_bool_IsGhostSurface", &is_ghost_surface);
-				bool is_only_hotspot_visible = false;
-				lobj->GetDstObjValue(pobj_id, "_bool_IsOnlyHotSpotVisible", &is_only_hotspot_visible);
+				bool is_ghost_surface = actor->GetParam("_bool_IsGhostSurface", false);
+				bool is_only_hotspot_visible = actor->GetParam("_bool_IsOnlyHotSpotVisible", false);
 				if (is_ghost_surface) cbPolygonObj.pobj_flag |= 0x1 << 22;
 				if (is_only_hotspot_visible) cbPolygonObj.pobj_flag |= 0x1 << 23;
 				//cout << "TEST : " << is_ghost_surface << ", " << is_only_hotspot_visible << endl;
@@ -1727,12 +1670,21 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			dx11DeviceImmContext->Unmap(cbuf_pobj, 0);
 
 			CB_ClipInfo cbClipInfo;
-			grd_helper::SetCb_ClipInfo(cbClipInfo, pobj, lobj);
+			grd_helper::SetCb_ClipInfo(cbClipInfo, pobj, actor);
 			D3D11_MAPPED_SUBRESOURCE mappedResClipInfo;
 			dx11DeviceImmContext->Map(cbuf_clip, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResClipInfo);
 			CB_ClipInfo* cbClipInfoData = (CB_ClipInfo*)mappedResClipInfo.pData;
 			memcpy(cbClipInfoData, &cbClipInfo, sizeof(CB_ClipInfo));
 			dx11DeviceImmContext->Unmap(cbuf_clip, 0);
+
+
+			dx11DeviceImmContext->VSSetConstantBuffers(1, 1, &cbuf_pobj);
+			dx11DeviceImmContext->PSSetConstantBuffers(1, 1, &cbuf_pobj);
+			dx11DeviceImmContext->CSSetConstantBuffers(1, 1, &cbuf_pobj); // for silhouette or A-buffer test
+			dx11DeviceImmContext->PSSetConstantBuffers(2, 1, &cbuf_clip);
+			dx11DeviceImmContext->PSSetConstantBuffers(3, 1, &cbuf_reffect);
+			dx11DeviceImmContext->CSSetConstantBuffers(3, 1, &cbuf_reffect);
+#pragma endregion
 
 #pragma region // Setting Rasterization Stages
 			ID3D11InputLayout* dx11InputLayer_Target = NULL;
@@ -1758,7 +1710,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					dx11VS_Target = dx11VShader_PN;
 				}
 
-				if (render_obj_info.is_annotation_obj && dx11InputLayer_Target == dx11LI_PNT)
+				if (is_annotation_obj && dx11InputLayer_Target == dx11LI_PNT)
 					switch (mode_OIT)
 					{
 					case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0); break;
@@ -1777,7 +1729,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_TEXTMAPPING_ROV_ps_5_0);
 						break;
 					}
-				else if (render_obj_info.has_texture_img && dx11InputLayer_Target == dx11LI_PNT)
+				else if (has_texture_img && dx11InputLayer_Target == dx11LI_PNT)
 					switch (mode_OIT)
 					{
 					case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0); break;
@@ -1852,7 +1804,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					dx11InputLayer_Target = dx11LI_PT;
 					dx11VS_Target = dx11VShader_PT;
 
-					if (render_obj_info.is_annotation_obj)
+					if (is_annotation_obj)
 						switch (mode_OIT)
 						{
 						case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0); break;
@@ -1952,8 +1904,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				{
 					if (dx11InputLayer_Target == dx11LI_PTTT)
 						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_GEN_MTT_ps_5_0) : GETPS(SR_MOMENT_GEN_MTT_ROV_ps_5_0);
-					else if ((dx11InputLayer_Target == dx11LI_PT || dx11InputLayer_Target == dx11LI_PT)
-						&& render_obj_info.is_annotation_obj)
+					else if ((dx11InputLayer_Target == dx11LI_PT || dx11InputLayer_Target == dx11LI_PT) && is_annotation_obj)
 						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_GEN_TEXT_ps_5_0) : GETPS(SR_MOMENT_GEN_TEXT_ROV_ps_5_0);
 					else
 						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_GEN_ps_5_0) : GETPS(SR_MOMENT_GEN_ROV_ps_5_0);
@@ -1987,8 +1938,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 #define GETRASTER(NAME) dx11CommonParams->get_rasterizer(#NAME)
 
-			bool force_to_pointsetrender = false;
-			lobj->GetDstObjValue(pobj_id, "_bool_ForceToPointsetRender", &force_to_pointsetrender);
 			if (force_to_pointsetrender)
 			{
 				dx11RState_TargetObj = GETRASTER(SOLID_NONE);
@@ -1997,7 +1946,10 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					dx11GS_Target = is_surfel ? GETGS(GS_SurfelPoints_gs_5_0) : GETGS(GS_ThickPoints_gs_5_0);
 			}
 
-			if (render_obj_info.is_wireframe)
+			if (pobj_topology_type == D3D11_PRIMITIVE_TOPOLOGY_POINTLIST || pobj_topology_type == D3D11_PRIMITIVE_TOPOLOGY_LINELIST)
+				dx11DeviceImmContext->GSSetConstantBuffers(1, 1, &cbuf_pobj);
+
+			if (is_wireframe)
 			{
 				dx11RState_TargetObj = GETRASTER(WIRE_NONE);
 				dx11GS_Target = NULL;
@@ -2006,14 +1958,12 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				dx11RState_TargetObj = GETRASTER(SOLID_NONE);
 			//dx11RState_TargetObj = GETRASTER(SOLID_CCW);
 
-			auto itrMapBufferVtx = mapGpuRes_Vtx.find(pobj_id);
-
 			//{
 			//	if (dx11InputLayer_Target == dx11LI_PNT && prim_data->num_vtx > 1000000)
 			//	{
 			//		cout << "# of vtx : " << prim_data->num_vtx << endl;
 			//
-			//		ID3D11Buffer* pdx11bufvtx = (ID3D11Buffer*)itrMapBufferVtx->second.alloc_res_ptrs[DTYPE_RES];
+			//		ID3D11Buffer* pdx11bufvtx = (ID3D11Buffer*)gres_vtx.alloc_res_ptrs[DTYPE_RES];
 			//		D3D11_MAPPED_SUBRESOURCE mappedRes;
 			//		dx11CommonParams->dx11DeviceImmContext->Map(pdx11bufvtx, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedRes);
 			//		vmfloat3* vtxbuf = (vmfloat3*)mappedRes.pData;
@@ -2027,14 +1977,13 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			//	}
 			//}
 
-			ID3D11Buffer* dx11BufferTargetPrim = (ID3D11Buffer*)itrMapBufferVtx->second.alloc_res_ptrs[DTYPE_RES];
+			ID3D11Buffer* dx11BufferTargetPrim = (ID3D11Buffer*)gres_vtx.alloc_res_ptrs[DTYPE_RES];
 			ID3D11Buffer* dx11IndiceTargetPrim = NULL;
 			uint stride_inputlayer = sizeof(vmfloat3) * (uint)prim_data->GetNumVertexDefinitions();
 			dx11DeviceImmContext->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&dx11BufferTargetPrim, &stride_inputlayer, &offset);
 			if (prim_data->vidx_buffer != NULL && prim_data->ptype != EvmPrimitiveType::PrimitiveTypePOINT)
 			{
-				auto itrMapBufferIdx = mapGpuRes_Idx.find(pobj_id);
-				dx11IndiceTargetPrim = (ID3D11Buffer*)itrMapBufferIdx->second.alloc_res_ptrs[DTYPE_RES];
+				dx11IndiceTargetPrim = (ID3D11Buffer*)gres_idx.alloc_res_ptrs[DTYPE_RES];
 				dx11DeviceImmContext->IASetIndexBuffer(dx11IndiceTargetPrim, DXGI_FORMAT_R32_UINT, 0);
 			}
 
@@ -2044,24 +1993,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			dx11DeviceImmContext->PSSetShader(dx11PS_Target, NULL, 0);
 			dx11DeviceImmContext->RSSetState(dx11RState_TargetObj);
 			dx11DeviceImmContext->IASetPrimitiveTopology(pobj_topology_type);
-#pragma endregion 
-
-#pragma region // Set Constant Buffers
-			dx11DeviceImmContext->VSSetConstantBuffers(1, 1, &cbuf_pobj);
-			dx11DeviceImmContext->PSSetConstantBuffers(1, 1, &cbuf_pobj);
-			dx11DeviceImmContext->CSSetConstantBuffers(1, 1, &cbuf_pobj); // for silhouette or A-buffer test
-			if (pobj_topology_type == D3D11_PRIMITIVE_TOPOLOGY_POINTLIST || pobj_topology_type == D3D11_PRIMITIVE_TOPOLOGY_LINELIST)
-				dx11DeviceImmContext->GSSetConstantBuffers(1, 1, &cbuf_pobj);
-
-			dx11DeviceImmContext->PSSetConstantBuffers(2, 1, &cbuf_clip);
-			dx11DeviceImmContext->PSSetConstantBuffers(3, 1, &cbuf_reffect);
-			dx11DeviceImmContext->CSSetConstantBuffers(3, 1, &cbuf_reffect);
-
-			if (with_vobj)
-			{
-				dx11DeviceImmContext->PSSetConstantBuffers(4, 1, &cbuf_vobj);
-				dx11DeviceImmContext->PSSetConstantBuffers(5, 1, &cbuf_tmap);
-			}
 #pragma endregion 
 
 #pragma region // GEO RENDERING PASS
@@ -2152,7 +2083,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				}
 			}
 
-			if (render_obj_info.fColor.a == 0) continue;
 			//dx11DeviceImmContext->Flush();
 			if (prim_data->is_stripe || pobj_topology_type == D3D11_PRIMITIVE_TOPOLOGY_POINTLIST)
 				dx11DeviceImmContext->Draw(prim_data->num_vtx, 0);
@@ -2362,7 +2292,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 		___GpuProfile("Picking");
 
-		RenderStage1(&general_oit_routine_objs, MFR_MODE::DYNAMIC_FB, RENDER_GEOPASS::PASS_OIT
+		RenderStage1(general_oit_routine_objs, MFR_MODE::DYNAMIC_FB, RENDER_GEOPASS::PASS_OIT
 			, false /*is_frag_counter_buffer*/, false, true /*is_picking_routine*/, true, false);
 
 #pragma region copyback to sysmem
@@ -2402,16 +2332,16 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			picking_layers_depth_id[it.second] = it.first;
 		}
 
-		vector<vmdouble4> picking_out;
+		vector<vmfloat4> picking_out;
 		for (auto& it : picking_layers_depth_id) {
 			vmfloat3 pos_pick = picking_ray_origin + picking_ray_dir * it.first;
-			vmdouble4 encoded(pos_pick.x, pos_pick.y, pos_pick.z, (double)it.second);
+			vmfloat4 encoded(pos_pick.x, pos_pick.y, pos_pick.z, (double)it.second);
 			picking_out.push_back(encoded);
 		}
 		if (picking_out.size() == 0)
-			picking_out.push_back(vmdouble4(0, 0, 0, 0));
+			picking_out.push_back(vmfloat4(0, 0, 0, 0));
 
-		lobj->ReplaceOrAddBufferPtr("_vlist_DOUBLE4_PickPosAndId", &picking_out[0], picking_out.size(), sizeof(vmdouble4));
+		_fncontainer->SetParam("_vlist_float4_PickPosAndId", picking_out);
 		// END of Render Process for picking
 	}
 	else if (mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB || mode_OIT == MFR_MODE::STATIC_KB) {
@@ -2426,7 +2356,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 			___GpuProfile("Opaque Surface");
 			// Opaque Foremost Rendering for 
-			RenderStage1(&foremost_surfaces_routine_objs, mode_OIT, RENDER_GEOPASS::PASS_OPAQUESURFACES
+			RenderStage1(foremost_surfaces_routine_objs, mode_OIT, RENDER_GEOPASS::PASS_OPAQUESURFACES
 				, false /*is_frag_counter_buffer*/, is_ghost_mode, false /*is_picking_routine*/, apply_fragmerge, false);
 			___GpuProfile("Opaque Surface", true);
 		}
@@ -2434,7 +2364,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		if (mode_OIT != MFR_MODE::STATIC_KB) {
 			assert(mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB);
 			___GpuProfile("Fragment Count");
-			RenderStage1(&general_oit_routine_objs, mode_OIT, RENDER_GEOPASS::PASS_OIT
+			RenderStage1(general_oit_routine_objs, mode_OIT, RENDER_GEOPASS::PASS_OIT
 				, true /*is_frag_counter_buffer*/, is_ghost_mode, false /*is_picking_routine*/, apply_fragmerge, false);
 			___GpuProfile("Fragment Count", true);
 
@@ -2480,8 +2410,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				histo_buf.options["CPU_ACCESS_FLAG"] = NULL;
 				histo_buf.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 				histo_buf.options["FORMAT"] = DXGI_FORMAT_R32_UINT;
-				histo_buf.res_dvalues["NUM_ELEMENTS"] = (double)bins_frag_histo;
-				histo_buf.res_dvalues["STRIDE_BYTES"] = (double)sizeof(uint);
+				histo_buf.res_values.SetParam("NUM_ELEMENTS", (uint)bins_frag_histo);
+				histo_buf.res_values.SetParam("STRIDE_BYTES", (uint)sizeof(uint));
 				if (!gpu_manager->UpdateGpuResource(histo_buf))
 					gpu_manager->GenerateGpuResource(histo_buf);
 
@@ -2519,7 +2449,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					totol_num_frags += h_v * (i + 1);
 				}
 
-				const double Rh = _fncontainer->GetParam("_double_RobustRatio", 0.75);
+				const double Rh = _fncontainer->GetParam("_float_RobustRatio", 0.75);
 				const bool is_ztmodel = _fncontainer->GetParam("_bool_ApplyZTModel", false);
 				const uint bytes_per_f = is_ztmodel ? 4 * 4 : 4 * 2; // here, we assign this w.r.t. our z-thickness model (rgba, depth, thickness, opacity_sum)
 				// here, we assign this w.r.t. our z-thickness model (rgba, depth, thickness, opacity_sum), i.e., 16 bytes per fragment
@@ -2604,7 +2534,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		
 		___GpuProfile("Geometry for OIT");
 		// buffer filling
-		RenderStage1(&general_oit_routine_objs, mode_OIT, RENDER_GEOPASS::PASS_OIT
+		RenderStage1(general_oit_routine_objs, mode_OIT, RENDER_GEOPASS::PASS_OIT
 			, false /*is_frag_counter_buffer*/, is_ghost_mode, false /*is_picking_routine*/, apply_fragmerge, false);
 		___GpuProfile("Geometry for OIT", true);
 
@@ -2638,7 +2568,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
 
 				___GpuProfile("Single Layer Pass");
-				RenderStage1(&single_layer_routine_objs, MFR_MODE::STATIC_KB, RENDER_GEOPASS::PASS_SINGLELAYERS
+				RenderStage1(single_layer_routine_objs, MFR_MODE::STATIC_KB, RENDER_GEOPASS::PASS_SINGLELAYERS
 					, false /*is_frag_counter_buffer*/, is_ghost_mode, false /*is_picking_routine*/, apply_fragmerge, false);
 				___GpuProfile("Single Layer Pass", true);
 
@@ -2685,13 +2615,13 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	else if (mode_OIT == MFR_MODE::MOMENT) {
 		SetCamConstBuf(cbCamState);
 
-		RenderStage1(&general_oit_routine_objs, MFR_MODE::MOMENT, RENDER_GEOPASS::PASS_OIT // moment generation
+		RenderStage1(general_oit_routine_objs, MFR_MODE::MOMENT, RENDER_GEOPASS::PASS_OIT // moment generation
 			, false /*is_frag_counter_buffer*/, is_ghost_mode, false /*is_picking_routine*/, apply_fragmerge, true /*is_MOMENT_gen_buffer*/);
 
 		dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
 		dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 
-		RenderStage1(&general_oit_routine_objs, MFR_MODE::MOMENT, RENDER_GEOPASS::PASS_OIT // moment generation
+		RenderStage1(general_oit_routine_objs, MFR_MODE::MOMENT, RENDER_GEOPASS::PASS_OIT // moment generation
 			, false /*is_frag_counter_buffer*/, is_ghost_mode, false /*is_picking_routine*/, apply_fragmerge, false /*is_MOMENT_gen_buffer*/);
 	}
 
@@ -2733,8 +2663,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 
 		vmint2 pixel_pos = _fncontainer->GetParam("_int2_PixelPos", vmint2(0));
-		double tr_interval = _fncontainer->GetParam("_double_TrInvterval", (double)0.01);
-		double tr_startoffset = _fncontainer->GetParam("_double_TrStartOffset", (double)1.00);
+		float tr_interval = _fncontainer->GetParam("_float_TrInvterval", 0.01f);
+		float tr_startoffset = _fncontainer->GetParam("_float_TrStartOffset", 1.00f);
 
 		cout << "-------------" << endl;
 		cout << "interval : " << tr_interval << endl;
@@ -2833,7 +2763,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			uint element_size = apply_fragmerge ? 4 : 2;
 			Fragment* fs = new Fragment[num_layers];
 
-			for (int i = 0; i < num_layers; i++)
+			for (uint i = 0; i < num_layers; i++)
 			{
 				fs[i].z = *(float*)&deep_kbuffer[element_size * (pixel_offset + i) + 1];
 				fs[i].alpha = (deep_kbuffer[element_size * (pixel_offset + i) + 0] >> 24) / 255.f;
@@ -2881,7 +2811,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				float depth_range = depth_range_info[1];
 				int num_intervals = (int)(depth_range / tr_interval) + 2;
 
-				int hit_count = 0;
+				uint hit_count = 0;
 				float absorb = 0;
 				if (mode_OIT == MFR_MODE::DYNAMIC_FB && !apply_fragmerge)
 				{

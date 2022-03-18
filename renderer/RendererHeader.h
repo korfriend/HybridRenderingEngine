@@ -22,9 +22,6 @@ using namespace fncontainer;
 using namespace vmgpuinterface;
 using namespace grd_helper;
 
-void RegisterVolumeRes(VmVObjectVolume* vol_obj, VmObject* tobj, VmLObject* lobj, VmGpuManager* pCGpuManager, ID3D11DeviceContext* pdx11DeviceImmContext,
-	map<int, VmObject*>& mapAssociatedObjects, map<int, GpuRes>& mapGpuRes, LocalProgress* progress);
-
 bool RenderSrOIT(VmFnContainer* _fncontainer,
 	VmGpuManager* gpu_manager,
 	grd_helper::GpuDX11CommonParameters* dx11CommonParams,
