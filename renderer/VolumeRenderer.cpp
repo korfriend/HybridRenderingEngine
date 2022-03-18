@@ -14,62 +14,50 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	dx11CommonParams->debug_info_queue->PushEmptyStorageFilter();
 #endif
 
-	// Get VXObjects //
-	vector<VmObject*> input_vobjs;
-	_fncontainer->GetVmObjectList(&input_vobjs, VmObjKey(ObjectTypeVOLUME, true));
-	vector<VmObject*> input_tobjs;
-	_fncontainer->GetVmObjectList(&input_tobjs, VmObjKey(ObjectTypeTMAP, true));
+#pragma region // Parameter Setting //
+	VmIObject* iobj = _fncontainer->GetParamPtr<VmIObject>("_VmObject_RenderOut");
+	int k_value_old = iobj->GetObjParam("_int_NumK", (int)8);
+	int k_value = _fncontainer->GetParam("_int_NumK", k_value_old);
+	iobj->SetObjParam("_int_NumK", k_value);
 
-	VmLObject* lobj = (VmLObject*)_fncontainer->GetVmObject(VmObjKey(ObjectTypeBUFFER, true), 0);
-	VmIObject* iobj = (VmIObject*)_fncontainer->GetVmObject(VmObjKey(ObjectTypeIMAGEPLANE, false), 0);
+	vmfloat4 default_phong_lighting_coeff = vmfloat4(0.2, 1.0, 0.5, 5); // Emission, Diffusion, Specular, Specular Power
+	bool force_to_update_otf = _fncontainer->GetParam("_bool_ForceToUpdateOtf", false);
+	bool show_block_test = _fncontainer->GetParam("_bool_IsShowBlock", false);
+	float v_thickness = (float)_fncontainer->GetParam("_float_VZThickness", 0.0);
+	bool check_pixel_transmittance = _fncontainer->GetParam("_bool_PixelTransmittance", false);
 
-	// Check Parameters //
-	vmdouble4 global_light_factors = _fncontainer->GetParamValue("_double4_ShadingFactorsForGlobalPrimitives", vmdouble4(0.4, 0.6, 0.2, 30)); // Emission, Diffusion, Specular, Specular Power
-	bool force_to_update_otf = _fncontainer->GetParamValue("_bool_ForceToUpdateOtf", false);
-	bool show_block_test = _fncontainer->GetParamValue("_bool_IsShowBlock", false);
-	float v_thickness = (float)_fncontainer->GetParamValue("_double_VZThickness", 0.0);
-	bool check_pixel_transmittance = _fncontainer->GetParamValue("_bool_PixelTransmittance", false);
-
-	float merging_beta = (float)_fncontainer->GetParamValue("_double_MergingBeta", 0.5);
-	bool is_rgba = _fncontainer->GetParamValue("_bool_IsRGBA", false); // false means bgra
-	bool is_ghost_mode = _fncontainer->GetParamValue("_bool_GhostEffect", false);
-	bool blur_SSAO = _fncontainer->GetParamValue("_bool_BlurSSAO", true);
-	bool without_sr = _fncontainer->GetParamValue("_bool_IsFirstRenderer", false);
-	bool test_consoleout = _fncontainer->GetParamValue("_bool_TestConsoleOut", false);
+	float merging_beta = (float)_fncontainer->GetParam("_float_MergingBeta", 0.5);
+	bool is_rgba = _fncontainer->GetParam("_bool_IsRGBA", false); // false means bgra
+	bool is_ghost_mode = _fncontainer->GetParam("_bool_GhostEffect", false);
+	bool blur_SSAO = _fncontainer->GetParam("_bool_BlurSSAO", true);
+	bool without_sr = _fncontainer->GetParam("_bool_IsFirstRenderer", false);
+	bool test_consoleout = _fncontainer->GetParam("_bool_TestConsoleOut", false);
 	auto test_out = [&test_consoleout](const string& _message)
 	{
-		if(test_consoleout)
+		if (test_consoleout)
 			cout << _message << endl;
 	};
 
-#define __DTYPE(type) data_type::dtype<type>()
-	auto Get_LCParam = [&lobj](const string& name, data_type dtype, auto default_value)
-	{
-		auto vret = default_value;
-		lobj->GetCustomParameter(name, dtype, &vret);
-		return vret;
-	};
-
-	int k_value_old = Get_LCParam("_int_NumK", __DTYPE(int), (int)8);
-	int k_value = _fncontainer->GetParamValue("_int_NumK", k_value_old);
-	lobj->RegisterCustomParameter("_int_NumK", k_value);
-	bool apply_fragmerge = _fncontainer->GetParamValue("_bool_ApplyFragMerge", true);
-	MFR_MODE mode_OIT = (MFR_MODE)_fncontainer->GetParamValue("_int_OitMode", (int)1); // 1
+	bool apply_fragmerge = _fncontainer->GetParam("_bool_ApplyFragMerge", true);
+	MFR_MODE mode_OIT = (MFR_MODE)_fncontainer->GetParam("_int_OitMode", (int)1); // 1
 	mode_OIT = (MFR_MODE)min((int)mode_OIT, (int)MFR_MODE::MOMENT);
 	//if (mode_OIT == MFR_MODE::STATIC_KB_FM) apply_fragmerge = true;
 
-	int buf_ex_scale = _fncontainer->GetParamValue("_int_BufExScale", (int)8); // 32 layers
+	int buf_ex_scale = _fncontainer->GetParam("_int_BufExScale", (int)8); // 32 layers
 	int num_moments_old = 8;
 	lobj->GetCustomParameter("_int_NumQueueLayers", data_type::dtype<int>(), &num_moments_old);
-	int num_moments = _fncontainer->GetParamValue("_int_NumQueueLayers", num_moments_old);
+	int num_moments = _fncontainer->GetParam("_int_NumQueueLayers", num_moments_old);
 
 	// TEST
-	int test_value = _fncontainer->GetParamValue("_int_TestValue", (int)0);
-	int test_mode = _fncontainer->GetParamValue("_int_TestMode", (int)0);
+	int test_value = _fncontainer->GetParam("_int_TestValue", (int)0);
+	int test_mode = _fncontainer->GetParam("_int_TestMode", (int)0);
+
+	bool recompile_hlsl = _fncontainer->GetParam("_bool_ReloadHLSLObjFiles", false);
+#pragma endregion
+
 
 #pragma region // SHADER SETTING
 	// Shader Re-Compile Setting //
-	bool recompile_hlsl = _fncontainer->GetParamValue("_bool_ReloadHLSLObjFiles", false);
 	if (recompile_hlsl)
 	{
 		char ownPth[2048];
@@ -139,7 +127,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			}
 		}
 	}
-#pragma endregion // SHADER SETTING
+#pragma endregion 
 
 #pragma region // IOBJECT OUT
 	while (iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, 1) != NULL)
@@ -151,7 +139,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		iobj->DeleteFrameBuffer(FrameBufferUsageDEPTH, 1);
 	if (!iobj->ReplaceFrameBuffer(FrameBufferUsageDEPTH, 0, data_type::dtype<float>(), ("1st hit screen depth frame buffer : defined in vismtv_inbuilt_renderergpudx module")))
 		iobj->InsertFrameBuffer(data_type::dtype<float>(), FrameBufferUsageDEPTH, ("1st hit screen depth frame buffer : defined in vismtv_inbuilt_renderergpudx module"));
-#pragma endregion // IOBJECT OUT
+#pragma endregion 
 
 	__ID3D11Device* pdx11Device = dx11CommonParams->dx11Device;
 	__ID3D11DeviceContext* dx11DeviceImmContext = dx11CommonParams->dx11DeviceImmContext;
@@ -179,7 +167,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	bool gpu_profile = false;
 	if (fb_size_cur.x > 200 && fb_size_cur.y > 200)
 	{
-		gpu_profile = _fncontainer->GetParamValue("_bool_GpuProfile", false);
+		gpu_profile = _fncontainer->GetParam("_bool_GpuProfile", false);
 	}
 
 	GpuRes gres_fb_rgba, gres_fb_depthcs, gres_fb_vrdepthcs;
@@ -232,10 +220,10 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 	if (mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB)
 		grd_helper::UpdateFrameBuffer(gres_fb_ref_pidx, iobj, "BUFFER_RW_REF_PIDX_BUF", RTYPE_BUFFER, D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
-#pragma endregion // IOBJECT GPU
+#pragma endregion 
 
-#pragma region // Presetting of VxObject
-	int last_render_vol_id = _fncontainer->GetParamValue("_int_LastRenderVolumeID", input_vobjs[input_vobjs.size() - 1]->GetObjectID());
+#pragma region // Presetting of VmObject
+	int last_render_vol_id = _fncontainer->GetParam("_int_LastRenderVolumeID", input_vobjs[input_vobjs.size() - 1]->GetObjectID());
 
 	map<int, VmVObjectVolume*> mapVolumes;
 	for (int i = 0; i < (int)input_vobjs.size(); i++)
@@ -309,7 +297,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	}
 	ordered_main_volume_ids.push_back(last_render_vol_id);
 
-#pragma endregion // Presetting of VxObject
+#pragma endregion 
 
 	// Backup Previous Render Target //
 	ID3D11RenderTargetView* pdxRTVOld = NULL;
@@ -357,7 +345,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 // 	const int __BLOCKSIZE = 8;
 // 	uint num_grid_x = (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
 // 	uint num_grid_y = (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
-	const int __BLOCKSIZE = _fncontainer->GetParamValue("_int_GpuThreadBlockSize", (int)8);
+	const int __BLOCKSIZE = _fncontainer->GetParam("_int_GpuThreadBlockSize", (int)8);
 	uint num_grid_x = __BLOCKSIZE == 1 ? fb_size_cur.x : (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
 	uint num_grid_y = __BLOCKSIZE == 1 ? fb_size_cur.y : (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
 
@@ -534,9 +522,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			}
 
 			sculpt_index = GET_LDVALUE("_int_SculptingIndex", (int)-1);
-			Get_Lbuffer("_vlist_DOUBLE_MaskOTFIDs", &mask_otf_ids, num_mask_otfs);
-			Get_Lbuffer("_vlist_DOUBLE_MaskOTFIDs_VisibilitySeries", &mask_otf_ids_vis, num_mask_otfs);
-			Get_Lbuffer("_vlist_DOUBLE_MaskOTFIndexMap", &mask_otf_idmap, num_mask_otfs);
+			Get_Lbuffer("_vlist_float_MaskOTFIDs", &mask_otf_ids, num_mask_otfs);
+			Get_Lbuffer("_vlist_float_MaskOTFIDs_VisibilitySeries", &mask_otf_ids_vis, num_mask_otfs);
+			Get_Lbuffer("_vlist_float_MaskOTFIndexMap", &mask_otf_idmap, num_mask_otfs);
 		}
 		bool use_mask_otfs = false;
 		if (num_mask_otfs > 0)
@@ -865,10 +853,10 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			lobj->GetDstObjValue(vobj_id, "_int_SilhouetteThickness", &outline_thickness);
 			if (outline_thickness > 0) {
 				double doutline_depthThres = 100000.;
-				lobj->GetDstObjValue(vobj_id, "_double_SilhouetteDepthThres", &doutline_depthThres);
+				lobj->GetDstObjValue(vobj_id, "_float_SilhouetteDepthThres", &doutline_depthThres);
 				float outline_depthThres = (float)doutline_depthThres;
 				vmdouble3 doutline_color = vmdouble3(1, 1, 1);
-				lobj->GetDstObjValue(vobj_id, "_double3_SilhouetteColor", &doutline_color);
+				lobj->GetDstObjValue(vobj_id, "_float3_SilhouetteColor", &doutline_color);
 				vmfloat3 outline_color = doutline_color;
 
 				cbVolumeObj.vobj_dummy_2 = (uint)(outline_color.r * 255.f) | ((uint)(outline_color.g * 255.f) << 8) | ((uint)(outline_color.b * 255.f) << 16) | (uint)(outline_thickness << 24);
@@ -975,7 +963,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 	bool is_system_out = true;
 	// APPLY HWND MODE
-	HWND hWnd = (HWND)_fncontainer->GetParamValue("_hwnd_WindowHandle", (HWND)NULL);
+	HWND hWnd = (HWND)_fncontainer->GetParam("_hwnd_WindowHandle", (HWND)NULL);
 	if (is_system_out && hWnd)
 	{
 		ID3D11Texture2D* pTex2dHwndRT = NULL;

@@ -588,6 +588,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 	int k_value_old = iobj->GetObjParam("_int_NumK", (int)8);
 	int k_value = _fncontainer->GetParam("_int_NumK", k_value_old);
+	iobj->SetObjParam("_int_NumK", k_value);
 
 	int num_moments_old = iobj->GetObjParam("_int_NumQueueLayers", (int)8);
 	int num_moments = _fncontainer->GetParam("_int_NumQueueLayers", num_moments_old);
