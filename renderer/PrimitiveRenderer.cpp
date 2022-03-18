@@ -1493,7 +1493,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	// For Each Primitive //
 	int count_call_render = 0;
 
-#define NUM_UAVs_1ST 4dd
+#define NUM_UAVs_1ST 4
 #define NUM_UAVs_2ND 5
 	auto RenderStage1 = [&dx11CommonParams, &dx11DeviceImmContext, &_fncontainer, &dx11LI_P, &dx11LI_PN, &dx11LI_PT, &dx11LI_PNT, &dx11LI_PTTT, &dx11VShader_P,
 		&dx11VShader_PN, &dx11VShader_PT, &dx11VShader_PNT, &dx11VShader_PTTT, &dx11DSV, 
@@ -1520,19 +1520,18 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			VmObject* tobj_maptable = (VmObject*)actor->GetAssociateRes("_VmObject_Maptable");
 			VmVObjectVolume* vobj = (VmVObjectVolume*)actor->GetAssociateRes("_VmObject_Volume");
 
-			GpuRes gres_vol, gres_tmap_otf;
 			if (vobj) {
+				GpuRes gres_vol, gres_tmap_otf, gres_volblk_otf;
 				grd_helper::UpdateVolumeModel(gres_vol, vobj, false, progress);
 				if (tobj_otf) {
+					ullong _tp_cpu = tobj_otf->GetContentUpdateTime();
+					ullong _tp_gpu = tobj_otf->GetObjParam("_ullong_LatestMapTableGpuUpdateTime", (ullong)0);
+					bool update_otf_res = if (_tp_gpu >= _tp_cpu)
+						return true;
+
 					grd_helper::UpdateTMapBuffer(gres_tmap_otf, tobj_otf);
-					ullong latest_otf_update_time = tobj_otf->GetObjParam("_ullong_LatestTmapUpdateTime", (ullong)17);
-					ullong latest_blk_update_time = vobj->GetObjParam("_ullong_LatestVolBlkUpdateTime", (ullong)17);
-					latest_blk_update_time <= latest_otf_update_time;
 
-
-					GpuRes gres_volblk_otf;
-					grd_helper::UpdateOtfBlocks(gres_volblk_otf, vobj, NULL, mapTObjects, main_tobj->GetObjectID(), mask_otf_idmap, num_mask_otfs,
-						(is_otf_changed | update_volblk_sculptmask) && !force_to_skip_volblk_update, use_mask_otfs, sculpt_index);
+					grd_helper::UpdateOtfBlocks(gres_volblk_otf, vobj, NULL, tobj_otf, sculpt_index);
 				}
 			}
 

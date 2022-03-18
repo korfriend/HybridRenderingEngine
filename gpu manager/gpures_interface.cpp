@@ -275,9 +275,7 @@ ullong __GetUsedGpuMemorySizeBytes()
 	{
 		if (itrResDX11->second.alloc_res_ptrs[DTYPE_RES] != NULL)
 		{
-			auto it = itrResDX11->second.res_dvalues.find("RES_SIZE_BYTES");
-			if (it != itrResDX11->second.res_dvalues.end())
-				ullSizeBytes += (ullong)it->second;
+			ullSizeBytes += itrResDX11->second.res_values.GetParam("RES_SIZE_BYTES", (ullong)0);
 		}
 	}
 	return (ullong)(ullSizeBytes);
@@ -436,16 +434,6 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		return it->second;
 	};
 
-	auto GetParam = [&](const std::string& param_name) -> double
-	{
-		auto it = gres.res_dvalues.find(param_name);
-		if (it == gres.res_dvalues.end())
-		{
-			//::MessageBoxA(NULL, "Error GPU Parameters!!", NULL, MB_OK);
-			return 0;
-		}
-		return it->second;
-	};
 
 	//if (gres.vm_src_id == 33554445)
 	//	cout << "------33554445-----> " << gres.res_name << (uint)GetParam("NUM_ELEMENTS") << endl;
@@ -471,7 +459,7 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		case DXGI_FORMAT_R16_UNORM: stride_bytes = sizeof(ushort); break;
 		case DXGI_FORMAT_R16_UINT: stride_bytes = sizeof(ushort); break;
 		case DXGI_FORMAT_R16_SINT: stride_bytes = sizeof(short); break;
-		case DXGI_FORMAT_UNKNOWN: stride_bytes = (uint)GetParam("STRIDE_BYTES"); break;
+		case DXGI_FORMAT_UNKNOWN: stride_bytes = gres.res_values.GetParam("STRIDE_BYTES", (uint)0); break;
 		default:
 			::MessageBoxA(NULL, "NOT SUPPORTED FORMAT!!", NULL, MB_OK);
 			return 0;
@@ -485,8 +473,8 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 	{
 		// GetOption("FORMAT") ==> needed for VIEW creation
 		// vertex, index, ...
-		uint num_elements = (uint)GetParam("NUM_ELEMENTS");
-		uint stride_bytes = (uint)GetParam("STRIDE_BYTES");
+		uint num_elements = gres.res_values.GetParam("NUM_ELEMENTS", (uint)0);
+		uint stride_bytes = gres.res_values.GetParam("STRIDE_BYTES", (uint)0);
 		D3D11_BUFFER_DESC desc_buf;
 		ZeroMemory(&desc_buf, sizeof(D3D11_BUFFER_DESC));
 		desc_buf.ByteWidth = stride_bytes * num_elements;
@@ -512,7 +500,7 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		}
 
 		gres.alloc_res_ptrs[DTYPE_RES] = (void*)pdx11Buffer;
-		gres.res_dvalues["RES_SIZE_BYTES"] = num_elements * stride_bytes;
+		gres.res_values.SetParam("RES_SIZE_BYTES", (ullong)(num_elements * stride_bytes));
 		break;
 	}
 	case RTYPE_TEXTURE1D:
@@ -525,10 +513,10 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		// OTF, RenderRes, ..
 		D3D11_TEXTURE2D_DESC descTex2D;
 		ZeroMemory(&descTex2D, sizeof(D3D11_TEXTURE2D_DESC));
-		descTex2D.Width = (uint)GetParam("WIDTH");
-		descTex2D.Height = (uint)GetParam("HEIGHT");
+		descTex2D.Width = gres.res_values.GetParam("WIDTH", (uint)0);
+		descTex2D.Height = gres.res_values.GetParam("HEIGHT", (uint)0); 
 		descTex2D.MipLevels = gres.options["MIP_GEN"] == 1? 0 : 1;
-		descTex2D.ArraySize = max((uint)GetParam("DEPTH"), (uint)1);
+		descTex2D.ArraySize = max(gres.res_values.GetParam("DEPTH", (uint)0), (uint)1);
 		descTex2D.Format = (DXGI_FORMAT)GetOption("FORMAT");
 		descTex2D.SampleDesc.Count = 1;
 		descTex2D.SampleDesc.Quality = 0;
@@ -545,16 +533,16 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 			::MessageBoxA(NULL, "CreateTexture2D ==> ERROR!!", NULL, S_OK);
 
 		gres.alloc_res_ptrs[DTYPE_RES] = (void*)pdx11TX2D;
-		gres.res_dvalues["RES_SIZE_BYTES"] = descTex2D.Width * descTex2D.Height * GetSizeFormat(descTex2D.Format);
+		gres.res_values.SetParam("RES_SIZE_BYTES", (ullong)(descTex2D.Width* descTex2D.Height* GetSizeFormat(descTex2D.Format)));
 		break;
 	}
 	case RTYPE_TEXTURE3D:
 	{
 		D3D11_TEXTURE3D_DESC descTex3D;
 		ZeroMemory(&descTex3D, sizeof(D3D11_TEXTURE3D_DESC));
-		descTex3D.Width = (uint)GetParam("WIDTH");;
-		descTex3D.Height = (uint)GetParam("HEIGHT");;
-		descTex3D.Depth = (uint)GetParam("DEPTH");;
+		descTex3D.Width = gres.res_values.GetParam("WIDTH", (uint)0);
+		descTex3D.Height = gres.res_values.GetParam("HEIGHT", (uint)0);
+		descTex3D.Depth = gres.res_values.GetParam("DEPTH", (uint)0);
 		descTex3D.MipLevels = 1;
 		descTex3D.MiscFlags = NULL;
 		descTex3D.Format = (DXGI_FORMAT)GetOption("FORMAT");
@@ -566,7 +554,7 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		g_pdx11Device->CreateTexture3D(&descTex3D, NULL, &pdx11TX3D);
 
 		gres.alloc_res_ptrs[DTYPE_RES] = (void*)pdx11TX3D;
-		gres.res_dvalues["RES_SIZE_BYTES"] = descTex3D.Width * descTex3D.Height * descTex3D.Depth * GetSizeFormat(descTex3D.Format);
+		gres.res_values.SetParam("RES_SIZE_BYTES", (ullong)(descTex3D.Width* descTex3D.Height* descTex3D.Depth* GetSizeFormat(descTex3D.Format)));
 		break;
 	}
 	default: break;
@@ -618,15 +606,17 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		case RTYPE_BUFFER:
 			descSRV.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
 			descSRV.BufferEx.FirstElement = 0;
-			descSRV.BufferEx.NumElements = (uint)GetParam("NUM_ELEMENTS");
+			descSRV.BufferEx.NumElements = gres.res_values.GetParam("NUM_ELEMENTS", (uint)0);
 			if (GetOption("RAW_ACCESS") & 0x1) descSRV.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
 			break;
 		case RTYPE_TEXTURE2D:
-			if ((uint)GetParam("DEPTH") > 1)
+		{
+			uint depth = gres.res_values.GetParam("DEPTH", (uint)0);
+			if (depth > 1)
 			{
 				descSRV.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
 				descSRV.Texture2DArray.MipLevels = gres.options["MIP_GEN"] == 1 ? -1 : 1;
-				descSRV.Texture2DArray.ArraySize = (uint)GetParam("DEPTH");
+				descSRV.Texture2DArray.ArraySize = depth;
 			}
 			else
 			{
@@ -643,7 +633,7 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 					descSRV.Texture2D.MostDetailedMip = 0;
 				}
 			}
-			break;
+		} break;
 		case RTYPE_TEXTURE3D:
 			descSRV.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE3D;
 			descSRV.Texture3D.MipLevels = 1;
@@ -671,14 +661,14 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		case RTYPE_BUFFER:
 			descUAV.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
 			descUAV.Buffer.FirstElement = 0;
-			descUAV.Buffer.NumElements = (uint)GetParam("NUM_ELEMENTS");
+			descUAV.Buffer.NumElements = gres.res_values.GetParam("NUM_ELEMENTS", (uint)0);
 			if (GetOption("RAW_ACCESS") & 0x1) descUAV.Buffer.Flags = D3D11_BUFFER_UAV_FLAG_RAW;
 			break;
 		case RTYPE_TEXTURE2D:
 			//descUAV.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
 			//descUAV.Texture2D.MipSlice = 0;
 			{
-				uint depth = (uint)GetParam("DEPTH");
+				uint depth = gres.res_values.GetParam("DEPTH", (uint)0); 
 				if (depth > 1)
 				{
 					descUAV.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2DARRAY;
@@ -702,11 +692,7 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		gres.alloc_res_ptrs[DTYPE_UAV] = (void*)pdx11View;
 	}
 
-	//gres.res_dvalues["LAST_UPDATE_TIME"] = 0;
-	unsigned long long _time = vmhelpers::GetCurrentTimePack();
-	double d_time;
-	memcpy(&d_time, &_time, sizeof(double));
-	gres.res_dvalues["LAST_UPDATE_TIME"] = d_time;
+	gres.res_values.SetParam("LAST_UPDATE_TIME", vmhelpers::GetCurrentTimePack());
 	g_mapVmResources[RES_INDICATOR(gres)] = gres;
 
 	return true;

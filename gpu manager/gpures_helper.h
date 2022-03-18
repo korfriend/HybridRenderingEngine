@@ -309,7 +309,7 @@ namespace grd_helper
 
 	// volume/block structure
 	bool UpdateOtfBlocks(GpuRes& gres, VmVObjectVolume* main_vobj, VmVObjectVolume* mask_vobj,
-		VmObject* tobj, const bool update_blks, const int sculpt_value, LocalProgress* progress = NULL);
+		VmObject* tobj, const int sculpt_value, LocalProgress* progress = NULL);
 	bool UpdateMinMaxBlocks(GpuRes& gres_min, GpuRes& gres_max, const VmVObjectVolume* vobj, LocalProgress* progress = NULL);
 	// bool UpdateAOMask(const VmVObjectVolume* vobj, LocalProgress* progress = NULL); // to do
 	bool UpdateVolumeModel(GpuRes& gres, VmVObjectVolume* vobj, const bool use_nearest_max, LocalProgress* progress = NULL);

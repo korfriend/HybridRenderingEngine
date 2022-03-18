@@ -566,9 +566,9 @@ int __UpdateBlocks(GpuRes& gres, const VmVObjectVolume* vobj, const string& vmod
 	const int blk_level = 1;	// 0 : High Resolution, 1 : Low Resolution
 	VolumeBlocks* volblk = ((VmVObjectVolume*)vobj)->GetVolumeBlock(blk_level);
 
-	gres.res_dvalues["WIDTH"] = (double)volblk->blk_vol_size.x;
-	gres.res_dvalues["HEIGHT"] = (double)volblk->blk_vol_size.y;
-	gres.res_dvalues["DEPTH"] = (double)volblk->blk_vol_size.z;
+	gres.res_values.SetParam("WIDTH", (uint)volblk->blk_vol_size.x);
+	gres.res_values.SetParam("HEIGHT", (uint)volblk->blk_vol_size.y);
+	gres.res_values.SetParam("DEPTH", (uint)volblk->blk_vol_size.z);
 
 	uint num_blk_units = volblk->blk_vol_size.x * volblk->blk_vol_size.y * volblk->blk_vol_size.z;
 	gres.options["FORMAT"] = (vmode == "OTFTAG") && num_blk_units >= 65535 ? DXGI_FORMAT_R32_FLOAT : DXGI_FORMAT_R16_UNORM;
@@ -579,11 +579,10 @@ int __UpdateBlocks(GpuRes& gres, const VmVObjectVolume* vobj, const string& vmod
 }
 
 bool grd_helper::UpdateOtfBlocks(GpuRes& gres, VmVObjectVolume* main_vobj, VmVObjectVolume* mask_vobj,
-	VmObject* tobj, const bool update_blks, const int sculpt_value, LocalProgress* progress)
+	VmObject* tobj, const int sculpt_value, LocalProgress* progress)
 {
 	int is_new = __UpdateBlocks(gres, main_vobj, "OTFTAG", progress);
-	if (!update_blks && is_new == 0) return true;
-
+	
 	int tobj_id = tobj->GetObjectID();
 	vmdouble2 otf_Mm_range = vmdouble2(DBL_MAX, -DBL_MAX);
 	MapTable* tmap_data = tobj->GetObjParamPtr<MapTable>("_TableMap_OTF");
@@ -593,6 +592,13 @@ bool grd_helper::UpdateOtfBlocks(GpuRes& gres, VmVObjectVolume* main_vobj, VmVOb
 
 	const int blk_level = 1;	// 0 : High Resolution, 1 : Low Resolution
 	VolumeBlocks* volblk = ((VmVObjectVolume*)main_vobj)->GetVolumeBlock(blk_level);
+
+	ullong _tp_cpu = volblk->GetUpdateTime(tobj_id);
+	ullong _tp_gpu = tobj->GetObjParam("_ullong_LatestMapTableGpuUpdateTime", (ullong)0);
+	if (_tp_gpu >= _tp_cpu)
+		return true;
+
+
 	// MAIN UPDATE!
 	((VmVObjectVolume*)main_vobj)->UpdateTagBlocks(tobj_id, 0, otf_Mm_range, NULL);
 	((VmVObjectVolume*)main_vobj)->UpdateTagBlocks(tobj_id, 1, otf_Mm_range, NULL);
@@ -600,6 +606,12 @@ bool grd_helper::UpdateOtfBlocks(GpuRes& gres, VmVObjectVolume* main_vobj, VmVOb
 
 	ullong _tp = vmhelpers::GetCurrentTimePack();
 	main_vobj->SetObjParam("_ullong_LatestVolBlkUpdateTime", _tp);
+
+
+	ullong latest_otf_update_time = tobj_otf->GetObjParam("_ullong_LatestMapTableGpuUpdateTime", (ullong)17);
+	ullong latest_blk_update_time = vobj->GetObjParam("_ullong_LatestVolBlkUpdateTime", (ullong)17);
+	latest_blk_update_time <= latest_otf_update_time;
+
 
 	//if (use_mask_otf && mask_tmap_ids && num_mask_tmap_ids > 0 && mask_vobj) // Only Cares for Main Block of iLevelBlock
 	//{
@@ -801,17 +813,6 @@ auto GetOption = [](const GpuRes& gres, const std::string& flag_name) -> uint
 	return it->second;
 };
 
-auto GetParam = [](const GpuRes& gres, const std::string& param_name) -> double
-{
-	auto it = gres.res_dvalues.find(param_name);
-	if (it == gres.res_dvalues.end())
-	{
-		::MessageBoxA(NULL, "Error GPU Parameters!!", NULL, MB_OK);
-		return 0;
-	}
-	return it->second;
-};
-
 template <typename GPUTYPE, typename CPUTYPE> bool __FillVolumeValues(CPUTYPE* gpu_data, const GPUTYPE** cpu_data,
 	const bool is_downscaled, const bool use_nearest_max, const int valueoffset,
 	const vmint3& cpu_size, const vmint3& cpu_resize, const vmint3& cpu_bnd_size, const vmint2& gpu_row_depth_pitch, LocalProgress* progress)
@@ -976,12 +977,12 @@ RETRY:
 	int vol_size_x = max((int)((float)vol_data->vol_size.x / sample_offset.x), 1);
 	int vol_size_y = max((int)((float)vol_data->vol_size.y / sample_offset.y), 1);
 	int vol_size_z = max((int)((float)vol_data->vol_size.z / sample_offset.z), 1);
-	gres.res_dvalues["WIDTH"] = vol_size_x;
-	gres.res_dvalues["HEIGHT"] = vol_size_y;
-	gres.res_dvalues["DEPTH"] = vol_size_z;
-	gres.res_dvalues["SAMPLE_OFFSET_X"] = sample_offset.x;
-	gres.res_dvalues["SAMPLE_OFFSET_Y"] = sample_offset.y;
-	gres.res_dvalues["SAMPLE_OFFSET_Z"] = sample_offset.z;
+	gres.res_values.SetParam("WIDTH", (uint)vol_size_x);
+	gres.res_values.SetParam("HEIGHT", (uint)vol_size_y);
+	gres.res_values.SetParam("DEPTH", (uint)vol_size_z);
+	gres.res_values.SetParam("SAMPLE_OFFSET_X", (float)sample_offset.x);
+	gres.res_values.SetParam("SAMPLE_OFFSET_Y", (float)sample_offset.y);
+	gres.res_values.SetParam("SAMPLE_OFFSET_Z", (float)sample_offset.z);
 
 	if (vol_size_x > 2048)
 	{
@@ -1042,8 +1043,7 @@ bool grd_helper::UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, LocalProgress* p
 	if (g_pCGpuManager->UpdateGpuResource(gres)) {
 
 		ullong _tp_cpu = tobj->GetContentUpdateTime(); 
-		gres.
-		ullong _tp_gpu = tobj->GetObjParam("_ullong_LatestTmapUpdateTime", (ullong)0);
+		ullong _tp_gpu = tobj->GetObjParam("_ullong_LatestMapTableGpuUpdateTime", (ullong)0);
 		if(_tp_gpu >= _tp_cpu)
 			return true;
 	}
@@ -1054,8 +1054,8 @@ bool grd_helper::UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, LocalProgress* p
 		gres.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
 		gres.options["FORMAT"] = DXGI_FORMAT_R8G8B8A8_UNORM;
 
-		gres.res_dvalues["NUM_ELEMENTS"] = tmap_data->array_lengths.x * (tmap_data->array_lengths.y);
-		gres.res_dvalues["STRIDE_BYTES"] = tmap_data->dtype.type_bytes;
+		gres.res_values.SetParam("NUM_ELEMENTS", (uint)(tmap_data->array_lengths.x * (tmap_data->array_lengths.y)));
+		gres.res_values.SetParam("STRIDE_BYTES", (uint)tmap_data->dtype.type_bytes);
 
 		g_pCGpuManager->GenerateGpuResource(gres);
 	}
@@ -1069,7 +1069,7 @@ bool grd_helper::UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, LocalProgress* p
 	}
 	g_pvmCommonParams->dx11DeviceImmContext->Unmap((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], 0);
 
-	tobj->SetObjParam("_ullong_LatestTmapUpdateTime", vmhelpers::GetCurrentTimePack());
+	tobj->SetObjParam("_ullong_LatestMapTableGpuUpdateTime", vmhelpers::GetCurrentTimePack());
 
 	return true;
 }
@@ -1079,12 +1079,9 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 	PrimitiveData* prim_data = ((VmVObjectPrimitive*)pobj)->GetPrimitiveData();
 
 	auto CheckReusability = [&pobj](GpuRes& gres, bool& update_data, bool& regen_data,
-		const std::map<std::string, double>& res_new_dvalues)
+		const vmobjects::VmParamMap<std::string, std::any>& res_new_values)
 	{
-		auto it = gres.res_dvalues.find("LAST_UPDATE_TIME");
-		unsigned long long _gpu_gen_timg = 0;
-		if (it != gres.res_dvalues.end())
-			_gpu_gen_timg = *(unsigned long long*)&it->second;
+		unsigned long long _gpu_gen_timg = gres.res_values.GetParam("LAST_UPDATE_TIME", (ullong)0);
 		unsigned long long _cpu_gen_timg = pobj->GetContentUpdateTime();
 		if (_gpu_gen_timg < _cpu_gen_timg)
 		{
@@ -1094,8 +1091,9 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 			if (!is_reuse_memory)
 			{
 				regen_data = true;
-				for (auto it = res_new_dvalues.begin(); it != res_new_dvalues.end(); it++)
-					gres.res_dvalues[it->first] = it->second;
+				// add properties
+				for (auto it = res_new_values.begin(); it != res_new_values.end(); it++)
+					gres.res_values.SetParam(it->first, it->second);
 			}
 		}
 	};
@@ -1115,18 +1113,18 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 			gres_vtx.options["CPU_ACCESS_FLAG"] = NULL; // D3D11_CPU_ACCESS_WRITE;// | D3D11_CPU_ACCESS_READ;
 			gres_vtx.options["BIND_FLAG"] = D3D11_BIND_VERTEX_BUFFER;
 			gres_vtx.options["FORMAT"] = DXGI_FORMAT_R32G32B32_FLOAT;
-			gres_vtx.res_dvalues["NUM_ELEMENTS"] = prim_data->num_vtx;
-			gres_vtx.res_dvalues["STRIDE_BYTES"] = stride_bytes;
+			gres_vtx.res_values.SetParam("NUM_ELEMENTS", (uint)prim_data->num_vtx);
+			gres_vtx.res_values.SetParam("STRIDE_BYTES", (uint)stride_bytes);
 
 			update_data = true;
 			g_pCGpuManager->GenerateGpuResource(gres_vtx);
 		}
 		else
 		{
-			std::map<std::string, double> res_new_dvalues;
-			res_new_dvalues["NUM_ELEMENTS"] = prim_data->num_vtx;
+			vmobjects::VmParamMap<std::string, std::any> res_new_values;
+			res_new_values.SetParam("NUM_ELEMENTS", (uint)prim_data->num_vtx);
 			bool regen_data = false;
-			CheckReusability(gres_vtx, update_data, regen_data, res_new_dvalues);
+			CheckReusability(gres_vtx, update_data, regen_data, res_new_values);
 			if(regen_data)
 				g_pCGpuManager->GenerateGpuResource(gres_vtx);
 		}
@@ -1200,8 +1198,8 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 			gres_idx.options["CPU_ACCESS_FLAG"] = NULL;
 			gres_idx.options["BIND_FLAG"] = D3D11_BIND_INDEX_BUFFER;
 			gres_idx.options["FORMAT"] = DXGI_FORMAT_R32_UINT;
-			gres_idx.res_dvalues["NUM_ELEMENTS"] = prim_data->num_vidx;
-			gres_idx.res_dvalues["STRIDE_BYTES"] = sizeof(uint);
+			gres_idx.res_values.SetParam("NUM_ELEMENTS", (uint)prim_data->num_vidx);
+			gres_idx.res_values.SetParam("STRIDE_BYTES", (uint)sizeof(uint));
 
 			g_pCGpuManager->GenerateGpuResource(gres_idx);
 
@@ -1214,10 +1212,10 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 		}
 		else
 		{
-			std::map<std::string, double> res_new_dvalues;
-			res_new_dvalues["NUM_ELEMENTS"] = prim_data->num_vidx;
+			vmobjects::VmParamMap<std::string, std::any> res_new_values;
+			res_new_values.SetParam("NUM_ELEMENTS", (uint)prim_data->num_vidx);
 			bool regen_data = false;
-			CheckReusability(gres_idx, update_data, regen_data, res_new_dvalues);
+			CheckReusability(gres_idx, update_data, regen_data, res_new_values);
 			if(regen_data)
 				g_pCGpuManager->GenerateGpuResource(gres_idx);
 		}
@@ -1299,9 +1297,9 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 				gres_tex.options["CPU_ACCESS_FLAG"] = NULL;// D3D11_CPU_ACCESS_WRITE;
 				gres_tex.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
 				gres_tex.options["FORMAT"] = DXGI_FORMAT_R8G8B8A8_UNORM;
-				gres_tex.res_dvalues["WIDTH"] = tex_res_size.x;
-				gres_tex.res_dvalues["HEIGHT"] = tex_res_size.y;
-				gres_tex.res_dvalues["DEPTH"] = (double)prim_data->texture_res_info.size();
+				gres_tex.res_values.SetParam("WIDTH", (uint)tex_res_size.x);
+				gres_tex.res_values.SetParam("HEIGHT", (uint)tex_res_size.y);
+				gres_tex.res_values.SetParam("DEPTH", (uint)prim_data->texture_res_info.size());
 				
 				//auto upload_teximg = [&prim_data](GpuRes& gres_tex, D3D11_MAP maptype)
 				//{
@@ -1373,12 +1371,12 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 			}
 			else
 			{
-				std::map<std::string, double> res_new_dvalues;
-				res_new_dvalues["WIDTH"] = tex_res_size.x;
-				res_new_dvalues["HEIGHT"] = tex_res_size.y;
-				res_new_dvalues["DEPTH"] = (double)prim_data->texture_res_info.size();
+				vmobjects::VmParamMap<std::string, std::any> res_new_values;
+				res_new_values.SetParam("WIDTH", (uint)tex_res_size.x);
+				res_new_values.SetParam("HEIGHT", (uint)tex_res_size.y);
+				res_new_values.SetParam("DEPTH", (uint)prim_data->texture_res_info.size());
 				bool regen_data = false;
-				CheckReusability(gres_tex, update_data, regen_data, res_new_dvalues);
+				CheckReusability(gres_tex, update_data, regen_data, res_new_values);
 				if(regen_data)
 					g_pCGpuManager->GenerateGpuResource(gres_tex);
 			}
@@ -1439,18 +1437,18 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 					gres_tex.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
 					assert(byte_stride != 2);
 					gres_tex.options["FORMAT"] = byte_stride == 1 ? DXGI_FORMAT_R8_UNORM : DXGI_FORMAT_R8G8B8A8_UNORM;
-					gres_tex.res_dvalues["WIDTH"] = tex_res_size.x;
-					gres_tex.res_dvalues["HEIGHT"] = tex_res_size.y;
+					gres_tex.res_values.SetParam("WIDTH", (uint)tex_res_size.x);
+					gres_tex.res_values.SetParam("HEIGHT", (uint)tex_res_size.y);
 
 					g_pCGpuManager->GenerateGpuResource(gres_tex);
 				}
 				else
 				{
-					std::map<std::string, double> res_new_dvalues;
-					res_new_dvalues["WIDTH"] = tex_res_size.x;
-					res_new_dvalues["HEIGHT"] = tex_res_size.y;
+					vmobjects::VmParamMap<std::string, std::any> res_new_values;
+					res_new_values.SetParam("WIDTH", (uint)tex_res_size.x);
+					res_new_values.SetParam("HEIGHT", (uint)tex_res_size.y);
 					bool regen_data = false;
-					CheckReusability(gres_tex, update_data, regen_data, res_new_dvalues);
+					CheckReusability(gres_tex, update_data, regen_data, res_new_values);
 					if(regen_data)
 						g_pCGpuManager->GenerateGpuResource(gres_tex);
 				}
@@ -1564,8 +1562,8 @@ bool grd_helper::UpdateFrameBuffer(GpuRes& gres,
 	switch (gres_type)
 	{
 	case RTYPE_BUFFER:
-		if (fb_flag & UPFB_NFPP_BUFFERSIZE) gres.res_dvalues["NUM_ELEMENTS"] = num_frags_perpixel;
-		else gres.res_dvalues["NUM_ELEMENTS"] = num_frags_perpixel > 0 ? fb_size.x * fb_size.y * num_frags_perpixel : fb_size.x * fb_size.y;
+		if (fb_flag & UPFB_NFPP_BUFFERSIZE) gres.res_values.SetParam("NUM_ELEMENTS", (uint)num_frags_perpixel);
+		else gres.res_values.SetParam("NUM_ELEMENTS", (uint)(num_frags_perpixel > 0 ? fb_size.x * fb_size.y * num_frags_perpixel : fb_size.x * fb_size.y));
 		switch (dx_format)
 		{
 		case DXGI_FORMAT_R32_UINT: stride_bytes = sizeof(uint); break;
@@ -1585,12 +1583,12 @@ bool grd_helper::UpdateFrameBuffer(GpuRes& gres,
 		}
 		if (fb_flag & UPFB_RAWBYTE) gres.options["RAW_ACCESS"] = 1;
 		if (stride_bytes == 0) return false;
-		gres.res_dvalues["STRIDE_BYTES"] = (double)(stride_bytes);
+		gres.res_values.SetParam("STRIDE_BYTES", (uint)stride_bytes);
 		break;
 	case RTYPE_TEXTURE2D:
-		gres.res_dvalues["WIDTH"] = ((fb_flag & UPFB_HALF) || (fb_flag & UPFB_HALF_W)) ? fb_size.x / 2 : fb_size.x;
-		gres.res_dvalues["HEIGHT"] = ((fb_flag & UPFB_HALF) || (fb_flag & UPFB_HALF_H)) ? fb_size.y / 2 : fb_size.y;
-		if (fb_flag & UPFB_NFPP_TEXTURESTACK) gres.res_dvalues["DEPTH"] = num_frags_perpixel;
+		gres.res_values.SetParam("WIDTH", (uint)(((fb_flag & UPFB_HALF) || (fb_flag & UPFB_HALF_W)) ? fb_size.x / 2 : fb_size.x));
+		gres.res_values.SetParam("HEIGHT", (uint)(((fb_flag & UPFB_HALF) || (fb_flag & UPFB_HALF_H)) ? fb_size.y / 2 : fb_size.y));
+		if (fb_flag & UPFB_NFPP_TEXTURESTACK) gres.res_values.SetParam("DEPTH", (uint)num_frags_perpixel);
 		if (fb_flag & UPFB_MIPMAP) gres.options["MIP_GEN"] = 1;
 		if (fb_flag & UPFB_HALF) gres.options["HALF_GEN"] = 1;
 		break;
