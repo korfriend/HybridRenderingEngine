@@ -44,8 +44,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	//if (mode_OIT == MFR_MODE::STATIC_KB_FM) apply_fragmerge = true;
 
 	int buf_ex_scale = _fncontainer->GetParam("_int_BufExScale", (int)8); // 32 layers
-	int num_moments_old = 8;
-	lobj->GetCustomParameter("_int_NumQueueLayers", data_type::dtype<int>(), &num_moments_old);
+	int num_moments_old = iobj->GetObjParam("_int_NumQueueLayers", (int)8);
 	int num_moments = _fncontainer->GetParam("_int_NumQueueLayers", num_moments_old);
 
 	// TEST
@@ -153,15 +152,15 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 	vmint2 fb_size_cur, fb_size_old = vmint2(0, 0);
 	iobj->GetFrameBufferInfo(&fb_size_cur);
-	iobj->GetCustomParameter("_int2_PreviousScreenSize", data_type::dtype<vmint2>(), &fb_size_old);
-	iobj->GetCustomParameter("_int_PreviousBufferEx", data_type::dtype<int>(), &buffer_ex_old);
+	vmint2 fb_size_old = iobj->GetObjParam("_int2_PreviousScreenSize", vmint2(0, 0));
+	buffer_ex_old = iobj->GetObjParam("_int_PreviousBufferEx", buffer_ex_old);
 	if (fb_size_cur.x != fb_size_old.x || fb_size_cur.y != fb_size_old.y || k_value != k_value_old
 		|| k_value != k_value_old || num_moments != num_moments_old
 		|| buffer_ex != buffer_ex_old)
 	{
 		gpu_manager->ReleaseGpuResourcesBySrcID(iobj->GetObjectID());	// System Out Æ÷ÇÔ //
-		iobj->RegisterCustomParameter("_int2_PreviousScreenSize", fb_size_cur);
-		iobj->RegisterCustomParameter("_int_PreviousBufferEx", buffer_ex);
+		iobj->SetObjParam("_int2_PreviousScreenSize", fb_size_cur);
+		iobj->SetObjParam("_int_PreviousBufferEx", buffer_ex);
 	}
 
 	bool gpu_profile = false;
@@ -187,8 +186,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	grd_helper::UpdateFrameBuffer(gres_fb_counter, iobj, "RW_COUNTER", RTYPE_TEXTURE2D,
 		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
 
+	const int num_frags_perpixel = k_value * 4 * buffer_ex;
 	grd_helper::UpdateFrameBuffer(gres_fb_k_buffer, iobj, "BUFFER_RW_K_BUF", RTYPE_BUFFER,
-		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, k_value * 4 * buffer_ex);
+		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, num_frags_perpixel);
 
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_rgba, iobj, "SYSTEM_OUT_RGBA", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_SYSOUT);
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_depthcs, iobj, "SYSTEM_OUT_DEPTH", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R32_FLOAT, UPFB_SYSOUT);
@@ -223,80 +223,34 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #pragma endregion 
 
 #pragma region // Presetting of VmObject
-	int last_render_vol_id = _fncontainer->GetParam("_int_LastRenderVolumeID", input_vobjs[input_vobjs.size() - 1]->GetObjectID());
-
-	map<int, VmVObjectVolume*> mapVolumes;
-	for (int i = 0; i < (int)input_vobjs.size(); i++)
-	{
-		VmVObjectVolume* pCVolume = (VmVObjectVolume*)input_vobjs[i];
-		mapVolumes.insert(pair<int, VmVObjectVolume*>(pCVolume->GetObjectID(), pCVolume));
-	}
-
-	map<int, VmObject*> mapTObjects;
-	for (int i = 0; i < (int)input_tobjs.size(); i++)
-	{
-		VmObject* pCTObject = (VmObject*)input_tobjs[i];
-		mapTObjects.insert(pair<int, VmObject*>(pCTObject->GetObjectID(), pCTObject));
-	}
-
-	auto Get_Lbuffer = [&lobj](const string& name, auto** pp, int& num_elements)
-	{
-		size_t bytes_temp;
-		lobj->LoadBufferPtr("_vlist_INT_MainVolumeIDs", (void**)pp, bytes_temp);
-		num_elements = voo::get_num_from_bytes<int>(bytes_temp);
-	};
-
-	int* main_volume_ids = NULL; int num_main_volumes = 0;
-	Get_Lbuffer("_vlist_INT_MainVolumeIDs", &main_volume_ids, num_main_volumes);
-	if (num_main_volumes == 0)
-	{
-		VMERRORMESSAGE("GPU DVR! - ERROR 00");
-		return false;
-	}
-
-	vector<int> ordered_main_volume_ids;
-	bool is_valid_list = false;
+	vector<VmActor*> dvr_volumes;
+	auto& sceneActors = *_fncontainer->sceneActors;
 	vmfloat3 pos_aabb_min_ws(FLT_MAX), pos_aabb_max_ws(-FLT_MAX);
 	float min_pitch = FLT_MAX;
-	for (int i = 0; i < num_main_volumes; i++)
+	// For Each Primitive //
+	for (auto& actorPair : sceneActors) 
 	{
-		int vobj_id = main_volume_ids[i];
-		auto it = mapVolumes.find(vobj_id);
-		if (it == mapVolumes.end())
-		{
-			VMERRORMESSAGE("GPU DVR! - INVALID VOLUME ID");
-			return false;
-		}
-		if (vobj_id == last_render_vol_id)
-		{
-			is_valid_list = true;
-		}
-		else
-		{
-			ordered_main_volume_ids.push_back(vobj_id);
-		}
-		AaBbMinMax aabb_os;
-		it->second->GetOrthoBoundingBox(aabb_os);
-		vmmat44f matOS2WS = it->second->GetMatrixOS2WSf();
-		vmfloat3 min_aabb, max_aabb;
-		fTransformPoint(&min_aabb, &(vmfloat3)aabb_os.pos_min, &matOS2WS);
-		fTransformPoint(&max_aabb, &(vmfloat3)aabb_os.pos_max, &matOS2WS);
-		pos_aabb_min_ws.x = min(pos_aabb_min_ws.x, min_aabb.x);
-		pos_aabb_min_ws.y = min(pos_aabb_min_ws.y, min_aabb.y);
-		pos_aabb_min_ws.z = min(pos_aabb_min_ws.z, min_aabb.z);
-		pos_aabb_max_ws.x = max(pos_aabb_max_ws.x, max_aabb.x);
-		pos_aabb_max_ws.y = max(pos_aabb_max_ws.y, max_aabb.y);
-		pos_aabb_max_ws.z = max(pos_aabb_max_ws.z, max_aabb.z);
+		VmActor& actor = get<1>(actorPair);
+		VmVObject* geo_obj = actor.GetGeometryRes();
+		if (geo_obj == NULL ||
+			geo_obj->GetObjectType() != ObjectTypeVOLUME ||
+			!geo_obj->IsDefined() ||
+			!actor.visible || actor.color.a == 0)
+			continue;
 
-		min_pitch = min(min(min(it->second->GetVolumeData()->vox_pitch.x, it->second->GetVolumeData()->vox_pitch.y), it->second->GetVolumeData()->vox_pitch.z), min_pitch);
-	}
-	if (!is_valid_list)
-	{
-		VMERRORMESSAGE("GPU DVR! - ERROR 01");
-		return false;
-	}
-	ordered_main_volume_ids.push_back(last_render_vol_id);
+		if (dvr_volumes.size() > 1) {
+			test_out("WARNNING!! two rendering target volumes are not allowed!");
+			break;
+		}
+		dvr_volumes.push_back(&actor);
+		VmVObjectVolume* volobj = (VmVObjectVolume*)geo_obj;
+		VolumeData* vol_data = volobj->GetVolumeData();
 
+		min_pitch = min(min(
+			min(vol_data->vox_pitch.x, vol_data->vox_pitch.y), 
+			vol_data->vox_pitch.z), 
+			min_pitch);
+	}
 #pragma endregion 
 
 	// Backup Previous Render Target //
@@ -330,6 +284,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	ID3D11Buffer* cbuf_tmap = dx11CommonParams->get_cbuf("CB_TMAP");
 	ID3D11Buffer* cbuf_hsmask = dx11CommonParams->get_cbuf("CB_HotspotMask");
 
+#pragma region // HLSL Sampler Setting
 	ID3D11SamplerState* sampler_PZ = dx11CommonParams->get_sampler("POINT_ZEROBORDER");
 	ID3D11SamplerState* sampler_LZ = dx11CommonParams->get_sampler("LINEAR_ZEROBORDER");
 	ID3D11SamplerState* sampler_PC = dx11CommonParams->get_sampler("POINT_CLAMP");
@@ -338,9 +293,11 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	dx11DeviceImmContext->CSSetSamplers(1, 1, &sampler_PZ);
 	dx11DeviceImmContext->CSSetSamplers(2, 1, &sampler_LC);
 	dx11DeviceImmContext->CSSetSamplers(3, 1, &sampler_PC);
+#pragma endregion
 
 	ID3D11UnorderedAccessView* dx11UAVs_NULL[10] = { NULL };
 	ID3D11ShaderResourceView* dx11SRVs_NULL[10] = { NULL };
+
 #pragma region // Camera & Environment 
 // 	const int __BLOCKSIZE = 8;
 // 	uint num_grid_x = (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
@@ -400,7 +357,6 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		//gpu_profilecount++;
 	}
 
-
 	auto ___GpuProfile = [&gpu_profile, &dx11DeviceImmContext, &profile_map, &dx11CommonParams](const string& profile_name, const bool is_closed = false) {
 		if (gpu_profile)
 		{
@@ -426,12 +382,10 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	___GpuProfile("VR Begin");
 
 	// Initial Setting of Frame Buffers //
-	int count_call_render = 0;
-	iobj->GetCustomParameter("_int_NumCallRenders", __DTYPE(int), &count_call_render);
+	int count_call_render = iobj->GetObjParam("_int_NumCallRenders", (int)0);
 	bool is_performed_ssao = false;
 
-	int num_main_vrs = (int)ordered_main_volume_ids.size();
-	for (int i = 0; i < num_main_vrs; i++)
+	for (VmActor* actor : dvr_volumes)
 	{
 		int vobj_id = ordered_main_volume_ids[i];
 

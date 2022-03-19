@@ -1692,7 +1692,6 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 	if (sculpt_index >= 0)
 		cb_volume.vobj_flag |= sculpt_index << 24;
 
-	vmmat44f matVS2WS = vobj->GetMatrixRS2OSf() * actor->matOS2WS;
 	vmmat44f matWS2VS = actor->matWS2OS * vobj->GetMatrixOS2RSf();
 
 	vmmat44f matVS2TS;
@@ -1704,22 +1703,22 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 	vmmat44f mat_ws2ts = matWS2VS * matVS2TS;
 	cb_volume.mat_ws2ts = TRANSPOSE(mat_ws2ts);
 
-	AaBbMinMax aabb;
-	vobj->GetOrthoBoundingBox(aabb);
+	AaBbMinMax aabb_os;
+	vobj->GetOrthoBoundingBox(aabb_os);
 
 	vmfloat3 fPosVObjectMinWS, fVecVObjectZWS, fVecVObjectYWS, fVecVObjectXWS;
-	fTransformPoint(&fPosVObjectMinWS, &(vmfloat3)aabb.pos_min, &matVS2WS);
-	fTransformVector(&fVecVObjectZWS, &vmfloat3(0, 0, -1.f), &matVS2WS);
-	fTransformVector(&fVecVObjectYWS, &vmfloat3(0, 1.f, 0), &matVS2WS);
-	fTransformVector(&fVecVObjectXWS, &vmfloat3(1.f, 0, 0), &matVS2WS);
+	fTransformPoint(&fPosVObjectMinWS, &(vmfloat3)aabb_os.pos_min, &actor->matOS2WS);
+	fTransformVector(&fVecVObjectZWS, &vmfloat3(0, 0, -1.f), &actor->matOS2WS);
+	fTransformVector(&fVecVObjectYWS, &vmfloat3(0, 1.f, 0), &actor->matOS2WS);
+	fTransformVector(&fVecVObjectXWS, &vmfloat3(1.f, 0, 0), &actor->matOS2WS);
 	vmfloat3 fVecCrossZY;
 	fCrossDotVector(&fVecCrossZY, &fVecVObjectZWS, &fVecVObjectYWS);
 	if (fDotVector(&fVecCrossZY, &fVecVObjectXWS) < 0)
-		fTransformVector(&fVecVObjectYWS, &vmfloat3(1.f, 0, 0), &matVS2WS);
+		fTransformVector(&fVecVObjectYWS, &vmfloat3(1.f, 0, 0), &actor->matOS2WS);
 
 	vmmat44f matWS2BS;
 	fMatrixWS2CS(&matWS2BS, (vmfloat3*)&fPosVObjectMinWS, (vmfloat3*)&fVecVObjectYWS, (vmfloat3*)&fVecVObjectZWS); // set
-	fTransformPoint((vmfloat3*)&cb_volume.pos_alignedvbox_max_bs, &(vmfloat3)aabb.pos_max, &(matVS2WS * matWS2BS)); // set
+	fTransformPoint((vmfloat3*)&cb_volume.pos_alignedvbox_max_bs, &(vmfloat3)aabb_os.pos_max, &(actor->matOS2WS * matWS2BS)); // set
 	cb_volume.mat_alignedvbox_tr_ws2bs = TRANSPOSE(matWS2BS);
 
 	if (vol_data->store_dtype.type_bytes == data_type::dtype<byte>().type_bytes) // char
