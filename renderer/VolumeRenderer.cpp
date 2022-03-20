@@ -387,28 +387,11 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 	for (VmActor* actor : dvr_volumes)
 	{
-		int vobj_id = ordered_main_volume_ids[i];
+		VmVObjectVolume* vobj = (VmVObjectVolume*)actor->GetGeometryRes();
+		VolumeData* vol_data = vobj->GetVolumeData();
 
-#pragma region // Volume General Parameters
-		VmVObjectVolume* main_vol_obj = NULL;
-
-		// Volumes //
-		auto itrVolume = mapVolumes.find(vobj_id);
-		if (itrVolume == mapVolumes.end())
-		{
-			VMERRORMESSAGE("NO Volume ID");
-			continue;
-		}
-		main_vol_obj = itrVolume->second;
-
-		bool is_visible = true;
-		lobj->GetDstObjValue(vobj_id, "_bool_IsVisible", &is_visible); // VxFramework
-		lobj->GetDstObjValue(vobj_id, "_bool_TestVisible", &is_visible);
-		lobj->GetDstObjValue(vobj_id, "_bool_visibility", &is_visible); // VisMotive
-
-		if (!is_visible)
-			continue;
-
+		// note that the actor is visible (already checked)
+#pragma region Actor Parameters
 #define __RM_DEFAULT 0
 #define __RM_CLIPOPAQUE 1
 #define __RM_OPAQUE 2
@@ -419,116 +402,39 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #define __RM_RAYMAX 10
 #define __RM_RAYMIN 11
 #define __RM_RAYSUM 12
-
 #define __SRV_PTR ID3D11ShaderResourceView* 
 
-		auto GET_LDVALUE = [&lobj, &vobj_id](const string& name, auto default_v, int id = 0)
-		{
-			if (id == 0) id = vobj_id;
-			auto v = default_v;
-			lobj->GetDstObjValue(id, name, &v);
-			return v;
-		};
-
-		int render_type = GET_LDVALUE("_int_RendererType", (int)0);
+		// will change integer to string type 
+		// and its param name 'RaySamplerMode'
+		// also its corresponding cpu renderer
+		int render_type = actor->GetParam("_int_RendererType", (int)0);
 		bool is_xray_mode = false;
 		if (render_type >= __RM_RAYMAX)
 			is_xray_mode = true;
 
-		bool skip_volblk_update = GET_LDVALUE("_bool_ForceToSkipBlockUpdate", false);
-
-		int blk_level = GET_LDVALUE("_int_BlockLevel", (int)1);
+		bool skip_volblk_update = actor->GetParam("_bool_ForceToSkipBlockUpdate", false);
+		int blk_level = actor->GetParam("_int_BlockLevel", (int)1);
 		blk_level = max(min(1, blk_level), 0);
 
-		bool use_mask_volume = GET_LDVALUE("_bool_ValidateMaskVolume", false);
-		bool update_volblk_sculptmask = GET_LDVALUE("_bool_BlockUpdateForSculptMask", false);
-		int main_tobj_id = GET_LDVALUE("_int_MainTObjectID", (int)0);
-		int mask_vol_id = GET_LDVALUE("_int_MaskVolumeObjectID", (int)0);
-		// TEST 
-		int windowing_tobj_id = GET_LDVALUE("_int_WindowingTObjectID", (int)0);
-#pragma endregion // Volume General Parameters
+		bool use_mask_volume = actor->GetParam("_bool_ValidateMaskVolume", false);
+		bool update_volblk_sculptmask = actor->GetParam("_bool_BlockUpdateForSculptMask", false);
+#pragma endregion
 
-#pragma region // Mask Volume Custom Parameters
-		VmVObjectVolume* mask_vol_obj = NULL;
-		//pCLObjectForParameters->GetCustomDValue(iMaskVolumeID, (void**)&pmapDValueMaskVolume);
-		//if (pmapDValueMaskVolume == NULL)
-		//	pmapDValueMaskVolume = &mapDValueClear;
+#pragma region GPU resource updates
 
-		int sculpt_index = -1;
-		double* mask_otf_ids = NULL;
-		double* mask_otf_ids_vis = NULL;
-		double* mask_otf_idmap = NULL;
-		int num_mask_otfs = 0;
-		if (mask_vol_id != 0 && (use_mask_volume || render_type == __RM_SCULPTMASK))
+		VmObject* tobj_otf = (VmObject*)actor->GetAssociateRes("_VmObject_OTF");
+		VmVObjectVolume* mask_vol_obj = (VmVObjectVolume*)actor->GetAssociateRes("_VmObject_MaskVolume");
+
+		if (tobj_otf == NULL)
 		{
-			auto itrMaskVolume = mapVolumes.find(mask_vol_id);
-			if (itrMaskVolume == mapVolumes.end())
-			{
-				VMERRORMESSAGE("NO Mask Volume ID");
-				continue;
-			}
-
-			mask_vol_obj = itrMaskVolume->second;
-			if (mask_vol_obj == NULL)
-			{
-				VMERRORMESSAGE("INVALID Mask Volume ID");
-				return false;
-			}
-
-			sculpt_index = GET_LDVALUE("_int_SculptingIndex", (int)-1);
-			Get_Lbuffer("_vlist_float_MaskOTFIDs", &mask_otf_ids, num_mask_otfs);
-			Get_Lbuffer("_vlist_float_MaskOTFIDs_VisibilitySeries", &mask_otf_ids_vis, num_mask_otfs);
-			Get_Lbuffer("_vlist_float_MaskOTFIndexMap", &mask_otf_idmap, num_mask_otfs);
-		}
-		bool use_mask_otfs = false;
-		if (num_mask_otfs > 0)
-		{
-			use_mask_otfs = true;
-			// Check if Mask Volume Renderer is used or not.
-			if (num_mask_otfs == 1 && (int)mask_otf_ids[0] == main_tobj_id)
-				use_mask_otfs = false;
-		}
-#pragma endregion // Mask Volume Custom Parameters
-
-#pragma region // Main TObject Custom Parameters
-		////// 여기서 부터 토요일!
-		VmObject* main_tobj = NULL;
-		
-		auto itrTObject = mapTObjects.find(main_tobj_id);
-		if (itrTObject == mapTObjects.end())
-		{
-			VMERRORMESSAGE("NO TOBJECT ID");
-			continue;
-		}
-		main_tobj = itrTObject->second;
-		if (main_tobj->GetTMapData() == NULL)
-		{
-			VMERRORMESSAGE("NOT ASSIGNED TOBJECT");
+			VMERRORMESSAGE("NOT ASSIGNED OTF");
 			continue;
 		}
 
-		bool is_otf_changed = GET_LDVALUE("_bool_IsTfChanged", false, main_tobj_id);
-		is_otf_changed |= grd_helper::CheckOtfAndVolBlobkUpdate(main_vol_obj, main_tobj);
-		if (force_to_update_otf)
-			is_otf_changed = true;
-		bool force_to_skip_volblk_update = GET_LDVALUE("_bool_ForceToSkipBlockUpdate", false, main_tobj_id) || skip_volblk_update;
-
-		if (use_mask_otfs)
-		{
-			for (int j = 0; j < num_mask_otfs; j++)
-			{
-				bool is_mask_otf_changed = GET_LDVALUE("_bool_IsTfChanged", false, (int)mask_otf_ids[j]);
-				is_otf_changed |= is_mask_otf_changed;
-			}
-		}
-#pragma endregion // Main TObject Custom Parameters
-
-#pragma region // Volume Resource Setting 
-		GpuRes gres_main_vol;
-		grd_helper::UpdateVolumeModel(gres_main_vol, main_vol_obj, render_type == __RM_MAXMASK);
-#pragma endregion // Volume Resource Setting 
-
-#pragma region // Mask Volume Resource Setting
+		GpuRes gres_vol, gres_tmap_otf;
+		grd_helper::UpdateVolumeModel(gres_vol, vobj, render_type == __RM_MAXMASK, progress);
+		grd_helper::UpdateTMapBuffer(gres_tmap_otf, tobj_otf);
+		//grd_helper::UpdateOtfBlocks(gres_volblk_otf, vobj, NULL, tobj_otf, 0);
 		if (mask_vol_obj != NULL)
 		{
 			GpuRes gres_mask_vol;
@@ -536,7 +442,51 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 			dx11DeviceImmContext->CSSetShaderResources(2, 1, (__SRV_PTR*)&gres_mask_vol.alloc_res_ptrs[DTYPE_SRV]);
 		}
-#pragma endregion // Mask Volume Resource Setting
+
+// 		dx11DeviceImmContext->VSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
+// 		dx11DeviceImmContext->PSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
+// 		dx11DeviceImmContext->VSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_tmap_otf.alloc_res_ptrs[DTYPE_SRV]);
+// 		dx11DeviceImmContext->PSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_tmap_otf.alloc_res_ptrs[DTYPE_SRV]);
+// 
+// 		CB_TMAP cbTmap;
+// 		grd_helper::SetCb_TMap(cbTmap, tobj_otf);
+// 		D3D11_MAPPED_SUBRESOURCE mappedResTmap;
+// 		dx11DeviceImmContext->Map(cbuf_tmap, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResTmap);
+// 		CB_TMAP* cbTmapData = (CB_TMAP*)mappedResTmap.pData;
+// 		memcpy(cbTmapData, &cbTmap, sizeof(CB_TMAP));
+// 		dx11DeviceImmContext->Unmap(cbuf_tmap, 0);
+// 
+// 		dx11DeviceImmContext->PSSetConstantBuffers(5, 1, &cbuf_tmap);
+// 
+// 	
+// 
+// 		bool high_samplerate = gres_vol.res_values.GetParam("SAMPLE_OFFSET_X", (uint)1) > 1.f ||
+// 			gres_vol.res_values.GetParam("SAMPLE_OFFSET_Y", (uint)1) > 1.f || gres_vol.res_values.GetParam("SAMPLE_OFFSET_Z", (uint)1) > 1.f;
+// 		CB_VolumeObject cbVolumeObj;
+// 		vmint3 vol_sampled_size = vmint3(gres_vol.res_values.GetParam("WIDTH", (uint)0),
+// 			gres_vol.res_values.GetParam("HEIGHT", (uint)0),
+// 			gres_vol.res_values.GetParam("DEPTH", (uint)0));
+// 		grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, actor, high_samplerate ? 2.f : 1.f, false, 0, 1.f);
+// 		cbVolumeObj.pb_shading_factor = material_phongCoeffs;
+// 		D3D11_MAPPED_SUBRESOURCE mappedResVolObj;
+// 		dx11DeviceImmContext->Map(cbuf_vobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResVolObj);
+// 		CB_VolumeObject* cbVolumeObjData = (CB_VolumeObject*)mappedResVolObj.pData;
+// 		memcpy(cbVolumeObjData, &cbVolumeObj, sizeof(CB_VolumeObject));
+// 		dx11DeviceImmContext->Unmap(cbuf_vobj, 0);
+// 
+// 		dx11DeviceImmContext->PSSetConstantBuffers(4, 1, &cbuf_vobj);
+
+
+
+
+		int sculpt_index = -1;
+		if (mask_vol_obj != NULL && (use_mask_volume || render_type == __RM_SCULPTMASK))
+		{
+			sculpt_index = actor->GetParam("_int_SculptingIndex", (int)-1);
+		}
+#pragma endregion 
+
+
 
 #pragma region // TObject Resource Setting 
 		GpuRes gres_otf;
@@ -626,15 +576,15 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #pragma endregion // Main Block Mask Setting From OTFs
 
 #pragma region // Constant Buffers
-		bool high_samplerate = gres_main_vol.res_dvalues["SAMPLE_OFFSET_X"] > 1.f ||
-			gres_main_vol.res_dvalues["SAMPLE_OFFSET_Y"] > 1.f ||
-			gres_main_vol.res_dvalues["SAMPLE_OFFSET_Z"] > 1.f;
+		bool high_samplerate = gres_vol.res_dvalues["SAMPLE_OFFSET_X"] > 1.f ||
+			gres_vol.res_dvalues["SAMPLE_OFFSET_Y"] > 1.f ||
+			gres_vol.res_dvalues["SAMPLE_OFFSET_Z"] > 1.f;
 
 		if (render_type == __RM_MODULATION && high_samplerate)
 			high_samplerate = false;
 
 		CB_VolumeObject cbVolumeObj;
-		vmint3 vol_sampled_size = vmint3(gres_main_vol.res_dvalues["WIDTH"], gres_main_vol.res_dvalues["HEIGHT"], gres_main_vol.res_dvalues["DEPTH"]);
+		vmint3 vol_sampled_size = vmint3(gres_vol.res_dvalues["WIDTH"], gres_vol.res_dvalues["HEIGHT"], gres_vol.res_dvalues["DEPTH"]);
 		
 		int iso_value = GET_LDVALUE("_int_Isovalue", main_tobj->GetTMapData()->valid_min_idx.x);
 		grd_helper::SetCb_VolumeObj(cbVolumeObj, main_vol_obj, lobj, _fncontainer, high_samplerate, vol_sampled_size, iso_value, gres_volblk_otf.options["FORMAT"] == DXGI_FORMAT_R16_UNORM ? 65535.f : 1.f, sculpt_index);
@@ -715,7 +665,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		else
 			volblk_srv = (__SRV_PTR)gres_volblk_otf.alloc_res_ptrs[DTYPE_SRV];
 		dx11DeviceImmContext->CSSetShaderResources(1, 1, (__SRV_PTR*)&volblk_srv);
-		dx11DeviceImmContext->CSSetShaderResources(0, 1, (__SRV_PTR*)&gres_main_vol.alloc_res_ptrs[DTYPE_SRV]);
+		dx11DeviceImmContext->CSSetShaderResources(0, 1, (__SRV_PTR*)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
 #pragma endregion // Resource Shader Setting
 
 #pragma region // Renderer
