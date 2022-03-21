@@ -387,13 +387,6 @@ namespace vmobjects
 		vmdouble3 pos_min, pos_max;
 		/// constructor, 모두 0 (NULL or false)으로 초기화
 		AaBbMinMax() { }
-		AaBbMinMax(vmint3 vol_size) {
-			pos_min = vmdouble3(-0.5, -0.5, -0.5);
-			vmint3 idx_max = vol_size - vmint3(1, 1, 1);
-			pos_max = vmdouble3((double)idx_max.x, (double)idx_max.y, (double)idx_max.z) + vmdouble3(0.5, 0.5, 0.5);
-
-			assert(IsAvailableBox());
-		}
 		/// 현재 좌표계의 AaBbMinMax 가 유효하게 정의되었는가 확인
 		bool IsAvailableBox() const {
 			if (pos_max.x <= pos_min.x || pos_max.y <= pos_min.y || pos_max.z <= pos_min.z)
@@ -403,30 +396,30 @@ namespace vmobjects
 	};
 
 	/**
-	 * @class AxisInfoOS2WS
-	 * @brief Object Space 정의된 x축(1,0,0), y축(0,1,0), z축(0,0,z)이 처음 World Space 에 배치될 때의 방향을 정의 \n
+	 * @class AxisInfoRS2OS
+	 * @brief Resource Space 에 정의된 x축(1,0,0), y축(0,1,0), z축(0,0,z)이 처음 Object Space (RHS) 에 배치될 때의 방향을 정의 \n
 	 * pitch 는 고려되지 않으며 방향만 정의, (즉 vector 에 대해서만 유효함)
 	 * @sa
 	 * @ref vmobjects::VolumeData
 	 */
-	struct AxisInfoOS2WS {
+	struct AxisInfoRS2OS {
 		/**
-		 * @brief Object Space 정의된 x축(1,0,0)에 대응되는 World Space 상에 배치된 Object의 x축을 정의, unit vector
+		 * @brief Resource Space 정의된 x축(1,0,0)에 대응되는 Object Space 상에 배치된 Object의 x축을 정의, unit vector
 		 */
-		vmdouble3 vec_axisx_ws;
+		vmdouble3 vec_axisx_os;
 		/**
-		 * @brief Object Space 정의된 y축(0,1,0)에 대응되는 World Space 상에 배치된 Object의 y축을 정의, unit vector
+		 * @brief Resource Space 정의된 y축(0,1,0)에 대응되는 Object Space 상에 배치된 Object의 y축을 정의, unit vector
 		 */
-		vmdouble3 vec_axisy_ws;
+		vmdouble3 vec_axisy_os;
 		/**
 		 * @brief Object Space 정의된 z축(0,0,1)에 대응되는 World Space 상에 배치된 Object의 z축을 정의하기 위한 XY RHS cross vecor 방향의 reverse 여부\n
 		 * true 면 RHS 로 배치되며 Affine Space 에서 변환 성립, false 면 LHS 로 z툭이 배치
 		 */
 		bool is_rhs;
 		/**
-		 * @brief vec_axisx_ws, vec_axisy_ws, is_rhs 로부터 정의되는 초기 OS2WS 변환 행렬
+		 * @brief vec_axisx_ws, vec_axisy_ws, is_rhs 로부터 정의되는 초기 RS2OS 변환 행렬
 		 */
-		vmmat44 mat_os2ws;
+		vmmat44 mat_rs2os;
 		/**
 		 * @brief constructor, 초기화 작업 수행
 		 * @details
@@ -435,32 +428,32 @@ namespace vmobjects
 		 * >> RHS;
 		 * >> mat_os2ws is identity matrix
 		 */
-		AxisInfoOS2WS()
+		AxisInfoRS2OS()
 		{
-			vec_axisx_ws = vmdouble3(1, 0, 0);
-			vec_axisy_ws = vmdouble3(0, 1, 0);
+			vec_axisx_os = vmdouble3(1, 0, 0);
+			vec_axisy_os = vmdouble3(0, 1, 0);
 			is_rhs = true;
 			ComputeInitalMatrix();
 		}
-		AxisInfoOS2WS(vmdouble3 _vec_axisx_ws, vmdouble3 _vec_axisy_ws, bool _is_rhs)
+		AxisInfoRS2OS(vmdouble3 _vec_axisx_os, vmdouble3 _vec_axisy_os, bool _is_rhs)
 		{
-			vec_axisx_ws = _vec_axisx_ws;
-			vec_axisy_ws = _vec_axisy_ws;
+			vec_axisx_os = _vec_axisx_os;
+			vec_axisy_os = _vec_axisy_os;
 			is_rhs = _is_rhs;
 			ComputeInitalMatrix();
 		}
 		/// 정의된 vec_axisx_ws와 vec_axisy_ws로부터 mat_os2ws 계산하여 등록
 		void ComputeInitalMatrix() {
 			vmdouble3 z_vec_rhs;
-			vmmath::CrossDotVector(&z_vec_rhs, &vec_axisy_ws, &vec_axisx_ws);	// this is for -z direction
+			vmmath::CrossDotVector(&z_vec_rhs, &vec_axisy_os, &vec_axisx_os);	// this is for -z direction
 			vmmat44 matT;
-			vmmath::MatrixWS2CS(&matT, &vmdouble3(0, 0, 0), &vec_axisy_ws, &z_vec_rhs);
-			vmmath::MatrixInverse(&mat_os2ws, &matT);
+			vmmath::MatrixWS2CS(&matT, &vmdouble3(0, 0, 0), &vec_axisy_os, &z_vec_rhs);
+			vmmath::MatrixInverse(&mat_rs2os, &matT);
 			if (!is_rhs)
 			{
 				vmmat44 matInverseZ;
 				vmmath::MatrixScaling(&matInverseZ, &vmdouble3(1., 1., -1.));
-				mat_os2ws = mat_os2ws * matInverseZ;
+				mat_rs2os = mat_rs2os * matInverseZ;
 			}
 		}
 	};
@@ -532,7 +525,7 @@ namespace vmobjects
 		/**
 		 * @brief memory 에 저장된 volume space (샘플 좌표)와 초기 world space 에 배치되는 변환 matrix 정의
 		 */
-		AxisInfoOS2WS axis_info;
+		AxisInfoRS2OS axis_info;
 		/**
 		 * @brief constructor, 초기화 작업 수행
 		 */
@@ -1784,12 +1777,14 @@ namespace fncontainer
 		template <typename T>
 		void SetParam(const std::string& param_name, const T& _v)
 		{
+			if (_vmparams == NULL) return;
 			_vmparams.SetParam(param_name, _v);
 		}
 
 		template <typename T>
 		void SetParamV(const std::string& param_name, const T _v)
 		{
+			if (_vmparams == NULL) return;
 			_vmparams.SetParam(param_name, _v);
 		}
 	};

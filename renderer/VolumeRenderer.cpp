@@ -52,6 +52,30 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	int test_mode = _fncontainer->GetParam("_int_TestMode", (int)0);
 
 	bool recompile_hlsl = _fncontainer->GetParam("_bool_ReloadHLSLObjFiles", false);
+
+	LightSource light_src;
+	light_src.is_on_camera = _fncontainer->GetParam("_bool_IsLightOnCamera", true);
+	light_src.is_soptlight = _fncontainer->GetParam("_bool_IsPointSpotLight", false);
+	light_src.light_pos = _fncontainer->GetParam("_float3_PosLightWS", vmfloat3());
+	light_src.light_dir = _fncontainer->GetParam("_float3_VecLightWS", vmfloat3());
+	light_src.light_ambient_color = _fncontainer->GetParam("_float3_ColorLightAmbient", vmfloat3(1.f));
+	light_src.light_diffuse_color = _fncontainer->GetParam("_float3_ColorLightDiffuse", vmfloat3(1.f));
+	light_src.light_specular_color = _fncontainer->GetParam("_float3_ColorLightSpecular", vmfloat3(1.f));
+	GlobalLighting global_lighting;
+	global_lighting.apply_ssao = _fncontainer->GetParam("_bool_ApplySSAO", false);
+	global_lighting.ssao_r_kernel = _fncontainer->GetParam("_float_SSAOKernalR", 1.f);
+	global_lighting.ssao_num_steps = _fncontainer->GetParam("_int_SSAONumSteps", (int)4);
+	global_lighting.ssao_num_dirs = _fncontainer->GetParam("_int_SSAONumDirs", (int)4);
+	global_lighting.ssao_tangent_bias = _fncontainer->GetParam("_float_SSAOTangentBias", (float)(VM_PI / 6.0));
+	global_lighting.ssao_blur = _fncontainer->GetParam("_bool_BlurSSAO", true);
+	global_lighting.ssao_intensity = _fncontainer->GetParam("_float_SSAOIntensity", 0.5f);
+	global_lighting.ssao_debug = _fncontainer->GetParam("_int_SSAOOutput", (int)0);
+	LensEffect lens_effect;
+	lens_effect.apply_ssdof = _fncontainer->GetParam("_bool_ApplyDOF", false);
+	lens_effect.dof_focus_z = _fncontainer->GetParam("_float_DOFFocusZ", 20.f);
+	lens_effect.dof_lens_F = _fncontainer->GetParam("_float_DOFFocalLength", 10.f);
+	lens_effect.dof_lens_r = _fncontainer->GetParam("_float_DOFLensRadius", 3.f);
+	lens_effect.dof_ray_num_samples = _fncontainer->GetParam("_int_DOFLensRaySamples", (int)8);
 #pragma endregion
 
 
@@ -150,7 +174,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	// it always uses static number of k!!
 	// note that DFB uses a simple fragment model (vis and depth) and the stored simple fragments are extended into the z-thickness model fragments in the resolve pass
 
-	vmint2 fb_size_cur, fb_size_old = vmint2(0, 0);
+	vmint2 fb_size_cur;
 	iobj->GetFrameBufferInfo(&fb_size_cur);
 	vmint2 fb_size_old = iobj->GetObjParam("_int2_PreviousScreenSize", vmint2(0, 0));
 	buffer_ex_old = iobj->GetObjParam("_int_PreviousBufferEx", buffer_ex_old);
@@ -328,7 +352,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	dx11DeviceImmContext->CSSetConstantBuffers(0, 1, &cbuf_cam_state);
 
 	CB_EnvState cbEnvState;
-	grd_helper::SetCb_Env(cbEnvState, cam_obj, _fncontainer, (vmfloat3)global_light_factors);
+	grd_helper::SetCb_Env(cbEnvState, cam_obj, light_src, global_lighting, lens_effect);
 	cbEnvState.env_flag |= 0x2;
 	D3D11_MAPPED_SUBRESOURCE mappedResEnvState;
 	dx11DeviceImmContext->Map(cbuf_env_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResEnvState);
@@ -418,257 +442,129 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 		bool use_mask_volume = actor->GetParam("_bool_ValidateMaskVolume", false);
 		bool update_volblk_sculptmask = actor->GetParam("_bool_BlockUpdateForSculptMask", false);
+		int sculpt_index = actor->GetParam("_int_SculptingIndex", (int)-1);
+
+		vmfloat4 material_phongCoeffs = actor->GetParam("_float4_PhongCoeffs", default_phong_lighting_coeff);
+		int outline_thickness = actor->GetParam("_int_SilhouetteThickness", (int)0);
+		float outline_depthThres = 10000.f;
+		vmfloat3 outline_color = vmfloat3(1.f);
+		if (outline_thickness > 0) {
+			outline_depthThres = actor->GetParam("_float_SilhouetteDepthThres", outline_depthThres);
+			outline_color = actor->GetParam("_float3_SilhouetteColor", outline_color);
+		}
 #pragma endregion
 
 #pragma region GPU resource updates
-
-		VmObject* tobj_otf = (VmObject*)actor->GetAssociateRes("_VmObject_OTF");
-		VmVObjectVolume* mask_vol_obj = (VmVObjectVolume*)actor->GetAssociateRes("_VmObject_MaskVolume");
-
+		VmObject* tobj_otf = (VmObject*)actor->GetAssociateRes("_VmObject_OTF"); // essential!
 		if (tobj_otf == NULL)
 		{
 			VMERRORMESSAGE("NOT ASSIGNED OTF");
 			continue;
 		}
+		MapTable* tmap_data = tobj_otf->GetObjParamPtr<MapTable>("_TableMap_OTF");
 
-		GpuRes gres_vol, gres_tmap_otf;
+		VmVObjectVolume* mask_vol_obj = (VmVObjectVolume*)actor->GetAssociateRes("_VmObject_MaskVolume");
+
+		GpuRes gres_vol;
 		grd_helper::UpdateVolumeModel(gres_vol, vobj, render_type == __RM_MAXMASK, progress);
+		dx11DeviceImmContext->CSSetShaderResources(0, 1, (__SRV_PTR*)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
+
+		GpuRes gres_tmap_otf;
 		grd_helper::UpdateTMapBuffer(gres_tmap_otf, tobj_otf);
-		//grd_helper::UpdateOtfBlocks(gres_volblk_otf, vobj, NULL, tobj_otf, 0);
-		if (mask_vol_obj != NULL)
-		{
-			GpuRes gres_mask_vol;
-			grd_helper::UpdateVolumeModel(gres_mask_vol, mask_vol_obj, true);
+		dx11DeviceImmContext->CSSetShaderResources(3, 1, (__SRV_PTR*)&gres_tmap_otf.alloc_res_ptrs[DTYPE_SRV]);
 
-			dx11DeviceImmContext->CSSetShaderResources(2, 1, (__SRV_PTR*)&gres_mask_vol.alloc_res_ptrs[DTYPE_SRV]);
-		}
-
-// 		dx11DeviceImmContext->VSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
-// 		dx11DeviceImmContext->PSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
-// 		dx11DeviceImmContext->VSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_tmap_otf.alloc_res_ptrs[DTYPE_SRV]);
-// 		dx11DeviceImmContext->PSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_tmap_otf.alloc_res_ptrs[DTYPE_SRV]);
-// 
-// 		CB_TMAP cbTmap;
-// 		grd_helper::SetCb_TMap(cbTmap, tobj_otf);
-// 		D3D11_MAPPED_SUBRESOURCE mappedResTmap;
-// 		dx11DeviceImmContext->Map(cbuf_tmap, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResTmap);
-// 		CB_TMAP* cbTmapData = (CB_TMAP*)mappedResTmap.pData;
-// 		memcpy(cbTmapData, &cbTmap, sizeof(CB_TMAP));
-// 		dx11DeviceImmContext->Unmap(cbuf_tmap, 0);
-// 
-// 		dx11DeviceImmContext->PSSetConstantBuffers(5, 1, &cbuf_tmap);
-// 
-// 	
-// 
-// 		bool high_samplerate = gres_vol.res_values.GetParam("SAMPLE_OFFSET_X", (uint)1) > 1.f ||
-// 			gres_vol.res_values.GetParam("SAMPLE_OFFSET_Y", (uint)1) > 1.f || gres_vol.res_values.GetParam("SAMPLE_OFFSET_Z", (uint)1) > 1.f;
-// 		CB_VolumeObject cbVolumeObj;
-// 		vmint3 vol_sampled_size = vmint3(gres_vol.res_values.GetParam("WIDTH", (uint)0),
-// 			gres_vol.res_values.GetParam("HEIGHT", (uint)0),
-// 			gres_vol.res_values.GetParam("DEPTH", (uint)0));
-// 		grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, actor, high_samplerate ? 2.f : 1.f, false, 0, 1.f);
-// 		cbVolumeObj.pb_shading_factor = material_phongCoeffs;
-// 		D3D11_MAPPED_SUBRESOURCE mappedResVolObj;
-// 		dx11DeviceImmContext->Map(cbuf_vobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResVolObj);
-// 		CB_VolumeObject* cbVolumeObjData = (CB_VolumeObject*)mappedResVolObj.pData;
-// 		memcpy(cbVolumeObjData, &cbVolumeObj, sizeof(CB_VolumeObject));
-// 		dx11DeviceImmContext->Unmap(cbuf_vobj, 0);
-// 
-// 		dx11DeviceImmContext->PSSetConstantBuffers(4, 1, &cbuf_vobj);
-
-
-
-
-		int sculpt_index = -1;
-		if (mask_vol_obj != NULL && (use_mask_volume || render_type == __RM_SCULPTMASK))
-		{
-			sculpt_index = actor->GetParam("_int_SculptingIndex", (int)-1);
-		}
-#pragma endregion 
-
-
-
-#pragma region // TObject Resource Setting 
-		GpuRes gres_otf;
-		int num_prev_mask_otfs = 0;
-		main_tobj->GetCustomParameter("_int_NumOTFSeries", data_type::dtype<int>(), &num_prev_mask_otfs);
-		bool bMaskUpdate = false;
-		if (num_prev_mask_otfs != num_mask_otfs && use_mask_otfs)
-		{
-			bMaskUpdate = true;
-			gres_otf.vm_src_id = main_tobj->GetObjectID();
-			gres_otf.res_name = "OTF_BUFFER";
-			
-			gpu_manager->ReleaseGpuResource(gres_otf);
-			main_tobj->RegisterCustomParameter("_int_NumOTFSeries", num_mask_otfs);
-		}
-		grd_helper::UpdateTMapBuffer(gres_otf, main_tobj, mapTObjects,
-			mask_otf_ids, mask_otf_ids_vis, num_mask_otfs, is_otf_changed);
-
-		// TEST 
-		if (test_value == 1 && windowing_tobj_id > 0)
-		{
-			auto itrTObject = mapTObjects.find(windowing_tobj_id);
-			if (itrTObject == mapTObjects.end())
-			{
-				VMERRORMESSAGE("NO TOBJECT ID");
-				continue;
-			}
-
-			VmObject* windowing_tobj = itrTObject->second;
-
-			bool is_windowing_changed = GET_LDVALUE("_bool_IsTfChanged", false, windowing_tobj_id);
-			is_windowing_changed |= grd_helper::CheckOtfAndVolBlobkUpdate(main_vol_obj, windowing_tobj);
-			is_otf_changed |= is_windowing_changed;
-
-			GpuRes gres_windowing;
-			grd_helper::UpdateTMapBuffer(gres_windowing, windowing_tobj, mapTObjects, NULL, NULL, 1, is_windowing_changed);
-			dx11DeviceImmContext->CSSetShaderResources(4, 1, (__SRV_PTR*)&gres_windowing.alloc_res_ptrs[DTYPE_SRV]);
-		}
-
-		GpuRes gres_otf_series_ids;
-		if (use_mask_otfs)
-		{
-			gres_otf_series_ids.vm_src_id = main_tobj->GetObjectID();
-			gres_otf_series_ids.res_name = string("OTF_SERIES_IDS");
-			gres_otf_series_ids.rtype = RTYPE_BUFFER;
-			gres_otf_series_ids.options["USAGE"] = D3D11_USAGE_DYNAMIC;
-			gres_otf_series_ids.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
-			gres_otf_series_ids.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
-			gres_otf_series_ids.options["FORMAT"] = DXGI_FORMAT_R32_SINT;
-			gres_otf_series_ids.res_dvalues["NUM_ELEMENTS"] = 128;
-			gres_otf_series_ids.res_dvalues["STRIDE_BYTES"] = sizeof(int);
-
-			if (bMaskUpdate)
-				gpu_manager->ReleaseGpuResource(gres_otf_series_ids);
-
-			if (!gpu_manager->UpdateGpuResource(gres_otf_series_ids))
-				gpu_manager->GenerateGpuResource(gres_otf_series_ids);
-
-			D3D11_MAPPED_SUBRESOURCE d11MappedRes;
-			dx11DeviceImmContext->Map((ID3D11Resource*)gres_otf_series_ids.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes);
-			int* otf_index_data = (int*)d11MappedRes.pData;
-			memset(otf_index_data, 0, sizeof(int) * 128);
-			for (int j = 0; j < num_mask_otfs; j++)
-			{
-				int otf_index = static_cast<int>(mask_otf_idmap[j]);
-				otf_index_data[otf_index] = j;
-			}
-			dx11DeviceImmContext->Unmap((ID3D11Resource*)gres_otf_series_ids.alloc_res_ptrs[DTYPE_RES], 0);
-		}
-#pragma endregion // TObject Resource Setting 
-
-#pragma region // Main Volume Block Mask Setting From OTFs
-		VolumeBlocks* vol_blk = main_vol_obj->GetVolumeBlock(blk_level);
+		VolumeBlocks* vol_blk = vobj->GetVolumeBlock(blk_level);
 		if (vol_blk == NULL)
 		{
-			main_vol_obj->UpdateVolumeMinMaxBlocks();
-			vol_blk = main_vol_obj->GetVolumeBlock(blk_level);
+			vobj->UpdateVolumeMinMaxBlocks();
+			vol_blk = vobj->GetVolumeBlock(blk_level);
 		}
-
 		GpuRes gres_volblk_otf, gres_volblk_min, gres_volblk_max;
-		if (is_xray_mode)
-			grd_helper::UpdateMinMaxBlocks(gres_volblk_min, gres_volblk_max, main_vol_obj);
-
-		// this is always used even when MIP mode
-		grd_helper::UpdateOtfBlocks(gres_volblk_otf, main_vol_obj, mask_vol_obj, mapTObjects, main_tobj->GetObjectID(), mask_otf_idmap, num_mask_otfs,
-			(is_otf_changed | update_volblk_sculptmask) && !force_to_skip_volblk_update, use_mask_otfs, sculpt_index);
-#pragma endregion // Main Block Mask Setting From OTFs
-
-#pragma region // Constant Buffers
-		bool high_samplerate = gres_vol.res_dvalues["SAMPLE_OFFSET_X"] > 1.f ||
-			gres_vol.res_dvalues["SAMPLE_OFFSET_Y"] > 1.f ||
-			gres_vol.res_dvalues["SAMPLE_OFFSET_Z"] > 1.f;
-
-		if (render_type == __RM_MODULATION && high_samplerate)
-			high_samplerate = false;
-
-		CB_VolumeObject cbVolumeObj;
-		vmint3 vol_sampled_size = vmint3(gres_vol.res_dvalues["WIDTH"], gres_vol.res_dvalues["HEIGHT"], gres_vol.res_dvalues["DEPTH"]);
-		
-		int iso_value = GET_LDVALUE("_int_Isovalue", main_tobj->GetTMapData()->valid_min_idx.x);
-		grd_helper::SetCb_VolumeObj(cbVolumeObj, main_vol_obj, lobj, _fncontainer, high_samplerate, vol_sampled_size, iso_value, gres_volblk_otf.options["FORMAT"] == DXGI_FORMAT_R16_UNORM ? 65535.f : 1.f, sculpt_index);
-		cbVolumeObj.pb_shading_factor = global_light_factors;
-
-		// ghosted
-		if (is_ghost_mode)
-		{
-			bool is_ghost_surface = false;
-			lobj->GetDstObjValue(vobj_id, "_bool_IsGhostSurface", &is_ghost_surface);
-			bool is_only_hotspot_visible = false;
-			lobj->GetDstObjValue(vobj_id, "_bool_IsOnlyHotSpotVisible", &is_only_hotspot_visible);
-			if (is_ghost_surface) cbVolumeObj.vobj_flag |= 0x1 << 19;
-			if (is_only_hotspot_visible) cbVolumeObj.vobj_flag |= 0x1 << 20;
-			//cout << "TEST : " << is_ghost_surface << ", " << is_only_hotspot_visible << endl;
-		}
-
-		D3D11_MAPPED_SUBRESOURCE mappedResVolObj;
-		dx11DeviceImmContext->Map(cbuf_vobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResVolObj);
-		CB_VolumeObject* cbVolumeObjData = (CB_VolumeObject*)mappedResVolObj.pData;
-		memcpy(cbVolumeObjData, &cbVolumeObj, sizeof(CB_VolumeObject));
-		dx11DeviceImmContext->Unmap(cbuf_vobj, 0);
-
-		CB_ClipInfo cbClipInfo;
-		grd_helper::SetCb_ClipInfo(cbClipInfo, main_vol_obj, lobj);
-		D3D11_MAPPED_SUBRESOURCE mappedResClipInfo;
-		dx11DeviceImmContext->Map(cbuf_clip, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResClipInfo);
-		CB_ClipInfo* cbClipInfoData = (CB_ClipInfo*)mappedResClipInfo.pData;
-		memcpy(cbClipInfoData, &cbClipInfo, sizeof(CB_ClipInfo));
-		dx11DeviceImmContext->Unmap(cbuf_clip, 0);
-
-		CB_TMAP cbTmap;
-		grd_helper::SetCb_TMap(cbTmap, main_tobj);
-		D3D11_MAPPED_SUBRESOURCE mappedResOtf;
-		dx11DeviceImmContext->Map(cbuf_tmap, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResOtf);
-		CB_TMAP* cbTmapData = (CB_TMAP*)mappedResOtf.pData;
-		memcpy(cbTmapData, &cbTmap, sizeof(CB_TMAP));
-		dx11DeviceImmContext->Unmap(cbuf_tmap, 0);
-
-		RenderObjInfo tmp_render_info;
-		CB_RenderingEffect cbRndEffect;
-		grd_helper::SetCb_RenderingEffect(cbRndEffect, main_vol_obj, lobj, tmp_render_info);
-		D3D11_MAPPED_SUBRESOURCE mappedResRdnEffect;
-		dx11DeviceImmContext->Map(cbuf_reffect, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResRdnEffect);
-		CB_RenderingEffect* cbRndEffectData = (CB_RenderingEffect*)mappedResRdnEffect.pData;
-		memcpy(cbRndEffectData, &cbRndEffect, sizeof(CB_RenderingEffect));
-		dx11DeviceImmContext->Unmap(cbuf_reffect, 0);
-
-		CB_VolumeRenderingEffect cbVrEffect;
-		grd_helper::SetCb_VolumeRenderingEffect(cbVrEffect, main_vol_obj, lobj);
-		D3D11_MAPPED_SUBRESOURCE mappedVrEffect;
-		dx11DeviceImmContext->Map(cbuf_vreffect, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedVrEffect);
-		CB_VolumeRenderingEffect* cbVrEffectData = (CB_VolumeRenderingEffect*)mappedVrEffect.pData;
-		memcpy(cbVrEffectData, &cbVrEffect, sizeof(CB_VolumeRenderingEffect));
-		dx11DeviceImmContext->Unmap(cbuf_vreffect, 0);
-
-
-		dx11DeviceImmContext->CSSetConstantBuffers(2, 1, &cbuf_clip);
-		dx11DeviceImmContext->CSSetConstantBuffers(3, 1, &cbuf_reffect);
-		dx11DeviceImmContext->CSSetConstantBuffers(4, 1, &cbuf_vobj);
-		dx11DeviceImmContext->CSSetConstantBuffers(5, 1, &cbuf_tmap);
-		dx11DeviceImmContext->CSSetConstantBuffers(6, 1, &cbuf_vreffect);
-#pragma endregion // Constant Buffers
-
-#pragma region // Resource Shader Setting
-		dx11DeviceImmContext->CSSetShaderResources(3, 1, (__SRV_PTR*)&gres_otf.alloc_res_ptrs[DTYPE_SRV]);
-		if (use_mask_otfs)
-			dx11DeviceImmContext->CSSetShaderResources(5, 1, (__SRV_PTR*)&gres_otf_series_ids.alloc_res_ptrs[DTYPE_SRV]);
-
 		__SRV_PTR volblk_srv = NULL;
-		if (is_xray_mode)
-		{
+		if (is_xray_mode) {
+			grd_helper::UpdateMinMaxBlocks(gres_volblk_min, gres_volblk_max, vobj);
 			if (render_type == __RM_RAYMAX)	// Min
 				volblk_srv = (__SRV_PTR)gres_volblk_max.alloc_res_ptrs[DTYPE_SRV];
 			else if (render_type == __RM_RAYMIN)
 				volblk_srv = (__SRV_PTR)gres_volblk_min.alloc_res_ptrs[DTYPE_SRV];
 		}
-		else
+		else {
+			grd_helper::UpdateOtfBlocks(gres_volblk_otf, vobj, mask_vol_obj, tobj_otf, sculpt_index); // this tagged mask volume is always used even when MIP mode
 			volblk_srv = (__SRV_PTR)gres_volblk_otf.alloc_res_ptrs[DTYPE_SRV];
+		}
 		dx11DeviceImmContext->CSSetShaderResources(1, 1, (__SRV_PTR*)&volblk_srv);
-		dx11DeviceImmContext->CSSetShaderResources(0, 1, (__SRV_PTR*)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
-#pragma endregion // Resource Shader Setting
+		
+		if (mask_vol_obj != NULL)
+		{
+			GpuRes gres_mask_vol;
+			grd_helper::UpdateVolumeModel(gres_mask_vol, mask_vol_obj, true);
+			dx11DeviceImmContext->CSSetShaderResources(2, 1, (__SRV_PTR*)&gres_mask_vol.alloc_res_ptrs[DTYPE_SRV]);
+		}
 
-#pragma region // Renderer
+		bool high_samplerate = gres_vol.res_values.GetParam("SAMPLE_OFFSET_X", (uint)1) > 1.f ||
+			gres_vol.res_values.GetParam("SAMPLE_OFFSET_Y", (uint)1) > 1.f || gres_vol.res_values.GetParam("SAMPLE_OFFSET_Z", (uint)1) > 1.f;
+		CB_VolumeObject cbVolumeObj;
+		vmint3 vol_sampled_size = vmint3(gres_vol.res_values.GetParam("WIDTH", (uint)0),
+			gres_vol.res_values.GetParam("HEIGHT", (uint)0),
+			gres_vol.res_values.GetParam("DEPTH", (uint)0));
+		grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, actor, high_samplerate ? 2.f : 1.f, false, tmap_data->valid_min_idx.x, gres_volblk_otf.options["FORMAT"] == DXGI_FORMAT_R16_UNORM ? 65535.f : 1.f);
+		cbVolumeObj.pb_shading_factor = material_phongCoeffs;
+		cbVolumeObj.vobj_dummy_2 = (uint)(outline_color.r * 255.f) | ((uint)(outline_color.g * 255.f) << 8) | ((uint)(outline_color.b * 255.f) << 16) | (uint)(outline_thickness << 24);
+		if (is_ghost_mode) {
+			bool is_ghost_surface = actor->GetParam("_bool_IsGhostSurface", false);
+			bool is_only_hotspot_visible = actor->GetParam("_bool_IsOnlyHotSpotVisible", false);
+			if (is_ghost_surface) cbVolumeObj.vobj_flag |= 0x1 << 19;
+			if (is_only_hotspot_visible) cbVolumeObj.vobj_flag |= 0x1 << 20;
+			//cout << "TEST : " << is_ghost_surface << ", " << is_only_hotspot_visible << endl;
+		}
+		D3D11_MAPPED_SUBRESOURCE mappedResVolObj;
+		dx11DeviceImmContext->Map(cbuf_vobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResVolObj);
+		CB_VolumeObject* cbVolumeObjData = (CB_VolumeObject*)mappedResVolObj.pData;
+		memcpy(cbVolumeObjData, &cbVolumeObj, sizeof(CB_VolumeObject));
+		dx11DeviceImmContext->Unmap(cbuf_vobj, 0);
+		dx11DeviceImmContext->CSSetConstantBuffers(4, 1, &cbuf_vobj);
+
+		CB_ClipInfo cbClipInfo;
+		grd_helper::SetCb_ClipInfo(cbClipInfo, vobj, actor);
+		D3D11_MAPPED_SUBRESOURCE mappedResClipInfo;
+		dx11DeviceImmContext->Map(cbuf_clip, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResClipInfo);
+		CB_ClipInfo* cbClipInfoData = (CB_ClipInfo*)mappedResClipInfo.pData;
+		memcpy(cbClipInfoData, &cbClipInfo, sizeof(CB_ClipInfo));
+		dx11DeviceImmContext->Unmap(cbuf_clip, 0);
+		dx11DeviceImmContext->CSSetConstantBuffers(2, 1, &cbuf_clip);
+
+		CB_TMAP cbTmap;
+		grd_helper::SetCb_TMap(cbTmap, tobj_otf);
+		D3D11_MAPPED_SUBRESOURCE mappedResOtf;
+		dx11DeviceImmContext->Map(cbuf_tmap, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResOtf);
+		CB_TMAP* cbTmapData = (CB_TMAP*)mappedResOtf.pData;
+		memcpy(cbTmapData, &cbTmap, sizeof(CB_TMAP));
+		dx11DeviceImmContext->Unmap(cbuf_tmap, 0);
+		dx11DeviceImmContext->CSSetConstantBuffers(5, 1, &cbuf_tmap);
+
+		CB_RenderingEffect cbRndEffect;
+		grd_helper::SetCb_RenderingEffect(cbRndEffect, actor);
+		D3D11_MAPPED_SUBRESOURCE mappedResRdnEffect;
+		dx11DeviceImmContext->Map(cbuf_reffect, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResRdnEffect);
+		CB_RenderingEffect* cbRndEffectData = (CB_RenderingEffect*)mappedResRdnEffect.pData;
+		memcpy(cbRndEffectData, &cbRndEffect, sizeof(CB_RenderingEffect));
+		dx11DeviceImmContext->Unmap(cbuf_reffect, 0);
+		dx11DeviceImmContext->CSSetConstantBuffers(6, 1, &cbuf_vreffect);
+
+		CB_VolumeRenderingEffect cbVrEffect;
+		grd_helper::SetCb_VolumeRenderingEffect(cbVrEffect, vobj, actor);
+		D3D11_MAPPED_SUBRESOURCE mappedVrEffect;
+		dx11DeviceImmContext->Map(cbuf_vreffect, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedVrEffect);
+		CB_VolumeRenderingEffect* cbVrEffectData = (CB_VolumeRenderingEffect*)mappedVrEffect.pData;
+		memcpy(cbVrEffectData, &cbVrEffect, sizeof(CB_VolumeRenderingEffect));
+		dx11DeviceImmContext->Unmap(cbuf_vreffect, 0);
+		dx11DeviceImmContext->CSSetConstantBuffers(3, 1, &cbuf_reffect);
+#pragma endregion 
+
+#pragma region GPU resource updates
+#pragma endregion 
+
+#pragma region Renderer
 //#define __RM_DEFAULT 0
 //#define __RM_OPAQUE 1
 //#define __RM_MODULATION 2
@@ -743,8 +639,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		
 		if(render_type != __RM_RAYMIN
 			&& render_type != __RM_RAYMAX
-			&& render_type != __RM_RAYSUM)
-		{
+			&& render_type != __RM_RAYSUM) {
+			// 1st hit surface
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(4, 1, (ID3D11UnorderedAccessView**)&gres_fb_vrdepthcs.alloc_res_ptrs[DTYPE_UAV], (UINT*)(&dx11UAVs));
 
 			dx11DeviceImmContext->CSSetShader(GETCS(VR_SURFACE_cs_5_0), NULL, 0);
@@ -752,46 +648,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(4, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs));
 			dx11DeviceImmContext->CSSetShaderResources(6, 1, (ID3D11ShaderResourceView**)&gres_fb_vrdepthcs.alloc_res_ptrs[DTYPE_SRV]);
-
-			int outline_thickness = 0;
-			lobj->GetDstObjValue(vobj_id, "_int_SilhouetteThickness", &outline_thickness);
-			if (outline_thickness > 0) {
-				double doutline_depthThres = 100000.;
-				lobj->GetDstObjValue(vobj_id, "_float_SilhouetteDepthThres", &doutline_depthThres);
-				float outline_depthThres = (float)doutline_depthThres;
-				vmdouble3 doutline_color = vmdouble3(1, 1, 1);
-				lobj->GetDstObjValue(vobj_id, "_float3_SilhouetteColor", &doutline_color);
-				vmfloat3 outline_color = doutline_color;
-
-				cbVolumeObj.vobj_dummy_2 = (uint)(outline_color.r * 255.f) | ((uint)(outline_color.g * 255.f) << 8) | ((uint)(outline_color.b * 255.f) << 16) | (uint)(outline_thickness << 24);
-
-				dx11DeviceImmContext->Map(cbuf_vobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResVolObj);
-				CB_VolumeObject* cbVolumeObjData = (CB_VolumeObject*)mappedResVolObj.pData;
-				memcpy(cbVolumeObjData, &cbVolumeObj, sizeof(CB_VolumeObject));
-				dx11DeviceImmContext->Unmap(cbuf_vobj, 0);
-
-				//CB_PolygonObject cbPolygonObj;
-				//cbPolygonObj.pix_thickness = (float)outline_thickness;
-				//cbPolygonObj.depth_thres = outline_depthThres;
-				//cbPolygonObj.pobj_dummy_0 = (int)(outline_color.r * 255.f) + (int)(outline_color.g * 255.f) << 8 + (int)(outline_color.b * 255.f) << 16;
-				//D3D11_MAPPED_SUBRESOURCE mappedResPobjData;
-				//dx11DeviceImmContext->Map(cbuf_pobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResPobjData);
-				//CB_PolygonObject* cbPolygonObjData = (CB_PolygonObject*)mappedResPobjData.pData;
-				//memcpy(cbPolygonObjData, &cbPolygonObj, sizeof(CB_PolygonObject));
-				//dx11DeviceImmContext->Unmap(cbuf_pobj, 0);
-				//dx11DeviceImmContext->CSSetConstantBuffers(1, 1, &cbuf_pobj); // for silhouette or A-buffer test
-				//dx11DeviceImmContext->CSSetUnorderedAccessViews(2, 1, dx11UAVs, (UINT*)(&dx11UAVs));
-				//dx11DeviceImmContext->CSSetUnorderedAccessViews(4, 1, dx11UAVs, (UINT*)(&dx11UAVs));
-				//
-				//UINT UAVInitialCounts = 0;
-				//if (mode_OIT == MFR_MODE::STATIC_KB)
-				//	dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(SR_SINGLE_LAYER_TO_SKBTZ_cs_5_0) : GETCS(SR_SINGLE_LAYER_TO_SKBT_cs_5_0), NULL, 0);
-				//else if (mode_OIT == MFR_MODE::DYNAMIC_KB)
-				//	dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(SR_SINGLE_LAYER_TO_DKBTZ_cs_5_0) : GETCS(SR_SINGLE_LAYER_TO_DKBT_cs_5_0), NULL, 0);
-			}
 		}
 
-		if (i == num_main_vrs - 1 && cbEnvState.r_kernel_ao > 0)
+		if (cbEnvState.r_kernel_ao > 0)
 		{
 			is_performed_ssao = true;
 			//dx11DeviceImmContext->Flush();
@@ -827,7 +686,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 		dx11DeviceImmContext->CSSetShaderResources(6, 1, dx11SRVs_NULL);
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(50, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-#pragma endregion // Renderer
+#pragma endregion 
 	}
 
 	if (cbEnvState.r_kernel_ao > 0 && !is_performed_ssao)
