@@ -1777,14 +1777,12 @@ namespace fncontainer
 		template <typename T>
 		void SetParam(const std::string& param_name, const T& _v)
 		{
-			if (_vmparams == NULL) return;
 			_vmparams.SetParam(param_name, _v);
 		}
 
 		template <typename T>
 		void SetParamV(const std::string& param_name, const T _v)
 		{
-			if (_vmparams == NULL) return;
 			_vmparams.SetParam(param_name, _v);
 		}
 	};
