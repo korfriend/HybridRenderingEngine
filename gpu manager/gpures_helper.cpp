@@ -1876,7 +1876,8 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 	bool force_to_pointsetrender = actor->GetParam("_bool_ForceToPointsetRender", false);
 	if (pobj_data->ptype == PrimitiveTypePOINT || force_to_pointsetrender)
 	{
-		float fPointThickness = actor->GetParam("_float_SurfelSize", 0.f);
+		bool is_surfel = actor->GetParam("_bool_PointToSurfel", true);
+		float fPointThickness = is_surfel? actor->GetParam("_float_SurfelSize", 0.f) : actor->GetParam("_float_PointThickness", 0.f);
 		if (fPointThickness <= 0)
 		{
 			vmfloat3 pos_max_ws, pos_min_ws;

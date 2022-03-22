@@ -295,7 +295,7 @@ namespace vmobjects
 
 	template <typename NAME, typename ANY> struct VmParamMap {
 	private:
-		std::string __PM_VERSION = "LIBI_1.2";
+		std::string __PM_VERSION = "LIBI_1.3";
 		std::map<NAME, ANY> __params;
 	public:
 		template <typename SRCV> bool GetParamCheck(const NAME& param_name, SRCV& param) {
@@ -1740,7 +1740,7 @@ namespace fncontainer
 			return _associated_res.GetParam(name, (vmobjects::VmObject*)NULL);
 		}
 
-		void SetAssociatedRes(const std::string name, const vmobjects::VmObject* geometry_res) {
+		void SetAssociateRes(const std::string name, const vmobjects::VmObject* geometry_res) {
 			_associated_res.SetParam(name, (vmobjects::VmObject*)geometry_res);
 		}
 
