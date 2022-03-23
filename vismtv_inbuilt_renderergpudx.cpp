@@ -148,4 +148,5 @@ void GetModuleSpecification(std::vector<std::string>& requirements)
 void InteropCustomWork(fncontainer::VmFnContainer& _fncontainer)
 {
 	_fncontainer.SetParam("_string_CoreVersion", string(__VERSION));
+	_fncontainer.SetParam("_VmGpuManager_", g_pCGpuManager);
 }

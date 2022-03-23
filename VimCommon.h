@@ -335,7 +335,7 @@ namespace vmobjects
 			}
 		}
 		void RemoveAll() {
-			__params.clean();
+			__params.clear();
 		}
 		size_t Size() {
 			return __params.size();
@@ -1725,8 +1725,23 @@ namespace fncontainer
 		vmmat44f matWS2OS = vmmat44f();
 		std::string name = "No Name";
 		int actorId = 0;
+		int sceneId = 0;
 
 		VmActor* parentActor = NULL;
+
+		int GetAllResourceObjs(std::vector<vmobjects::VmObject*>* res_objs) {
+			std::vector<vmobjects::VmObject*> _res_objs;
+			if (_geometry_res) {
+				_res_objs.push_back(_geometry_res);
+			}
+			for (auto it = _associated_res.begin(); it != _associated_res.end(); it++) {
+				vmobjects::VmObject* _res = std::any_cast<vmobjects::VmObject*>(it->second);
+				if(_res)
+					_res_objs.push_back(_res);
+			}
+			if (res_objs) *res_objs = _res_objs;
+			return (int)_res_objs.size();
+		}
 
 		vmobjects::VmVObject* GetGeometryRes() {
 			return _geometry_res;
