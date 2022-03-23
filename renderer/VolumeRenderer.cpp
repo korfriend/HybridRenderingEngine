@@ -15,67 +15,67 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #endif
 
 #pragma region // Parameter Setting //
-	VmIObject* iobj = _fncontainer->GetParamPtr<VmIObject>("_VmObject_RenderOut");
+	VmIObject* iobj = _fncontainer->fnParams.GetParam("_VmObject_RenderOut", (VmIObject*)NULL);
 	int k_value_old = iobj->GetObjParam("_int_NumK", (int)8);
-	int k_value = _fncontainer->GetParam("_int_NumK", k_value_old);
+	int k_value = _fncontainer->fnParams.GetParam("_int_NumK", k_value_old);
 	iobj->SetObjParam("_int_NumK", k_value);
 
 	vmfloat4 default_phong_lighting_coeff = vmfloat4(0.2, 1.0, 0.5, 5); // Emission, Diffusion, Specular, Specular Power
-	bool force_to_update_otf = _fncontainer->GetParam("_bool_ForceToUpdateOtf", false);
-	bool show_block_test = _fncontainer->GetParam("_bool_IsShowBlock", false);
-	float v_thickness = (float)_fncontainer->GetParam("_float_VZThickness", 0.0);
-	bool check_pixel_transmittance = _fncontainer->GetParam("_bool_PixelTransmittance", false);
+	bool force_to_update_otf = _fncontainer->fnParams.GetParam("_bool_ForceToUpdateOtf", false);
+	bool show_block_test = _fncontainer->fnParams.GetParam("_bool_IsShowBlock", false);
+	float v_thickness = (float)_fncontainer->fnParams.GetParam("_float_VZThickness", 0.0);
+	bool check_pixel_transmittance = _fncontainer->fnParams.GetParam("_bool_PixelTransmittance", false);
 
-	float merging_beta = (float)_fncontainer->GetParam("_float_MergingBeta", 0.5);
-	bool is_rgba = _fncontainer->GetParam("_bool_IsRGBA", false); // false means bgra
-	bool is_ghost_mode = _fncontainer->GetParam("_bool_GhostEffect", false);
-	bool blur_SSAO = _fncontainer->GetParam("_bool_BlurSSAO", true);
-	bool without_sr = _fncontainer->GetParam("_bool_IsFirstRenderer", false);
-	bool test_consoleout = _fncontainer->GetParam("_bool_TestConsoleOut", false);
+	float merging_beta = (float)_fncontainer->fnParams.GetParam("_float_MergingBeta", 0.5);
+	bool is_rgba = _fncontainer->fnParams.GetParam("_bool_IsRGBA", false); // false means bgra
+	bool is_ghost_mode = _fncontainer->fnParams.GetParam("_bool_GhostEffect", false);
+	bool blur_SSAO = _fncontainer->fnParams.GetParam("_bool_BlurSSAO", true);
+	bool without_sr = _fncontainer->fnParams.GetParam("_bool_IsFirstRenderer", false);
+	bool test_consoleout = _fncontainer->fnParams.GetParam("_bool_TestConsoleOut", false);
 	auto test_out = [&test_consoleout](const string& _message)
 	{
 		if (test_consoleout)
 			cout << _message << endl;
 	};
 
-	bool apply_fragmerge = _fncontainer->GetParam("_bool_ApplyFragMerge", true);
-	MFR_MODE mode_OIT = (MFR_MODE)_fncontainer->GetParam("_int_OitMode", (int)1); // 1
+	bool apply_fragmerge = _fncontainer->fnParams.GetParam("_bool_ApplyFragMerge", true);
+	MFR_MODE mode_OIT = (MFR_MODE)_fncontainer->fnParams.GetParam("_int_OitMode", (int)1); // 1
 	mode_OIT = (MFR_MODE)min((int)mode_OIT, (int)MFR_MODE::MOMENT);
 	//if (mode_OIT == MFR_MODE::STATIC_KB_FM) apply_fragmerge = true;
 
-	int buf_ex_scale = _fncontainer->GetParam("_int_BufExScale", (int)8); // 32 layers
+	int buf_ex_scale = _fncontainer->fnParams.GetParam("_int_BufExScale", (int)8); // 32 layers
 	int num_moments_old = iobj->GetObjParam("_int_NumQueueLayers", (int)8);
-	int num_moments = _fncontainer->GetParam("_int_NumQueueLayers", num_moments_old);
+	int num_moments = _fncontainer->fnParams.GetParam("_int_NumQueueLayers", num_moments_old);
 
 	// TEST
-	int test_value = _fncontainer->GetParam("_int_TestValue", (int)0);
-	int test_mode = _fncontainer->GetParam("_int_TestMode", (int)0);
+	int test_value = _fncontainer->fnParams.GetParam("_int_TestValue", (int)0);
+	int test_mode = _fncontainer->fnParams.GetParam("_int_TestMode", (int)0);
 
-	bool recompile_hlsl = _fncontainer->GetParam("_bool_ReloadHLSLObjFiles", false);
+	bool recompile_hlsl = _fncontainer->fnParams.GetParam("_bool_ReloadHLSLObjFiles", false);
 
 	LightSource light_src;
-	light_src.is_on_camera = _fncontainer->GetParam("_bool_IsLightOnCamera", true);
-	light_src.is_soptlight = _fncontainer->GetParam("_bool_IsPointSpotLight", false);
-	light_src.light_pos = _fncontainer->GetParam("_float3_PosLightWS", vmfloat3());
-	light_src.light_dir = _fncontainer->GetParam("_float3_VecLightWS", vmfloat3());
-	light_src.light_ambient_color = _fncontainer->GetParam("_float3_ColorLightAmbient", vmfloat3(1.f));
-	light_src.light_diffuse_color = _fncontainer->GetParam("_float3_ColorLightDiffuse", vmfloat3(1.f));
-	light_src.light_specular_color = _fncontainer->GetParam("_float3_ColorLightSpecular", vmfloat3(1.f));
+	light_src.is_on_camera = _fncontainer->fnParams.GetParam("_bool_IsLightOnCamera", true);
+	light_src.is_soptlight = _fncontainer->fnParams.GetParam("_bool_IsPointSpotLight", false);
+	light_src.light_pos = _fncontainer->fnParams.GetParam("_float3_PosLightWS", vmfloat3());
+	light_src.light_dir = _fncontainer->fnParams.GetParam("_float3_VecLightWS", vmfloat3());
+	light_src.light_ambient_color = _fncontainer->fnParams.GetParam("_float3_ColorLightAmbient", vmfloat3(1.f));
+	light_src.light_diffuse_color = _fncontainer->fnParams.GetParam("_float3_ColorLightDiffuse", vmfloat3(1.f));
+	light_src.light_specular_color = _fncontainer->fnParams.GetParam("_float3_ColorLightSpecular", vmfloat3(1.f));
 	GlobalLighting global_lighting;
-	global_lighting.apply_ssao = _fncontainer->GetParam("_bool_ApplySSAO", false);
-	global_lighting.ssao_r_kernel = _fncontainer->GetParam("_float_SSAOKernalR", 1.f);
-	global_lighting.ssao_num_steps = _fncontainer->GetParam("_int_SSAONumSteps", (int)4);
-	global_lighting.ssao_num_dirs = _fncontainer->GetParam("_int_SSAONumDirs", (int)4);
-	global_lighting.ssao_tangent_bias = _fncontainer->GetParam("_float_SSAOTangentBias", (float)(VM_PI / 6.0));
-	global_lighting.ssao_blur = _fncontainer->GetParam("_bool_BlurSSAO", true);
-	global_lighting.ssao_intensity = _fncontainer->GetParam("_float_SSAOIntensity", 0.5f);
-	global_lighting.ssao_debug = _fncontainer->GetParam("_int_SSAOOutput", (int)0);
+	global_lighting.apply_ssao = _fncontainer->fnParams.GetParam("_bool_ApplySSAO", false);
+	global_lighting.ssao_r_kernel = _fncontainer->fnParams.GetParam("_float_SSAOKernalR", 1.f);
+	global_lighting.ssao_num_steps = _fncontainer->fnParams.GetParam("_int_SSAONumSteps", (int)4);
+	global_lighting.ssao_num_dirs = _fncontainer->fnParams.GetParam("_int_SSAONumDirs", (int)4);
+	global_lighting.ssao_tangent_bias = _fncontainer->fnParams.GetParam("_float_SSAOTangentBias", (float)(VM_PI / 6.0));
+	global_lighting.ssao_blur = _fncontainer->fnParams.GetParam("_bool_BlurSSAO", true);
+	global_lighting.ssao_intensity = _fncontainer->fnParams.GetParam("_float_SSAOIntensity", 0.5f);
+	global_lighting.ssao_debug = _fncontainer->fnParams.GetParam("_int_SSAOOutput", (int)0);
 	LensEffect lens_effect;
-	lens_effect.apply_ssdof = _fncontainer->GetParam("_bool_ApplyDOF", false);
-	lens_effect.dof_focus_z = _fncontainer->GetParam("_float_DOFFocusZ", 20.f);
-	lens_effect.dof_lens_F = _fncontainer->GetParam("_float_DOFFocalLength", 10.f);
-	lens_effect.dof_lens_r = _fncontainer->GetParam("_float_DOFLensRadius", 3.f);
-	lens_effect.dof_ray_num_samples = _fncontainer->GetParam("_int_DOFLensRaySamples", (int)8);
+	lens_effect.apply_ssdof = _fncontainer->fnParams.GetParam("_bool_ApplyDOF", false);
+	lens_effect.dof_focus_z = _fncontainer->fnParams.GetParam("_float_DOFFocusZ", 20.f);
+	lens_effect.dof_lens_F = _fncontainer->fnParams.GetParam("_float_DOFFocalLength", 10.f);
+	lens_effect.dof_lens_r = _fncontainer->fnParams.GetParam("_float_DOFLensRadius", 3.f);
+	lens_effect.dof_ray_num_samples = _fncontainer->fnParams.GetParam("_int_DOFLensRaySamples", (int)8);
 #pragma endregion
 
 
@@ -190,7 +190,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	bool gpu_profile = false;
 	if (fb_size_cur.x > 200 && fb_size_cur.y > 200)
 	{
-		gpu_profile = _fncontainer->GetParam("_bool_GpuProfile", false);
+		gpu_profile = _fncontainer->fnParams.GetParam("_bool_GpuProfile", false);
 	}
 
 	GpuRes gres_fb_rgba, gres_fb_depthcs, gres_fb_vrdepthcs;
@@ -248,7 +248,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 #pragma region // Presetting of VmObject
 	vector<VmActor*> dvr_volumes;
-	auto& sceneActors = *_fncontainer->sceneActors;
+	auto& sceneActors = _fncontainer->sceneActors;
 	vmfloat3 pos_aabb_min_ws(FLT_MAX), pos_aabb_max_ws(-FLT_MAX);
 	float min_pitch = FLT_MAX;
 	// For Each Primitive //
@@ -326,7 +326,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 // 	const int __BLOCKSIZE = 8;
 // 	uint num_grid_x = (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
 // 	uint num_grid_y = (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
-	const int __BLOCKSIZE = _fncontainer->GetParam("_int_GpuThreadBlockSize", (int)8);
+	const int __BLOCKSIZE = _fncontainer->fnParams.GetParam("_int_GpuThreadBlockSize", (int)8);
 	uint num_grid_x = __BLOCKSIZE == 1 ? fb_size_cur.x : (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
 	uint num_grid_y = __BLOCKSIZE == 1 ? fb_size_cur.y : (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
 
@@ -726,7 +726,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 	bool is_system_out = true;
 	// APPLY HWND MODE
-	HWND hWnd = (HWND)_fncontainer->GetParam("_hwnd_WindowHandle", (HWND)NULL);
+	HWND hWnd = (HWND)_fncontainer->fnParams.GetParam("_hwnd_WindowHandle", (HWND)NULL);
 	if (is_system_out && hWnd)
 	{
 		ID3D11Texture2D* pTex2dHwndRT = NULL;

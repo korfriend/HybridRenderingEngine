@@ -1803,60 +1803,10 @@ namespace fncontainer
 	};
 
 	struct VmFnContainer {
+	private:
+	public:
 		std::string descriptor;
-
-		vmobjects::VmParamMap<int, VmActor>* sceneActors = NULL;
-		vmobjects::VmParamMap<std::string, std::any>* vmparams = NULL;
-
-		template <typename T>
-		T GetParam(const std::string& param_name, const T _init)
-		{
-			if (vmparams == NULL) return _init;
-			T v = _init;
-			vmparams->GetParam(param_name, v);
-			return v;
-		}
-
-		template <typename T>
-		bool GetParamCheck(const std::string& param_name, T& _v)
-		{
-			return vmparams->GetParamCheck(param_name, _v);
-		}
-
-		template <typename T>
-		T* GetParamPtr(const std::string& param_name)
-		{
-			if (vmparams == NULL) return NULL;
-			return vmparams->GetParamPtr<T>(param_name);
-		}
-
-		template <typename S, typename T>
-		T GetParamCasting(const std::string& param_name, const T _init)
-		{
-			if (vmparams == NULL) return _init;
-			T v = _init;
-			vmparams->GetParamCasting<S>(param_name, v);
-			return v;
-		}
-
-		template <typename S, typename T>
-		bool GetParamCastingCheck(const std::string& param_name, T& _v)
-		{
-			return vmparams->GetParamCastingCheck<S>(param_name, _v);
-		}
-
-		template <typename T>
-		void SetParam(const std::string& param_name, const T& _v)
-		{
-			if (vmparams == NULL) return;
-			vmparams->SetParam(param_name, _v);
-		}
-
-		template <typename T>
-		void SetParamV(const std::string& param_name, const T _v)
-		{
-			if (vmparams == NULL) return;
-			vmparams->SetParam(param_name, _v);
-		}
+		vmobjects::VmParamMap<int, VmActor> sceneActors;
+		vmobjects::VmParamMap<std::string, std::any> fnParams;
 	};
 }

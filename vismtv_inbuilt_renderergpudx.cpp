@@ -70,7 +70,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	g_LocalProgress.range = 100;
 	g_LocalProgress.progress_ptr = &g_dProgress;
 
-	VmIObject* iobj = _fncontainer.GetParamPtr<VmIObject>("_VmObject_RenderOut");
+	VmIObject* iobj = _fncontainer.fnParams.GetParam("_VmObject_RenderOut", (VmIObject*)NULL);
 	if(iobj == NULL)
 	{
 		VMERRORMESSAGE("VisMotive Renderer needs at least one IObject as output!");
@@ -83,13 +83,13 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	}
 
 #pragma region GPU/CPU Pre Setting
-	//float sizeGpuResourceForVolume = _fncontainer.GetParam("_float_SizeGpuResourceForVolume", 80.0f);
+	//float sizeGpuResourceForVolume = _fncontainer.fnParams.GetParam("_float_SizeGpuResourceForVolume", 80.0f);
 	//// 100 means 50%
 	//float resourceRatioForVolume = sizeGpuResourceForVolume * 0.5f * 0.01f;
 	//uint uiDedicatedGpuMemoryKB = 
 	//	(uint)(g_vmCommonParams.dx11_adapter.DedicatedVideoMemory / 1024);
 	//float halfCriterionKB = (float)uiDedicatedGpuMemoryKB * resourceRatioForVolume;
-	//float halfCriterionKB = _fncontainer.GetParam("_float_GpuVolumeMaxSizeKB", 256.f * 1024.f);
+	//float halfCriterionKB = _fncontainer.fnParams.GetParam("_float_GpuVolumeMaxSizeKB", 256.f * 1024.f);
 	// In CPU VR mode, Recommend to set dHalfCriterionKB = 16;
 	//vector<VmObject*> vtrInputVolumes;
 	//_fncontainer.GetVmObjectList(&vtrInputVolumes, VmObjKey(ObjectTypeVOLUME, true));
@@ -97,8 +97,8 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	//	vtrInputVolumes.at(i)->RegisterCustomParameter("_float_ForcedHalfCriterionKB", halfCriterionKB);
 #pragma endregion
 
-	string strRendererSource = _fncontainer.GetParam("_string_RenderingSourceType", string("MESH"));
-	bool is_shadow = _fncontainer.GetParam("_bool_IsShadow", false);
+	string strRendererSource = _fncontainer.fnParams.GetParam("_string_RenderingSourceType", string("MESH"));
+	bool is_shadow = _fncontainer.fnParams.GetParam("_bool_IsShadow", false);
 	if (strRendererSource.compare("VOLUME") == 0)
 	{
 		double dRuntime = 0;
@@ -147,6 +147,6 @@ void GetModuleSpecification(std::vector<std::string>& requirements)
 
 void InteropCustomWork(fncontainer::VmFnContainer& _fncontainer)
 {
-	_fncontainer.SetParam("_string_CoreVersion", string(__VERSION));
-	_fncontainer.SetParam("_VmGpuManager_", g_pCGpuManager);
+	_fncontainer.fnParams.SetParam("_string_CoreVersion", string(__VERSION));
+	_fncontainer.fnParams.SetParam("_VmGpuManager_", g_pCGpuManager);
 }

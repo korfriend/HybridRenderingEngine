@@ -584,90 +584,90 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	//((std::mutex*)HDx11GetMutexGpuCriticalPath())->lock();
 
 #pragma region // Parameter Setting //
-	VmIObject* iobj = _fncontainer->GetParamPtr<VmIObject>("_VmObject_RenderOut");
+	VmIObject* iobj = _fncontainer->fnParams.GetParam("_VmObject_RenderOut", (VmIObject*)NULL);
 
 	int k_value_old = iobj->GetObjParam("_int_NumK", (int)8);
-	int k_value = _fncontainer->GetParam("_int_NumK", k_value_old);
+	int k_value = _fncontainer->fnParams.GetParam("_int_NumK", k_value_old);
 	iobj->SetObjParam("_int_NumK", k_value);
 
 	int num_moments_old = iobj->GetObjParam("_int_NumQueueLayers", (int)8);
-	int num_moments = _fncontainer->GetParam("_int_NumQueueLayers", num_moments_old);
-	int num_safe_loopexit = _fncontainer->GetParam("_int_SpinLockSafeLoops", (int)10000000);
-	bool is_final_renderer = _fncontainer->GetParam("_bool_IsFinalRenderer", true);
-	//double v_discont_depth = _fncontainer->GetParam("_float_DiscontDepth", -1.0);
-	float merging_beta = _fncontainer->GetParam("_float_MergingBeta", 0.5f);
-	bool blur_SSAO = _fncontainer->GetParam("_bool_BlurSSAO", true);
+	int num_moments = _fncontainer->fnParams.GetParam("_int_NumQueueLayers", num_moments_old);
+	int num_safe_loopexit = _fncontainer->fnParams.GetParam("_int_SpinLockSafeLoops", (int)10000000);
+	bool is_final_renderer = _fncontainer->fnParams.GetParam("_bool_IsFinalRenderer", true);
+	//double v_discont_depth = _fncontainer->fnParams.GetParam("_float_DiscontDepth", -1.0);
+	float merging_beta = _fncontainer->fnParams.GetParam("_float_MergingBeta", 0.5f);
+	bool blur_SSAO = _fncontainer->fnParams.GetParam("_bool_BlurSSAO", true);
 
-	bool apply_fragmerge = _fncontainer->GetParam("_bool_ApplyFragMerge", true);
-	MFR_MODE mode_OIT = (MFR_MODE)_fncontainer->GetParam("_int_OitMode", (int)1);
+	bool apply_fragmerge = _fncontainer->fnParams.GetParam("_bool_ApplyFragMerge", true);
+	MFR_MODE mode_OIT = (MFR_MODE)_fncontainer->fnParams.GetParam("_int_OitMode", (int)1);
 	mode_OIT = (MFR_MODE)min((int)mode_OIT, (int)MFR_MODE::MOMENT);
 	//if (mode_OIT == MFR_MODE::STATIC_KB_FM) apply_fragmerge = true;
 
-	bool is_picking_routine = _fncontainer->GetParam("_bool_IsPickingRoutine", false);
+	bool is_picking_routine = _fncontainer->fnParams.GetParam("_bool_IsPickingRoutine", false);
 	if (is_picking_routine) mode_OIT = DYNAMIC_FB;
-	vmint2 picking_pos_ss = _fncontainer->GetParam("_int2_PickingPosSS", vmint2(-1, -1));
+	vmint2 picking_pos_ss = _fncontainer->fnParams.GetParam("_int2_PickingPosSS", vmint2(-1, -1));
 
-	int buf_ex_scale = _fncontainer->GetParam("_int_BufExScale", (int)8); // scaling the capacity of the k-buffer for _bool_PixelTransmittance
-	bool use_blending_option_MomentOIT = _fncontainer->GetParam("_bool_UseBlendingOptionMomentOIT", false);
-	bool check_pixel_transmittance = _fncontainer->GetParam("_bool_PixelTransmittance", false);
+	int buf_ex_scale = _fncontainer->fnParams.GetParam("_int_BufExScale", (int)8); // scaling the capacity of the k-buffer for _bool_PixelTransmittance
+	bool use_blending_option_MomentOIT = _fncontainer->fnParams.GetParam("_bool_UseBlendingOptionMomentOIT", false);
+	bool check_pixel_transmittance = _fncontainer->fnParams.GetParam("_bool_PixelTransmittance", false);
 	//vr_level = 2;
 	vmfloat4 default_phong_lighting_coeff = vmfloat4(0.2, 1.0, 0.5, 5); // Emission, Diffusion, Specular, Specular Power
 
-	float default_point_thickness = _fncontainer->GetParam("_float_PointThickness", 3.0f);
-	float default_surfel_size = _fncontainer->GetParam("_float_SurfelSize", 0.0f);
-	float default_line_thickness = _fncontainer->GetParam("_float_LineThickness", 2.0f);
-	vmfloat3 default_color_cmmobj = _fncontainer->GetParam("_float3_CmmGlobalColor", vmfloat3(-1, -1, -1));
-	bool use_spinlock_pixsynch = _fncontainer->GetParam("_bool_UseSpinLock", false);
-	bool is_ghost_mode = _fncontainer->GetParam("_bool_GhostEffect", false);
-	bool is_rgba = _fncontainer->GetParam("_bool_IsRGBA", false); // false means bgra
+	float default_point_thickness = _fncontainer->fnParams.GetParam("_float_PointThickness", 3.0f);
+	float default_surfel_size = _fncontainer->fnParams.GetParam("_float_SurfelSize", 0.0f);
+	float default_line_thickness = _fncontainer->fnParams.GetParam("_float_LineThickness", 2.0f);
+	vmfloat3 default_color_cmmobj = _fncontainer->fnParams.GetParam("_float3_CmmGlobalColor", vmfloat3(-1, -1, -1));
+	bool use_spinlock_pixsynch = _fncontainer->fnParams.GetParam("_bool_UseSpinLock", false);
+	bool is_ghost_mode = _fncontainer->fnParams.GetParam("_bool_GhostEffect", false);
+	bool is_rgba = _fncontainer->fnParams.GetParam("_bool_IsRGBA", false); // false means bgra
 
 	bool is_system_out = false;
 	if (is_final_renderer) is_system_out = true;
 
-	bool only_surface_test = _fncontainer->GetParam("_bool_OnlySurfaceTest", false);
-	bool test_consoleout = _fncontainer->GetParam("_bool_TestConsoleOut", false);
-	bool test_fps_profiling = _fncontainer->GetParam("_bool_TestFpsProfile", false);
+	bool only_surface_test = _fncontainer->fnParams.GetParam("_bool_OnlySurfaceTest", false);
+	bool test_consoleout = _fncontainer->fnParams.GetParam("_bool_TestConsoleOut", false);
+	bool test_fps_profiling = _fncontainer->fnParams.GetParam("_bool_TestFpsProfile", false);
 	auto test_out = [&test_consoleout](const string& _message)
 	{
 		if (test_consoleout)
 			cout << _message << endl;
 	};
 
-	float sample_rate = _fncontainer->GetParam("_float_UserSampleRate", 0.0f);
+	float sample_rate = _fncontainer->fnParams.GetParam("_float_UserSampleRate", 0.0f);
 	if (sample_rate <= 0) sample_rate = 1.0f;
-	bool apply_samplerate2gradient = _fncontainer->GetParam("_bool_ApplySampleRateToGradient", false);
-	bool reload_hlsl_objs = _fncontainer->GetParam("_bool_ReloadHLSLObjFiles", false);
+	bool apply_samplerate2gradient = _fncontainer->fnParams.GetParam("_bool_ApplySampleRateToGradient", false);
+	bool reload_hlsl_objs = _fncontainer->fnParams.GetParam("_bool_ReloadHLSLObjFiles", false);
 
-	int __BLOCKSIZE = _fncontainer->GetParam("_int_GpuThreadBlockSize", (int)8);
-	float v_thickness = _fncontainer->GetParam("_float_VZThickness", 0.0f);
-	float gi_v_thickness = _fncontainer->GetParam("_float_GIVZThickness", v_thickness);
-	float scale_z_res = _fncontainer->GetParam("_float_zResScale", 1.0f);
+	int __BLOCKSIZE = _fncontainer->fnParams.GetParam("_int_GpuThreadBlockSize", (int)8);
+	float v_thickness = _fncontainer->fnParams.GetParam("_float_VZThickness", 0.0f);
+	float gi_v_thickness = _fncontainer->fnParams.GetParam("_float_GIVZThickness", v_thickness);
+	float scale_z_res = _fncontainer->fnParams.GetParam("_float_zResScale", 1.0f);
 
-	int i_test_shader = (int)_fncontainer->GetParam("_int_ShaderTest", (int)0);
+	int i_test_shader = (int)_fncontainer->fnParams.GetParam("_int_ShaderTest", (int)0);
 
 	LightSource light_src;
-	light_src.is_on_camera = _fncontainer->GetParam("_bool_IsLightOnCamera", true);
-	light_src.is_soptlight = _fncontainer->GetParam("_bool_IsPointSpotLight", false);
-	light_src.light_pos = _fncontainer->GetParam("_float3_PosLightWS", vmfloat3());
-	light_src.light_dir = _fncontainer->GetParam("_float3_VecLightWS", vmfloat3());
-	light_src.light_ambient_color = _fncontainer->GetParam("_float3_ColorLightAmbient", vmfloat3(1.f));
-	light_src.light_diffuse_color = _fncontainer->GetParam("_float3_ColorLightDiffuse", vmfloat3(1.f));
-	light_src.light_specular_color = _fncontainer->GetParam("_float3_ColorLightSpecular", vmfloat3(1.f));
+	light_src.is_on_camera = _fncontainer->fnParams.GetParam("_bool_IsLightOnCamera", true);
+	light_src.is_soptlight = _fncontainer->fnParams.GetParam("_bool_IsPointSpotLight", false);
+	light_src.light_pos = _fncontainer->fnParams.GetParam("_float3_PosLightWS", vmfloat3());
+	light_src.light_dir = _fncontainer->fnParams.GetParam("_float3_VecLightWS", vmfloat3());
+	light_src.light_ambient_color = _fncontainer->fnParams.GetParam("_float3_ColorLightAmbient", vmfloat3(1.f));
+	light_src.light_diffuse_color = _fncontainer->fnParams.GetParam("_float3_ColorLightDiffuse", vmfloat3(1.f));
+	light_src.light_specular_color = _fncontainer->fnParams.GetParam("_float3_ColorLightSpecular", vmfloat3(1.f));
 	GlobalLighting global_lighting;
-	global_lighting.apply_ssao = _fncontainer->GetParam("_bool_ApplySSAO", false);
-	global_lighting.ssao_r_kernel = _fncontainer->GetParam("_float_SSAOKernalR", 1.f);
-	global_lighting.ssao_num_steps = _fncontainer->GetParam("_int_SSAONumSteps", (int)4);
-	global_lighting.ssao_num_dirs = _fncontainer->GetParam("_int_SSAONumDirs", (int)4);
-	global_lighting.ssao_tangent_bias = _fncontainer->GetParam("_float_SSAOTangentBias", (float)(VM_PI / 6.0));
-	global_lighting.ssao_blur = _fncontainer->GetParam("_bool_BlurSSAO", true);
-	global_lighting.ssao_intensity = _fncontainer->GetParam("_float_SSAOIntensity", 0.5f);
-	global_lighting.ssao_debug = _fncontainer->GetParam("_int_SSAOOutput", (int)0);
+	global_lighting.apply_ssao = _fncontainer->fnParams.GetParam("_bool_ApplySSAO", false);
+	global_lighting.ssao_r_kernel = _fncontainer->fnParams.GetParam("_float_SSAOKernalR", 1.f);
+	global_lighting.ssao_num_steps = _fncontainer->fnParams.GetParam("_int_SSAONumSteps", (int)4);
+	global_lighting.ssao_num_dirs = _fncontainer->fnParams.GetParam("_int_SSAONumDirs", (int)4);
+	global_lighting.ssao_tangent_bias = _fncontainer->fnParams.GetParam("_float_SSAOTangentBias", (float)(VM_PI / 6.0));
+	global_lighting.ssao_blur = _fncontainer->fnParams.GetParam("_bool_BlurSSAO", true);
+	global_lighting.ssao_intensity = _fncontainer->fnParams.GetParam("_float_SSAOIntensity", 0.5f);
+	global_lighting.ssao_debug = _fncontainer->fnParams.GetParam("_int_SSAOOutput", (int)0);
 	LensEffect lens_effect;
-	lens_effect.apply_ssdof = _fncontainer->GetParam("_bool_ApplyDOF", false);
-	lens_effect.dof_focus_z = _fncontainer->GetParam("_float_DOFFocusZ", 20.f);
-	lens_effect.dof_lens_F = _fncontainer->GetParam("_float_DOFFocalLength", 10.f);
-	lens_effect.dof_lens_r = _fncontainer->GetParam("_float_DOFLensRadius", 3.f);
-	lens_effect.dof_ray_num_samples = _fncontainer->GetParam("_int_DOFLensRaySamples", (int)8);
+	lens_effect.apply_ssdof = _fncontainer->fnParams.GetParam("_bool_ApplyDOF", false);
+	lens_effect.dof_focus_z = _fncontainer->fnParams.GetParam("_float_DOFFocusZ", 20.f);
+	lens_effect.dof_lens_F = _fncontainer->fnParams.GetParam("_float_DOFFocalLength", 10.f);
+	lens_effect.dof_lens_r = _fncontainer->fnParams.GetParam("_float_DOFLensRadius", 3.f);
+	lens_effect.dof_ray_num_samples = _fncontainer->fnParams.GetParam("_int_DOFLensRaySamples", (int)8);
 #pragma endregion
 	
 #pragma region // Shader Setting
@@ -1115,11 +1115,11 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	//		}
 	//		if (updatemask)
 	//		{
-	//			vmdouble4 mask_center_rs_0 = _fncontainer->GetParam("_float4_MaskCenterRadius0", vmdouble4(fb_size / 2, fb_size.x / 5, 5));
-	//			//vmdouble4 mask_center_rs_1 = _fncontainer->GetParam("_float4_MaskCenterRadius1", vmdouble4(fb_size / 2, 0, 5));
-	//			vmdouble4 hotspot_params_0 = _fncontainer->GetParam("_float4_HotspotParamsTKtKsV0", vmdouble4(1., 1., 1., 1.));
-	//			//vmdouble4 hotspot_params_1 = _fncontainer->GetParam("_float4_HotspotParamsTKtKsV1", vmdouble4(1., 1., 1., 1.));
-	//			float mask_bnd = (float)_fncontainer->GetParam("_float_MaskBndDisplay", (double)1.0);
+	//			vmdouble4 mask_center_rs_0 = _fncontainer->fnParams.GetParam("_float4_MaskCenterRadius0", vmdouble4(fb_size / 2, fb_size.x / 5, 5));
+	//			//vmdouble4 mask_center_rs_1 = _fncontainer->fnParams.GetParam("_float4_MaskCenterRadius1", vmdouble4(fb_size / 2, 0, 5));
+	//			vmdouble4 hotspot_params_0 = _fncontainer->fnParams.GetParam("_float4_HotspotParamsTKtKsV0", vmdouble4(1., 1., 1., 1.));
+	//			//vmdouble4 hotspot_params_1 = _fncontainer->fnParams.GetParam("_float4_HotspotParamsTKtKsV1", vmdouble4(1., 1., 1., 1.));
+	//			float mask_bnd = (float)_fncontainer->fnParams.GetParam("_float_MaskBndDisplay", (double)1.0);
 	//
 	//			D3D11_MAPPED_SUBRESOURCE d11MappedRes;
 	//			HRESULT hr = dx11CommonParams->dx11DeviceImmContext->Map((ID3D11Buffer*)gres.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes);
@@ -1236,7 +1236,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		cb_moment.moment_bias = 0.0025f;
 		double np, fp;
 		cam_obj->GetCameraIntState(NULL, &np, &fp, NULL);
-		mot_nf = _fncontainer->GetParam("_float2_MotNearFar", vmdouble2(np, fp));
+		mot_nf = _fncontainer->fnParams.GetParam("_float2_MotNearFar", vmdouble2(np, fp));
 		cb_moment.warp_nf = mot_nf;
 		switch (num_moments)
 		{
@@ -1247,7 +1247,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		case 16: cb_moment.moment_bias = 0.00065f; break;
 		case 18: cb_moment.moment_bias = 0.00085f; break;
 		}
-		cb_moment.moment_bias = _fncontainer->GetParam("_float_MomentBias", cb_moment.moment_bias);
+		cb_moment.moment_bias = _fncontainer->fnParams.GetParam("_float_MomentBias", cb_moment.moment_bias);
 		D3D11_MAPPED_SUBRESOURCE mappedMomentState;
 		dx11DeviceImmContext->Map(cbuf_moment_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedMomentState);
 		MomentOIT* cbMomentData = (MomentOIT*)mappedMomentState.pData;
@@ -1312,10 +1312,10 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	vector<VmActor*> general_oit_routine_objs;
 	vector<VmActor*> single_layer_routine_objs; // e.g. silhouette
 	vector<VmActor*> foremost_surfaces_routine_objs; // for performance //
-	int minimum_oit_area = _fncontainer->GetParam("_int_MinimumOitArea", (int)1000); // 0 means turn-off the wildcard case
+	int minimum_oit_area = _fncontainer->fnParams.GetParam("_int_MinimumOitArea", (int)1000); // 0 means turn-off the wildcard case
 	int _w_max = 0;
 	int _h_max = 0;
-	auto& sceneActors = *_fncontainer->sceneActors;
+	auto& sceneActors = _fncontainer->sceneActors;
 	// For Each Primitive //
 	for (auto& actorPair : sceneActors) 
 	{
@@ -1381,7 +1381,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	bool gpu_profile = false;
 	if (fb_size_cur.x > 200 && fb_size_cur.y > 200)
 	{
-		gpu_profile = _fncontainer->GetParam("_bool_GpuProfile", false);
+		gpu_profile = _fncontainer->fnParams.GetParam("_bool_GpuProfile", false);
 		if(gpu_profile)
 		{
 			cout << "  ** general_oit_routine_objs    : " << general_oit_routine_objs.size() << endl;
@@ -2276,7 +2276,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->Unmap(cbuf_cam_state, 0);
 	};
 
-	HWND hWnd = (HWND)_fncontainer->GetParam("_hwnd_WindowHandle", (HWND)NULL);
+	HWND hWnd = (HWND)_fncontainer->fnParams.GetParam("_hwnd_WindowHandle", (HWND)NULL);
 
 	// RENDER BEGIN
 	___GpuProfile("SR Render");
@@ -2342,7 +2342,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		if (picking_out.size() == 0)
 			picking_out.push_back(vmfloat4(0, 0, 0, 0));
 
-		_fncontainer->SetParam("_vlist_float4_PickPosAndId", picking_out);
+		_fncontainer->fnParams.SetParam("_vlist_float4_PickPosAndId", picking_out);
 		// END of Render Process for picking
 	}
 	else if (mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB || mode_OIT == MFR_MODE::STATIC_KB) {
@@ -2450,8 +2450,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					totol_num_frags += h_v * (i + 1);
 				}
 
-				const double Rh = _fncontainer->GetParam("_float_RobustRatio", 0.75);
-				const bool is_ztmodel = _fncontainer->GetParam("_bool_ApplyZTModel", false);
+				const double Rh = _fncontainer->fnParams.GetParam("_float_RobustRatio", 0.75);
+				const bool is_ztmodel = _fncontainer->fnParams.GetParam("_bool_ApplyZTModel", false);
 				const uint bytes_per_f = is_ztmodel ? 4 * 4 : 4 * 2; // here, we assign this w.r.t. our z-thickness model (rgba, depth, thickness, opacity_sum)
 				// here, we assign this w.r.t. our z-thickness model (rgba, depth, thickness, opacity_sum), i.e., 16 bytes per fragment
 				const double size_k_buf_mb = (double)(16 * k_value * buffer_ex) * ((double)fb_size_cur.x * (double)fb_size_cur.y / (1024.0 * 1024.0));
@@ -2508,7 +2508,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					file_k.close();
 				}
 
-				const int test_K = _fncontainer->GetParam("_int_TestKvalue", -1);
+				const int test_K = _fncontainer->fnParams.GetParam("_int_TestKvalue", -1);
 				if (test_K >= 8) k_value = test_K;
 				cbCamState.k_value = k_value;
 
@@ -2663,9 +2663,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->Unmap((ID3D11Texture2D*)gres_fb_sys_counter.alloc_res_ptrs[DTYPE_RES], 0);
 
 
-		vmint2 pixel_pos = _fncontainer->GetParam("_int2_PixelPos", vmint2(0));
-		float tr_interval = _fncontainer->GetParam("_float_TrInvterval", 0.01f);
-		float tr_startoffset = _fncontainer->GetParam("_float_TrStartOffset", 1.00f);
+		vmint2 pixel_pos = _fncontainer->fnParams.GetParam("_int2_PixelPos", vmint2(0));
+		float tr_interval = _fncontainer->fnParams.GetParam("_float_TrInvterval", 0.01f);
+		float tr_startoffset = _fncontainer->fnParams.GetParam("_float_TrStartOffset", 1.00f);
 
 		cout << "-------------" << endl;
 		cout << "interval : " << tr_interval << endl;

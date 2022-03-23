@@ -2040,17 +2040,17 @@ void grd_helper::SetCb_ClipInfo(CB_ClipInfo& cb_clip, VmVObject* obj, VmActor* a
 
 void grd_helper::SetCb_HotspotMask(CB_HotspotMask& cb_hsmask, VmFnContainer* _fncontainer, const vmmat44f& matWS2SS)
 {
-	vmfloat3 pos_3dtip_ws = _fncontainer->GetParam("_float3_3DTipPos", vmdouble3());
-	bool use_mask_3dtip = _fncontainer->GetParam("_bool_UseMask3DTip", false);
+	vmfloat3 pos_3dtip_ws = _fncontainer->fnParams.GetParam("_float3_3DTipPos", vmdouble3());
+	bool use_mask_3dtip = _fncontainer->fnParams.GetParam("_bool_UseMask3DTip", false);
 
-	vmdouble4 mask_center_rs_0 = _fncontainer->GetParam("_float4_MaskCenterRadius0", vmdouble4(150, 150, 200, 0.5f));
-	//vmdouble3 mask_center_rs_1 = _fncontainer->GetParam("_float4_MaskCenterRadius1", vmdouble3(fb_size / 4, fb_size.x / 5, 150, 3));
-	vmdouble3 hotspot_params_0 = _fncontainer->GetParam("_float3_HotspotParamsTKtKs0", vmdouble3(1.));
-	//vmdouble3 hotspot_params_1 = _fncontainer->GetParam("_float3_HotspotParamsTKtKs1", vmdouble3(1.));
-	bool show_silhuette_edge_0 = _fncontainer->GetParam("_bool_HotspotSilhuette0", false);
-	//bool show_silhuette_edge_1 = _fncontainer->GetParam("_bool_HotspotSilhuette1", false);
-	float mask_bnd = _fncontainer->GetParam("_float_MaskBndDisplay", 1.f);
-	float inDepthVis = _fncontainer->GetParam("_float_InDepthVis", 0.01f);
+	vmdouble4 mask_center_rs_0 = _fncontainer->fnParams.GetParam("_float4_MaskCenterRadius0", vmdouble4(150, 150, 200, 0.5f));
+	//vmdouble3 mask_center_rs_1 = _fncontainer->fnParams.GetParam("_float4_MaskCenterRadius1", vmdouble3(fb_size / 4, fb_size.x / 5, 150, 3));
+	vmdouble3 hotspot_params_0 = _fncontainer->fnParams.GetParam("_float3_HotspotParamsTKtKs0", vmdouble3(1.));
+	//vmdouble3 hotspot_params_1 = _fncontainer->fnParams.GetParam("_float3_HotspotParamsTKtKs1", vmdouble3(1.));
+	bool show_silhuette_edge_0 = _fncontainer->fnParams.GetParam("_bool_HotspotSilhuette0", false);
+	//bool show_silhuette_edge_1 = _fncontainer->fnParams.GetParam("_bool_HotspotSilhuette1", false);
+	float mask_bnd = _fncontainer->fnParams.GetParam("_float_MaskBndDisplay", 1.f);
+	float inDepthVis = _fncontainer->fnParams.GetParam("_float_InDepthVis", 0.01f);
 	auto __set_params = [&cb_hsmask, &matWS2SS, &pos_3dtip_ws, &use_mask_3dtip, &inDepthVis](int idx, const vmdouble4& mask_center_rs_0, const vmdouble3& hotspot_params, bool show_silhuette_edge, float mask_bnd)
 	{
 		const double max_smoothness = 30.;
