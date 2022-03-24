@@ -493,15 +493,13 @@ namespace grd_helper
 	struct CB_ClipInfo
 	{
 		vmmat44f mat_clipbox_ws2bs;  // To Clip Box Space (BS)
-		vmfloat3 pos_clipbox_max_bs;
+		vmfloat3 pos_clipplane;
 		// 1st bit : 0 (No) 1 (Clip Box)
 		// 2nd bit : 0 (No) 1 (Clip plane)
 		uint clip_flag;
 
-		vmfloat3 pos_clipplane;
-		uint ci_dummy_1;
 		vmfloat3 vec_clipplane;
-		uint ci_dummy_2;
+		uint ci_dummy_1;
 
 		ZERO_SET(CB_ClipInfo)
 	};

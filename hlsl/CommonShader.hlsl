@@ -91,15 +91,13 @@ struct HxCB_EnvState
 struct HxCB_ClipInfo
 {
     float4x4 mat_clipbox_ws2bs; // To Clip Box Space (BS)
-    float3 pos_clipbox_max_bs;
+	float3 pos_clipplane;
 	// 1st bit : 0 (No) 1 (Clip Box)
 	// 2nd bit : 0 (No) 1 (Clip plane)
-    uint clip_flag;
+	uint clip_flag;
 
-    float3 pos_clipplane;
-    uint ci_dummy_1;
-    float3 vec_clipplane;
-    uint ci_dummy_2;
+	float3 vec_clipplane;
+	uint ci_dummy_1;
 };
 
 struct HxCB_PolygonObject

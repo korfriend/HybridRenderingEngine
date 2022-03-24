@@ -2030,11 +2030,7 @@ void grd_helper::SetCb_ClipInfo(CB_ClipInfo& cb_clip, VmVObject* obj, VmActor* a
 	}
 	if (cb_clip.clip_flag & 0x2)
 	{
-		vmmat44 dmatClipWS2BS = actor->GetParam("_matrix44_MatrixClipWS2BS", vmmat44());
-		vmdouble3 dPosOrthoMaxBox = actor->GetParam("_float3_PosClipBoxMaxWS", (vmdouble3)0);
-		TransformPoint(&dPosOrthoMaxBox, &dPosOrthoMaxBox, &dmatClipWS2BS);
-		cb_clip.mat_clipbox_ws2bs = TRANSPOSE((vmmat44f)dmatClipWS2BS);
-		cb_clip.pos_clipbox_max_bs = vmfloat3(dPosOrthoMaxBox);
+		cb_clip.mat_clipbox_ws2bs = actor->GetParam("_matrix44f_MatrixClipWS2BS", vmmat44f());
 	}
 }
 
