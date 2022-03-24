@@ -78,7 +78,7 @@ struct HxCB_EnvState
 	float tangent_bias;
 
 	float ao_intensity;
-	uint env_dummy_0;
+	uint num_safe_loopexit;
 	uint env_dummy_1;
 	uint env_dummy_2;
 
@@ -147,7 +147,9 @@ struct HxCB_VolumeObject
 
     float4x4 mat_alignedvbox_tr_ws2bs;
 
-    float3 pos_alignedvbox_max_bs;
+	uint vobj_dummy_0;
+	uint vobj_dummy_1;
+	uint vobj_dummy_2;
 	// 1st bit : 0 (use the input normal) 1 (invert the input normal)
 	// 20th bit : 0 (static alpha) 1 (dynamic alpha using mask t50) ... mode 1
 	// 21th bit : 0 (static alpha) 1 (dynamic alpha using mask t50) ... mode 2
@@ -168,8 +170,8 @@ struct HxCB_VolumeObject
 
     uint iso_value;
     float ao_intensity;
-    uint vobj_dummy_1;
-    uint vobj_dummy_2;
+    uint vobj_dummy_3;
+    uint vobj_dummy_4;
 
 	float4 pb_shading_factor; // x : Ambient, y : Diffuse, z : Specular, w : specular
 };
@@ -361,11 +363,11 @@ uint ConvertFloat4ToUInt(const in float4 fColor)
     return (iA << 24) | (iR << 16) | (iG << 8) | iB;
 }
 
-bool IsInsideClipBox(const in float3 pos_target, const in float3 pos_max_bs, const in float4x4 mat_2_bs)
+bool IsInsideClipBox(const in float3 pos_target, const in float4x4 mat_2_bs)
 {
     float3 pos_target_bs = TransformPoint(pos_target, mat_2_bs);
-    float3 pos_maxbs2targetbs = pos_target_bs - pos_max_bs;
-    float3 _dot = pos_target_bs * pos_maxbs2targetbs;
+    //float3 pos_maxbs2targetbs = pos_target_bs - pos_max_bs;
+    float3 _dot = (pos_target_bs + float3(0.5, 0.5, 0.5)) * (pos_target_bs - float3(0.5, 0.5, 0.5));
 	return _dot.x <= 0 && _dot.y <= 0 && _dot.z <= 0;
     //if (_dot.x > 0 || _dot.y > 0 || _dot.z > 0)
     //    return false;
@@ -393,12 +395,12 @@ float2 ComputeAaBbHits(const in float3 pos_start, in float3 pos_min, const in fl
     return float2(tnear, tfar);
 }
 
-float2 ComputeObliqueBoxHits(const in float3 pos_start, const in float3 vec_dir, const in float3 pos_max_bs, const in float4x4 mat_vbox_2bs)
+float2 ComputeClipBoxHits(const in float3 pos_start, const in float3 vec_dir, const in float4x4 mat_vbox_2bs)
 {
-    float3 pos_min_bs = TransformPoint(pos_start, mat_vbox_2bs);
+    float3 pos_src_bs = TransformPoint(pos_start, mat_vbox_2bs);
     //float3 pos_max_bs = TransformPoint(pos_vbox_max, mat_vbox_2bs);
-    float3 vec_dir_bs = normalize(TransformVector(vec_dir, mat_vbox_2bs));
-    float2 hit_t = ComputeAaBbHits(pos_min_bs, float3(0, 0, 0), pos_max_bs, vec_dir_bs);
+	float3 vec_dir_bs = TransformVector(vec_dir, mat_vbox_2bs);// normalize(TransformVector(vec_dir, mat_vbox_2bs));
+    float2 hit_t = ComputeAaBbHits(pos_src_bs, float3(-0.5, -0.5, -0.5), float3(0.5, 0.5, 0.5), vec_dir_bs);
     return hit_t;
 }
 
@@ -447,10 +449,10 @@ float2 ComputePlaneHits(const in float prev_t, const in float next_t, const in f
     return hits_t;
 }
 
-float2 ComputeVBoxHits(const in float3 pos_start, const in float3 vec_dir, const in float3 pos_vbox_max_bs, const in float4x4 mat_vbox_2bs, const in HxCB_ClipInfo clip_info)
+float2 ComputeVBoxHits(const in float3 pos_start, const in float3 vec_dir, const in float4x4 mat_vbox_2bs, const in HxCB_ClipInfo clip_info)
 {
 	// Compute VObject Box Enter and Exit //
-    float2 hits_t = ComputeObliqueBoxHits(pos_start, vec_dir, pos_vbox_max_bs, mat_vbox_2bs);
+    float2 hits_t = ComputeClipBoxHits(pos_start, vec_dir, mat_vbox_2bs);
 	
 	if (hits_t.y > hits_t.x)
 	{
@@ -470,7 +472,7 @@ float2 ComputeVBoxHits(const in float3 pos_start, const in float3 vec_dir, const
 
 		if (clip_info.clip_flag & 0x2)
 		{
-			float2 hits_clipbox_t = ComputeObliqueBoxHits(pos_start, vec_dir, clip_info.pos_clipbox_max_bs, clip_info.mat_clipbox_ws2bs);
+			float2 hits_clipbox_t = ComputeClipBoxHits(pos_start, vec_dir, clip_info.mat_clipbox_ws2bs);
 
 			hits_t.x = max(hits_t.x, hits_clipbox_t.x);
 			hits_t.y = min(hits_t.y, hits_clipbox_t.y);

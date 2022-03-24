@@ -1705,20 +1705,11 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 
 	AaBbMinMax aabb_os;
 	vobj->GetOrthoBoundingBox(aabb_os);
+	vmmat44f mat_s;
+	vmfloat3 aabb_size = aabb_os.pos_max - aabb_os.pos_min;
+	fMatrixScaling(&mat_s, &vmfloat3(1. / aabb_size.x, 1. / aabb_size.y, 1. / aabb_size.z));
 
-	vmfloat3 fPosVObjectMinWS, fVecVObjectZWS, fVecVObjectYWS, fVecVObjectXWS;
-	fTransformPoint(&fPosVObjectMinWS, &(vmfloat3)aabb_os.pos_min, &actor->matOS2WS);
-	fTransformVector(&fVecVObjectZWS, &vmfloat3(0, 0, -1.f), &actor->matOS2WS);
-	fTransformVector(&fVecVObjectYWS, &vmfloat3(0, 1.f, 0), &actor->matOS2WS);
-	fTransformVector(&fVecVObjectXWS, &vmfloat3(1.f, 0, 0), &actor->matOS2WS);
-	vmfloat3 fVecCrossZY;
-	fCrossDotVector(&fVecCrossZY, &fVecVObjectZWS, &fVecVObjectYWS);
-	if (fDotVector(&fVecCrossZY, &fVecVObjectXWS) < 0)
-		fTransformVector(&fVecVObjectYWS, &vmfloat3(1.f, 0, 0), &actor->matOS2WS);
-
-	vmmat44f matWS2BS;
-	fMatrixWS2CS(&matWS2BS, (vmfloat3*)&fPosVObjectMinWS, (vmfloat3*)&fVecVObjectYWS, (vmfloat3*)&fVecVObjectZWS); // set
-	fTransformPoint((vmfloat3*)&cb_volume.pos_alignedvbox_max_bs, &(vmfloat3)aabb_os.pos_max, &(actor->matOS2WS * matWS2BS)); // set
+	vmmat44f matWS2BS = actor->matWS2OS * mat_s;
 	cb_volume.mat_alignedvbox_tr_ws2bs = TRANSPOSE(matWS2BS);
 
 	if (vol_data->store_dtype.type_bytes == data_type::dtype<byte>().type_bytes) // char

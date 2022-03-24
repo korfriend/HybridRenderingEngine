@@ -13,7 +13,7 @@ void OIT_A_BUFFER_CNF_FRAGS(__VS_OUT input)
 	if (g_cbClipInfo.clip_flag & 0x1)
 		clip(dot(g_cbClipInfo.vec_clipplane, input.f3PosWS - g_cbClipInfo.pos_clipplane) > 0 ? -1 : 1);
 	if (g_cbClipInfo.clip_flag & 0x2)
-		clip(!IsInsideClipBox(input.f3PosWS, g_cbClipInfo.pos_clipbox_max_bs, g_cbClipInfo.mat_clipbox_ws2bs) ? -1 : 1);
+		clip(!IsInsideClipBox(input.f3PosWS, g_cbClipInfo.mat_clipbox_ws2bs) ? -1 : 1);
 
 	float3 pos_ip_ss = float3(input.f4PosSS.xy, 0.0f);
 	float3 pos_ip_ws = TransformPoint(pos_ip_ss, g_cbCamState.mat_ss2ws);

@@ -436,7 +436,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	}
 #endif
 	// Ray Intersection for Clipping Box //
-    float2 hits_t = ComputeVBoxHits(vbos_hit_start_pos, dir_sample_unit_ws, g_cbVobj.pos_alignedvbox_max_bs, g_cbVobj.mat_alignedvbox_tr_ws2bs, g_cbClipInfo);
+    float2 hits_t = ComputeVBoxHits(vbos_hit_start_pos, dir_sample_unit_ws, g_cbVobj.mat_alignedvbox_tr_ws2bs, g_cbClipInfo);
 	// 1st Exit in the case that there is no ray-intersecting boundary in the volume box
     int num_ray_samples = (int) ((hits_t.y - hits_t.x) / g_cbVobj.sample_dist + 0.5f);
     if (num_ray_samples <= 0)
@@ -589,7 +589,7 @@ void VR_SURFACE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	float3 dir_sample_ws = dir_sample_unit_ws * g_cbVobj.sample_dist;
 
 	// Ray Intersection for Clipping Box //
-	float2 hits_t = ComputeVBoxHits(pos_ip_ws, dir_sample_unit_ws, g_cbVobj.pos_alignedvbox_max_bs, g_cbVobj.mat_alignedvbox_tr_ws2bs, g_cbClipInfo);
+	float2 hits_t = ComputeVBoxHits(pos_ip_ws, dir_sample_unit_ws, g_cbVobj.mat_alignedvbox_tr_ws2bs, g_cbClipInfo);
 	// 1st Exit in the case that there is no ray-intersecting boundary in the volume box
 	int num_ray_samples = (int)((hits_t.y - hits_t.x) / g_cbVobj.sample_dist + 0.5f);
 	if (num_ray_samples <= 0)

@@ -555,7 +555,9 @@ namespace grd_helper
 
 		vmmat44f mat_alignedvbox_tr_ws2bs;
 
-		vmfloat3 pos_alignedvbox_max_bs;
+		uint vobj_dummy_0; // 
+		uint vobj_dummy_1; // 
+		uint vobj_dummy_2; // 
 		// 1st bit : 0 (use the input normal) 1 (invert the input normal) ==> will be deprecated! (always faces to camera)
 		// 24~31bit : Sculpt Mask Value (1 byte)
 		uint	vobj_flag;
@@ -574,8 +576,8 @@ namespace grd_helper
 
 		uint iso_value;
 		float ao_intensity;
-		uint vobj_dummy_1; // 
-		uint vobj_dummy_2; // 
+		uint vobj_dummy_3; // 
+		uint vobj_dummy_4; // 
 
 		// light properties
 		vmfloat4 pb_shading_factor;	// x : Ambient, y : Diffuse, z : Specular, w : Specular power
