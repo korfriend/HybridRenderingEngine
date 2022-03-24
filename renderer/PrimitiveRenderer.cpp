@@ -645,29 +645,36 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 	int i_test_shader = (int)_fncontainer->fnParams.GetParam("_int_ShaderTest", (int)0);
 
+	VmLight* light = _fncontainer->fnParams.GetParamPtr<VmLight>("_VmLight_LightSource");
+	VmLens* lens = _fncontainer->fnParams.GetParamPtr<VmLens>("_VmLens_CamLens");
 	LightSource light_src;
-	light_src.is_on_camera = _fncontainer->fnParams.GetParam("_bool_IsLightOnCamera", true);
-	light_src.is_soptlight = _fncontainer->fnParams.GetParam("_bool_IsPointSpotLight", false);
-	light_src.light_pos = _fncontainer->fnParams.GetParam("_float3_PosLightWS", vmfloat3());
-	light_src.light_dir = _fncontainer->fnParams.GetParam("_float3_VecLightWS", vmfloat3());
-	light_src.light_ambient_color = _fncontainer->fnParams.GetParam("_float3_ColorLightAmbient", vmfloat3(1.f));
-	light_src.light_diffuse_color = _fncontainer->fnParams.GetParam("_float3_ColorLightDiffuse", vmfloat3(1.f));
-	light_src.light_specular_color = _fncontainer->fnParams.GetParam("_float3_ColorLightSpecular", vmfloat3(1.f));
 	GlobalLighting global_lighting;
-	global_lighting.apply_ssao = _fncontainer->fnParams.GetParam("_bool_ApplySSAO", false);
-	global_lighting.ssao_r_kernel = _fncontainer->fnParams.GetParam("_float_SSAOKernalR", 1.f);
-	global_lighting.ssao_num_steps = _fncontainer->fnParams.GetParam("_int_SSAONumSteps", (int)4);
-	global_lighting.ssao_num_dirs = _fncontainer->fnParams.GetParam("_int_SSAONumDirs", (int)4);
-	global_lighting.ssao_tangent_bias = _fncontainer->fnParams.GetParam("_float_SSAOTangentBias", (float)(VM_PI / 6.0));
-	global_lighting.ssao_blur = _fncontainer->fnParams.GetParam("_bool_BlurSSAO", true);
-	global_lighting.ssao_intensity = _fncontainer->fnParams.GetParam("_float_SSAOIntensity", 0.5f);
-	global_lighting.ssao_debug = _fncontainer->fnParams.GetParam("_int_SSAOOutput", (int)0);
 	LensEffect lens_effect;
-	lens_effect.apply_ssdof = _fncontainer->fnParams.GetParam("_bool_ApplyDOF", false);
-	lens_effect.dof_focus_z = _fncontainer->fnParams.GetParam("_float_DOFFocusZ", 20.f);
-	lens_effect.dof_lens_F = _fncontainer->fnParams.GetParam("_float_DOFFocalLength", 10.f);
-	lens_effect.dof_lens_r = _fncontainer->fnParams.GetParam("_float_DOFLensRadius", 3.f);
-	lens_effect.dof_ray_num_samples = _fncontainer->fnParams.GetParam("_int_DOFLensRaySamples", (int)8);
+	if (light) {
+		light_src.is_on_camera = light_src.is_on_camera;
+		light_src.is_soptlight = light_src.is_soptlight;
+		light_src.light_pos = light_src.light_pos;
+		light_src.light_dir = light_src.light_dir; 
+		light_src.light_ambient_color = vmfloat3(1.f);
+		light_src.light_diffuse_color = vmfloat3(1.f);
+		light_src.light_specular_color = vmfloat3(1.f);
+
+		global_lighting.apply_ssao = light->effect_ssao.is_on_ssao;
+		global_lighting.ssao_r_kernel = light->effect_ssao.kernel_r;
+		global_lighting.ssao_num_steps = light->effect_ssao.num_steps;
+		global_lighting.ssao_num_dirs = light->effect_ssao.num_dirs;
+		global_lighting.ssao_tangent_bias = light->effect_ssao.tangent_bias;
+		global_lighting.ssao_blur = light->effect_ssao.smooth_filter;
+		global_lighting.ssao_intensity = light->effect_ssao.ao_power;
+		global_lighting.ssao_debug = _fncontainer->fnParams.GetParam("_int_SSAOOutput", (int)0);
+	}
+	if (lens) {
+		lens_effect.apply_ssdof = lens->apply_ssdof;
+		lens_effect.dof_focus_z = lens->dof_focus_z;
+		lens_effect.dof_lens_F = lens->dof_lens_F;
+		lens_effect.dof_lens_r = lens->dof_lens_r;
+		lens_effect.dof_ray_num_samples = lens->dof_ray_num_samples;
+	}
 #pragma endregion
 	
 #pragma region // Shader Setting

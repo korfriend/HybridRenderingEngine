@@ -1774,6 +1774,34 @@ namespace vmgeom {
 //==========================================
 namespace fncontainer
 {
+	struct VmLight {
+		vmfloat3 pos_light = vmfloat3();
+		vmfloat3 dir_light = vmfloat3(0, 0, -1.f);
+		bool is_pointlight = false; // 'true' uses pos_light, 'false' uses dir_light
+		bool is_on_camera = true; // 'true' sets cam params to light source. in this case, it is unnecessary to set pos_light and dir_light (ignore both
+
+		//vmfloat3 ambient_color = vmfloat3(1.f);
+		//vmfloat3 diffuse_color = vmfloat3(1.f);
+		//vmfloat3 specular_color = vmfloat3(1.f);
+		struct SSAO_Params
+		{
+			bool is_on_ssao = false;
+			float kernel_r = 0;
+			float ao_power = 1.f;
+			float tangent_bias = 3.141592654f / 6.f;;
+			int num_dirs = 8;
+			int num_steps = 8;
+			bool smooth_filter;
+		};
+		SSAO_Params effect_ssao;
+	};
+	struct VmLens {
+		bool apply_ssdof = false;
+		float dof_lens_r = 3.f;
+		float dof_lens_F = 10.f;
+		int dof_ray_num_samples = 8;
+		float dof_focus_z = 20.f;
+	};
 	struct VmActor {
 	private:
 		vmobjects::VmVObject* _geometry_res = NULL;
