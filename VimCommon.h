@@ -292,6 +292,66 @@ namespace vmobjects
 	//=========================
 	// Object Structures
 	//=========================
+	template <typename NAME, typename T> struct VmMap {
+	private:
+		std::string __PM_VERSION = "LIBI_1.3";
+		std::map<NAME, T> __params;
+	public:
+		bool GetParamCheck(const NAME& param_name, T& param) {
+			auto it = __params.find(param_name);
+			if (it == __params.end()) return false;
+			param = it->second;
+			return true;
+		}
+		T GetParam(const NAME& param_name, const T& init_v) {
+			auto it = __params.find(param_name);
+			if (it == __params.end()) return init_v;
+			return it->second;
+		}
+		T* GetParamPtr(const NAME& param_name) {
+			auto it = __params.find(param_name);
+			if (it == __params.end()) return NULL;
+			return &it->second;
+		}
+		template <typename DSTV> bool GetParamCastingCheck(const NAME& param_name, DSTV& param) {
+			auto it = __params.find(param_name);
+			if (it == __params.end()) return false;
+			param = (DSTV)it->second;
+			return true;
+		}
+		template <typename DSTV> DSTV GetParamCasting(const NAME& param_name, const DSTV& init_v) {
+			auto it = __params.find(param_name);
+			if (it == __params.end()) return init_v;
+			return (DSTV)it->second;
+		}
+		void SetParam(const NAME& param_name, const T& param) {
+			__params[param_name] = param;
+		}
+		void RemoveParam(const NAME& param_name) {
+			auto it = __params.find(param_name);
+			if (it != __params.end()) {
+				__params.erase(it);
+			}
+		}
+		void RemoveAll() {
+			__params.clear();
+		}
+		size_t Size() {
+			return __params.size();
+		}
+		std::string GetPMapVersion() {
+			return __PM_VERSION;
+		}
+
+		typedef std::map<NAME, T> MapType;
+		typename typedef MapType::iterator iterator;
+		typename typedef MapType::const_iterator const_iterator;
+		typename typedef MapType::reference reference;
+		iterator begin() { return __params.begin(); }
+		const_iterator begin() const { return __params.begin(); }
+		iterator end() { return __params.end(); }
+		const_iterator end() const { return __params.end(); }
+	};
 
 	template <typename NAME, typename ANY> struct VmParamMap {
 	private:
@@ -1670,6 +1730,7 @@ namespace vmobjects
 		 * 기본값은 NULL이며, NULL이면 사용 안 함.
 		 */
 		bool RegisterPrimitiveData(const PrimitiveData& prim_data, LocalProgress* progress = NULL);
+		bool RemovePrimitiveData();
 		/*!
 		 * @brief VmVObjectPrimitive에 정의되어 있는 primitive로 정의된 객체 정보를 얻음.
 		 * @return PrimitiveData \n primitive로 정의된 객체 정보가 저장되어 있는 PrimitiveData 의 포인터
@@ -1716,7 +1777,7 @@ namespace fncontainer
 	struct VmActor {
 	private:
 		vmobjects::VmVObject* _geometry_res = NULL;
-		vmobjects::VmParamMap<std::string, std::any> _associated_res; // VmObject
+		vmobjects::VmMap<std::string, vmobjects::VmObject*> _associated_res;
 		vmobjects::VmParamMap<std::string, std::any> _vmparams;
 	public:
 		bool visible = true;
@@ -1729,14 +1790,26 @@ namespace fncontainer
 
 		VmActor* parentActor = NULL;
 
+		int GetAssociateObjKeyNamesFromObjID(const int obj_id, std::vector<std::string>* res_objs_keyNames) {
+			std::vector<std::string> _res_objs_keyNames;
+
+			for (auto it = _associated_res.begin(); it != _associated_res.end(); it++) {
+				vmobjects::VmObject* _res = it->second;
+				if (_res->GetObjectID() == obj_id)
+					_res_objs_keyNames.push_back(it->first);
+			}
+			if (res_objs_keyNames) *res_objs_keyNames = _res_objs_keyNames;
+			return (int)_res_objs_keyNames.size();
+		}
+
 		int GetAllResourceObjs(std::vector<vmobjects::VmObject*>* res_objs) {
 			std::vector<vmobjects::VmObject*> _res_objs;
 			if (_geometry_res) {
 				_res_objs.push_back(_geometry_res);
 			}
 			for (auto it = _associated_res.begin(); it != _associated_res.end(); it++) {
-				vmobjects::VmObject* _res = std::any_cast<vmobjects::VmObject*>(it->second);
-				if(_res)
+				vmobjects::VmObject* _res = it->second;
+				if (_res)
 					_res_objs.push_back(_res);
 			}
 			if (res_objs) *res_objs = _res_objs;
@@ -1757,6 +1830,10 @@ namespace fncontainer
 
 		void SetAssociateRes(const std::string name, const vmobjects::VmObject* geometry_res) {
 			_associated_res.SetParam(name, (vmobjects::VmObject*)geometry_res);
+		}
+
+		void RemoveAssociateRes(const std::string name) {
+			_associated_res.RemoveParam(name);
 		}
 
 		template <typename T>
@@ -1806,7 +1883,7 @@ namespace fncontainer
 	private:
 	public:
 		std::string descriptor;
-		vmobjects::VmParamMap<int, VmActor> sceneActors;
+		vmobjects::VmMap<int, VmActor>* sceneActors = NULL;
 		vmobjects::VmParamMap<std::string, std::any> fnParams;
 	};
 }

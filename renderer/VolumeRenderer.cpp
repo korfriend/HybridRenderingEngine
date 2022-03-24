@@ -248,7 +248,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 #pragma region // Presetting of VmObject
 	vector<VmActor*> dvr_volumes;
-	auto& sceneActors = _fncontainer->sceneActors;
+	auto& sceneActors = *_fncontainer->sceneActors;
 	vmfloat3 pos_aabb_min_ws(FLT_MAX), pos_aabb_max_ws(-FLT_MAX);
 	float min_pitch = FLT_MAX;
 	// For Each Primitive //

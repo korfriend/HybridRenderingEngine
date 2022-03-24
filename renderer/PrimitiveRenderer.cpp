@@ -1315,7 +1315,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	int minimum_oit_area = _fncontainer->fnParams.GetParam("_int_MinimumOitArea", (int)1000); // 0 means turn-off the wildcard case
 	int _w_max = 0;
 	int _h_max = 0;
-	auto& sceneActors = _fncontainer->sceneActors;
+	auto& sceneActors = *_fncontainer->sceneActors;
 	// For Each Primitive //
 	for (auto& actorPair : sceneActors) 
 	{
