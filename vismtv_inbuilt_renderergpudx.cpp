@@ -147,6 +147,8 @@ void GetModuleSpecification(std::vector<std::string>& requirements)
 
 void InteropCustomWork(fncontainer::VmFnContainer& _fncontainer)
 {
+	if (g_pCGpuManager == NULL) // for module initialization
+		g_pCGpuManager = new VmGpuManager(GpuSdkTypeDX11, "vismtv_inbuilt_renderergpudx.dll");
 	_fncontainer.fnParams.SetParam("_string_CoreVersion", string(__VERSION));
 	_fncontainer.fnParams.SetParam("_VmGpuManager_", g_pCGpuManager);
 }
