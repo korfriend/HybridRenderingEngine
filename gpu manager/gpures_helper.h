@@ -389,7 +389,7 @@ namespace grd_helper
 
 	struct LightSource {
 		bool is_on_camera = false; 
-		bool is_soptlight = false; 
+		bool is_pointlight = false; 
 		vmfloat3 light_dir = vmfloat3(0); 
 		vmfloat3 light_pos = vmfloat3(0); 
 

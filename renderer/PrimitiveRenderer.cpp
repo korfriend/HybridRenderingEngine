@@ -584,7 +584,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	//((std::mutex*)HDx11GetMutexGpuCriticalPath())->lock();
 
 #pragma region // Parameter Setting //
-	VmIObject* iobj = _fncontainer->fnParams.GetParam("_VmObject_RenderOut", (VmIObject*)NULL);
+	VmIObject* iobj = _fncontainer->fnParams.GetParam("_VmIObject*_RenderOut", (VmIObject*)NULL);
 
 	int k_value_old = iobj->GetObjParam("_int_NumK", (int)8);
 	int k_value = _fncontainer->fnParams.GetParam("_int_NumK", k_value_old);
@@ -645,16 +645,16 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 	int i_test_shader = (int)_fncontainer->fnParams.GetParam("_int_ShaderTest", (int)0);
 
-	VmLight* light = _fncontainer->fnParams.GetParamPtr<VmLight>("_VmLight_LightSource");
-	VmLens* lens = _fncontainer->fnParams.GetParamPtr<VmLens>("_VmLens_CamLens");
+	VmLight* light = _fncontainer->fnParams.GetParam("_VmLight*_LightSource", (VmLight*)NULL);
+	VmLens* lens = _fncontainer->fnParams.GetParam("_VmLens*_CamLens", (VmLens*)NULL);
 	LightSource light_src;
 	GlobalLighting global_lighting;
 	LensEffect lens_effect;
 	if (light) {
-		light_src.is_on_camera = light_src.is_on_camera;
-		light_src.is_soptlight = light_src.is_soptlight;
-		light_src.light_pos = light_src.light_pos;
-		light_src.light_dir = light_src.light_dir; 
+		light_src.is_on_camera = light->is_on_camera;
+		light_src.is_pointlight = light->is_pointlight;
+		light_src.light_pos = light->pos;
+		light_src.light_dir = light->dir;
 		light_src.light_ambient_color = vmfloat3(1.f);
 		light_src.light_diffuse_color = vmfloat3(1.f);
 		light_src.light_specular_color = vmfloat3(1.f);
@@ -694,8 +694,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			hlslobj_path += token + "\\";
 			exe_path.erase(0, pos + delimiter.length());
 		}
-		//hlslobj_path += "..\\..\\VmModuleProjects\\renderer_gpudx11\\shader_compiled_objs\\";
-		hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
+		hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
+		//hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
 		//cout << hlslobj_path << endl;
 
 		string prefix_path = hlslobj_path;
@@ -1315,23 +1315,22 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		h = aaBbMaxSS.y - aaBbMinSS.y;
 	};
 
-	vector<VmActor> temperal_actors;
+	vector<VmActor*> temperal_actors;
 	vector<VmActor*> general_oit_routine_objs;
 	vector<VmActor*> single_layer_routine_objs; // e.g. silhouette
 	vector<VmActor*> foremost_surfaces_routine_objs; // for performance //
 	int minimum_oit_area = _fncontainer->fnParams.GetParam("_int_MinimumOitArea", (int)1000); // 0 means turn-off the wildcard case
 	int _w_max = 0;
 	int _h_max = 0;
-	auto& sceneActors = *_fncontainer->sceneActors;
 	// For Each Primitive //
-	for (auto& actorPair : sceneActors) 
+	for (auto& actorPair : _fncontainer->sceneActors)
 	{
-		VmActor& actor = get<1>(actorPair);
-		VmVObject* geo_obj = actor.GetGeometryRes();
+		VmActor* actor = get<1>(actorPair);
+		VmVObject* geo_obj = actor->GetGeometryRes();
 		if (geo_obj == NULL ||
 			geo_obj->GetObjectType() != ObjectTypePRIMITIVE ||
 			!geo_obj->IsDefined() ||
-			!actor.visible || actor.color.a == 0)
+			!actor->visible || actor->color.a == 0)
 			continue;
 
 		VmVObjectPrimitive* pobj = (VmVObjectPrimitive*)geo_obj;
@@ -1340,48 +1339,48 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			continue;
 
 		if (is_picking_routine) {
-			if(!grd_helper::CollisionCheck(actor.matWS2OS, prim_data->aabb_os, picking_ray_origin, picking_ray_dir))
+			if(!grd_helper::CollisionCheck(actor->matWS2OS, prim_data->aabb_os, picking_ray_origin, picking_ray_dir))
 				continue;
 			// test //
-			std::cout << "###### obb ray intersection : " << actor.actorId << std::endl;
-			general_oit_routine_objs.push_back(&actor);
+			std::cout << "###### obb ray intersection : " << actor->actorId << std::endl;
+			general_oit_routine_objs.push_back(actor);
 			// NOTE THAT is_picking_routine allows only general_oit_routine_objs!!
 			continue;
 		}
 
-		vmmat44f matOS2SS = actor.matOS2WS * matWS2SS;
+		vmmat44f matOS2SS = actor->matOS2WS * matWS2SS;
 		int w, h;
 		__compute_computespace_screen(w, h, matOS2SS, prim_data->aabb_os);
 		bool is_wildcard_Candidate = w * h < minimum_oit_area;
-		actor.SetParam("_int_SpinLockCount", is_wildcard_Candidate ? (int)10 : num_safe_loopexit);
+		actor->SetParam("_int_SpinLockCount", is_wildcard_Candidate ? (int)10 : num_safe_loopexit);
 		_w_max = max(_w_max, w);
 		_h_max = max(_h_max, h);
 
-		bool has_wire = actor.GetParam("_bool_HasWireframe", false);
+		bool has_wire = actor->GetParam("_bool_HasWireframe", false);
 
-		bool is_foremost_surfaces = actor.GetParam("_bool_OnlyForemostSurfaces", false);
+		bool is_foremost_surfaces = actor->GetParam("_bool_OnlyForemostSurfaces", false);
 		if (has_wire && prim_data->ptype == PrimitiveTypeTRIANGLE)
 		{
 			temperal_actors.push_back(actor);
-			VmActor& temp_actor = temperal_actors[temperal_actors.size() - 1];
-			temp_actor.color = actor.GetParam("_float4_WireColor", vmfloat4(0));
-			temp_actor.SetParam("_bool_IsWireframe", true);
-			foremost_surfaces_routine_objs.push_back(&temp_actor);
+			VmActor* temp_actor = temperal_actors[temperal_actors.size() - 1];
+			temp_actor->color = actor->GetParam("_float4_WireColor", vmfloat4(0));
+			temp_actor->SetParam("_bool_IsWireframe", true);
+			foremost_surfaces_routine_objs.push_back(temp_actor);
 
 			// trick for using 'z-thickness blending' between wires and surfaces
 			is_foremost_surfaces = false;
 		}
-		actor.SetParam("_bool_IsWireframe", false);
+		actor->SetParam("_bool_IsWireframe", false);
 
-		int outline_thickness = actor.GetParam("_int_SilhouetteThickness", (int)0);
+		int outline_thickness = actor->GetParam("_int_SilhouetteThickness", (int)0);
 		if (outline_thickness > 0) {
-			single_layer_routine_objs.push_back(&actor);
+			single_layer_routine_objs.push_back(actor);
 		}
 		else {
 			if (is_foremost_surfaces)
-				foremost_surfaces_routine_objs.push_back(&actor);
+				foremost_surfaces_routine_objs.push_back(actor);
 			else
-				general_oit_routine_objs.push_back(&actor);
+				general_oit_routine_objs.push_back(actor);
 		}
 	}
 
@@ -1543,9 +1542,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #pragma endregion
 
 #pragma region GPU resource updates
-			VmObject* tobj_otf = (VmObject*)actor->GetAssociateRes("_VmObject_OTF");
-			VmObject* tobj_maptable = (VmObject*)actor->GetAssociateRes("_VmObject_Maptable");
-			VmVObjectVolume* vobj = (VmVObjectVolume*)actor->GetAssociateRes("_VmObject_Volume");
+			VmObject* tobj_otf = (VmObject*)actor->GetAssociateRes("OTF");
+			VmObject* tobj_maptable = (VmObject*)actor->GetAssociateRes("MAPTABLE");
+			VmVObjectVolume* vobj = (VmVObjectVolume*)actor->GetAssociateRes("VOLUME");
 
 			if (vobj) {
 				GpuRes gres_vol, gres_tmap_otf;
@@ -1652,6 +1651,10 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			cbPolygonObj.tex_map_enum = tex_map_enum;
 			cbPolygonObj.pobj_dummy_0 = pobj->GetObjectID(); // used for picking
 			grd_helper::SetCb_PolygonObj(cbPolygonObj, pobj, actor, matWS2SS, matWS2PS, is_annotation_obj, use_vertex_color);
+			cbPolygonObj.Ka *= material_phongCoeffs.x;
+			cbPolygonObj.Kd *= material_phongCoeffs.y;
+			cbPolygonObj.Ks *= material_phongCoeffs.z;
+			cbPolygonObj.Ns *= material_phongCoeffs.w;
 			if (default_color_cmmobj.x >= 0 && default_color_cmmobj.y >= 0 && default_color_cmmobj.z >= 0)
 				cbPolygonObj.Ka = cbPolygonObj.Kd = cbPolygonObj.Ks = default_color_cmmobj;
 			if (render_pass == RENDER_GEOPASS::PASS_SINGLELAYERS && outline_thickness > 0)

@@ -203,7 +203,7 @@ namespace vmenums {
 
 	/*! Module-Platform interoperation에 사용되는 VmObject의 type 종류 */
 	enum EvmObjectType {
-		ObjectTypeOBJECT = 0,/*!< Just an Object for archiving something */
+		ObjectTypeOBJECT = 1,/*!< Just an Object for archiving something */
 		ObjectTypeVOLUME,/*!< Volume Object */
 		ObjectTypePRIMITIVE,/*!< Polygon Object */
 		ObjectTypeIMAGEPLANE/*!< Image Plane을 정의하는 VmObject이며 Camera Object를 갖음 */
@@ -879,7 +879,7 @@ namespace vmobjects
 				return false;
 			}
 
-			switch (dtype.type_bytes)
+			switch (num_dim)
 			{
 			case 1:
 			case 2:
@@ -1775,11 +1775,9 @@ namespace vmgeom {
 namespace fncontainer
 {
 	struct VmLight {
-		vmfloat3 pos_light = vmfloat3();
-		vmfloat3 dir_light = vmfloat3(0, 0, -1.f);
+		vmfloat3 pos = vmfloat3(0), dir = vmfloat3(0, 0, -1), up = vmfloat3(0, 1, 0); // Local coordinates
 		bool is_pointlight = false; // 'true' uses pos_light, 'false' uses dir_light
-		bool is_on_camera = true; // 'true' sets cam params to light source. in this case, it is unnecessary to set pos_light and dir_light (ignore both
-
+		bool is_on_camera = true; // 'true' sets cam params to light source. in this case, it is unnecessary to set pos, dir, and up (ignore these)
 		//vmfloat3 ambient_color = vmfloat3(1.f);
 		//vmfloat3 diffuse_color = vmfloat3(1.f);
 		//vmfloat3 specular_color = vmfloat3(1.f);
@@ -1806,7 +1804,9 @@ namespace fncontainer
 	private:
 		vmobjects::VmVObject* _geometry_res = NULL;
 		vmobjects::VmMap<std::string, vmobjects::VmObject*> _associated_res;
+	protected:
 		vmobjects::VmParamMap<std::string, std::any> _vmparams;
+		std::string _actorType = "ACTOR";
 	public:
 		bool visible = true;
 		vmfloat4 color = vmfloat4(1.f);
@@ -1817,17 +1817,22 @@ namespace fncontainer
 		int sceneId = 0;
 
 		VmActor* parentActor = NULL;
+		std::vector<VmActor*> childActors;
 
-		int GetAssociateObjKeyNamesFromObjID(const int obj_id, std::vector<std::string>* res_objs_keyNames) {
-			std::vector<std::string> _res_objs_keyNames;
+		VmActor() {
+			_actorType = "ACTOR";
+		}
 
-			for (auto it = _associated_res.begin(); it != _associated_res.end(); it++) {
-				vmobjects::VmObject* _res = it->second;
-				if (_res->GetObjectID() == obj_id)
-					_res_objs_keyNames.push_back(it->first);
-			}
-			if (res_objs_keyNames) *res_objs_keyNames = _res_objs_keyNames;
-			return (int)_res_objs_keyNames.size();
+		std::string GetActorType() { return _actorType; }
+
+		void Reset() {
+			_geometry_res = NULL;
+			_associated_res.RemoveAll();
+			_vmparams.RemoveAll();
+			visible = true;
+			color = vmfloat4(1.f);
+			matOS2WS = vmmat44f();
+			matWS2OS = vmmat44f();
 		}
 
 		int GetAllResourceObjs(std::vector<vmobjects::VmObject*>* res_objs) {
@@ -1862,6 +1867,18 @@ namespace fncontainer
 
 		void RemoveAssociateRes(const std::string name) {
 			_associated_res.RemoveParam(name);
+		}
+
+		void RemoveResFromID(const int res_obj_id) {
+			if (_geometry_res && _geometry_res->GetObjectID() == res_obj_id) _geometry_res = NULL;
+			std::vector<std::string> res_names;
+			for (auto& it : _associated_res) {
+				vmobjects::VmObject* res = std::get<1>(it);
+				if (res->GetObjectID() == res_obj_id) res_names.push_back(std::get<0>(it));
+			}
+			for (auto& it : res_names) {
+				_associated_res.RemoveParam(it);
+			}
 		}
 
 		template <typename T>
@@ -1911,7 +1928,7 @@ namespace fncontainer
 	private:
 	public:
 		std::string descriptor;
-		vmobjects::VmMap<int, VmActor>* sceneActors = NULL;
+		vmobjects::VmMap<int, VmActor*> sceneActors;
 		vmobjects::VmParamMap<std::string, std::any> fnParams;
 	};
 }

@@ -15,7 +15,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #endif
 
 #pragma region // Parameter Setting //
-	VmIObject* iobj = _fncontainer->fnParams.GetParam("_VmObject_RenderOut", (VmIObject*)NULL);
+	VmIObject* iobj = _fncontainer->fnParams.GetParam("_VmIObject*_RenderOut", (VmIObject*)NULL);
 	int k_value_old = iobj->GetObjParam("_int_NumK", (int)8);
 	int k_value = _fncontainer->fnParams.GetParam("_int_NumK", k_value_old);
 	iobj->SetObjParam("_int_NumK", k_value);
@@ -53,16 +53,16 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 	bool recompile_hlsl = _fncontainer->fnParams.GetParam("_bool_ReloadHLSLObjFiles", false);
 
-	VmLight* light = _fncontainer->fnParams.GetParamPtr<VmLight>("_VmLight_LightSource");
-	VmLens* lens = _fncontainer->fnParams.GetParamPtr<VmLens>("_VmLens_CamLens");
+	VmLight* light = _fncontainer->fnParams.GetParam("_VmLight*_LightSource", (VmLight*)NULL);
+	VmLens* lens = _fncontainer->fnParams.GetParam("_VmLens*_CamLens", (VmLens*)NULL);
 	LightSource light_src;
 	GlobalLighting global_lighting;
 	LensEffect lens_effect;
 	if (light) {
-		light_src.is_on_camera = light_src.is_on_camera;
-		light_src.is_soptlight = light_src.is_soptlight;
-		light_src.light_pos = light_src.light_pos;
-		light_src.light_dir = light_src.light_dir;
+		light_src.is_on_camera = light->is_on_camera;
+		light_src.is_pointlight = light->is_pointlight;
+		light_src.light_pos = light->pos;
+		light_src.light_dir = light->dir;
 		light_src.light_ambient_color = vmfloat3(1.f);
 		light_src.light_diffuse_color = vmfloat3(1.f);
 		light_src.light_specular_color = vmfloat3(1.f);
@@ -255,25 +255,24 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 #pragma region // Presetting of VmObject
 	vector<VmActor*> dvr_volumes;
-	auto& sceneActors = *_fncontainer->sceneActors;
 	vmfloat3 pos_aabb_min_ws(FLT_MAX), pos_aabb_max_ws(-FLT_MAX);
 	float min_pitch = FLT_MAX;
 	// For Each Primitive //
-	for (auto& actorPair : sceneActors) 
+	for (auto& actorPair : _fncontainer->sceneActors)
 	{
-		VmActor& actor = get<1>(actorPair);
-		VmVObject* geo_obj = actor.GetGeometryRes();
+		VmActor* actor = get<1>(actorPair);
+		VmVObject* geo_obj = actor->GetGeometryRes();
 		if (geo_obj == NULL ||
 			geo_obj->GetObjectType() != ObjectTypeVOLUME ||
 			!geo_obj->IsDefined() ||
-			!actor.visible || actor.color.a == 0)
+			!actor->visible || actor->color.a == 0)
 			continue;
 
 		if (dvr_volumes.size() > 1) {
 			test_out("WARNNING!! two rendering target volumes are not allowed!");
 			break;
 		}
-		dvr_volumes.push_back(&actor);
+		dvr_volumes.push_back(actor);
 		VmVObjectVolume* volobj = (VmVObjectVolume*)geo_obj;
 		VolumeData* vol_data = volobj->GetVolumeData();
 
@@ -462,7 +461,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #pragma endregion
 
 #pragma region GPU resource updates
-		VmObject* tobj_otf = (VmObject*)actor->GetAssociateRes("_VmObject_OTF"); // essential!
+		VmObject* tobj_otf = (VmObject*)actor->GetAssociateRes("OTF"); // essential!
 		if (tobj_otf == NULL)
 		{
 			VMERRORMESSAGE("NOT ASSIGNED OTF");
@@ -470,7 +469,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		}
 		MapTable* tmap_data = tobj_otf->GetObjParamPtr<MapTable>("_TableMap_OTF");
 
-		VmVObjectVolume* mask_vol_obj = (VmVObjectVolume*)actor->GetAssociateRes("_VmObject_MaskVolume");
+		VmVObjectVolume* mask_vol_obj = (VmVObjectVolume*)actor->GetAssociateRes("MASKVOLUME");
 
 		GpuRes gres_vol;
 		grd_helper::UpdateVolumeModel(gres_vol, vobj, render_type == __RM_MAXMASK, progress);
@@ -508,8 +507,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			dx11DeviceImmContext->CSSetShaderResources(2, 1, (__SRV_PTR*)&gres_mask_vol.alloc_res_ptrs[DTYPE_SRV]);
 		}
 
-		bool high_samplerate = gres_vol.res_values.GetParam("SAMPLE_OFFSET_X", (uint)1) > 1.f ||
-			gres_vol.res_values.GetParam("SAMPLE_OFFSET_Y", (uint)1) > 1.f || gres_vol.res_values.GetParam("SAMPLE_OFFSET_Z", (uint)1) > 1.f;
+		bool high_samplerate = gres_vol.res_values.GetParam("SAMPLE_OFFSET_X", 1.f) > 1.f ||
+			gres_vol.res_values.GetParam("SAMPLE_OFFSET_Y", 1.f) > 1.f || gres_vol.res_values.GetParam("SAMPLE_OFFSET_Z", 1.f) > 1.f;
 		CB_VolumeObject cbVolumeObj;
 		vmint3 vol_sampled_size = vmint3(gres_vol.res_values.GetParam("WIDTH", (uint)0),
 			gres_vol.res_values.GetParam("HEIGHT", (uint)0),

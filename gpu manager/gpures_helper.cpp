@@ -605,7 +605,8 @@ bool grd_helper::UpdateOtfBlocks(GpuRes& gres, VmVObjectVolume* main_vobj, VmVOb
 				return true;
 		}
 	}
-	mask_vobj->SetObjParam("_int_LastSculptIndex", sculpt_value);
+	if(mask_vobj)
+		mask_vobj->SetObjParam("_int_LastSculptIndex", sculpt_value);
 	
 	// MAIN UPDATE!
 	((VmVObjectVolume*)main_vobj)->UpdateTagBlocks(tobj_id, 0, otf_Mm_range, NULL); // update volblk->GetUpdateTime(tobj_id)
@@ -1637,11 +1638,17 @@ void grd_helper::SetCb_Env(CB_EnvState& cb_env, VmCObject* ccobj, const LightSou
 	vmfloat3 pos_cam, dir_cam;
 	ccobj->GetCameraExtStatef(&pos_cam, &dir_cam, NULL);
 
-	cb_env.dir_light_ws = light_src.light_dir;
-	cb_env.pos_light_ws = light_src.light_pos;
+	if (light_src.is_on_camera) {
+		cb_env.dir_light_ws = dir_cam;
+		cb_env.pos_light_ws = pos_cam;
+	}
+	else {
+		cb_env.dir_light_ws = light_src.light_dir;
+		cb_env.pos_light_ws = light_src.light_pos;
+	}
 	fNormalizeVector(&cb_env.dir_light_ws, &cb_env.dir_light_ws);
 
-	if (light_src.is_soptlight)
+	if (light_src.is_pointlight)
 		cb_env.env_flag |= 0x1;
 
 	cb_env.r_kernel_ao = 0;

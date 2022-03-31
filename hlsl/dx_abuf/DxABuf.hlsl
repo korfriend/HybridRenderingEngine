@@ -109,6 +109,7 @@ void OIT_A_BUFFER_FILL(__VS_OUT input)
 	}
 	else
 		v_rgba.rgb = Kd;
+
 #endif
 
 	// make it as an associated color.

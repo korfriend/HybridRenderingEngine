@@ -70,7 +70,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	g_LocalProgress.range = 100;
 	g_LocalProgress.progress_ptr = &g_dProgress;
 
-	VmIObject* iobj = _fncontainer.fnParams.GetParam("_VmObject_RenderOut", (VmIObject*)NULL);
+	VmIObject* iobj = _fncontainer.fnParams.GetParam("_VmIObject*_RenderOut", (VmIObject*)NULL);
 	if(iobj == NULL)
 	{
 		VMERRORMESSAGE("VisMotive Renderer needs at least one IObject as output!");
@@ -150,5 +150,5 @@ void InteropCustomWork(fncontainer::VmFnContainer& _fncontainer)
 	if (g_pCGpuManager == NULL) // for module initialization
 		g_pCGpuManager = new VmGpuManager(GpuSdkTypeDX11, "vismtv_inbuilt_renderergpudx.dll");
 	_fncontainer.fnParams.SetParam("_string_CoreVersion", string(__VERSION));
-	_fncontainer.fnParams.SetParam("_VmGpuManager_", g_pCGpuManager);
+	_fncontainer.fnParams.SetParam("_VmGpuManager*_", g_pCGpuManager);
 }
