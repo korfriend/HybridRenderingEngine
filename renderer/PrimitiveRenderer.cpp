@@ -1649,7 +1649,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 			CB_PolygonObject cbPolygonObj;
 			cbPolygonObj.tex_map_enum = tex_map_enum;
-			cbPolygonObj.pobj_dummy_0 = pobj->GetObjectID(); // used for picking
+			cbPolygonObj.pobj_dummy_0 = actor->actorId;// pobj->GetObjectID(); // used for picking
 			grd_helper::SetCb_PolygonObj(cbPolygonObj, pobj, actor, matWS2SS, matWS2PS, is_annotation_obj, use_vertex_color);
 			cbPolygonObj.Ka *= material_phongCoeffs.x;
 			cbPolygonObj.Kd *= material_phongCoeffs.y;
