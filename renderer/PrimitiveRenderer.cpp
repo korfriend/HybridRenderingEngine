@@ -1315,7 +1315,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		h = aaBbMaxSS.y - aaBbMinSS.y;
 	};
 
-	vector<VmActor*> temperal_actors;
+	vector<VmActor> temperal_actors;
 	vector<VmActor*> general_oit_routine_objs;
 	vector<VmActor*> single_layer_routine_objs; // e.g. silhouette
 	vector<VmActor*> foremost_surfaces_routine_objs; // for performance //
@@ -1361,8 +1361,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		bool is_foremost_surfaces = actor->GetParam("_bool_OnlyForemostSurfaces", false);
 		if (has_wire && prim_data->ptype == PrimitiveTypeTRIANGLE)
 		{
-			temperal_actors.push_back(actor);
-			VmActor* temp_actor = temperal_actors[temperal_actors.size() - 1];
+			temperal_actors.push_back(*actor);
+			VmActor* temp_actor = &temperal_actors[temperal_actors.size() - 1];
 			temp_actor->color = actor->GetParam("_float4_WireColor", vmfloat4(0));
 			temp_actor->SetParam("_bool_IsWireframe", true);
 			foremost_surfaces_routine_objs.push_back(temp_actor);
@@ -1376,12 +1376,11 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		if (outline_thickness > 0) {
 			single_layer_routine_objs.push_back(actor);
 		}
-		else {
-			if (is_foremost_surfaces)
-				foremost_surfaces_routine_objs.push_back(actor);
-			else
-				general_oit_routine_objs.push_back(actor);
-		}
+
+		if (is_foremost_surfaces)
+			foremost_surfaces_routine_objs.push_back(actor);
+		else
+			general_oit_routine_objs.push_back(actor);
 	}
 
 	bool gpu_profile = false;
@@ -2194,7 +2193,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
 	};
 
-	
 	auto RenderOut = [&iobj, &___GpuProfile, &fb_size_cur, &dx11DeviceImmContext,
 		&gres_fb_rgba, &gres_fb_depthcs, &gres_fb_sys_rgba, &gres_fb_sys_depthcs, &gpu_manager, &is_rgba](const int count_call_render, const HWND hWnd) {
 
