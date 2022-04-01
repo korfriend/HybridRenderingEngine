@@ -1342,7 +1342,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			if(!grd_helper::CollisionCheck(actor->matWS2OS, prim_data->aabb_os, picking_ray_origin, picking_ray_dir))
 				continue;
 			// test //
-			std::cout << "###### obb ray intersection : " << actor->actorId << std::endl;
+			//std::cout << "###### obb ray intersection : " << actor->actorId << std::endl;
 			general_oit_routine_objs.push_back(actor);
 			// NOTE THAT is_picking_routine allows only general_oit_routine_objs!!
 			continue;
@@ -2336,8 +2336,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		___GpuProfile("Picking", true);
 
 		//if (gpu_profile) {
-			cout << "### NUM PICKING LAYERS : " << num_layers << endl;
-			cout << "### NUM PICKING UNIQUE ID LAYERS : " << picking_layers_id_depth.size() << endl;
+		//	cout << "### NUM PICKING LAYERS : " << num_layers << endl;
+		//	cout << "### NUM PICKING UNIQUE ID LAYERS : " << picking_layers_id_depth.size() << endl;
 		//}
 		for (auto& it : picking_layers_id_depth) {
 			picking_layers_depth_id[it.second] = it.first;
