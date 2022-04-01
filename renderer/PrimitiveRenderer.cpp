@@ -2345,14 +2345,16 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			picking_layers_depth_id[it.second] = it.first;
 		}
 
-		vector<vmfloat4> picking_out;
+		vector<vmfloat3> picking_pos_out;
+		vector<int> picking_id_out;
 		for (auto& it : picking_layers_depth_id) {
 			vmfloat3 pos_pick = picking_ray_origin + picking_ray_dir * it.first;
-			vmfloat4 encoded(pos_pick.x, pos_pick.y, pos_pick.z, (double)it.second);
-			picking_out.push_back(encoded);
+			picking_pos_out.push_back(pos_pick);
+			picking_id_out.push_back(it.second);
 		}
 
-		_fncontainer->fnParams.SetParam("_vlist_float4_PickPosAndId", picking_out);
+		_fncontainer->fnParams.SetParam("_vlist_float3_PickPos", picking_pos_out);
+		_fncontainer->fnParams.SetParam("_vlist_int_PickId", picking_id_out);
 		// END of Render Process for picking
 	}
 	else if (mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB || mode_OIT == MFR_MODE::STATIC_KB) {
