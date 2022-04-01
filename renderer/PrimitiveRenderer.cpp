@@ -1524,9 +1524,10 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			PrimitiveData* prim_data = pobj->GetPrimitiveData();
 			// note that the actor is visible (already checked)
 #pragma region Actor Parameters
+			bool has_texture_img = actor->GetParam("_bool_HasTextureMap", false); // ????
+
+
 			vmfloat4 material_phongCoeffs = actor->GetParam("_float4_PhongCoeffs", default_phong_lighting_coeff);
-			bool is_annotation_obj = actor->GetParam("_bool_IsAnnotationObj", false) && prim_data->texture_res_info.size() > 0;
-			bool has_texture_img = actor->GetParam("_bool_HasTextureMap", false);
 			bool use_vertex_color = actor->GetParam("_bool_UseVertexColor", false) && prim_data->GetVerticeDefinition("TEXCOORD0") != NULL;
 
 			int outline_thickness = actor->GetParam("_int_SilhouetteThickness", (int)0);
@@ -1615,6 +1616,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			map<string, GpuRes> map_gres_texs;
 			grd_helper::UpdatePrimitiveModel(gres_vtx, gres_idx, map_gres_texs, pobj);
 			int tex_map_enum = 0;
+			bool is_annotation_obj = pobj->GetObjParam("_bool_IsAnnotationObj", false) && prim_data->texture_res_info.size() > 0;
 			if (is_annotation_obj)
 			{
 				auto it_tex = map_gres_texs.find("MAP_COLOR4");
