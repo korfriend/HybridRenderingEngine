@@ -2351,8 +2351,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			vmfloat4 encoded(pos_pick.x, pos_pick.y, pos_pick.z, (double)it.second);
 			picking_out.push_back(encoded);
 		}
-		if (picking_out.size() == 0)
-			picking_out.push_back(vmfloat4(0, 0, 0, 0));
 
 		_fncontainer->fnParams.SetParam("_vlist_float4_PickPosAndId", picking_out);
 		// END of Render Process for picking
