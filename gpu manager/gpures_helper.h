@@ -555,12 +555,10 @@ namespace grd_helper
 
 		vmmat44f mat_alignedvbox_tr_ws2bs;
 
-		uint vobj_dummy_0; // 
-		uint vobj_dummy_1; // 
-		uint vobj_dummy_2; // 
-		// 1st bit : 0 (use the input normal) 1 (invert the input normal) ==> will be deprecated! (always faces to camera)
-		// 24~31bit : Sculpt Mask Value (1 byte)
-		uint	vobj_flag;
+		float grad_max; // 
+		float grad_scale; // 
+		float kappa_i; // 
+		float kappa_s; // 
 
 		vmfloat3 vec_grad_x; // ts
 		float value_range;
@@ -574,10 +572,12 @@ namespace grd_helper
 		vmfloat3 volblk_size_ts;
 		float volblk_value_range;
 
+		// 1st bit : 0 (use the input normal) 1 (invert the input normal) ==> will be deprecated! (always faces to camera)
+		// 24~31bit : Sculpt Mask Value (1 byte)
+		uint vobj_flag;
 		uint iso_value;
 		float ao_intensity;
-		uint vobj_dummy_3; // 
-		uint vobj_dummy_4; // 
+		uint outline_color; // 
 
 		// light properties
 		vmfloat4 pb_shading_factor;	// x : Ambient, y : Diffuse, z : Specular, w : Specular power
@@ -612,8 +612,8 @@ namespace grd_helper
 	{
 		float clip_plane_intensity;
 		float attribute_voxel_sharpness;
-		float mod_grad_mag_scale;	// for modulation 
-		float mod_max_grad_size; // for modulation 
+		float vrf_dummy_2;	
+		float vrf_dummy_3; 
 
 		float occ_sample_dist_scale; // for occlusion
 		float sdm_sample_dist_scale; // for shadow

@@ -387,7 +387,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	depth_out = vr_fragment_1sthit_read[DTid.xy];
 	
 
-	float4 outline_test = ConvertUIntToFloat4(g_cbVobj.vobj_dummy_2);
+	float4 outline_test = ConvertUIntToFloat4(g_cbVobj.outline_color);
 	if (outline_test.w > 0 && vr_hit_enc == 0) {
 		// note that the outline appears over background of the DVR front-surface
 		float4 outline_color = VrOutlineTest(tex2d_xy, depth_out, 100000.f, outline_test.rgb, (int)(outline_test.w*255.f));
@@ -475,12 +475,6 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		Fragment f_dly = fs[0]; // if no frag, the z-depth is infinite
 #endif
 
-#if VR_MODE == 2
-		const float grad_max = 1.731f / 255;
-		const float grad_scale = 1.f;
-		//vis_out = float4(1, 0, 0, 1);
-		//return;
-#endif
 		int start_idx = 0, sample_v = 0;
 		if (vr_hit_enc == 2)
 		{
@@ -493,7 +487,8 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #if VR_MODE == 2
 				float grad_len;
 				GRAD_NRL_VOL(pos_ray_start_ts, dir_sample_ws, grad_len);
-				float modulator = min(grad_len * grad_scale / grad_max, 1.f);
+				//float modulator = pow(min(grad_len * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(g_cbVobj.kappa_i, g_cbVobj.kappa_s));
+				float modulator = min(grad_len * 65535.f * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
 				vis_sample *= modulator;
 #endif
 				//vis_sample *= mask_weight;
@@ -532,7 +527,10 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 						float4 vis_sample = float4(shade * vis_otf.rgb, vis_otf.a);
 						float depth_sample = depth_hit + (float)i * sample_dist;
 #if VR_MODE == 2
-						float modulator = min(pow(grad_len / grad_max, 2) * grad_scale, 1.f);
+						float __s = abs(dot(view_dir, nrl));
+						//g_cbVobj.kappa_i
+						//float modulator = pow(min(grad_len * 65535.f * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(g_cbVobj.kappa_i * max(__s, 0.1f), g_cbVobj.kappa_s));
+						float modulator = min(grad_len * 65535.f * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
 						vis_sample *= modulator;
 #endif
 						//vis_sample *= mask_weight;

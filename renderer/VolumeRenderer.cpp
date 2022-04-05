@@ -2,6 +2,46 @@
 
 using namespace grd_helper;
 
+void GradientMagnitudeAnalysis(vmfloat2& grad_minmax, VmVObjectVolume* vobj)
+{
+	grad_minmax = vobj->GetObjParam("_float2_GraidentMagMinMax", vmfloat2(FLT_MAX, -FLT_MAX));
+	if (grad_minmax.x < grad_minmax.y) return;
+
+	VolumeData* vol_data = vobj->GetVolumeData();
+
+	int max_length = max(max(vol_data->vol_size.x, vol_data->vol_size.y), vol_data->vol_size.z);
+	int offset = max(max_length / 200, 2);
+
+	ushort** ppusVolume = (ushort**)vol_data->vol_slices;
+	int iSizeAddrX = vol_data->vol_size.x + vol_data->bnd_size.x * 2;
+	for (int iZ = 1; iZ < vol_data->vol_size.z - 1; iZ += offset)
+	{
+		for (int iY = 1; iY < vol_data->vol_size.y - 1; iY += offset)
+		{
+			for (int iX = 1; iX < vol_data->vol_size.x - 1; iX += offset)
+			{
+				vmfloat3 f3Difference;
+				int iAddrZ = iZ + vol_data->bnd_size.x;
+				int iAddrY = iY + vol_data->bnd_size.y;
+				int iAddrX = iX + vol_data->bnd_size.z;
+				int iAddrZL = iZ - 1 + vol_data->bnd_size.z;
+				int iAddrYL = iY - 1 + vol_data->bnd_size.y;
+				int iAddrXL = iX - 1 + vol_data->bnd_size.x;
+				int iAddrZR = iZ + 1 + vol_data->bnd_size.z;
+				int iAddrYR = iY + 1 + vol_data->bnd_size.y;
+				int iAddrXR = iX + 1 + vol_data->bnd_size.x;
+				f3Difference.x = (float)((int)ppusVolume[iAddrZ][iAddrY * iSizeAddrX + iAddrXR] - (int)ppusVolume[iAddrZ][iAddrY * iSizeAddrX + iAddrXL]);
+				f3Difference.y = (float)((int)ppusVolume[iAddrZ][iAddrYR * iSizeAddrX + iAddrX] - (int)ppusVolume[iAddrZ][iAddrYL * iSizeAddrX + iAddrX]);
+				f3Difference.z = (float)((int)ppusVolume[iAddrZR][iAddrY * iSizeAddrX + iAddrX] - (int)ppusVolume[iAddrZL][iAddrY * iSizeAddrX + iAddrX]);
+				float fGradientMag = sqrt(f3Difference.x * f3Difference.x + f3Difference.y * f3Difference.y + f3Difference.z * f3Difference.z);
+				grad_minmax.x = min(grad_minmax.x, fGradientMag);
+				grad_minmax.y = max(grad_minmax.y, fGradientMag);
+			}
+		}
+	}
+	vobj->SetObjParam("_float2_GraidentMagMinMax", grad_minmax);
+}
+
 bool RenderVrDLS(VmFnContainer* _fncontainer,
 	VmGpuManager* gpu_manager,
 	grd_helper::GpuDX11CommonParameters* dx11CommonParams,
@@ -42,6 +82,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	MFR_MODE mode_OIT = (MFR_MODE)_fncontainer->fnParams.GetParam("_int_OitMode", (int)1); // 1
 	mode_OIT = (MFR_MODE)min((int)mode_OIT, (int)MFR_MODE::MOMENT);
 	//if (mode_OIT == MFR_MODE::STATIC_KB_FM) apply_fragmerge = true;
+
+	int ray_cast_type = _fncontainer->fnParams.GetParam("_int_VolumeRayCastType", (int)0);
 
 	int buf_ex_scale = _fncontainer->fnParams.GetParam("_int_BufExScale", (int)8); // 32 layers
 	int num_moments_old = iobj->GetObjParam("_int_NumQueueLayers", (int)8);
@@ -103,7 +145,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			hlslobj_path += token + "\\";
 			exe_path.erase(0, pos + delimiter.length());
 		}
-		hlslobj_path += "..\\..\\VmModuleProjects\\renderer_gpudx11\\shader_compiled_objs\\";
+		//hlslobj_path += "..\\..\\VmModuleProjects\\renderer_gpudx11\\shader_compiled_objs\\";
+		hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
 		//cout << hlslobj_path << endl;
 
 		string prefix_path = hlslobj_path;
@@ -423,12 +466,13 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		// note that the actor is visible (already checked)
 #pragma region Actor Parameters
 #define __RM_DEFAULT 0
-#define __RM_CLIPOPAQUE 1
-#define __RM_OPAQUE 2
-#define __RM_MODULATION 3
-#define __RM_SCULPTMASK 4
-#define __RM_MAXMASK 5
-#define __RM_TEST 6
+#define __RM_MODULATION 1
+#define __RM_MODULATION_MASK 2
+#define __RM_CLIPOPAQUE 20
+#define __RM_OPAQUE 21
+#define __RM_SCULPTMASK 22
+#define __RM_MAXMASK 23
+//#define __RM_TEST 6
 #define __RM_RAYMAX 10
 #define __RM_RAYMIN 11
 #define __RM_RAYSUM 12
@@ -437,10 +481,22 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		// will change integer to string type 
 		// and its param name 'RaySamplerMode'
 		// also its corresponding cpu renderer
-		int render_type = actor->GetParam("_int_RendererType", (int)0);
 		bool is_xray_mode = false;
-		if (render_type >= __RM_RAYMAX)
+		bool is_modulation_mode = false;
+		vmfloat2 grad_minmax(FLT_MAX, -FLT_MAX);
+		switch (ray_cast_type) {
+		case __RM_RAYMAX:
+		case __RM_RAYMIN:
+		case __RM_RAYSUM:
 			is_xray_mode = true;
+			break;
+		case __RM_MODULATION:
+		case __RM_MODULATION_MASK:
+			GradientMagnitudeAnalysis(grad_minmax, vobj);
+			is_modulation_mode = true;
+			break;
+		default: break;
+		}
 
 		bool skip_volblk_update = actor->GetParam("_bool_ForceToSkipBlockUpdate", false);
 		int blk_level = actor->GetParam("_int_BlockLevel", (int)1);
@@ -472,7 +528,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		VmVObjectVolume* mask_vol_obj = (VmVObjectVolume*)actor->GetAssociateRes("MASKVOLUME");
 
 		GpuRes gres_vol;
-		grd_helper::UpdateVolumeModel(gres_vol, vobj, render_type == __RM_MAXMASK, progress);
+		grd_helper::UpdateVolumeModel(gres_vol, vobj, ray_cast_type == __RM_MAXMASK, progress);
 		dx11DeviceImmContext->CSSetShaderResources(0, 1, (__SRV_PTR*)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
 
 		GpuRes gres_tmap_otf;
@@ -489,9 +545,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		__SRV_PTR volblk_srv = NULL;
 		if (is_xray_mode) {
 			grd_helper::UpdateMinMaxBlocks(gres_volblk_min, gres_volblk_max, vobj);
-			if (render_type == __RM_RAYMAX)	// Min
+			if (ray_cast_type == __RM_RAYMAX)	// Min
 				volblk_srv = (__SRV_PTR)gres_volblk_max.alloc_res_ptrs[DTYPE_SRV];
-			else if (render_type == __RM_RAYMIN)
+			else if (ray_cast_type == __RM_RAYMIN)
 				volblk_srv = (__SRV_PTR)gres_volblk_min.alloc_res_ptrs[DTYPE_SRV];
 		}
 		else {
@@ -515,13 +571,19 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			gres_vol.res_values.GetParam("DEPTH", (uint)0));
 		grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, actor, high_samplerate ? 2.f : 1.f, false, tmap_data->valid_min_idx.x, gres_volblk_otf.options["FORMAT"] == DXGI_FORMAT_R16_UNORM ? 65535.f : 1.f);
 		cbVolumeObj.pb_shading_factor = material_phongCoeffs;
-		cbVolumeObj.vobj_dummy_2 = (uint)(outline_color.r * 255.f) | ((uint)(outline_color.g * 255.f) << 8) | ((uint)(outline_color.b * 255.f) << 16) | (uint)(outline_thickness << 24);
+		cbVolumeObj.outline_color = (uint)(outline_color.r * 255.f) | ((uint)(outline_color.g * 255.f) << 8) | ((uint)(outline_color.b * 255.f) << 16) | (uint)(outline_thickness << 24);
 		if (is_ghost_mode) {
 			bool is_ghost_surface = actor->GetParam("_bool_IsGhostSurface", false);
 			bool is_only_hotspot_visible = actor->GetParam("_bool_IsOnlyHotSpotVisible", false);
 			if (is_ghost_surface) cbVolumeObj.vobj_flag |= 0x1 << 19;
 			if (is_only_hotspot_visible) cbVolumeObj.vobj_flag |= 0x1 << 20;
 			//cout << "TEST : " << is_ghost_surface << ", " << is_only_hotspot_visible << endl;
+		}
+		else if (is_modulation_mode) {
+			cbVolumeObj.grad_max = grad_minmax.y;
+			cbVolumeObj.grad_scale = actor->GetParam("_float_ModulationGradScale", 1.f);
+			cbVolumeObj.kappa_i = actor->GetParam("_float_ModulationKappai", 1.f);
+			cbVolumeObj.kappa_s = actor->GetParam("_float_ModulationKappas", 1.f);
 		}
 		D3D11_MAPPED_SUBRESOURCE mappedResVolObj;
 		dx11DeviceImmContext->Map(cbuf_vobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResVolObj);
@@ -571,18 +633,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #pragma endregion 
 
 #pragma region Renderer
-//#define __RM_DEFAULT 0
-//#define __RM_OPAQUE 1
-//#define __RM_MODULATION 2
-//#define __RM_SCULPTMASK 3
-//#define __RM_MAXMASK 4
-//#define __RM_TEST 6
-//#define __RM_RAYMAX 10
-//#define __RM_RAYMIN 11
-//#define __RM_RAYSUM 12
-
 		ID3D11ComputeShader* cshader = NULL;
-		switch (render_type)
+		switch (ray_cast_type)
 		{
 		case __RM_RAYMIN: cshader = GETCS(VR_RAYMIN_cs_5_0); break;
 		case __RM_RAYMAX: cshader = GETCS(VR_RAYMAX_cs_5_0); break;
@@ -593,11 +645,10 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			{
 				// VR_OPAQUE_DFB_cs_5_0 is same as VR_OPAQUE_DKB_cs_5_0
 			case MFR_MODE::STATIC_KB:
+			case MFR_MODE::DYNAMIC_FB:
 				cshader = apply_fragmerge ? GETCS(VR_OPAQUE_FM_cs_5_0) : GETCS(VR_OPAQUE_cs_5_0); break;
 			case MFR_MODE::DYNAMIC_KB:
 				cshader = apply_fragmerge? GETCS(VR_OPAQUE_DKBZ_cs_5_0) : GETCS(VR_OPAQUE_DFB_cs_5_0); break;
-			case MFR_MODE::DYNAMIC_FB:
-				cshader = apply_fragmerge? GETCS(VR_OPAQUE_FM_cs_5_0) : GETCS(VR_OPAQUE_cs_5_0); break;
 			default:
 				VMERRORMESSAGE("DOES NOT SUPPORT!!");
 			}
@@ -606,11 +657,10 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			switch (mode_OIT)
 			{
 			case MFR_MODE::STATIC_KB:
+			case MFR_MODE::DYNAMIC_FB:
 				cshader = apply_fragmerge ? GETCS(VR_CONTEXT_FM_cs_5_0) : GETCS(VR_CONTEXT_cs_5_0); break;
 			case MFR_MODE::DYNAMIC_KB:
 				cshader = apply_fragmerge ? GETCS(VR_CONTEXT_DKBZ_cs_5_0) : GETCS(VR_CONTEXT_DFB_cs_5_0); break;
-			case MFR_MODE::DYNAMIC_FB:
-				cshader = apply_fragmerge ? GETCS(VR_CONTEXT_FM_cs_5_0) : GETCS(VR_CONTEXT_cs_5_0); break;
 			default:
 				VMERRORMESSAGE("DOES NOT SUPPORT!!");
 			}
@@ -621,11 +671,10 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			switch (mode_OIT)
 			{
 			case MFR_MODE::STATIC_KB:
+			case MFR_MODE::DYNAMIC_FB:
 				cshader = apply_fragmerge ? GETCS(VR_DEFAULT_FM_cs_5_0) : GETCS(VR_DEFAULT_cs_5_0); break;
 			case MFR_MODE::DYNAMIC_KB:
 				cshader = apply_fragmerge ? GETCS(VR_DEFAULT_DKBZ_cs_5_0) : GETCS(VR_DEFAULT_DFB_cs_5_0); break;
-			case MFR_MODE::DYNAMIC_FB:
-				cshader = apply_fragmerge ? GETCS(VR_DEFAULT_FM_cs_5_0) : GETCS(VR_DEFAULT_cs_5_0); break;
 			default:
 				VMERRORMESSAGE("DOES NOT SUPPORT!!");
 			}
@@ -643,9 +692,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		if ((mode_OIT == MFR_MODE::DYNAMIC_FB && !apply_fragmerge) || mode_OIT == MFR_MODE::DYNAMIC_KB) // filling
 			dx11DeviceImmContext->CSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]); // search why this does not work
 		
-		if(render_type != __RM_RAYMIN
-			&& render_type != __RM_RAYMAX
-			&& render_type != __RM_RAYSUM) {
+		if(ray_cast_type != __RM_RAYMIN
+			&& ray_cast_type != __RM_RAYMAX
+			&& ray_cast_type != __RM_RAYSUM) {
 			// 1st hit surface
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(4, 1, (ID3D11UnorderedAccessView**)&gres_fb_vrdepthcs.alloc_res_ptrs[DTYPE_UAV], (UINT*)(&dx11UAVs));
 
