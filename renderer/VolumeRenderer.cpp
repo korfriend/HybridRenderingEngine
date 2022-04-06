@@ -495,6 +495,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			GradientMagnitudeAnalysis(grad_minmax, vobj);
 			is_modulation_mode = true;
 			break;
+		case __RM_MAXMASK:
+			break;
 		default: break;
 		}
 
@@ -526,9 +528,15 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		MapTable* tmap_data = tobj_otf->GetObjParamPtr<MapTable>("_TableMap_OTF");
 
 		VmVObjectVolume* mask_vol_obj = (VmVObjectVolume*)actor->GetAssociateRes("MASKVOLUME");
+		if (mask_vol_obj != NULL)
+		{
+			GpuRes gres_mask_vol;
+			grd_helper::UpdateVolumeModel(gres_mask_vol, mask_vol_obj, true);
+			dx11DeviceImmContext->CSSetShaderResources(2, 1, (__SRV_PTR*)&gres_mask_vol.alloc_res_ptrs[DTYPE_SRV]);
+		}
 
 		GpuRes gres_vol;
-		grd_helper::UpdateVolumeModel(gres_vol, vobj, ray_cast_type == __RM_MAXMASK, progress);
+		grd_helper::UpdateVolumeModel(gres_vol, vobj, false, progress); // ray_cast_type == __RM_MAXMASK
 		dx11DeviceImmContext->CSSetShaderResources(0, 1, (__SRV_PTR*)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
 
 		GpuRes gres_tmap_otf;
@@ -555,13 +563,6 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			volblk_srv = (__SRV_PTR)gres_volblk_otf.alloc_res_ptrs[DTYPE_SRV];
 		}
 		dx11DeviceImmContext->CSSetShaderResources(1, 1, (__SRV_PTR*)&volblk_srv);
-		
-		if (mask_vol_obj != NULL)
-		{
-			GpuRes gres_mask_vol;
-			grd_helper::UpdateVolumeModel(gres_mask_vol, mask_vol_obj, true);
-			dx11DeviceImmContext->CSSetShaderResources(2, 1, (__SRV_PTR*)&gres_mask_vol.alloc_res_ptrs[DTYPE_SRV]);
-		}
 
 		bool high_samplerate = gres_vol.res_values.GetParam("SAMPLE_OFFSET_X", 1.f) > 1.f ||
 			gres_vol.res_values.GetParam("SAMPLE_OFFSET_Y", 1.f) > 1.f || gres_vol.res_values.GetParam("SAMPLE_OFFSET_Z", 1.f) > 1.f;
