@@ -214,7 +214,7 @@ struct HxCB_TMAP
 
     uint first_nonzeroalpha_index; // For ESS
     uint last_nonzeroalpha_index;
-    uint tmap_size;
+    uint tmap_size_x;
     float mapping_v_min;
 
     float mapping_v_max;

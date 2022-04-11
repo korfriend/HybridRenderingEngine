@@ -587,8 +587,17 @@ bool grd_helper::UpdateOtfBlocks(GpuRes& gres, VmVObjectVolume* main_vobj, VmVOb
 	vmdouble2 otf_Mm_range = vmdouble2(DBL_MAX, -DBL_MAX);
 	MapTable* tmap_data = tobj->GetObjParamPtr<MapTable>("_TableMap_OTF");
 
-	otf_Mm_range.x = tmap_data->valid_min_idx.x;
-	otf_Mm_range.y = tmap_data->valid_max_idx.x;
+
+	VolumeData* vol_data = main_vobj->GetVolumeData();
+	float value_range = 65535.f;
+	if (vol_data->store_dtype.type_bytes == data_type::dtype<byte>().type_bytes) 
+		value_range = 255.f;
+	else assert(vol_data->store_dtype.type_bytes == data_type::dtype<ushort>().type_bytes); 
+
+	float scale_tf2volume = value_range / (float)tmap_data->array_lengths.x;
+
+	otf_Mm_range.x = tmap_data->valid_min_idx.x * scale_tf2volume;
+	otf_Mm_range.y = tmap_data->valid_max_idx.x * scale_tf2volume;
 
 	const int blk_level = 1;	// 0 : High Resolution, 1 : Low Resolution
 	VolumeBlocks* volblk = ((VmVObjectVolume*)main_vobj)->GetVolumeBlock(blk_level);
@@ -1897,7 +1906,7 @@ void grd_helper::SetCb_TMap(CB_TMAP& cb_tmap, VmObject* tobj)
 
 	cb_tmap.first_nonzeroalpha_index = tobj_data->valid_min_idx.x;
 	cb_tmap.last_nonzeroalpha_index = tobj_data->valid_max_idx.x;
-	cb_tmap.tmap_size = tobj_data->array_lengths.x;
+	cb_tmap.tmap_size_x = tobj_data->array_lengths.x;
 	vmbyte4 y4ColorEnd = ((vmbyte4**)tobj_data->tmap_buffers)[0][tobj_data->array_lengths.x - 1];
 	cb_tmap.last_color = vmfloat4(y4ColorEnd.x / 255.f, y4ColorEnd.y / 255.f, y4ColorEnd.z / 255.f, y4ColorEnd.w / 255.f);
 }

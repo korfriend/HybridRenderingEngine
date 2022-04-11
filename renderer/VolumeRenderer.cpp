@@ -471,7 +471,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #define __RM_CLIPOPAQUE 20
 #define __RM_OPAQUE 21
 #define __RM_SCULPTMASK 22
-#define __RM_MAXMASK 23
+#define __RM_MULTIOTF 23
 //#define __RM_TEST 6
 #define __RM_RAYMAX 10
 #define __RM_RAYMIN 11
@@ -495,7 +495,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			GradientMagnitudeAnalysis(grad_minmax, vobj);
 			is_modulation_mode = true;
 			break;
-		case __RM_MAXMASK:
+		case __RM_DEFAULT:
+		case __RM_MULTIOTF:
 			break;
 		default: break;
 		}
@@ -533,6 +534,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			GpuRes gres_mask_vol;
 			grd_helper::UpdateVolumeModel(gres_mask_vol, mask_vol_obj, true);
 			dx11DeviceImmContext->CSSetShaderResources(2, 1, (__SRV_PTR*)&gres_mask_vol.alloc_res_ptrs[DTYPE_SRV]);
+		}
+		else if (ray_cast_type == __RM_MULTIOTF) {
+			ray_cast_type = __RM_MULTIOTF;
 		}
 
 		GpuRes gres_vol;
@@ -634,6 +638,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #pragma endregion 
 
 #pragma region Renderer
+		// LATER... MFR_MODE::DYNAMIC_KB ==> DEPRECATED in VR
+		// MFR_MODE::DYNAMIC_KB also uses static K buffer in VR
 		ID3D11ComputeShader* cshader = NULL;
 		switch (ray_cast_type)
 		{
@@ -662,6 +668,18 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				cshader = apply_fragmerge ? GETCS(VR_CONTEXT_FM_cs_5_0) : GETCS(VR_CONTEXT_cs_5_0); break;
 			case MFR_MODE::DYNAMIC_KB:
 				cshader = apply_fragmerge ? GETCS(VR_CONTEXT_DKBZ_cs_5_0) : GETCS(VR_CONTEXT_DFB_cs_5_0); break;
+			default:
+				VMERRORMESSAGE("DOES NOT SUPPORT!!");
+			}
+			break;
+		case __RM_MULTIOTF:
+			switch (mode_OIT)
+			{
+			case MFR_MODE::STATIC_KB:
+			case MFR_MODE::DYNAMIC_FB:
+				cshader = apply_fragmerge ? GETCS(VR_MULTIOTF_FM_cs_5_0) : GETCS(VR_MULTIOTF_cs_5_0); break;
+			case MFR_MODE::DYNAMIC_KB:
+				cshader = apply_fragmerge ? GETCS(VR_MULTIOTF_DKBZ_cs_5_0) : GETCS(VR_MULTIOTF_DFB_cs_5_0); break;
 			default:
 				VMERRORMESSAGE("DOES NOT SUPPORT!!");
 			}
