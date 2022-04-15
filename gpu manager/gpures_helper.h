@@ -576,7 +576,7 @@ namespace grd_helper
 		// 24~31bit : Sculpt Mask Value (1 byte)
 		uint vobj_flag;
 		uint iso_value;
-		float ao_intensity;
+		float mask_value_range;
 		uint outline_color; // 
 
 		// light properties
@@ -604,6 +604,11 @@ namespace grd_helper
 		float shadowmap_depth_bias; // for shadow
 		float occ_radius;
 		uint occ_num_rays;
+
+		float ao_intensity;
+		uint rf_dummy_1;
+		uint rf_dummy_2;
+		uint rf_dummy_3;
 
 		ZERO_SET(CB_RenderingEffect)
 	};

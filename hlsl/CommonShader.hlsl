@@ -168,7 +168,7 @@ struct HxCB_VolumeObject
 	// 24~31bit : Sculpt Mask Value (1 byte)
 	uint vobj_flag;
 	uint iso_value;
-	float ao_intensity;
+	float mask_value_range;
 	uint outline_color; // 
 
 	float4 pb_shading_factor; // x : Ambient, y : Diffuse, z : Specular, w : specular
@@ -193,6 +193,11 @@ struct HxCB_RenderingEffect // normally for each object
     float shadowmap_depth_bias; // for shadow
     float occ_radius;
     uint occ_num_rays;
+
+	float ao_intensity;
+	uint rf_dummy_1;
+	uint rf_dummy_2;
+	uint rf_dummy_3;
 };
 
 struct HxCB_VolumeRenderingEffect // normally for each volume
@@ -533,10 +538,10 @@ float4 LoadOtfBuf(const in int sample_value, const in Buffer<float4> buf_otf, co
     return vis_otf;
 }
 
-#define OTFROWPITCH 65537
+#define OTFROWPITCH 4096
 float4 LoadOtfBufId(const in int sample_value, const in Buffer<float4> buf_otf, const in float opacity_correction, const in int id)
 {
-    float4 vis_otf = buf_otf[sample_value + id * OTFROWPITCH];
+    float4 vis_otf = buf_otf[sample_value + id * g_cbTmap.tmap_size_x];
     vis_otf.a *= opacity_correction;
     vis_otf.rgb *= vis_otf.a; // associate color
     return vis_otf;

@@ -489,13 +489,15 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50002), "VR_RAYSUM_cs_5_0", "cs_5_0"), VR_RAYSUM_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50006), "VR_SURFACE_cs_5_0", "cs_5_0"), VR_SURFACE_cs_5_0);
 
-		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50003), "VR_DEFAULT_FM_cs_5_0", "cs_5_0"), VR_DEFAULT_cs_5_0);
-		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50004), "VR_OPAQUE_FM_cs_5_0", "cs_5_0"), VR_OPAQUE_cs_5_0);
-		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50005), "VR_CONTEXT_FM_cs_5_0", "cs_5_0"), VR_CONTEXT_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50003), "VR_DEFAULT_FM_cs_5_0", "cs_5_0"), VR_DEFAULT_FM_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50004), "VR_OPAQUE_FM_cs_5_0", "cs_5_0"), VR_OPAQUE_FM_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50005), "VR_CONTEXT_FM_cs_5_0", "cs_5_0"), VR_CONTEXT_FM_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50011), "VR_MULTIOTF_FM_cs_5_0", "cs_5_0"), VR_MULTIOTF_FM_cs_5_0);
 		
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50013), "VR_DEFAULT_cs_5_0", "cs_5_0"), VR_DEFAULT_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50014), "VR_OPAQUE_cs_5_0", "cs_5_0"), VR_OPAQUE_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50015), "VR_CONTEXT_cs_5_0", "cs_5_0"), VR_CONTEXT_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50016), "VR_MULTIOTF_cs_5_0", "cs_5_0"), VR_MULTIOTF_cs_5_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50020), "VR_DEFAULT_DKBZ_cs_5_0", "cs_5_0"), VR_DEFAULT_DKBZ_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50021), "VR_OPAQUE_DKBZ_cs_5_0", "cs_5_0"), VR_OPAQUE_DKBZ_cs_5_0);
@@ -1753,7 +1755,6 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 	}
 	cb_volume.vz_thickness = cb_volume.sample_dist;	// 현재 HLSL 은 Sample Distance 를 강제로 사용 중...
 	cb_volume.iso_value = iso_value;
-	cb_volume.ao_intensity = actor->GetParam("_float_SSAOIntensity", 0.5f);
 
 	//printf("sample_rate : %f\n", sample_rate);
 	//printf("minDistSample : %f\n", minDistSample);
@@ -1929,6 +1930,7 @@ void grd_helper::SetCb_RenderingEffect(CB_RenderingEffect& cb_reffect, VmActor* 
 		cb_reffect.brdf_expw_u = actor->GetParam("_float_PhongExpWeightU", 50.f);
 		cb_reffect.brdf_expw_v = actor->GetParam("_float_PhongExpWeightV", 50.f);
 	}
+	cb_reffect.ao_intensity = actor->GetParam("_float_SSAOIntensity", 0.5f);
 
 	// Curvature
 	// to do

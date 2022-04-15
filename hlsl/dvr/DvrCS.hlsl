@@ -123,10 +123,13 @@ bool Sample_Volume_And_Check(inout int sample_v, const in float3 pos_sample_ts, 
 	float fsample = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
     sample_v = (int) (fsample * g_cbVobj.value_range + 0.5f);
 #if OTF_MASK==1
-    int max_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, 255, tex3D_volmask);
-    int mask_otf_id = buf_ids[max_vint];
-    float4 vis_otf = LoadOtfBufId(sample_v, buf_otf, g_cbVobj.opacity_correction, mask_otf_id);
-    return (uint)(vis_otf.a * 255.f) > 0;
+    //int max_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, 255, tex3D_volmask);
+    //int mask_otf_id = buf_ids[max_vint];
+    //float4 vis_otf = LoadOtfBufId(sample_v, buf_otf, g_cbVobj.opacity_correction, mask_otf_id);
+    //return (uint)(vis_otf.a * 255.f) > 0;
+	//int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
+	int mask_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, g_cbVobj.mask_value_range, tex3D_volmask);
+	return sample_v >= min_valid_v && mask_vint > 0;
 #elif SCULPT_MASK == 1
 	int max_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, 255, tex3D_volmask);
     int sculpt_value = (int) (g_cbVobj.vobj_flag >> 24);
@@ -141,10 +144,14 @@ bool Vis_Volume_And_Check(inout float4 vis_otf, inout int sample_v, const in flo
 	float fsample = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
 	sample_v = (int)(fsample * g_cbVobj.value_range + 0.5f);
 #if OTF_MASK==1
-    int max_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, 255, tex3D_volmask);
-    int mask_otf_id = buf_ids[max_vint];
-    vis_otf = LoadOtfBufId(sample_v, buf_otf, g_cbVobj.opacity_correction, mask_otf_id);
-    return (uint)(vis_otf.a * 255.f) > FLT_MIN;
+    //int max_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, 255, tex3D_volmask);
+    //int mask_otf_id = buf_ids[max_vint];
+    //vis_otf = LoadOtfBufId(sample_v, buf_otf, g_cbVobj.opacity_correction, mask_otf_id);
+    //return (uint)(vis_otf.a * 255.f) > FLT_MIN;
+	int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
+	//int mask_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, g_cbVobj.mask_value_range, tex3D_volmask);
+	vis_otf = LoadOtfBufId(fsample * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, 0);
+	return vis_otf.a >= FLT_OPACITY_MIN__ && mask_vint > 0;
 #elif SCULPT_MASK == 1
 	int max_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, 255, tex3D_volmask);
     int sculpt_value = (int) (g_cbVobj.vobj_flag >> 24);
@@ -490,7 +497,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 				float grad_len;
 				GRAD_NRL_VOL(pos_ray_start_ts, dir_sample_ws, grad_len);
 				//float modulator = pow(min(grad_len * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(g_cbVobj.kappa_i, g_cbVobj.kappa_s));
-				float modulator = min(grad_len * 65535.f * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
+				float modulator = min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
 				vis_sample *= modulator;
 #endif
 				//vis_sample *= mask_weight;
@@ -531,8 +538,8 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #if VR_MODE == 2
 						float __s = abs(dot(view_dir, nrl));
 						//g_cbVobj.kappa_i
-						//float modulator = pow(min(grad_len * 65535.f * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(g_cbVobj.kappa_i * max(__s, 0.1f), g_cbVobj.kappa_s));
-						float modulator = min(grad_len * 65535.f * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
+						//float modulator = pow(min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(g_cbVobj.kappa_i * max(__s, 0.1f), g_cbVobj.kappa_s));
+						float modulator = min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
 						vis_sample *= modulator;
 #endif
 						//vis_sample *= mask_weight;

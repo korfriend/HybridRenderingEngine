@@ -151,7 +151,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 		string prefix_path = hlslobj_path;
 
-#define CS_NUM 16
+#define CS_NUM 18
 #define SET_CS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(COMPUTE_SHADER, NAME), dx11CShader, true)
 
 		string strNames_CS[CS_NUM] = {
@@ -161,9 +161,11 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			  ,"VR_DEFAULT_cs_5_0"
 			  ,"VR_OPAQUE_cs_5_0"
 			  ,"VR_CONTEXT_cs_5_0"
+			  ,"VR_MULTIOTF_cs_5_0"
 			  ,"VR_DEFAULT_FM_cs_5_0"
 			  ,"VR_OPAQUE_FM_cs_5_0"
 			  ,"VR_CONTEXT_FM_cs_5_0"
+			  ,"VR_MULTIOTF_FM_cs_5_0"
 			  ,"VR_DEFAULT_DKBZ_cs_5_0"
 			  ,"VR_OPAQUE_DKBZ_cs_5_0"
 			  ,"VR_CONTEXT_DKBZ_cs_5_0"
@@ -590,6 +592,14 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			cbVolumeObj.kappa_i = actor->GetParam("_float_ModulationKappai", 1.f);
 			cbVolumeObj.kappa_s = actor->GetParam("_float_ModulationKappas", 1.f);
 		}
+		if (mask_vol_obj) {
+			VolumeData* mask_vol_data = mask_vol_obj->GetVolumeData();
+			if (mask_vol_data->store_dtype.type_bytes == data_type::dtype<byte>().type_bytes) // char
+				cbVolumeObj.mask_value_range = 255.f;
+			else if (mask_vol_data->store_dtype.type_bytes == data_type::dtype<ushort>().type_bytes) // short
+				cbVolumeObj.mask_value_range = 65535.f;
+			else GMERRORMESSAGE("UNSUPPORTED FORMAT : MASK VOLUME");
+		}
 		D3D11_MAPPED_SUBRESOURCE mappedResVolObj;
 		dx11DeviceImmContext->Map(cbuf_vobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResVolObj);
 		CB_VolumeObject* cbVolumeObjData = (CB_VolumeObject*)mappedResVolObj.pData;
@@ -678,8 +688,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			case MFR_MODE::STATIC_KB:
 			case MFR_MODE::DYNAMIC_FB:
 				cshader = apply_fragmerge ? GETCS(VR_MULTIOTF_FM_cs_5_0) : GETCS(VR_MULTIOTF_cs_5_0); break;
-			case MFR_MODE::DYNAMIC_KB:
-				cshader = apply_fragmerge ? GETCS(VR_MULTIOTF_DKBZ_cs_5_0) : GETCS(VR_MULTIOTF_DFB_cs_5_0); break;
+			//case MFR_MODE::DYNAMIC_KB:
+			//	cshader = apply_fragmerge ? GETCS(VR_MULTIOTF_DKBZ_cs_5_0) : GETCS(VR_MULTIOTF_DFB_cs_5_0); break;
 			default:
 				VMERRORMESSAGE("DOES NOT SUPPORT!!");
 			}
