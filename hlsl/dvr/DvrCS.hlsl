@@ -127,8 +127,8 @@ bool Sample_Volume_And_Check(inout int sample_v, const in float3 pos_sample_ts, 
     //int mask_otf_id = buf_ids[max_vint];
     //float4 vis_otf = LoadOtfBufId(sample_v, buf_otf, g_cbVobj.opacity_correction, mask_otf_id);
     //return (uint)(vis_otf.a * 255.f) > 0;
-	//int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
-	int mask_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, g_cbVobj.mask_value_range, tex3D_volmask);
+	int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
+	//int mask_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, g_cbVobj.mask_value_range, tex3D_volmask);
 	return sample_v >= min_valid_v && mask_vint > 0;
 #elif SCULPT_MASK == 1
 	int max_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, 255, tex3D_volmask);
@@ -148,10 +148,10 @@ bool Vis_Volume_And_Check(inout float4 vis_otf, inout int sample_v, const in flo
     //int mask_otf_id = buf_ids[max_vint];
     //vis_otf = LoadOtfBufId(sample_v, buf_otf, g_cbVobj.opacity_correction, mask_otf_id);
     //return (uint)(vis_otf.a * 255.f) > FLT_MIN;
-	int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
+	int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
 	//int mask_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, g_cbVobj.mask_value_range, tex3D_volmask);
-	vis_otf = LoadOtfBufId(fsample * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, 0);
-	return vis_otf.a >= FLT_OPACITY_MIN__ && mask_vint > 0;
+	vis_otf = LoadOtfBufId(fsample * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
+	return vis_otf.a >= FLT_OPACITY_MIN__ && mask_vint > 0;//&& mask_vint == 3;
 #elif SCULPT_MASK == 1
 	int max_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, 255, tex3D_volmask);
     int sculpt_value = (int) (g_cbVobj.vobj_flag >> 24);
