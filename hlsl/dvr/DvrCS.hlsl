@@ -113,11 +113,55 @@ INVALID CASE IN THIS VERSION
 #endif
 #endif
 
-int Sample_Volume(const in float3 pos_sample_ts)
-{
-    return (int) (tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r * g_cbVobj.value_range + 0.5f);
-}
+//int Sample_Volume(const in float3 pos_sample_ts)
+//{
+//    return (int) (tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r * g_cbVobj.value_range + 0.5f);
+//}
 
+#if VR_MODE == 3
+bool Sample_Volume_And_Check(inout int sample_v, const in float3 pos_sample_ts, const in int min_valid_v)
+{
+	float fsample = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
+	return sample_v > 0;
+}
+bool Vis_Volume_And_Check(inout float4 vis_otf, inout int sample_v, const in float3 pos_sample_ts)
+{
+	float3 pos_vs = float3(pos_sample_ts.x * g_cbVobj.vol_size.x - 0.5f, 
+		pos_sample_ts.y * g_cbVobj.vol_size.y - 0.5f, 
+		pos_sample_ts.z * g_cbVobj.vol_size.z - 0.5f);
+	int3 idx_vs = int3(pos_vs);
+
+	float samples[8];
+	samples[0] = tex3D_volume.Load(int4(idx_vs, 0)).r;
+	samples[1] = tex3D_volume.Load(int4(idx_vs + int3(1, 0, 0), 0)).r;
+	samples[2] = tex3D_volume.Load(int4(idx_vs + int3(0, 1, 0), 0)).r;
+	samples[3] = tex3D_volume.Load(int4(idx_vs + int3(1, 1, 0), 0)).r;
+	samples[4] = tex3D_volume.Load(int4(idx_vs + int3(0, 0, 1), 0)).r;
+	samples[5] = tex3D_volume.Load(int4(idx_vs + int3(1, 0, 1), 0)).r;
+	samples[6] = tex3D_volume.Load(int4(idx_vs + int3(0, 1, 1), 0)).r;
+	samples[7] = tex3D_volume.Load(int4(idx_vs + int3(1, 1, 1), 0)).r;
+
+	float3 f3InterpolateRatio = pos_vs - idx_vs;
+
+	float fInterpolateWeights[8];
+	fInterpolateWeights[0] = (1.f - f3InterpolateRatio.z) * (1.f - f3InterpolateRatio.y) * (1.f - f3InterpolateRatio.x);
+	fInterpolateWeights[1] = (1.f - f3InterpolateRatio.z) * (1.f - f3InterpolateRatio.y) * f3InterpolateRatio.x;
+	fInterpolateWeights[2] = (1.f - f3InterpolateRatio.z) * f3InterpolateRatio.y * (1.f - f3InterpolateRatio.x);
+	fInterpolateWeights[3] = (1.f - f3InterpolateRatio.z) * f3InterpolateRatio.y * f3InterpolateRatio.x;
+	fInterpolateWeights[4] = f3InterpolateRatio.z * (1.f - f3InterpolateRatio.y) * (1.f - f3InterpolateRatio.x);
+	fInterpolateWeights[5] = f3InterpolateRatio.z * (1.f - f3InterpolateRatio.y) * f3InterpolateRatio.x;
+	fInterpolateWeights[6] = f3InterpolateRatio.z * f3InterpolateRatio.y * (1.f - f3InterpolateRatio.x);
+	fInterpolateWeights[7] = f3InterpolateRatio.z * f3InterpolateRatio.y * f3InterpolateRatio.x;
+
+	vis_otf = (float4)0;
+	[unroll]
+	for (int m = 0; m < 8; m++) {
+		float4 vis = LoadOtfBuf(samples[m] * g_cbTmap.tmap_size_x, buf_otf, 1);
+		vis_otf += vis * fInterpolateWeights[m];
+	}
+	return vis_otf.a >= FLT_OPACITY_MIN__;
+}
+#else
 bool Sample_Volume_And_Check(inout int sample_v, const in float3 pos_sample_ts, const in int min_valid_v)
 {
 	float fsample = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
@@ -162,6 +206,7 @@ bool Vis_Volume_And_Check(inout float4 vis_otf, inout int sample_v, const in flo
     return vis_otf.a >= FLT_OPACITY_MIN__;
 #endif
 }
+#endif
 
 #define SURFACEREFINEMENTNUM 5
 void Compute_1stHit(inout int step, inout int sample_v, const in float3 pos_ray_start_ws, const in float3 dir_sample_ws, const in int num_ray_samples)

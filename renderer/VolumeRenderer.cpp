@@ -151,7 +151,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 		string prefix_path = hlslobj_path;
 
-#define CS_NUM 18
+#define CS_NUM 20
 #define SET_CS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(COMPUTE_SHADER, NAME), dx11CShader, true)
 
 		string strNames_CS[CS_NUM] = {
@@ -162,10 +162,12 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			  ,"VR_OPAQUE_cs_5_0"
 			  ,"VR_CONTEXT_cs_5_0"
 			  ,"VR_MULTIOTF_cs_5_0"
+			  ,"VR_MASKVIS_cs_5_0"
 			  ,"VR_DEFAULT_FM_cs_5_0"
 			  ,"VR_OPAQUE_FM_cs_5_0"
 			  ,"VR_CONTEXT_FM_cs_5_0"
 			  ,"VR_MULTIOTF_FM_cs_5_0"
+			  ,"VR_MASKVIS_FM_cs_5_0"
 			  ,"VR_DEFAULT_DKBZ_cs_5_0"
 			  ,"VR_OPAQUE_DKBZ_cs_5_0"
 			  ,"VR_CONTEXT_DKBZ_cs_5_0"
@@ -474,6 +476,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #define __RM_OPAQUE 21
 #define __RM_SCULPTMASK 22
 #define __RM_MULTIOTF 23
+#define __RM_VISVOLMASK 24
 //#define __RM_TEST 6
 #define __RM_RAYMAX 10
 #define __RM_RAYMIN 11
@@ -499,7 +502,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			break;
 		case __RM_DEFAULT:
 		case __RM_MULTIOTF:
-			break;
+		case __RM_VISVOLMASK:
 		default: break;
 		}
 
@@ -531,18 +534,26 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		MapTable* tmap_data = tobj_otf->GetObjParamPtr<MapTable>("_TableMap_OTF");
 
 		VmVObjectVolume* mask_vol_obj = (VmVObjectVolume*)actor->GetAssociateRes("MASKVOLUME");
+
 		if (mask_vol_obj != NULL)
 		{
-			GpuRes gres_mask_vol;
-			grd_helper::UpdateVolumeModel(gres_mask_vol, mask_vol_obj, true);
-			dx11DeviceImmContext->CSSetShaderResources(2, 1, (__SRV_PTR*)&gres_mask_vol.alloc_res_ptrs[DTYPE_SRV]);
+			if (ray_cast_type == __RM_VISVOLMASK) {
+				vobj = mask_vol_obj;
+				mask_vol_obj = NULL;
+				vol_data = vobj->GetVolumeData();
+			}
+			else {
+				GpuRes gres_mask_vol;
+				grd_helper::UpdateVolumeModel(gres_mask_vol, mask_vol_obj, true);
+				dx11DeviceImmContext->CSSetShaderResources(2, 1, (__SRV_PTR*)&gres_mask_vol.alloc_res_ptrs[DTYPE_SRV]);
+			}
 		}
-		else if (ray_cast_type == __RM_MULTIOTF) {
-			ray_cast_type = __RM_MULTIOTF;
+		else if (ray_cast_type == __RM_MULTIOTF || ray_cast_type == __RM_VISVOLMASK) {
+			ray_cast_type = __RM_DEFAULT;
 		}
 
 		GpuRes gres_vol;
-		grd_helper::UpdateVolumeModel(gres_vol, vobj, false, progress); // ray_cast_type == __RM_MAXMASK
+		grd_helper::UpdateVolumeModel(gres_vol, vobj, ray_cast_type == __RM_VISVOLMASK, progress); // ray_cast_type == __RM_MAXMASK
 		dx11DeviceImmContext->CSSetShaderResources(0, 1, (__SRV_PTR*)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
 
 		GpuRes gres_tmap_otf;
@@ -553,8 +564,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		if (vol_blk == NULL)
 		{
 			vobj->UpdateVolumeMinMaxBlocks();
-			vol_blk = vobj->GetVolumeBlock(blk_level);
+			//vol_blk = vobj->GetVolumeBlock(blk_level);
 		}
+
 		GpuRes gres_volblk_otf, gres_volblk_min, gres_volblk_max;
 		__SRV_PTR volblk_srv = NULL;
 		if (is_xray_mode) {
@@ -693,6 +705,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			default:
 				VMERRORMESSAGE("DOES NOT SUPPORT!!");
 			}
+			break;
+		case __RM_VISVOLMASK:
+			cshader = apply_fragmerge ? GETCS(VR_MASKVIS_FM_cs_5_0) : GETCS(VR_MASKVIS_cs_5_0); break;
 			break;
 		case __RM_DEFAULT:
 		case __RM_SCULPTMASK: 
