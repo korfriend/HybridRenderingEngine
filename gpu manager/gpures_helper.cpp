@@ -1962,12 +1962,12 @@ void grd_helper::SetCb_ClipInfo(CB_ClipInfo& cb_clip, VmVObject* obj, VmActor* a
 
 	if (cb_clip.clip_flag & 0x1)
 	{
-		cb_clip.pos_clipplane = (vmfloat3)actor->GetParam("_float3_PosClipPlaneWS", (vmdouble3)0); 
-		cb_clip.vec_clipplane = (vmfloat3)actor->GetParam("_float3_VecClipPlaneWS", (vmdouble3)0);
+		cb_clip.pos_clipplane = actor->GetParam("_float3_PosClipPlaneWS", (vmfloat3)0);
+		cb_clip.vec_clipplane = actor->GetParam("_float3_VecClipPlaneWS", (vmfloat3)0);
 	}
 	if (cb_clip.clip_flag & 0x2)
 	{
-		cb_clip.mat_clipbox_ws2bs = actor->GetParam("_matrix44f_MatrixClipWS2BS", vmmat44f());
+		cb_clip.mat_clipbox_ws2bs = TRANSPOSE(actor->GetParam("_matrix44f_MatrixClipWS2BS", vmmat44f()));
 	}
 }
 
