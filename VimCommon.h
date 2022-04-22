@@ -26,7 +26,8 @@
  //#define __VERSION "0.x beta" // released at 22.01.10
 //#define __VERSION "1.00" // released at 22.02.5
 //#define __VERSION "1.01" // released at 22.02.15
-#define __VERSION "1.10.official" // released at 22.04.02
+//#define __VERSION "1.10.official" // released at 22.04.02
+#define __VERSION "1.11.preview2" // released at 22.04.21
 
 #define _HAS_STD_BYTE 0
 
