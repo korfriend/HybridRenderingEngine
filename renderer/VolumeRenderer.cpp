@@ -146,7 +146,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			exe_path.erase(0, pos + delimiter.length());
 		}
 		//hlslobj_path += "..\\..\\VmModuleProjects\\renderer_gpudx11\\shader_compiled_objs\\";
-		hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
+		//hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
+		hlslobj_path += "..\\..\\VmModuleProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
 		//cout << hlslobj_path << endl;
 
 		string prefix_path = hlslobj_path;
@@ -526,12 +527,18 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 #pragma region GPU resource updates
 		VmObject* tobj_otf = (VmObject*)actor->GetAssociateRes("OTF"); // essential!
+		if (is_xray_mode) {
+			VmObject* tobj_windowing = (VmObject*)actor->GetAssociateRes("WINDOWING");
+			//if (tobj_windowing) 
+			//	tobj_otf = tobj_windowing;
+		}
+		MapTable* tmap_data = tobj_otf->GetObjParamPtr<MapTable>("_TableMap_OTF");
+
 		if (tobj_otf == NULL)
 		{
 			VMERRORMESSAGE("NOT ASSIGNED OTF");
 			continue;
 		}
-		MapTable* tmap_data = tobj_otf->GetObjParamPtr<MapTable>("_TableMap_OTF");
 
 		VmVObjectVolume* mask_vol_obj = (VmVObjectVolume*)actor->GetAssociateRes("MASKVOLUME");
 
