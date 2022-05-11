@@ -146,8 +146,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			exe_path.erase(0, pos + delimiter.length());
 		}
 		//hlslobj_path += "..\\..\\VmModuleProjects\\renderer_gpudx11\\shader_compiled_objs\\";
-		//hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
-		hlslobj_path += "..\\..\\VmModuleProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
+		hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
+		//hlslobj_path += "..\\..\\VmModuleProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
 		//cout << hlslobj_path << endl;
 
 		string prefix_path = hlslobj_path;
@@ -529,8 +529,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		VmObject* tobj_otf = (VmObject*)actor->GetAssociateRes("OTF"); // essential!
 		if (is_xray_mode) {
 			VmObject* tobj_windowing = (VmObject*)actor->GetAssociateRes("WINDOWING");
-			//if (tobj_windowing) 
-			//	tobj_otf = tobj_windowing;
+			if (tobj_windowing) 
+				tobj_otf = tobj_windowing;
 		}
 		MapTable* tmap_data = tobj_otf->GetObjParamPtr<MapTable>("_TableMap_OTF");
 
@@ -575,13 +575,18 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		}
 
 		GpuRes gres_volblk_otf, gres_volblk_min, gres_volblk_max;
+		GpuRes& gres_volblk = gres_volblk_otf;
 		__SRV_PTR volblk_srv = NULL;
 		if (is_xray_mode) {
 			grd_helper::UpdateMinMaxBlocks(gres_volblk_min, gres_volblk_max, vobj);
-			if (ray_cast_type == __RM_RAYMAX)	// Min
+			if (ray_cast_type == __RM_RAYMAX) {	// Min 
 				volblk_srv = (__SRV_PTR)gres_volblk_max.alloc_res_ptrs[DTYPE_SRV];
-			else if (ray_cast_type == __RM_RAYMIN)
+				gres_volblk = gres_volblk_max;
+			}
+			else if (ray_cast_type == __RM_RAYMIN) {
 				volblk_srv = (__SRV_PTR)gres_volblk_min.alloc_res_ptrs[DTYPE_SRV];
+				gres_volblk = gres_volblk_min;
+			}
 		}
 		else {
 			grd_helper::UpdateOtfBlocks(gres_volblk_otf, vobj, mask_vol_obj, tobj_otf, sculpt_index); // this tagged mask volume is always used even when MIP mode
@@ -595,7 +600,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		vmint3 vol_sampled_size = vmint3(gres_vol.res_values.GetParam("WIDTH", (uint)0),
 			gres_vol.res_values.GetParam("HEIGHT", (uint)0),
 			gres_vol.res_values.GetParam("DEPTH", (uint)0));
-		grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, actor, high_samplerate ? 2.f : 1.f, false, tmap_data->valid_min_idx.x, gres_volblk_otf.options["FORMAT"] == DXGI_FORMAT_R16_UNORM ? 65535.f : 1.f);
+		grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, actor, high_samplerate ? 2.f : 1.f, false, tmap_data->valid_min_idx.x, gres_volblk.options["FORMAT"] == DXGI_FORMAT_R16_UNORM ? 65535.f : 1.f);
 		cbVolumeObj.pb_shading_factor = material_phongCoeffs;
 		cbVolumeObj.outline_color = (uint)(outline_color.r * 255.f) | ((uint)(outline_color.g * 255.f) << 8) | ((uint)(outline_color.b * 255.f) << 16) | (uint)(outline_thickness << 24);
 		if (is_ghost_mode) {
