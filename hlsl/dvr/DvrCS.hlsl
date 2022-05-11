@@ -440,7 +440,6 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	//depth_out = fragment_zdepth[DTid.xy];
 	depth_out = vr_fragment_1sthit_read[DTid.xy];
 	
-
 	float4 outline_test = ConvertUIntToFloat4(g_cbVobj.outline_color);
 	if (outline_test.w > 0 && vr_hit_enc == 0) {
 		// note that the outline appears over background of the DVR front-surface
@@ -500,118 +499,222 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
     // recompute the vis result  
 
 	// DVR ray-casting core part
+#if RAYMODE == 0 // DVR
+	vis_out = 0;
+	depth_out = FLT_MAX;
+
+	float3 pos_ray_start_ts = TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts);
+	float3 dir_sample_ts = TransformVector(dir_sample_ws, g_cbVobj.mat_ws2ts);
+
+	float depth_hit = depth_out = length(pos_ray_start_ws - pos_ip_ws);
+
+	// note that the gradient normal direction faces to the inside
+	float3 light_dirinv = -g_cbEnv.dir_light_ws;
+	if (g_cbEnv.env_flag & 0x1)
+		light_dirinv = -normalize(pos_ray_start_ws - g_cbEnv.pos_light_ws);
+
+	uint idx_dlayer = 0;
 	{
-		vis_out = 0;
-		depth_out = FLT_MAX;
-
-		float3 pos_ray_start_ts = TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts);
-		float3 dir_sample_ts = TransformVector(dir_sample_ws, g_cbVobj.mat_ws2ts);
-
-		float depth_hit = depth_out = length(pos_ray_start_ws - pos_ip_ws);
-
-		// note that the gradient normal direction faces to the inside
-		float3 light_dirinv = -g_cbEnv.dir_light_ws;
-		if (g_cbEnv.env_flag & 0x1)
-			light_dirinv = -normalize(pos_ray_start_ws - g_cbEnv.pos_light_ws);
-
-		uint idx_dlayer = 0;
-		{
-			// care for clip plane ... 
-		}
-
-		float sample_dist = g_cbVobj.sample_dist;
-		float3 view_dir = normalize(dir_sample_ws);
-		//vis_out = float4(TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts), 1);
-		//return;
-
-#if FRAG_MERGING == 1
-		Fragment f_dly = fs[0]; // if no frag, the z-depth is infinite
-#endif
-
-		int start_idx = 0, sample_v = 0;
-		if (vr_hit_enc == 2)
-		{
-			start_idx = 1;
-			float4 vis_otf = (float4) 0;
-			if (Vis_Volume_And_Check(vis_otf, sample_v, pos_ray_start_ts))
-			{
-				float4 vis_sample = vis_otf;
-				float depth_sample = depth_hit;
-#if VR_MODE == 2
-				float grad_len;
-				GRAD_NRL_VOL(pos_ray_start_ts, dir_sample_ws, grad_len);
-				//float modulator = pow(min(grad_len * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(g_cbVobj.kappa_i, g_cbVobj.kappa_s));
-				float modulator = min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
-				vis_sample *= modulator;
-#endif
-				//vis_sample *= mask_weight;
-#if FRAG_MERGING == 1
-				INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, sample_dist, fs, merging_beta);
-#else
-				INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, fs);
-#endif
-			}
-		}
-
-		[loop]
-		for (int i = start_idx; i < num_ray_samples; i++)
-		{
-			float3 pos_sample_ts = pos_ray_start_ts + dir_sample_ts * (float)i;
-
-			LOAD_BLOCK_INFO(blkSkip, pos_sample_ts, dir_sample_ts, num_ray_samples, i);
-
-			if (blkSkip.blk_value > 0)
-			{
-				[loop]
-				for (int j = 0; j < blkSkip.num_skip_steps; j++, i++)
-				{
-					//float3 pos_sample_blk_ws = pos_hit_ws + dir_sample_ws * (float) i;
-					float3 pos_sample_blk_ts = pos_ray_start_ts + dir_sample_ts * (float)i;
-
-					float4 vis_otf = (float4) 0;
-					if (Vis_Volume_And_Check(vis_otf, sample_v, pos_sample_blk_ts))
-					{
-						float grad_len;
-						float3 nrl = GRAD_NRL_VOL(pos_sample_blk_ts, dir_sample_ws, grad_len);
-						float shade = 1.f;
-						if (grad_len > 0)
-							shade = PhongBlinnVr(view_dir, g_cbVobj.pb_shading_factor, light_dirinv, nrl, true);
-						//vis_otf *= 0.01;
-						float4 vis_sample = float4(shade * vis_otf.rgb, vis_otf.a);
-						float depth_sample = depth_hit + (float)i * sample_dist;
-#if VR_MODE == 2
-						float __s = abs(dot(view_dir, nrl));
-						//g_cbVobj.kappa_i
-						//float modulator = pow(min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(g_cbVobj.kappa_i * max(__s, 0.1f), g_cbVobj.kappa_s));
-						float modulator = min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
-						vis_sample *= modulator;
-#endif
-						//vis_sample *= mask_weight;
-#if FRAG_MERGING == 1
-						INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, sample_dist, fs, merging_beta);
-#else
-						INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, fs);
-#endif
-						if (vis_out.a > ERT_ALPHA)
-						{
-							i = num_ray_samples;
-							j = num_ray_samples;
-							break;
-						}
-					} // if(sample valid check)
-				} // for (int j = 0; j < blkSkip.num_skip_steps; j++, i++)
-			}
-			else
-			{
-				i += blkSkip.num_skip_steps;
-			}
-			// this is for outer loop's i++
-			i -= 1;
-		}
-
-		vis_out.rgb *= (1.f - ao_vr);
-		REMAINING_MIX(vis_out, idx_dlayer, num_frags, fs);
+		// care for clip plane ... 
 	}
+
+	float sample_dist = g_cbVobj.sample_dist;
+	float3 view_dir = normalize(dir_sample_ws);
+	//vis_out = float4(TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts), 1);
+	//return;
+
+#if FRAG_MERGING == 1
+	Fragment f_dly = fs[0]; // if no frag, the z-depth is infinite
+#endif
+
+	int start_idx = 0, sample_v = 0;
+	if (vr_hit_enc == 2)
+	{
+		start_idx = 1;
+		float4 vis_otf = (float4) 0;
+		if (Vis_Volume_And_Check(vis_otf, sample_v, pos_ray_start_ts))
+		{
+			float4 vis_sample = vis_otf;
+			float depth_sample = depth_hit;
+#if VR_MODE == 2
+			float grad_len;
+			GRAD_NRL_VOL(pos_ray_start_ts, dir_sample_ws, grad_len);
+			//float modulator = pow(min(grad_len * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(g_cbVobj.kappa_i, g_cbVobj.kappa_s));
+			float modulator = min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
+			vis_sample *= modulator;
+#endif
+			//vis_sample *= mask_weight;
+#if FRAG_MERGING == 1
+			INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, sample_dist, fs, merging_beta);
+#else
+			INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, fs);
+#endif
+		}
+	}
+
+	[loop]
+	for (int i = start_idx; i < num_ray_samples; i++)
+	{
+		float3 pos_sample_ts = pos_ray_start_ts + dir_sample_ts * (float)i;
+
+		LOAD_BLOCK_INFO(blkSkip, pos_sample_ts, dir_sample_ts, num_ray_samples, i);
+
+		if (blkSkip.blk_value > 0)
+		{
+			[loop]
+			for (int j = 0; j < blkSkip.num_skip_steps; j++, i++)
+			{
+				//float3 pos_sample_blk_ws = pos_hit_ws + dir_sample_ws * (float) i;
+				float3 pos_sample_blk_ts = pos_ray_start_ts + dir_sample_ts * (float)i;
+
+				float4 vis_otf = (float4) 0;
+				if (Vis_Volume_And_Check(vis_otf, sample_v, pos_sample_blk_ts))
+				{
+					float grad_len;
+					float3 nrl = GRAD_NRL_VOL(pos_sample_blk_ts, dir_sample_ws, grad_len);
+					float shade = 1.f;
+					if (grad_len > 0)
+						shade = PhongBlinnVr(view_dir, g_cbVobj.pb_shading_factor, light_dirinv, nrl, true);
+					//vis_otf *= 0.01;
+					float4 vis_sample = float4(shade * vis_otf.rgb, vis_otf.a);
+					float depth_sample = depth_hit + (float)i * sample_dist;
+#if VR_MODE == 2
+					float __s = abs(dot(view_dir, nrl));
+					//g_cbVobj.kappa_i
+					//float modulator = pow(min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(g_cbVobj.kappa_i * max(__s, 0.1f), g_cbVobj.kappa_s));
+					float modulator = min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
+					vis_sample *= modulator;
+#endif
+					//vis_sample *= mask_weight;
+#if FRAG_MERGING == 1
+					INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, sample_dist, fs, merging_beta);
+#else
+					INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, fs);
+#endif
+					if (vis_out.a > ERT_ALPHA)
+					{
+						i = num_ray_samples;
+						j = num_ray_samples;
+						break;
+					}
+				} // if(sample valid check)
+			} // for (int j = 0; j < blkSkip.num_skip_steps; j++, i++)
+		}
+		else
+		{
+			i += blkSkip.num_skip_steps;
+		}
+		// this is for outer loop's i++
+		i -= 1;
+	}
+
+	vis_out.rgb *= (1.f - ao_vr);
+	REMAINING_MIX(vis_out, idx_dlayer, num_frags, fs);
+#else // RAYMODE != 0
+	float3 pos_ray_start_ts = TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts);
+	float depth_begin = depth_out = length(pos_ray_start_ws - pos_ip_ws);
+	float3 dir_sample_ts = TransformVector(dir_sample_ws, g_cbVobj.mat_ws2ts);
+#if RAYMODE==1 || RAYMODE==2
+	int luckyStep = (int)((float)(Random(pos_ray_start_ws.xy) + 1) * (float)num_ray_samples * 0.5f);
+	float depth_sample = depth_begin + g_cbVobj.sample_dist * (float)(luckyStep);
+	float3 pos_lucky_sample_ws = pos_ray_start_ws + dir_sample_ws * (float)luckyStep;
+	float3 pos_lucky_sample_ts = TransformPoint(pos_lucky_sample_ws, g_cbVobj.mat_ws2ts);
+#if RAYMODE==2
+	float sample_v_prev = g_cbVobj.value_range;
+#else
+	float sample_v_prev = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_lucky_sample_ts, 0).r * g_cbVobj.value_range;
+#endif
+
+#if OTF_MASK == 1
+	float3 pos_mask_sample_ts = pos_lucky_sample_ts;
+#endif
+
+#else // ~(RAYMODE==1 || RAYMODE==2)
+	float depth_sample = depth_begin + g_cbVobj.sample_dist * (float)(num_ray_samples);
+	int num_valid_samples = 0;
+	float4 vis_otf_sum = (float4)0;
+#endif
+
+	[loop]
+	for (i = 0; i < num_ray_samples; i++)
+	{
+		float3 pos_sample_ts = pos_ray_start_ts + dir_sample_ts * (float)i;
+
+#if RAYMODE == 1 || RAYMODE == 2
+		LOAD_BLOCK_INFO(blkSkip, pos_sample_ts, dir_sample_ts, num_ray_samples, i);
+#if RAYMODE == 1
+		if (blkSkip.blk_value > (int)sample_v_prev)
+#elif RAYMODE == 2
+		if (blkSkip.blk_value < (int)sample_v_prev)
+#endif
+		{
+			for (int k = 0; k < blkSkip.num_skip_steps; k++, i++)
+			{
+				float3 pos_sample_in_blk_ts = pos_ray_start_ts + dir_sample_ts * (float)i;
+				float sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_in_blk_ts, 0).r * g_cbVobj.value_range;
+#if RAYMODE == 1
+
+				if (sample_v > sample_v_prev)
+#else	// ~RM_RAYMAX
+				if (sample_v < sample_v_prev)
+#endif
+				{
+#if OTF_MASK == 1
+					pos_mask_sample_ts = pos_sample_in_blk_ts;
+#endif
+					sample_v_prev = sample_v;
+					depth_sample = depth_begin + g_cbVobj.sample_dist * (float)i;
+				}
+			}
+		}
+		else
+		{
+			i += blkSkip.num_skip_steps;
+		}
+		// this is for outer loop's i++
+		i -= 1;
+#else	// ~(RAYMODE == 1 || RAYMODE == 2) , which means RAYSUM 
+		float sample_v_norm = tex3D_volume.SampleLevel(g_samplerLinear_Clamp, pos_sample_ts, 0).r;
+#if OTF_MASK == 1
+		float sample_mask_v = tex3D_volmask.SampleLevel(g_samplerPoint, pos_sample_ts, 0).r * g_cbVolObj.mask_value_range;
+		int mask_vint = (int)(sample_mask_v + 0.5f);
+		float4 vis_otf = LoadOtfBufId(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
+#else	// OTF_MASK != 1
+		float4 vis_otf = LoadOtfBuf(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, 1);// g_cbVobj.opacity_correction);
+#endif
+		if (vis_otf.a > 0)
+		{
+			vis_otf_sum += vis_otf;
+			num_valid_samples++;
+		}
+#endif
+	}
+
+#if RAYMODE == 3
+	if (num_valid_samples == 0)
+		num_valid_samples = 1;
+	float4 vis_otf = vis_otf_sum / (float)num_valid_samples;
+#else // RAYMODE != 3
+
+#if OTF_MASK == 1
+	float sample_mask_v = tex3D_volmask.SampleLevel(g_samplerPoint, pos_sample_ts, 0).r * g_cbVolObj.mask_value_range;
+	int mask_vint = (int)(sample_mask_v + 0.5f);
+	float4 vis_otf = LoadOtfBufId(sample_v_prev / g_cbVobj.value_range * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
+#else
+	float4 vis_otf = LoadOtfBuf(sample_v_prev / g_cbVobj.value_range * g_cbTmap.tmap_size_x, buf_otf, 1);// g_cbVobj.opacity_correction);
+#endif
+#endif
+
+	uint idx_dlayer = 0;
+#if FRAG_MERGING == 1
+	INTERMIX(vis_out, idx_dlayer, num_frags, vis_otf, depth_sample, hits_t.y - hits_t.x, fs, merging_beta);
+#else
+	INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_otf, depth_sample, fs);
+#endif
+
+
+	REMAINING_MIX(vis_out, idx_dlayer, num_frags, fs);
+#endif
 
 	//vis_out = float4(ao_vr, ao_vr, ao_vr, 1);
 	//vis_out = float4(TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts), 1);
