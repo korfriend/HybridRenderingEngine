@@ -622,7 +622,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #if RAYMODE==2
 	float sample_v_prev = g_cbVobj.value_range;
 #else
-	float sample_v_prev = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_lucky_sample_ts, 0).r * g_cbVobj.value_range;
+	float sample_v_prev = 0;/// tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_lucky_sample_ts, 0).r* g_cbVobj.value_range;
 #endif
 
 #if OTF_MASK == 1
@@ -635,6 +635,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	float4 vis_otf_sum = (float4)0;
 #endif
 
+	int count = 0;
 	[loop]
 	for (i = 0; i < num_ray_samples; i++)
 	{
@@ -648,12 +649,12 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		if (blkSkip.blk_value < (int)sample_v_prev)
 #endif
 		{
+			count++;
 			for (int k = 0; k < blkSkip.num_skip_steps; k++, i++)
 			{
 				float3 pos_sample_in_blk_ts = pos_ray_start_ts + dir_sample_ts * (float)i;
 				float sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_in_blk_ts, 0).r * g_cbVobj.value_range;
 #if RAYMODE == 1
-
 				if (sample_v > sample_v_prev)
 #else	// ~RM_RAYMAX
 				if (sample_v < sample_v_prev)
@@ -674,7 +675,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		// this is for outer loop's i++
 		i -= 1;
 #else	// ~(RAYMODE == 1 || RAYMODE == 2) , which means RAYSUM 
-		float sample_v_norm = tex3D_volume.SampleLevel(g_samplerLinear_Clamp, pos_sample_ts, 0).r;
+		float sample_v_norm = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
 #if OTF_MASK == 1
 		float sample_mask_v = tex3D_volmask.SampleLevel(g_samplerPoint, pos_sample_ts, 0).r * g_cbVolObj.mask_value_range;
 		int mask_vint = (int)(sample_mask_v + 0.5f);
@@ -707,15 +708,15 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 	uint idx_dlayer = 0;
 #if FRAG_MERGING == 1
-	INTERMIX(vis_out, idx_dlayer, num_frags, vis_otf, depth_sample, hits_t.y - hits_t.x, fs, merging_beta);
+	Fragment f_dly = fs[0]; // if no frag, the z-depth is infinite
+	INTERMIX(vis_out, idx_dlayer, num_frags, vis_otf, depth_begin, hits_t.y - hits_t.x, fs, merging_beta);
 #else
-	INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_otf, depth_sample, fs);
+	INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_otf, depth_begin, fs);
 #endif
-
-
 	REMAINING_MIX(vis_out, idx_dlayer, num_frags, fs);
 #endif
 
+	//if (count == 0) vis_otf = float4(1, 1, 0, 1);
 	//vis_out = float4(ao_vr, ao_vr, ao_vr, 1);
 	//vis_out = float4(TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts), 1);
     fragment_vis[tex2d_xy] = vis_out;

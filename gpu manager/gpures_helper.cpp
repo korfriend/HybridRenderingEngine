@@ -804,7 +804,7 @@ bool grd_helper::UpdateMinMaxBlocks(GpuRes& gres_min, GpuRes& gres_max, const Vm
 		for (int y = 0; y < volblk->blk_vol_size.y; y++)
 			for (int x = 0; x < volblk->blk_vol_size.x; x++)
 			{
-				vmushort2 mM_v = mM_blk_values[(x + blk_bnd_size.x)
+				vmushort2 mM_v  = mM_blk_values[(x + blk_bnd_size.x)
 					+ (y + blk_bnd_size.y) * blk_sample_width.x + (z + blk_bnd_size.z) * blk_sample_slice];
 
 				int iAddrBlockInGpu = x + y * d11MappedRes_Max.RowPitch / 2 + z * d11MappedRes_Max.DepthPitch / 2;
