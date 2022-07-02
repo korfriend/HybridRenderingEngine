@@ -115,11 +115,6 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 #define SET_CS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(COMPUTE_SHADER, NAME), dx11CShader, true)
 
 		string strNames_CS[CS_NUM] = {
-			   "PanoVR_RAYMAX_cs_5_0"
-			  ,"PanoVR_RAYMIN_cs_5_0"
-			  ,"PanoVR_RAYSUM_cs_5_0"
-			  ,"PanoVR_DEFAULT_cs_5_0"
-			  ,"PanoVR_MODULATE_cs_5_0"
 		};
 
 		for (int i = 0; i < CS_NUM; i++)
@@ -366,7 +361,6 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		}
 	};
 
-	___GpuProfile("Curved Slicer VR Begin");
 
 	// Initial Setting of Frame Buffers //
 	int count_call_render = iobj->GetObjParam("_int_NumCallRenders", (int)0);
@@ -585,14 +579,6 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		ID3D11ComputeShader* cshader = NULL;
 		switch (ray_cast_type)
 		{
-		case __RM_RAYMIN: cshader = GETCS(PanoVR_RAYMIN_cs_5_0); break;
-		case __RM_RAYMAX: cshader = GETCS(PanoVR_RAYMAX_cs_5_0); break;
-		case __RM_RAYSUM: cshader = GETCS(PanoVR_RAYSUM_cs_5_0); break;
-		case __RM_MODULATION: cshader = GETCS(PanoVR_MODULATE_cs_5_0); break;
-		//case __RM_MULTIOTF: cshader = GETCS(VR_RAYSUM_cs_5_0); break;
-		//case __RM_VISVOLMASK: cshader = GETCS(VR_RAYSUM_cs_5_0); break;
-		case __RM_DEFAULT: cshader = GETCS(PanoVR_DEFAULT_cs_5_0); break;
-		//case __RM_SCULPTMASK: cshader = GETCS(VR_RAYSUM_cs_5_0); break;
 		default:
 			VMERRORMESSAGE("NOT SUPPORT RAY CASTER!"); return false;
 		}
@@ -604,6 +590,22 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 				, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
 		};
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs, (UINT*)(&dx11UAVs));
+
+		if ((mode_OIT == MFR_MODE::DYNAMIC_FB && !apply_fragmerge) || mode_OIT == MFR_MODE::DYNAMIC_KB) // filling
+			dx11DeviceImmContext->CSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]); // search why this does not work
+
+		if (ray_cast_type != __RM_RAYMIN
+			&& ray_cast_type != __RM_RAYMAX
+			&& ray_cast_type != __RM_RAYSUM) {
+			// 1st hit surface
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(4, 1, (ID3D11UnorderedAccessView**)&gres_fb_vrdepthcs.alloc_res_ptrs[DTYPE_UAV], (UINT*)(&dx11UAVs));
+
+			dx11DeviceImmContext->CSSetShader(GETCS(VR_SURFACE_cs_5_0), NULL, 0);
+			dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(4, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs));
+			dx11DeviceImmContext->CSSetShaderResources(6, 1, (ID3D11ShaderResourceView**)&gres_fb_vrdepthcs.alloc_res_ptrs[DTYPE_SRV]);
+		}
 
 		if (cbEnvState.r_kernel_ao > 0)
 		{
@@ -677,7 +679,6 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 
 	//dx11DeviceImmContext->Flush();
 	//printf("# Textures : %d, # Drawing : %d, # RTBuffer Change : %d, # Merging : %d\n", iNumTexureLayers, iCountRendering, iCountRTBuffers, iCountMerging);
-	___GpuProfile("Curved Slicer VR Begin", true);
 
 	bool is_system_out = true;
 	// APPLY HWND MODE
