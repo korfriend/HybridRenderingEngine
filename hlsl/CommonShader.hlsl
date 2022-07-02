@@ -264,6 +264,20 @@ struct HxCB_HotspotMask
 	HotspotMask mask_info_[2];
 };
 
+struct HxCB_CurvedSlicer
+{
+	float3 posTopLeftCOS;
+	int numCurvePoints;
+	float3 posTopRightCOS;
+	float planeHeight;
+	float3 posBottomLeftCOS;
+	float thicknessPlane;
+	float3 posBottomRightCOS;
+	int numRaySteps; 
+	float3 planeUp; // WS, length is planePitch
+	uint flag; // 1st bit : isRightSide
+};
+
 //=====================
 // Constant Buffers
 //=====================
@@ -1783,6 +1797,11 @@ Fragment MergeFrags_ShiftVer(Fragment f_prior, Fragment f_posterior, const in fl
 cbuffer cbGlobalParams : register(b9)
 {
 	HxCB_HotspotMask g_cbHSMask;
+}
+
+cbuffer cbGlobalParams : register(b9)
+{
+	HxCB_CurvedSlicer g_cbCurvedSlicer;
 }
 
 float GetHotspotMaskWeightIdx(inout int out_lined, in int2 pos_xy, in int i, in bool check_silhouete)

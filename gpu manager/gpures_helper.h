@@ -688,6 +688,20 @@ namespace grd_helper
 		//float bnd_thick_[4];
 	};
 
+	struct CB_CurvedSlicer
+	{
+		vmfloat3 posTopLeftCOS;
+		int numCurvePoints;
+		vmfloat3 posTopRightCOS;
+		float planeHeight;
+		vmfloat3 posBottomLeftCOS;
+		float thicknessPlane;
+		vmfloat3 posBottomRightCOS;
+		int numRaySteps;
+		vmfloat3 planeUp; // WS, length is planePitch
+		uint flag; // 1st bit : isRightSide
+	};
+
 	// Compute Constant Buffers //
 	// global 
 	void SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, const vmmat44f& matSS2WS, VmCObject* ccobj, const vmint2& fb_size, const int k_value, const float vz_thickness);
@@ -702,6 +716,8 @@ namespace grd_helper
 	void SetCb_VolumeRenderingEffect(CB_VolumeRenderingEffect& cb_vreffect, VmVObjectVolume* vobj, VmActor* actor);
 	
 	void SetCb_HotspotMask(CB_HotspotMask& cb_hsmask, VmFnContainer* _fncontainer, const vmmat44f& matWS2SS);
+
+	void SetCb_CurvedSlicer(CB_CurvedSlicer& cb_curvedSlicer);
 
 	bool Compile_Hlsl(const string& str, const string& entry_point, const string& shader_model, D3D10_SHADER_MACRO* defines, void** sm);
 

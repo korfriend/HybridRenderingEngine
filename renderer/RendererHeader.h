@@ -22,6 +22,18 @@ using namespace fncontainer;
 using namespace vmgpuinterface;
 using namespace grd_helper;
 
+bool RenderSrCurvedSlicer(VmFnContainer* _fncontainer,
+	VmGpuManager* gpu_manager,
+	grd_helper::GpuDX11CommonParameters* dx11CommonParams,
+	LocalProgress* progress,
+	double* run_time_ptr);
+
+bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
+	VmGpuManager* gpu_manager,
+	grd_helper::GpuDX11CommonParameters* dx11CommonParams,
+	LocalProgress* progress,
+	double* run_time_ptr);
+
 bool RenderSrOIT(VmFnContainer* _fncontainer,
 	VmGpuManager* gpu_manager,
 	grd_helper::GpuDX11CommonParameters* dx11CommonParams,

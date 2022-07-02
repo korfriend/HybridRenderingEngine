@@ -19,6 +19,8 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="CurvedSlicerSR.cpp" />
+    <ClCompile Include="CurvedSlicerVR.cpp" />
     <ClCompile Include="gpu manager\gpures_helper.cpp" />
     <ClCompile Include="gpu manager\gpures_interface.cpp" />
     <ClCompile Include="renderer\RendererHeader.cpp" />
