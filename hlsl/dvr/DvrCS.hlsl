@@ -393,7 +393,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	}
 
 	[loop]
-    for (uint i = 0; i < num_frags; i++)
+    for (int i = 0; i < (int)num_frags; i++)
     {
         uint i_vis = 0;
 		Fragment f;
@@ -553,7 +553,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	}
 
 	[loop]
-	for (int i = start_idx; i < num_ray_samples; i++)
+	for (i = start_idx; i < num_ray_samples; i++)
 	{
 		float3 pos_sample_ts = pos_ray_start_ts + dir_sample_ts * (float)i;
 
@@ -767,4 +767,339 @@ void VR_SURFACE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	uint fcnt = fragment_counter[DTid.xy];
 	uint dvr_hit_enc = hit_step == 0 ? 2 : 1;
 	fragment_counter[DTid.xy] = fcnt | (dvr_hit_enc << 24);
+}
+
+Buffer<float3> buf_curvePoints : register(t30);
+Buffer<float3> buf_curveTangents : register(t31);
+
+[numthreads(GRIDSIZE, GRIDSIZE, 1)]
+void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
+{
+	int2 cip_xy = int2(DTid.xy);
+
+	// do not compute 1st hit surface separately
+
+	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
+		return;
+
+	const uint k_value = g_cbCamState.k_value;
+	uint bytes_per_frag = 4 * NUM_ELES_PER_FRAG;
+	uint pixel_id = cip_xy.y * g_cbCamState.rt_width + cip_xy.x;
+	uint bytes_frags_per_pixel = k_value * bytes_per_frag;
+	uint addr_base = pixel_id * bytes_frags_per_pixel;
+
+	uint num_frags = fragment_counter[DTid.xy];
+	uint vr_hit_enc = num_frags >> 24;
+	num_frags = num_frags & 0xFFF;
+
+	float4 vis_out = 0;
+	float depth_out = 0;
+
+	// Image Plane's Position and Camera State //
+	// cip refers to curved-ip
+
+	// g_cbCurvedSlicer::
+	//float3 posTopLeftCOS;
+	//int numCurvePoints;
+	//float3 posTopRightCOS;
+	//float planeHeight;
+	//float3 posBottomLeftCOS;
+	//float thicknessPlane;
+	//float3 posBottomRightCOS;
+	//int numRaySteps; 
+	//float3 planeUp; // WS, length is planePitch
+	//uint flag; // 1st bit : isRightSide
+
+	// precomputation
+	int num_ray_samples = g_cbCurvedSlicer.numRaySteps;
+	if (num_ray_samples < 1)
+		return;
+
+	Fragment fs[VR_MAX_LAYERS];
+
+	[loop]
+	for (int i = 0; i < (int)num_frags; i++)
+	{
+		uint i_vis = 0;
+		Fragment f;
+		GET_FRAG(f, addr_base, i); // from K-buffer
+		float4 vis_in = ConvertUIntToFloat4(f.i_vis);
+		if (g_cbEnv.r_kernel_ao > 0)
+			f.i_vis = ConvertFloat4ToUInt(vis_in);
+		if (vis_in.a > 0)
+			vis_out += vis_in * (1.f - vis_out.a);
+		fs[i] = f;
+	}
+
+	fs[num_frags] = (Fragment)0;
+	fs[num_frags].z = FLT_MAX;
+	fragment_vis[cip_xy] = vis_out;
+
+	int2 i2SizeBuffer = int2(g_cbCamState.rt_width, g_cbCamState.rt_height);
+	int iPlaneSizeX = g_cbCurvedSlicer.numCurvePoints;
+	float3 f3VecSampleUpWS = g_cbCurvedSlicer.planeUp;
+	bool bIsRightSide = BitCheck(g_cbCurvedSlicer.flag, 0);
+	float3 f3PosTopLeftCOS = g_cbCurvedSlicer.posTopLeftCOS;
+	float3 f3PosTopRightCOS = g_cbCurvedSlicer.posTopRightCOS;
+	float3 f3PosBottomLeftCOS = g_cbCurvedSlicer.posBottomLeftCOS;
+	float3 f3PosBottomRightCOS = g_cbCurvedSlicer.posBottomRightCOS;
+	float fPlaneThickness = g_cbCurvedSlicer.thicknessPlane;
+	float fPlaneSizeY = g_cbCurvedSlicer.planeHeight;
+	const float fThicknessPosition = 0;
+	const float merging_beta = 1.0;
+
+	// i ==> cip_xy.x
+	float fRatio0 = (float)((i2SizeBuffer.x - 1) - cip_xy.x) / (float)(i2SizeBuffer.x - 1);
+	float fRatio1 = (float)(cip_xy.x) / (float)(i2SizeBuffer.x - 1);
+
+	float2 f2PosInterTopCOS, f2PosInterBottomCOS, f2PosSampleCOS;
+	f2PosInterTopCOS.x = fRatio0 * f3PosTopLeftCOS.x + fRatio1 * f3PosTopRightCOS.x;
+	f2PosInterTopCOS.y = fRatio0 * f3PosTopLeftCOS.y + fRatio1 * f3PosTopRightCOS.y;
+
+	if (f2PosInterTopCOS.x < 0 || f2PosInterTopCOS.x >= (float)(iPlaneSizeX - 1))
+		return;
+
+	int iPosSampleCOS = (int)floor(f2PosInterTopCOS.x);
+	float fInterpolateRatio = f2PosInterTopCOS.x - iPosSampleCOS;
+
+	int iMinMaxAddrX = min(max(iPosSampleCOS, 0), iPlaneSizeX - 1);
+	int iMinMaxAddrNextX = min(max(iPosSampleCOS + 1, 0), iPlaneSizeX - 1);
+
+	float3 f3PosSampleWS_C0 = buf_curvePoints[iMinMaxAddrX];
+	float3 f3PosSampleWS_C1 = buf_curvePoints[iMinMaxAddrNextX];
+	float3 f3PosSampleWS_C_ = f3PosSampleWS_C0 * (1.f - fInterpolateRatio) + f3PosSampleWS_C1 * fInterpolateRatio;
+
+	float3 f3VecSampleTangentWS_0 = buf_curveTangents[iMinMaxAddrX];
+	float3 f3VecSampleTangentWS_1 = buf_curveTangents[iMinMaxAddrNextX];
+	float3 f3VecSampleTangentWS = normalize(f3VecSampleTangentWS_0 * (1.f - fInterpolateRatio) + f3VecSampleTangentWS_1 * fInterpolateRatio);
+	float3 f3VecSampleViewWS = normalize(cross(f3VecSampleUpWS, f3VecSampleTangentWS));
+
+	if (bIsRightSide)
+		f3VecSampleViewWS *= -1.f;
+	float3 f3PosSampleWS_C = f3PosSampleWS_C_ + f3VecSampleViewWS * (fThicknessPosition - fPlaneThickness * 0.5f);
+	//f3VecSampleUpWS *= fPlanePitch; // already multiplied
+
+	f2PosInterBottomCOS.x = fRatio0 * f3PosBottomLeftCOS.x + fRatio1 * f3PosBottomRightCOS.x;
+	f2PosInterBottomCOS.y = fRatio0 * f3PosBottomLeftCOS.y + fRatio1 * f3PosBottomRightCOS.y;
+
+	// j ==> cip_xy.y
+	float fRatio0Y = (float)((i2SizeBuffer.y - 1) - cip_xy.y) / (float)(i2SizeBuffer.y - 1);
+	float fRatio1Y = (float)(cip_xy.y) / (float)(i2SizeBuffer.y - 1);
+
+	f2PosSampleCOS.x = fRatio0Y * f2PosInterTopCOS.x + fRatio1Y * f2PosInterBottomCOS.x;
+	f2PosSampleCOS.y = fRatio0Y * f2PosInterTopCOS.y + fRatio1Y * f2PosInterBottomCOS.y;
+
+	if (f2PosSampleCOS.y < 0 || f2PosSampleCOS.y > fPlaneSizeY)
+		return;
+
+	// start position //
+	float3 pos_ray_start_ws = f3PosSampleWS_C;
+	float3 pos_ray_start_ts = TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts);
+
+	float3 dir_sample_ws = f3VecSampleViewWS * g_cbVobj.sample_dist;
+	float3 dir_sample_ts = TransformVector(dir_sample_ws, g_cbVobj.mat_ws2ts);
+
+	// DVR ray-casting core part
+#if RAYMODE == 0 // DVR
+	float depth_hit = 0;
+
+	// note that the gradient normal direction faces to the inside
+	float3 light_dirinv = -g_cbEnv.dir_light_ws;
+	if (g_cbEnv.env_flag & 0x1)
+		light_dirinv = -normalize(pos_ray_start_ws - g_cbEnv.pos_light_ws);
+
+	uint idx_dlayer = 0;
+	{
+		// care for clip plane ... 
+	}
+
+	float sample_dist = g_cbVobj.sample_dist;
+	float3 view_dir = normalize(dir_sample_ws);
+	//vis_out = float4(TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts), 1);
+	//return;
+
+#if FRAG_MERGING == 1
+	Fragment f_dly = fs[0]; // if no frag, the z-depth is infinite
+#endif
+
+	int start_idx = 0, sample_v = 0;
+	if (vr_hit_enc == 2)
+	{
+		start_idx = 1;
+		float4 vis_otf = (float4) 0;
+		if (Vis_Volume_And_Check(vis_otf, sample_v, pos_ray_start_ts))
+		{
+			float4 vis_sample = vis_otf;
+			float depth_sample = depth_hit;
+#if VR_MODE == 2
+			float grad_len;
+			GRAD_NRL_VOL(pos_ray_start_ts, dir_sample_ws, grad_len);
+			//float modulator = pow(min(grad_len * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(g_cbVobj.kappa_i, g_cbVobj.kappa_s));
+			float modulator = min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
+			vis_sample *= modulator;
+#endif
+			//vis_sample *= mask_weight;
+
+			vis_out += vis_sample * (1.f - vis_out.a);
+
+		}
+	}
+
+	[loop]
+	for (i = start_idx; i < num_ray_samples; i++)
+	{
+		float3 pos_sample_ts = pos_ray_start_ts + dir_sample_ts * (float)i;
+
+		LOAD_BLOCK_INFO(blkSkip, pos_sample_ts, dir_sample_ts, num_ray_samples, i);
+
+		if (blkSkip.blk_value > 0)
+		{
+			[loop]
+			for (int j = 0; j < blkSkip.num_skip_steps; j++, i++)
+			{
+				//float3 pos_sample_blk_ws = pos_hit_ws + dir_sample_ws * (float) i;
+				float3 pos_sample_blk_ts = pos_ray_start_ts + dir_sample_ts * (float)i;
+
+				float4 vis_otf = (float4) 0;
+				if (Vis_Volume_And_Check(vis_otf, sample_v, pos_sample_blk_ts))
+				{
+					float grad_len;
+					float3 nrl = GRAD_NRL_VOL(pos_sample_blk_ts, dir_sample_ws, grad_len);
+					float shade = 1.f;
+					if (grad_len > 0)
+						shade = PhongBlinnVr(view_dir, g_cbVobj.pb_shading_factor, light_dirinv, nrl, true);
+					//vis_otf *= 0.01;
+					float4 vis_sample = float4(shade * vis_otf.rgb, vis_otf.a);
+					float depth_sample = depth_hit + (float)i * sample_dist;
+#if VR_MODE == 2
+					float __s = abs(dot(view_dir, nrl));
+					//g_cbVobj.kappa_i
+					//float modulator = pow(min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(g_cbVobj.kappa_i * max(__s, 0.1f), g_cbVobj.kappa_s));
+					float modulator = min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
+					vis_sample *= modulator;
+#endif
+
+					vis_out += vis_sample * (1.f - vis_out.a);
+
+					if (vis_out.a > ERT_ALPHA)
+					{
+						i = num_ray_samples;
+						j = num_ray_samples;
+						break;
+					}
+				} // if(sample valid check)
+			} // for (int j = 0; j < blkSkip.num_skip_steps; j++, i++)
+		}
+		else
+		{
+			i += blkSkip.num_skip_steps;
+		}
+		// this is for outer loop's i++
+		i -= 1;
+	}
+
+	REMAINING_MIX(vis_out, idx_dlayer, num_frags, fs);
+
+#else // RAYMODE != 0
+	float depth_begin = 0;
+#if RAYMODE==1 || RAYMODE==2
+	int luckyStep = (int)((float)(Random(pos_ray_start_ws.xy) + 1) * (float)num_ray_samples * 0.5f);
+	float depth_sample = depth_begin + g_cbVobj.sample_dist * (float)(luckyStep);
+	float3 pos_lucky_sample_ws = pos_ray_start_ws + dir_sample_ws * (float)luckyStep;
+	float3 pos_lucky_sample_ts = TransformPoint(pos_lucky_sample_ws, g_cbVobj.mat_ws2ts);
+#if RAYMODE==2
+	float sample_v_prev = g_cbVobj.value_range;
+#else
+	float sample_v_prev = 0;/// tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_lucky_sample_ts, 0).r* g_cbVobj.value_range;
+#endif
+
+#if OTF_MASK == 1
+	float3 pos_mask_sample_ts = pos_lucky_sample_ts;
+#endif
+
+#else // ~(RAYMODE==1 || RAYMODE==2)
+	float depth_sample = depth_begin + g_cbVobj.sample_dist * (float)(num_ray_samples);
+	int num_valid_samples = 0;
+	float4 vis_otf_sum = (float4)0;
+#endif
+
+	int count = 0;
+	[loop]
+	for (i = 0; i < num_ray_samples; i++)
+	{
+		float3 pos_sample_ts = pos_ray_start_ts + dir_sample_ts * (float)i;
+
+#if RAYMODE == 1 || RAYMODE == 2
+		LOAD_BLOCK_INFO(blkSkip, pos_sample_ts, dir_sample_ts, num_ray_samples, i);
+#if RAYMODE == 1
+		if (blkSkip.blk_value > (int)sample_v_prev)
+#elif RAYMODE == 2
+		if (blkSkip.blk_value < (int)sample_v_prev)
+#endif
+		{
+			count++;
+			for (int k = 0; k < blkSkip.num_skip_steps; k++, i++)
+			{
+				float3 pos_sample_in_blk_ts = pos_ray_start_ts + dir_sample_ts * (float)i;
+				float sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_in_blk_ts, 0).r * g_cbVobj.value_range;
+#if RAYMODE == 1
+				if (sample_v > sample_v_prev)
+#else	// ~RM_RAYMAX
+				if (sample_v < sample_v_prev)
+#endif
+				{
+#if OTF_MASK == 1
+					pos_mask_sample_ts = pos_sample_in_blk_ts;
+#endif
+					sample_v_prev = sample_v;
+					depth_sample = depth_begin + g_cbVobj.sample_dist * (float)i;
+				}
+			}
+		}
+		else
+		{
+			i += blkSkip.num_skip_steps;
+		}
+		// this is for outer loop's i++
+		i -= 1;
+#else	// ~(RAYMODE == 1 || RAYMODE == 2) , which means RAYSUM 
+		float sample_v_norm = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
+#if OTF_MASK == 1
+		float sample_mask_v = tex3D_volmask.SampleLevel(g_samplerPoint, pos_sample_ts, 0).r * g_cbVolObj.mask_value_range;
+		int mask_vint = (int)(sample_mask_v + 0.5f);
+		float4 vis_otf = LoadOtfBufId(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
+#else	// OTF_MASK != 1
+		float4 vis_otf = LoadOtfBuf(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, 1);// g_cbVobj.opacity_correction);
+#endif
+		if (vis_otf.a > 0)
+		{
+			vis_otf_sum += vis_otf;
+			num_valid_samples++;
+		}
+#endif
+	}
+
+#if RAYMODE == 3
+	if (num_valid_samples == 0)
+		num_valid_samples = 1;
+	float4 vis_otf = vis_otf_sum / (float)num_valid_samples;
+#else // RAYMODE != 3
+
+#if OTF_MASK == 1
+	float sample_mask_v = tex3D_volmask.SampleLevel(g_samplerPoint, pos_sample_ts, 0).r * g_cbVolObj.mask_value_range;
+	int mask_vint = (int)(sample_mask_v + 0.5f);
+	float4 vis_otf = LoadOtfBufId(sample_v_prev / g_cbVobj.value_range * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
+#else
+	float4 vis_otf = LoadOtfBuf(sample_v_prev / g_cbVobj.value_range * g_cbTmap.tmap_size_x, buf_otf, 1);// g_cbVobj.opacity_correction);
+#endif
+#endif
+
+	uint idx_dlayer = 0;
+	Fragment f_dly = fs[0]; // if no frag, the z-depth is infinite
+	INTERMIX(vis_out, idx_dlayer, num_frags, vis_otf, depth_begin, fPlaneThickness, fs, merging_beta);
+	REMAINING_MIX(vis_out, idx_dlayer, num_frags, fs);
+#endif
+
+	fragment_vis[cip_xy] = vis_out;
+	fragment_zdepth[cip_xy] = depth_out;
 }

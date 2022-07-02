@@ -273,6 +273,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		CREATE_AND_SET(CB_TMAP);
 		CREATE_AND_SET(MomentOIT);
 		CREATE_AND_SET(CB_HotspotMask);
+		CREATE_AND_SET(CB_CurvedSlicer);
 	}
 	if (hr != S_OK)
 	{
@@ -508,6 +509,12 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50030), "VR_DEFAULT_DFB_cs_5_0", "cs_5_0"), VR_DEFAULT_DFB_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50031), "VR_OPAQUE_DFB_cs_5_0", "cs_5_0"), VR_OPAQUE_DFB_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50032), "VR_CONTEXT_DFB_cs_5_0", "cs_5_0"), VR_CONTEXT_DFB_cs_5_0);
+
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60001), "PanoVR_RAYMAX_cs_5_0", "cs_5_0"), PanoVR_RAYMAX_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60002), "PanoVR_RAYMIN_cs_5_0", "cs_5_0"), PanoVR_RAYMIN_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60003), "PanoVR_RAYSUM_cs_5_0", "cs_5_0"), PanoVR_RAYSUM_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60004), "PanoVR_DEFAULT_cs_5_0", "cs_5_0"), PanoVR_DEFAULT_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60005), "PanoVR_MODULATE_cs_5_0", "cs_5_0"), PanoVR_MODULATE_cs_5_0);
 	}
 
 	g_pvmCommonParams->is_initialized = true;
@@ -2103,6 +2110,7 @@ bool grd_helper::CollisionCheck(const vmmat44f& matWS2OS, const AaBbMinMax& aabb
 	vmfloat3 ray_origin_os, ray_dir_os;
 	vmmath::fTransformPoint(&ray_origin_os, &ray_origin_ws, &matWS2OS);
 	vmmath::fTransformVector(&ray_dir_os, &ray_dir_ws, &matWS2OS);
+	vmmath::fNormalizeVector(&ray_dir_os, &ray_dir_os);
 
 	CollisionAABox dxAabb;
 	dxAabb.aabox.Center = XMFLOAT3(pos_center_os.x, pos_center_os.y, pos_center_os.z);

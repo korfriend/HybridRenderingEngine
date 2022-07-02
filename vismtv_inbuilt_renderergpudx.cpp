@@ -97,28 +97,46 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	//	vtrInputVolumes.at(i)->RegisterCustomParameter("_float_ForcedHalfCriterionKB", halfCriterionKB);
 #pragma endregion
 
+	bool curved_slicer = _fncontainer.fnParams.GetParam("_bool_IsNonlinear", false);
 	string strRendererSource = _fncontainer.fnParams.GetParam("_string_RenderingSourceType", string("MESH"));
-	bool is_shadow = _fncontainer.fnParams.GetParam("_bool_IsShadow", false);
-	if (strRendererSource.compare("VOLUME") == 0)
-	{
-		double dRuntime = 0;
-		RenderVrDLS(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
-		g_dRunTimeVRs += dRuntime;
+
+	if (curved_slicer) {
+		if (strRendererSource.compare("VOLUME") == 0)
+		{
+			double dRuntime = 0;
+			RenderVrCurvedSlicer(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
+			g_dRunTimeVRs += dRuntime;
+		}
+		else if (strRendererSource.compare("MESH") == 0) // MESH
+		{
+			double dRuntime = 0;
+			RenderSrCurvedSlicer(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
+			g_dRunTimeVRs += dRuntime;
+		}
 	}
-	else if (strRendererSource.compare("MESH") == 0) // MESH
-	{
-		double dRuntime = 0;
-		RenderSrOIT(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
-		g_dRunTimeVRs += dRuntime;
-	}
-	else if (strRendererSource.compare("SECTIONAL_MESH") == 0)
-	{	
-		double dRuntime = 0;
+	else {
+		bool is_shadow = _fncontainer.fnParams.GetParam("_bool_IsShadow", false);
+		if (strRendererSource.compare("VOLUME") == 0)
+		{
+			double dRuntime = 0;
+			RenderVrDLS(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
+			g_dRunTimeVRs += dRuntime;
+		}
+		else if (strRendererSource.compare("MESH") == 0) // MESH
+		{
+			double dRuntime = 0;
+			RenderSrOIT(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
+			g_dRunTimeVRs += dRuntime;
+		}
 #if defined(ENABLE_LEGACY)
-		RenderSrOnPlane(&_fncontainer, g_pCGpuManager, &g_vmCommonParams_legacy,
-			pdx11ILs, ppdx11VSs, ppdx11PlaneVSs, ppdx11PSs, ppdx11CS_MERGEs, &g_LocalProgress, &dRuntime);
+		else if (strRendererSource.compare("SECTIONAL_MESH") == 0)
+		{
+			double dRuntime = 0;
+			RenderSrOnPlane(&_fncontainer, g_pCGpuManager, &g_vmCommonParams_legacy,
+				pdx11ILs, ppdx11VSs, ppdx11PlaneVSs, ppdx11PSs, ppdx11CS_MERGEs, &g_LocalProgress, &dRuntime);
+			g_dRunTimeVRs += dRuntime;
+		}
 #endif
-		g_dRunTimeVRs += dRuntime;
 	}
 
 	g_dProgress = 100;
