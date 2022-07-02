@@ -591,9 +591,6 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		};
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs, (UINT*)(&dx11UAVs));
 
-		if ((mode_OIT == MFR_MODE::DYNAMIC_FB && !apply_fragmerge) || mode_OIT == MFR_MODE::DYNAMIC_KB) // filling
-			dx11DeviceImmContext->CSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]); // search why this does not work
-
 		if (ray_cast_type != __RM_RAYMIN
 			&& ray_cast_type != __RM_RAYMAX
 			&& ray_cast_type != __RM_RAYSUM) {
