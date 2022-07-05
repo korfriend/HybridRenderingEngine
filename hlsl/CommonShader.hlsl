@@ -1799,7 +1799,7 @@ cbuffer cbGlobalParams : register(b9)
 	HxCB_HotspotMask g_cbHSMask;
 }
 
-cbuffer cbGlobalParams : register(b9)
+cbuffer cbGlobalParams : register(b10)
 {
 	HxCB_CurvedSlicer g_cbCurvedSlicer;
 }

@@ -337,6 +337,8 @@ namespace grd_helper
 		const int num_frags_perpixel = 1,
 		const int structured_stride = 0);
 
+	bool UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string& resName, const void* bufPtr, const int numElements, LocalProgress* progress = NULL);
+
 #define ZERO_SET(T) T(){memset(this, 0, sizeof(T));}
 
 #define MAX_LAYERS 8
@@ -714,10 +716,8 @@ namespace grd_helper
 	void SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimitive* pobj, VmActor* actor, const vmmat44f& matWS2SS, const vmmat44f& matWS2PS, const bool is_annotation_obj, const bool use_vertex_color);
 	void SetCb_RenderingEffect(CB_RenderingEffect& cb_reffect, VmActor* actor);
 	void SetCb_VolumeRenderingEffect(CB_VolumeRenderingEffect& cb_vreffect, VmVObjectVolume* vobj, VmActor* actor);
-	
 	void SetCb_HotspotMask(CB_HotspotMask& cb_hsmask, VmFnContainer* _fncontainer, const vmmat44f& matWS2SS);
-
-	void SetCb_CurvedSlicer(CB_CurvedSlicer& cb_curvedSlicer);
+	void SetCb_CurvedSlicer(CB_CurvedSlicer& cb_curvedSlicer, VmFnContainer* _fncontainer, VmIObject* iobj, const float fMinPitch);
 
 	bool Compile_Hlsl(const string& str, const string& entry_point, const string& shader_model, D3D10_SHADER_MACRO* defines, void** sm);
 

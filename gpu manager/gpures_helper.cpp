@@ -1622,6 +1622,45 @@ bool grd_helper::UpdateFrameBuffer(GpuRes& gres,
 	return true;
 }
 
+bool UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string& resName, const void* bufPtr, const int numElements, LocalProgress* progress)
+{
+	gres.vm_src_id = srcObj->GetObjectID();
+	gres.res_name = resName;
+
+	if (g_pCGpuManager->UpdateGpuResource(gres)) {
+
+		ullong _tp_cpu = srcObj->GetContentUpdateTime();
+		ullong _tp_gpu = srcObj->GetObjParam("_ullong_LatestCurvedPlaneGpuUpdateTime", (ullong)0);
+		if (_tp_gpu >= _tp_cpu)
+			return true;
+	}
+	else {
+		gres.rtype = RTYPE_BUFFER;
+		gres.options["USAGE"] = D3D11_USAGE_DYNAMIC;
+		gres.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
+		gres.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
+		gres.options["FORMAT"] = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+		gres.res_values.SetParam("NUM_ELEMENTS", (uint)(tmap_data->array_lengths.x * (tmap_data->array_lengths.y)));
+		gres.res_values.SetParam("STRIDE_BYTES", (uint)tmap_data->dtype.type_bytes);
+
+		g_pCGpuManager->GenerateGpuResource(gres);
+	}
+
+	D3D11_MAPPED_SUBRESOURCE d11MappedRes;
+	g_pvmCommonParams->dx11DeviceImmContext->Map((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes);
+	vmbyte4* py4ColorTF = (vmbyte4*)d11MappedRes.pData;
+	for (int i = 0; i < tmap_data->array_lengths.y; i++)
+	{
+		memcpy(&py4ColorTF[i * tmap_data->array_lengths.x], tmap_data->tmap_buffers[i], tmap_data->array_lengths.x * sizeof(vmbyte4));
+	}
+	g_pvmCommonParams->dx11DeviceImmContext->Unmap((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], 0);
+
+	srcObj->SetObjParam("_ullong_LatestCurvedPlaneGpuUpdateTime", vmhelpers::GetCurrentTimePack());
+
+	return true;
+}
+
 //#define *(vmfloat3*)&
 //#define *(vmfloat4*)&
 //#define *(XMMATRIX*)&
@@ -2015,6 +2054,76 @@ void grd_helper::SetCb_HotspotMask(CB_HotspotMask& cb_hsmask, VmFnContainer* _fn
 	};
 	__set_params(0, mask_center_rs_0, hotspot_params_0, show_silhuette_edge_0, mask_bnd);
 	//__set_params(1, mask_center_rs_1, hotspot_params_1, show_silhuette_edge_1, mask_bnd);
+}
+
+void grd_helper::SetCb_CurvedSlicer(CB_CurvedSlicer& cb_curvedSlicer, VmFnContainer* _fncontainer, VmIObject* iobj, const float fMinPitch) {
+
+	float fExPlaneWidth = _fncontainer->fnParams.GetParam("_float_ExPlaneWidth", 1.f);
+	float fExPlaneHeight = _fncontainer->fnParams.GetParam("_float_ExPlaneHeight", 1.f);
+	float fExCurveThicknessPositionRange = _fncontainer->fnParams.GetParam("_float_CurveThicknessPositionRange", 1.f);
+	float fThicknessRatio = _fncontainer->fnParams.GetParam("_float_ThicknessRatio", 0.f);
+	bool bIsRightSide = _fncontainer->fnParams.GetParam("_bool_IsRightSide", false);
+	float fThicknessPosition = fThicknessRatio * fExCurveThicknessPositionRange * 0.5;
+	float fPlaneThickness = _fncontainer->fnParams.GetParam("_float_PlaneThickness", 0.f);
+
+	vector<vmfloat3>& vtrCurveInterpolations = *_fncontainer->fnParams.GetParamPtr<vector<vmfloat3>>("_vlist_FLOAT3_CurveInterpolations");
+	vector<vmfloat3>& vtrCurveUpVectors = *_fncontainer->fnParams.GetParamPtr<vector<vmfloat3>>("_vlist_FLOAT3_CurveUpVectors");
+	vector<vmfloat3>& vtrCurveTangentVectors = *_fncontainer->fnParams.GetParamPtr<vector<vmfloat3>>("_vlist_FLOAT3_CurveTangentVectors");
+	int num_interpolation = (int)vtrCurveInterpolations.size();
+
+	VmCObject* cobj = iobj->GetCameraObject();
+	vmmat44 matSS2PS, matPS2CS, matCS2WS;
+	cobj->GetMatrixSStoWS(&matSS2PS, &matPS2CS, &matCS2WS);
+	vmmat44f matSS2WS = matSS2PS * matPS2CS * matCS2WS;
+
+	vmint2 i2SizeBuffer;
+	iobj->GetFrameBufferInfo(&i2SizeBuffer);
+
+	vmfloat3 f3PosTopLeftCWS, f3PosTopRightCWS, f3PosBottomLeftCWS, f3PosBottomRightCWS;
+	cobj->GetImagePlaneRectPointsf(CoordSpaceWORLD,
+		&f3PosTopLeftCWS,
+		&f3PosTopRightCWS,
+		&f3PosBottomLeftCWS,
+		&f3PosBottomRightCWS);
+
+	int iPlaneSizeX = num_interpolation;
+	float fPlanePitch = fExPlaneWidth / iPlaneSizeX;
+	float fPlaneSizeY = fExPlaneHeight / fPlanePitch;
+	float fPlaneCenterY = fPlaneSizeY * 0.5f;
+	
+	vmmat44f matScale, matTranslate;
+	float fPlanePixelPitch = (float)fPlanePitch;
+	fMatrixScaling(&matScale, &vmfloat3(fPlanePixelPitch, fPlanePixelPitch, fPlanePixelPitch));
+	float fHalfPlaneWidth = (float)(fExPlaneWidth * 0.5);
+	float fHalfPlaneHeight = (float)(fExPlaneHeight * 0.5);
+	fMatrixTranslation(&matTranslate, &vmfloat3(-fHalfPlaneWidth, -fHalfPlaneHeight, -fPlanePixelPitch * 0.5f));
+	vmmat44f matCOS2CWS = matScale * matTranslate;
+	vmmat44f matCWS2COS;
+	fMatrixInverse(&matCWS2COS, &matCOS2CWS);
+	
+	vmfloat3 f3PosTopLeftCOS, f3PosTopRightCOS, f3PosBottomLeftCOS, f3PosBottomRightCOS; 
+	fTransformPoint(&f3PosTopLeftCOS, &f3PosTopLeftCWS, &matCWS2COS);
+	fTransformPoint(&f3PosTopRightCOS, &f3PosTopRightCWS, &matCWS2COS); 
+	fTransformPoint(&f3PosBottomLeftCOS, &f3PosBottomLeftCWS, &matCWS2COS);
+	fTransformPoint(&f3PosBottomRightCOS, &f3PosBottomRightCWS, &matCWS2COS);
+	
+	int iThicknessStep = (int)ceil(fPlaneThickness / fMinPitch); /* Think "fPlaneThickness > fMinPitch"!! */\
+	float fStepLength = fPlaneThickness / (float)iThicknessStep;
+
+	{
+		cb_curvedSlicer.posTopLeftCOS = f3PosTopLeftCOS;
+		cb_curvedSlicer.posTopRightCOS = f3PosTopRightCOS;
+		cb_curvedSlicer.posBottomLeftCOS = f3PosBottomLeftCOS;
+		cb_curvedSlicer.posBottomRightCOS = f3PosBottomRightCOS;
+		cb_curvedSlicer.numCurvePoints = num_interpolation;
+		cb_curvedSlicer.planeHeight = fPlaneSizeY;
+		cb_curvedSlicer.thicknessPlane = fPlaneThickness;
+		cb_curvedSlicer.numRaySteps = iThicknessStep;
+		vmfloat3 curvedPlaneUp;
+		fNormalizeVector(&curvedPlaneUp, &vtrCurveUpVectors[0]);
+		cb_curvedSlicer.planeUp = curvedPlaneUp * fPlanePitch;
+		cb_curvedSlicer.flag = bIsRightSide;
+	}
 }
 
 std::wstring s2ws(const std::string& s)

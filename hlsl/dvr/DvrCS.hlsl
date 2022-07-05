@@ -789,7 +789,6 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	uint addr_base = pixel_id * bytes_frags_per_pixel;
 
 	uint num_frags = fragment_counter[DTid.xy];
-	uint vr_hit_enc = num_frags >> 24;
 	num_frags = num_frags & 0xFFF;
 
 	float4 vis_out = 0;
@@ -894,15 +893,10 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 
 	// start position //
 	float3 pos_ray_start_ws = f3PosSampleWS_C;
-	float3 pos_ray_start_ts = TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts);
-
 	float3 dir_sample_ws = f3VecSampleViewWS * g_cbVobj.sample_dist;
-	float3 dir_sample_ts = TransformVector(dir_sample_ws, g_cbVobj.mat_ws2ts);
 
 	// DVR ray-casting core part
 #if RAYMODE == 0 // DVR
-	float depth_hit = 0;
-
 	// note that the gradient normal direction faces to the inside
 	float3 light_dirinv = -g_cbEnv.dir_light_ws;
 	if (g_cbEnv.env_flag & 0x1)
@@ -922,31 +916,23 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	Fragment f_dly = fs[0]; // if no frag, the z-depth is infinite
 #endif
 
-	///////////////////
-
 	int sample_v = 0;
 	int hit_step = -1;
-	float3 pos_start_ws = pos_ip_ws + dir_sample_unit_ws * hits_t.x;
-	Compute_1stHit(hit_step, sample_v, pos_start_ws, dir_sample_ws, num_ray_samples);
+	Compute_1stHit(hit_step, sample_v, pos_ray_start_ws, dir_sample_ws, num_ray_samples);
 	if (hit_step < 0)
 		return;
 
 	float3 pos_hit_ws;
 	// note that sample_v is first set by Compute_1stHit
-	SurfaceRefinement(pos_hit_ws, sample_v, pos_start_ws + dir_sample_ws * (float)hit_step, dir_sample_ws, SURFACEREFINEMENTNUM);
-	float depth_hit = length(pos_hit_ws - pos_ip_ws);
+	SurfaceRefinement(pos_hit_ws, sample_v, pos_ray_start_ws + dir_sample_ws * (float)hit_step, dir_sample_ws, SURFACEREFINEMENTNUM);
+	float depth_hit = length(pos_hit_ws - pos_ray_start_ws);
+	pos_ray_start_ws = pos_hit_ws;
+	
+	float3 pos_ray_start_ts = TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts);
+	float3 dir_sample_ts = TransformVector(dir_sample_ws, g_cbVobj.mat_ws2ts);
 
-	vr_fragment_1sthit_write[DTid.xy] = depth_hit;
-	uint fcnt = fragment_counter[DTid.xy];
-	uint dvr_hit_enc = hit_step == 0 ? 2 : 1;
-	fragment_counter[DTid.xy] = fcnt | (dvr_hit_enc << 24);
-
-	////////////
-
-
-
-	int start_idx = 0, sample_v = 0;
-	if (vr_hit_enc == 2)
+	int start_idx = 0;
+	if (hit_step == 0)
 	{
 		start_idx = 1;
 		float4 vis_otf = (float4) 0;
@@ -1045,6 +1031,8 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	int num_valid_samples = 0;
 	float4 vis_otf_sum = (float4)0;
 #endif
+	float3 pos_ray_start_ts = TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts);
+	float3 dir_sample_ts = TransformVector(dir_sample_ws, g_cbVobj.mat_ws2ts);
 
 	int count = 0;
 	[loop]

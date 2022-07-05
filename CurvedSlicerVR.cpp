@@ -53,7 +53,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	bool bIsRightSide = _fncontainer->fnParams.GetParam("_bool_IsRightSide", false);
 	float fThicknessPosition = fThicknessRatio * fExCurveThicknessPositionRange * 0.5;
 	float fPlaneThickness = _fncontainer->fnParams.GetParam("_float_PlaneThickness", 0.f);
-	int iSlicerRayCastType = _fncontainer->fnParams.GetParam("_int_VolumeRayCastType", (int)__RM_MPR_MAINVOLUMEDEFAULT);	// 100
+	int iSlicerRayCastType = _fncontainer->fnParams.GetParam("_int_VolumeRayCastType", (int)0);	// 100
 
 	VmLight* light = _fncontainer->fnParams.GetParam("_VmLight*_LightSource", (VmLight*)NULL);
 	VmLens* lens = _fncontainer->fnParams.GetParam("_VmLens*_CamLens", (VmLens*)NULL);
@@ -331,6 +331,15 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	}
 #pragma endregion // Light & Shadow Setting
 
+	CB_CurvedSlicer cbCurvedSlicer;
+	grd_helper::SetCb_CurvedSlicer(cbCurvedSlicer, _fncontainer, iobj, min_pitch);
+	D3D11_MAPPED_SUBRESOURCE mappedResCurvedSlicerState;
+	dx11DeviceImmContext->Map(cbuf_curvedslicer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCurvedSlicerState);
+	CB_CurvedSlicer* cbCurvedSlicerData = (CB_CurvedSlicer*)mappedResCurvedSlicerState.pData;
+	memcpy(cbCurvedSlicerData, &cbCurvedSlicer, sizeof(CB_CurvedSlicer));
+	dx11DeviceImmContext->Unmap(cbuf_curvedslicer, 0);
+	dx11DeviceImmContext->CSSetConstantBuffers(10, 1, &cbuf_curvedslicer);
+
 	map<string, vmint2> profile_map;
 	if (gpu_profile)
 	{
@@ -591,44 +600,6 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		};
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs, (UINT*)(&dx11UAVs));
 
-		if (ray_cast_type != __RM_RAYMIN
-			&& ray_cast_type != __RM_RAYMAX
-			&& ray_cast_type != __RM_RAYSUM) {
-			// 1st hit surface
-			dx11DeviceImmContext->CSSetUnorderedAccessViews(4, 1, (ID3D11UnorderedAccessView**)&gres_fb_vrdepthcs.alloc_res_ptrs[DTYPE_UAV], (UINT*)(&dx11UAVs));
-
-			dx11DeviceImmContext->CSSetShader(GETCS(VR_SURFACE_cs_5_0), NULL, 0);
-			dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
-
-			dx11DeviceImmContext->CSSetUnorderedAccessViews(4, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs));
-			dx11DeviceImmContext->CSSetShaderResources(6, 1, (ID3D11ShaderResourceView**)&gres_fb_vrdepthcs.alloc_res_ptrs[DTYPE_SRV]);
-		}
-
-		if (cbEnvState.r_kernel_ao > 0)
-		{
-			is_performed_ssao = true;
-			//dx11DeviceImmContext->Flush();
-			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-			ComputeSSAO(dx11DeviceImmContext, dx11CommonParams, iobj, num_grid_x, num_grid_y,
-				gres_fb_counter, gres_fb_k_buffer, gres_fb_rgba, blur_SSAO,
-				gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex, true, apply_fragmerge, profile_map, gpu_profile);
-
-			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs, (UINT*)(&dx11UAVs));
-
-			if (blur_SSAO)
-			{
-				dx11DeviceImmContext->CSSetShaderResources(10, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_blf_texs[0].alloc_res_ptrs[DTYPE_SRV]);
-				dx11DeviceImmContext->CSSetShaderResources(11, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_blf_texs[1].alloc_res_ptrs[DTYPE_SRV]);
-				dx11DeviceImmContext->CSSetShaderResources(20, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_vr_blf_tex.alloc_res_ptrs[DTYPE_SRV]);
-			}
-			else
-			{
-				dx11DeviceImmContext->CSSetShaderResources(10, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_texs[0].alloc_res_ptrs[DTYPE_SRV]);
-				dx11DeviceImmContext->CSSetShaderResources(11, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_texs[1].alloc_res_ptrs[DTYPE_SRV]);
-				dx11DeviceImmContext->CSSetShaderResources(20, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_vr_tex.alloc_res_ptrs[DTYPE_SRV]);
-			}
-		}
-
 		dx11DeviceImmContext->CSSetShader(cshader, NULL, 0);
 		//dx11DeviceImmContext->Flush();
 		dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
@@ -641,37 +612,6 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->CSSetShaderResources(6, 1, dx11SRVs_NULL);
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(50, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 #pragma endregion 
-	}
-
-	if (cbEnvState.r_kernel_ao > 0 && !is_performed_ssao)
-	{
-		ID3D11UnorderedAccessView* dx11UAVs[4] = {
-				  (ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV]
-				, (ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]
-				, (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
-				, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
-		};
-		is_performed_ssao = true;
-		//dx11DeviceImmContext->Flush();
-		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-		ComputeSSAO(dx11DeviceImmContext, dx11CommonParams, iobj, num_grid_x, num_grid_y,
-			gres_fb_counter, gres_fb_k_buffer, gres_fb_rgba, blur_SSAO,
-			gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex, true, apply_fragmerge, profile_map, gpu_profile);
-
-		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs, (UINT*)(&dx11UAVs));
-
-		if (blur_SSAO)
-		{
-			dx11DeviceImmContext->CSSetShaderResources(10, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_blf_texs[0].alloc_res_ptrs[DTYPE_SRV]);
-			dx11DeviceImmContext->CSSetShaderResources(11, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_blf_texs[1].alloc_res_ptrs[DTYPE_SRV]);
-			dx11DeviceImmContext->CSSetShaderResources(20, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_vr_blf_tex.alloc_res_ptrs[DTYPE_SRV]);
-		}
-		else
-		{
-			dx11DeviceImmContext->CSSetShaderResources(10, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_texs[0].alloc_res_ptrs[DTYPE_SRV]);
-			dx11DeviceImmContext->CSSetShaderResources(11, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_texs[1].alloc_res_ptrs[DTYPE_SRV]);
-			dx11DeviceImmContext->CSSetShaderResources(20, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_vr_tex.alloc_res_ptrs[DTYPE_SRV]);
-		}
 	}
 
 	//dx11DeviceImmContext->Flush();
@@ -747,25 +687,6 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 				test_out("v_thickness : " + to_string(v_thickness));
 				test_out("k_value : " + to_string(k_value));
 				test_out("grid width and height : " + to_string(num_grid_x) + " x " + to_string(num_grid_y));
-				//float* f_v = (float*)&matWS2SS;
-				//for (int i = 0; i < 16; i++)
-				//{
-				//	test_out("matWS2SS " + to_string(i) + " : " + to_string(f_v[i]));
-				//	if (f_v[i] != f_v[i]) test_out("matWS2SS " + to_string(i) + " - element error");
-				//}
-				//f_v = (float*)&matWS2PS;
-				//for (int i = 0; i < 16; i++)
-				//{
-				//	test_out("matWS2PS " + to_string(i) + " : " + to_string(f_v[i]));
-				//	if (f_v[i] != f_v[i]) test_out("matWS2PS " + to_string(i) + " - element error");
-				//}
-				//f_v = (float*)&matSS2WS;
-				//for (int i = 0; i < 16; i++)
-				//{
-				//	test_out("matSS2WS " + to_string(i) + " : " + to_string(f_v[i]));
-				//	if (f_v[i] != f_v[i]) test_out("matSS2WS " + to_string(i) + " - element error");
-				//}
-				//return false;
 			}
 			int buf_row_pitch = mappedResSysRGBA.RowPitch / 4;
 #ifdef PPL_USE
