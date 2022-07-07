@@ -63,6 +63,8 @@ void ComputeDOF(__ID3D11DeviceContext* dx11DeviceImmContext,
 	bool involve_vr,
 	map<string, vmint2>& profile_map, bool gpu_profile);
 
+void GradientMagnitudeAnalysis(vmfloat2& grad_minmax, VmVObjectVolume* vobj);
+
 #define IS_SAFE_OBJ(OBJID) ((OBJID & 0xFFFF) >= 65536 - 4096)
 
 enum MFR_MODE

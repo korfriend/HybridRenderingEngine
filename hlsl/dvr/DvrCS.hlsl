@@ -778,7 +778,6 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	int2 cip_xy = int2(DTid.xy);
 
 	// do not compute 1st hit surface separately
-
 	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
 		return;
 
@@ -844,6 +843,7 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	float3 f3PosBottomRightCOS = g_cbCurvedSlicer.posBottomRightCOS;
 	float fPlaneThickness = g_cbCurvedSlicer.thicknessPlane;
 	float fPlaneSizeY = g_cbCurvedSlicer.planeHeight;
+	float fPlaneCenterY = fPlaneSizeY * 0.5f;
 	const float fThicknessPosition = 0;
 	const float merging_beta = 1.0;
 
@@ -892,7 +892,9 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 		return;
 
 	// start position //
-	float3 pos_ray_start_ws = f3PosSampleWS_C;
+	//vmfloat3 f3PosSampleWS = f3PosSampleWS_C + f3VecSampleUpWS * (f2PosSampleCOS.y - fPlaneCenterY)
+	//	+ f3VecSampleViewWS * fStepLength * (float)m;
+	float3 pos_ray_start_ws = f3PosSampleWS_C + f3VecSampleUpWS * (f2PosSampleCOS.y - fPlaneCenterY);
 	float3 dir_sample_ws = f3VecSampleViewWS * g_cbVobj.sample_dist;
 
 	// DVR ray-casting core part

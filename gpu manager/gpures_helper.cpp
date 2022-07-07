@@ -1622,15 +1622,17 @@ bool grd_helper::UpdateFrameBuffer(GpuRes& gres,
 	return true;
 }
 
-bool UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string& resName, const void* bufPtr, const int numElements, LocalProgress* progress)
+bool grd_helper::UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string& resName, const void* bufPtr, const int numElements, DXGI_FORMAT dxFormat, const int type_bytes, LocalProgress* progress)
 {
 	gres.vm_src_id = srcObj->GetObjectID();
 	gres.res_name = resName;
 
+	string updateName = "_ullong_Latest" + resName + "GpuUpdateTime";
+
 	if (g_pCGpuManager->UpdateGpuResource(gres)) {
 
 		ullong _tp_cpu = srcObj->GetContentUpdateTime();
-		ullong _tp_gpu = srcObj->GetObjParam("_ullong_LatestCurvedPlaneGpuUpdateTime", (ullong)0);
+		ullong _tp_gpu = srcObj->GetObjParam(updateName, (ullong)0);
 		if (_tp_gpu >= _tp_cpu)
 			return true;
 	}
@@ -1639,24 +1641,20 @@ bool UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string& resName, c
 		gres.options["USAGE"] = D3D11_USAGE_DYNAMIC;
 		gres.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
 		gres.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
-		gres.options["FORMAT"] = DXGI_FORMAT_R8G8B8A8_UNORM;
+		gres.options["FORMAT"] = dxFormat;// DXGI_FORMAT_R8G8B8A8_UNORM;
 
-		gres.res_values.SetParam("NUM_ELEMENTS", (uint)(tmap_data->array_lengths.x * (tmap_data->array_lengths.y)));
-		gres.res_values.SetParam("STRIDE_BYTES", (uint)tmap_data->dtype.type_bytes);
+		gres.res_values.SetParam("NUM_ELEMENTS", (const uint)numElements);
+		gres.res_values.SetParam("STRIDE_BYTES", (const uint)type_bytes);
 
 		g_pCGpuManager->GenerateGpuResource(gres);
 	}
 
 	D3D11_MAPPED_SUBRESOURCE d11MappedRes;
 	g_pvmCommonParams->dx11DeviceImmContext->Map((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes);
-	vmbyte4* py4ColorTF = (vmbyte4*)d11MappedRes.pData;
-	for (int i = 0; i < tmap_data->array_lengths.y; i++)
-	{
-		memcpy(&py4ColorTF[i * tmap_data->array_lengths.x], tmap_data->tmap_buffers[i], tmap_data->array_lengths.x * sizeof(vmbyte4));
-	}
+	memcpy(d11MappedRes.pData, bufPtr, type_bytes * numElements);
 	g_pvmCommonParams->dx11DeviceImmContext->Unmap((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], 0);
 
-	srcObj->SetObjParam("_ullong_LatestCurvedPlaneGpuUpdateTime", vmhelpers::GetCurrentTimePack());
+	srcObj->SetObjParam(updateName, vmhelpers::GetCurrentTimePack());
 
 	return true;
 }
@@ -2056,7 +2054,7 @@ void grd_helper::SetCb_HotspotMask(CB_HotspotMask& cb_hsmask, VmFnContainer* _fn
 	//__set_params(1, mask_center_rs_1, hotspot_params_1, show_silhuette_edge_1, mask_bnd);
 }
 
-void grd_helper::SetCb_CurvedSlicer(CB_CurvedSlicer& cb_curvedSlicer, VmFnContainer* _fncontainer, VmIObject* iobj, const float fMinPitch) {
+void grd_helper::SetCb_CurvedSlicer(CB_CurvedSlicer& cb_curvedSlicer, VmFnContainer* _fncontainer, VmIObject* iobj, float& sample_dist) {
 
 	float fExPlaneWidth = _fncontainer->fnParams.GetParam("_float_ExPlaneWidth", 1.f);
 	float fExPlaneHeight = _fncontainer->fnParams.GetParam("_float_ExPlaneHeight", 1.f);
@@ -2107,8 +2105,8 @@ void grd_helper::SetCb_CurvedSlicer(CB_CurvedSlicer& cb_curvedSlicer, VmFnContai
 	fTransformPoint(&f3PosBottomLeftCOS, &f3PosBottomLeftCWS, &matCWS2COS);
 	fTransformPoint(&f3PosBottomRightCOS, &f3PosBottomRightCWS, &matCWS2COS);
 	
-	int iThicknessStep = (int)ceil(fPlaneThickness / fMinPitch); /* Think "fPlaneThickness > fMinPitch"!! */\
-	float fStepLength = fPlaneThickness / (float)iThicknessStep;
+	int iThicknessStep = (int)ceil(fPlaneThickness / sample_dist); /* Think "fPlaneThickness > fMinPitch"!! */\
+	sample_dist = fPlaneThickness / (float)iThicknessStep;
 
 	{
 		cb_curvedSlicer.posTopLeftCOS = f3PosTopLeftCOS;

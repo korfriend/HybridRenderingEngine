@@ -1,6 +1,7 @@
 #include "RendererHeader.h"
 
 using namespace grd_helper;
+#define __SRV_PTR ID3D11ShaderResourceView* 
 
 bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	VmGpuManager* gpu_manager,
@@ -105,8 +106,8 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 			exe_path.erase(0, pos + delimiter.length());
 		}
 		//hlslobj_path += "..\\..\\VmModuleProjects\\renderer_gpudx11\\shader_compiled_objs\\";
-		hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
-		//hlslobj_path += "..\\..\\VmModuleProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
+		//hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
+		hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
 		//cout << hlslobj_path << endl;
 
 		string prefix_path = hlslobj_path;
@@ -115,6 +116,11 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 #define SET_CS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(COMPUTE_SHADER, NAME), dx11CShader, true)
 
 		string strNames_CS[CS_NUM] = {
+			   "PanoVR_RAYMAX_cs_5_0"
+			  ,"PanoVR_RAYMIN_cs_5_0"
+			  ,"PanoVR_RAYSUM_cs_5_0"
+			  ,"PanoVR_DEFAULT_cs_5_0"
+			  ,"PanoVR_MODULATE_cs_5_0"
 		};
 
 		for (int i = 0; i < CS_NUM; i++)
@@ -203,6 +209,14 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	vector<vmfloat3>& vtrCurveInterpolations = *_fncontainer->fnParams.GetParamPtr<vector<vmfloat3>>("_vlist_FLOAT3_CurveInterpolations");
 	vector<vmfloat3>& vtrCurveUpVectors = *_fncontainer->fnParams.GetParamPtr<vector<vmfloat3>>("_vlist_FLOAT3_CurveUpVectors");
 	vector<vmfloat3>& vtrCurveTangentVectors = *_fncontainer->fnParams.GetParamPtr<vector<vmfloat3>>("_vlist_FLOAT3_CurveTangentVectors");
+	GpuRes gres_cpPoints, gres_cpTangents;
+	int num_curvedPoints = (int)vtrCurveInterpolations.size();
+	if (num_curvedPoints < 1) 
+		return false;
+	grd_helper::UpdateCustomBuffer(gres_cpPoints, iobj, "CurvedPlanePoints", &vtrCurveInterpolations[0], num_curvedPoints, DXGI_FORMAT_R32G32B32_FLOAT, 12);
+	grd_helper::UpdateCustomBuffer(gres_cpTangents, iobj, "CurvedPlaneTangents", &vtrCurveTangentVectors[0], num_curvedPoints, DXGI_FORMAT_R32G32B32_FLOAT, 12);
+	dx11DeviceImmContext->CSSetShaderResources(30, 1, (__SRV_PTR*)&gres_cpPoints.alloc_res_ptrs[DTYPE_SRV]);
+	dx11DeviceImmContext->CSSetShaderResources(31, 1, (__SRV_PTR*)&gres_cpTangents.alloc_res_ptrs[DTYPE_SRV]);
 
 #pragma region // Presetting of VmObject
 	vector<VmActor*> dvr_volumes;
@@ -331,8 +345,10 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	}
 #pragma endregion // Light & Shadow Setting
 
+	float sample_dist = min_pitch;
+
 	CB_CurvedSlicer cbCurvedSlicer;
-	grd_helper::SetCb_CurvedSlicer(cbCurvedSlicer, _fncontainer, iobj, min_pitch);
+	grd_helper::SetCb_CurvedSlicer(cbCurvedSlicer, _fncontainer, iobj, sample_dist);
 	D3D11_MAPPED_SUBRESOURCE mappedResCurvedSlicerState;
 	dx11DeviceImmContext->Map(cbuf_curvedslicer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCurvedSlicerState);
 	CB_CurvedSlicer* cbCurvedSlicerData = (CB_CurvedSlicer*)mappedResCurvedSlicerState.pData;
@@ -394,7 +410,6 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 #define __RM_RAYMAX 10
 #define __RM_RAYMIN 11
 #define __RM_RAYSUM 12
-#define __SRV_PTR ID3D11ShaderResourceView* 
 
 		// will change integer to string type 
 		// and its param name 'RaySamplerMode'
@@ -410,6 +425,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 			break;
 		case __RM_MODULATION:
 		case __RM_MODULATION_MASK:
+			GradientMagnitudeAnalysis(grad_minmax, vobj);
 			is_modulation_mode = true;
 			break;
 		case __RM_DEFAULT:
@@ -535,6 +551,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 				cbVolumeObj.mask_value_range = 65535.f;
 			else GMERRORMESSAGE("UNSUPPORTED FORMAT : MASK VOLUME");
 		}
+		cbVolumeObj.sample_dist = sample_dist;
 		D3D11_MAPPED_SUBRESOURCE mappedResVolObj;
 		dx11DeviceImmContext->Map(cbuf_vobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResVolObj);
 		CB_VolumeObject* cbVolumeObjData = (CB_VolumeObject*)mappedResVolObj.pData;
@@ -588,6 +605,16 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		ID3D11ComputeShader* cshader = NULL;
 		switch (ray_cast_type)
 		{
+		case __RM_RAYMIN: cshader = GETCS(PanoVR_RAYMIN_cs_5_0); break;
+		case __RM_RAYMAX: cshader = GETCS(PanoVR_RAYMAX_cs_5_0); break;
+		case __RM_RAYSUM: cshader = GETCS(PanoVR_RAYSUM_cs_5_0); break;
+		case __RM_MODULATION: cshader = GETCS(PanoVR_MODULATE_cs_5_0); break;
+		case __RM_DEFAULT: cshader = GETCS(PanoVR_DEFAULT_cs_5_0); break;
+		case __RM_CLIPOPAQUE:
+		case __RM_OPAQUE:
+		case __RM_MULTIOTF:
+		case __RM_VISVOLMASK:
+		case __RM_SCULPTMASK:
 		default:
 			VMERRORMESSAGE("NOT SUPPORT RAY CASTER!"); return false;
 		}
