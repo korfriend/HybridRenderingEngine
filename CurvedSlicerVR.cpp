@@ -490,9 +490,11 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		grd_helper::UpdateVolumeModel(gres_vol, vobj, ray_cast_type == __RM_VISVOLMASK, progress); // ray_cast_type == __RM_MAXMASK
 		dx11DeviceImmContext->CSSetShaderResources(0, 1, (__SRV_PTR*)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
 
-		GpuRes gres_tmap_otf;
-		grd_helper::UpdateTMapBuffer(gres_tmap_otf, tobj_otf);
+		GpuRes gres_tmap_otf, gres_tmap_preintotf;
+		grd_helper::UpdateTMapBuffer(gres_tmap_otf, tobj_otf, false);
+		grd_helper::UpdateTMapBuffer(gres_tmap_preintotf, tobj_otf, true);
 		dx11DeviceImmContext->CSSetShaderResources(3, 1, (__SRV_PTR*)&gres_tmap_otf.alloc_res_ptrs[DTYPE_SRV]);
+		dx11DeviceImmContext->CSSetShaderResources(13, 1, (__SRV_PTR*)&gres_tmap_preintotf.alloc_res_ptrs[DTYPE_SRV]);
 
 		VolumeBlocks* vol_blk = vobj->GetVolumeBlock(blk_level);
 		if (vol_blk == NULL)

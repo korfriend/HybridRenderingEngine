@@ -314,7 +314,7 @@ namespace grd_helper
 	// bool UpdateAOMask(const VmVObjectVolume* vobj, LocalProgress* progress = NULL); // to do
 	bool UpdateVolumeModel(GpuRes& gres, VmVObjectVolume* vobj, const bool use_nearest_max, LocalProgress* progress = NULL);
 
-	bool UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, LocalProgress* progress = NULL);
+	bool UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, const bool isPreInt = false, LocalProgress* progress = NULL);
 
 	// primitive structure
 	bool UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<string, GpuRes>& map_gres_texs, VmVObjectPrimitive* pobj, LocalProgress* progress = NULL);

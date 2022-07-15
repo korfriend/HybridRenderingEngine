@@ -552,7 +552,33 @@ float4 LoadOtfBuf(const in int sample_value, const in Buffer<float4> buf_otf, co
     return vis_otf;
 }
 
-#define OTFROWPITCH 4096
+float4 LoadSlabOtfBuf_Avg(const in int sample_v, const in int sample_prev, const in Buffer<float4> buf_otf, const in float opacity_correction)
+{
+	float4 vis_otf = (buf_otf[sample_prev] + buf_otf[sample_v]) * 0.5f;
+	vis_otf.a *= opacity_correction;
+	vis_otf.rgb *= vis_otf.a; // associate color
+	return vis_otf;
+}
+
+float4 LoadSlabOtfBuf_PreInt(const in int sample_v, const in int sample_prev, const in Buffer<float4> buf_preintotf, const in float opacity_correction)
+{
+	float4 vis_otf = (float4)0;
+
+	int diff = sample_v - sample_prev;
+	if (diff == 0) diff = 1;
+
+	float divDiff = 1.f / (float)diff;
+
+	float4 f4OtfColorPrev = buf_preintotf[sample_prev];
+	float4 f4OtfColorNext = buf_preintotf[sample_v];
+
+	vis_otf.rgb = (f4OtfColorNext.rgb - f4OtfColorPrev.rgb) * divDiff;
+	//vis_otf.a = 1.f - exp(-(f4OtfColorNext.a - f4OtfColorPrev.a) * divDiff * opacity_correction)
+	vis_otf.a = (f4OtfColorNext.a - f4OtfColorPrev.a) * divDiff * opacity_correction;
+	vis_otf.rgb *= vis_otf.a; // associate color
+	return vis_otf;
+}
+
 float4 LoadOtfBufId(const in int sample_value, const in Buffer<float4> buf_otf, const in float opacity_correction, const in int id)
 {
     float4 vis_otf = buf_otf[sample_value + id * g_cbTmap.tmap_size_x];
@@ -613,6 +639,17 @@ float3 GradientVolume(const in float3 pos_sample_ts, const in float3 vec_x, cons
     float fGz = tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts + vec_z, 0).r
 		- tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts - vec_z, 0).r;
     return float3(fGx, fGy, fGz);
+}
+
+float3 GradientVolume2(const in float3 pos_sample_ts, const in float3 vec_x, const in float3 vec_y, const in float3 vec_z, const in Texture3D tex3d_data)
+{
+	float fGx = tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts + vec_x, 0).r
+		- tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts - vec_x, 0).r;
+	float fGy = tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts + vec_y, 0).r
+		- tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts - vec_y, 0).r;
+	float fGz = tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts + vec_z, 0).r
+		- tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts - vec_z, 0).r;
+	return float3(fGx, fGy, fGz);
 }
 
 float3 GradientNormalVolume(inout float leng, const in float3 pos_sample_ts, const in float3 pos_view_ws, const in float3 vec_x, const in float3 vec_y, const in float3 vec_z, const in Texture3D tex3d_data)

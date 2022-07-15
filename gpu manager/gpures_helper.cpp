@@ -1054,16 +1054,17 @@ RETRY:
 	return true;
 }
 
-bool grd_helper::UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, LocalProgress* progress)
+bool grd_helper::UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, const bool isPreInt, LocalProgress* progress)
 {
 	gres.vm_src_id = tobj->GetObjectID();
-	gres.res_name = string("OTF_BUFFER");
+	gres.res_name = isPreInt? string("PREINT_OTF_BUFFER") : string("OTF_BUFFER");
 
 	MapTable* tmap_data = tobj->GetObjParamPtr<MapTable>("_TableMap_OTF");
+	string updateTimeName = string("_ullong_Latest") + string(isPreInt? "PreIntOtf" : "Otf") + string("GpuUpdateTime");
 	if (g_pCGpuManager->UpdateGpuResource(gres)) {
 
 		ullong _tp_cpu = tobj->GetContentUpdateTime(); 
-		ullong _tp_gpu = tobj->GetObjParam("_ullong_LatestMapTableGpuUpdateTime", (ullong)0);
+		ullong _tp_gpu = tobj->GetObjParam(updateTimeName, (ullong)0);
 		if(_tp_gpu >= _tp_cpu)
 			return true;
 	}
@@ -1072,24 +1073,48 @@ bool grd_helper::UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, LocalProgress* p
 		gres.options["USAGE"] = D3D11_USAGE_DYNAMIC;
 		gres.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
 		gres.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
-		gres.options["FORMAT"] = DXGI_FORMAT_R8G8B8A8_UNORM;
+		gres.options["FORMAT"] = isPreInt? DXGI_FORMAT_R32G32B32A32_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
 
 		gres.res_values.SetParam("NUM_ELEMENTS", (uint)(tmap_data->array_lengths.x * (tmap_data->array_lengths.y)));
-		gres.res_values.SetParam("STRIDE_BYTES", (uint)tmap_data->dtype.type_bytes);
+		gres.res_values.SetParam("STRIDE_BYTES", isPreInt? (uint)16 : (uint)tmap_data->dtype.type_bytes);
 
 		g_pCGpuManager->GenerateGpuResource(gres);
 	}
 
 	D3D11_MAPPED_SUBRESOURCE d11MappedRes;
 	g_pvmCommonParams->dx11DeviceImmContext->Map((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes);
-	vmbyte4* py4ColorTF = (vmbyte4*)d11MappedRes.pData;
-	for (int i = 0; i < tmap_data->array_lengths.y; i++)
-	{
-		memcpy(&py4ColorTF[i * tmap_data->array_lengths.x], tmap_data->tmap_buffers[i], tmap_data->array_lengths.x * sizeof(vmbyte4));
+	if (isPreInt) {
+		vmfloat4* f4ColorPreIntTF = (vmfloat4*)d11MappedRes.pData;
+		for (int i = 0; i < tmap_data->array_lengths.y; i++)
+		{
+			vmbyte4* py4OTF = (vmbyte4*)tmap_data->tmap_buffers[i];
+			vmbyte4 rgba = py4OTF[0];
+			vmfloat4 frfba = vmfloat4(rgba.r / 255.f, rgba.g / 255.f, rgba.b / 255.f, rgba.a / 255.f);
+			//frfba.r *= frfba.a;
+			//frfba.g *= frfba.a;
+			//frfba.b *= frfba.a;
+			f4ColorPreIntTF[0] = frfba;
+			for (int j = 1; j < tmap_data->array_lengths.x; j++)
+			{
+				vmbyte4 rgba = py4OTF[j];
+				vmfloat4 frfba = vmfloat4(rgba.r / 255.f, rgba.g / 255.f, rgba.b / 255.f, rgba.a / 255.f);
+				//frfba.r *= frfba.a;
+				//frfba.g *= frfba.a;
+				//frfba.b *= frfba.a;
+				f4ColorPreIntTF[j] = f4ColorPreIntTF[j - 1] + frfba;
+			}
+		}
+	}
+	else {
+		vmbyte4* py4ColorTF = (vmbyte4*)d11MappedRes.pData;
+		for (int i = 0; i < tmap_data->array_lengths.y; i++)
+		{
+			memcpy(&py4ColorTF[i * tmap_data->array_lengths.x], tmap_data->tmap_buffers[i], tmap_data->array_lengths.x * sizeof(vmbyte4));
+		}
 	}
 	g_pvmCommonParams->dx11DeviceImmContext->Unmap((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], 0);
 
-	tobj->SetObjParam("_ullong_LatestMapTableGpuUpdateTime", vmhelpers::GetCurrentTimePack());
+	tobj->SetObjParam(updateTimeName, vmhelpers::GetCurrentTimePack());
 
 	return true;
 }
