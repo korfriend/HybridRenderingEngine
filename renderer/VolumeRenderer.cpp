@@ -340,7 +340,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 // 	const int __BLOCKSIZE = 8;
 // 	uint num_grid_x = (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
 // 	uint num_grid_y = (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
-	const int __BLOCKSIZE = _fncontainer->fnParams.GetParam("_int_GpuThreadBlockSize", (int)8);
+	const int __BLOCKSIZE = _fncontainer->fnParams.GetParam("_int_GpuThreadBlockSize", (int)2);
 	uint num_grid_x = __BLOCKSIZE == 1 ? fb_size_cur.x : (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
 	uint num_grid_y = __BLOCKSIZE == 1 ? fb_size_cur.y : (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
 

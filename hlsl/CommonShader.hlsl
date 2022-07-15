@@ -6,7 +6,7 @@
 #define FLT_MIN 0.0000001F
 #define D_PI 3.14159265358979323846
 #define F_PI 3.1415927
-#define GRIDSIZE 8
+#define GRIDSIZE 2
 #define ERT_ALPHA 0.99f
 
 #define FLT_MIN__ 0.000001f			// precision problem for zero-division 
