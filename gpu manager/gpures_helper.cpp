@@ -4,6 +4,8 @@
 
 using namespace grd_helper;
 
+#define __BLKLEVEL 0
+
 namespace grd_helper
 {
 	static GpuDX11CommonParameters* g_pvmCommonParams = NULL;
@@ -574,7 +576,7 @@ int __UpdateBlocks(GpuRes& gres, const VmVObjectVolume* vobj, const string& vmod
 	gres.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
 
 	VolumeData* vol_data = ((VmVObjectVolume*)vobj)->GetVolumeData();
-	const int blk_level = 1;	// 0 : High Resolution, 1 : Low Resolution
+	const int blk_level = __BLKLEVEL;	// 0 : High Resolution, 1 : Low Resolution
 	VolumeBlocks* volblk = ((VmVObjectVolume*)vobj)->GetVolumeBlock(blk_level);
 
 	gres.res_values.SetParam("WIDTH", (uint)volblk->blk_vol_size.x);
@@ -610,7 +612,7 @@ bool grd_helper::UpdateOtfBlocks(GpuRes& gres, VmVObjectVolume* main_vobj, VmVOb
 	otf_Mm_range.x = tmap_data->valid_min_idx.x * scale_tf2volume;
 	otf_Mm_range.y = tmap_data->valid_max_idx.x * scale_tf2volume;
 
-	const int blk_level = 1;	// 0 : High Resolution, 1 : Low Resolution
+	const int blk_level = __BLKLEVEL;	// 0 : High Resolution, 1 : Low Resolution
 	VolumeBlocks* volblk = ((VmVObjectVolume*)main_vobj)->GetVolumeBlock(blk_level);
 
 	ullong _tob_time_cpu = tobj->GetContentUpdateTime();
@@ -784,7 +786,7 @@ bool grd_helper::UpdateMinMaxBlocks(GpuRes& gres_min, GpuRes& gres_max, const Vm
 	if (is_new1 == 0 && is_new2 == 0) return true;
 
 	const VolumeData* vol_data = ((VmVObjectVolume*)vobj)->GetVolumeData();
-	const int blk_level = 1;	// 0 : High Resolution, 1 : Low Resolution
+	const int blk_level = __BLKLEVEL;	// 0 : High Resolution, 1 : Low Resolution
 	VolumeBlocks* volblk = ((VmVObjectVolume*)vobj)->GetVolumeBlock(blk_level);
 
 	if (progress)
@@ -1835,7 +1837,7 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 
 	// volume blocks
 	cb_volume.volblk_value_range = volblk_valuerange; // DOJO TO DO :  BLK 16UNORM ==> 16UINT... and forced to set 1
-	const int blk_level = 1;	// 0 : High Resolution, 1 : Low Resolution
+	const int blk_level = __BLKLEVEL;	// 0 : High Resolution, 1 : Low Resolution
 	VolumeBlocks* volblk = vobj->GetVolumeBlock(blk_level);
 	if(volblk != NULL)
 		cb_volume.volblk_size_ts = vmfloat3(

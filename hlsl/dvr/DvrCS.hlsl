@@ -594,7 +594,8 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	//float4 __vis_otf = (float4) 0;
 	//int vv;
 	//Vis_Volume_And_Check(__vis_otf, vv, pos_sample_ts);
-	//fragment_vis[tex2d_xy] = __vis_otf;// float4((pos_ray_start_ts + float3(1, 1, 1)) / 2, 1);
+	//float ttt = num_ray_samples / 200.f;
+	//fragment_vis[tex2d_xy] = float4((float3)ttt, 1);// float4((pos_ray_start_ts + float3(1, 1, 1)) / 2, 1);
 	//return;
 	//////////
 
@@ -663,6 +664,8 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		}
 	}
 	/**/
+	int sample_count = 0;
+
 	[loop]
 	for (i = start_idx; i < num_ray_samples; i++)
 	{
@@ -706,6 +709,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 					float shade = 1.f;
 					if (grad_len > 0)
 						shade = PhongBlinnVr(view_dir, g_cbVobj.pb_shading_factor, light_dirinv, nrl, true);
+
 					float4 vis_sample = float4(shade * vis_otf.rgb, vis_otf.a);
 					float depth_sample = depth_hit + (float)i * sample_dist;
 #if VR_MODE == 2
@@ -724,6 +728,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 					{
 						i = num_ray_samples;
 						j = num_ray_samples;
+						vis_out.a = 1.f;
 						break;
 					}
 				} // if(sample valid check)
@@ -737,6 +742,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		}
 		else
 		{
+			sample_count++;
 			i += blkSkip.num_skip_steps;
 #if VR_MODE != 3
 			sample_prev = 0;
@@ -861,6 +867,10 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
     fragment_vis[tex2d_xy] = vis_out;
     fragment_zdepth[tex2d_xy] = depth_out;
 	//fragment_counter[DTid.xy] = num_frags + 1;
+
+
+	//float tt = sample_count / 30.f;
+	//fragment_vis[tex2d_xy] = float4((float3)tt, 1);// float4((pos_ray_start_ts + float3(1, 1, 1)) / 2, 1);
 }
 
 [numthreads(GRIDSIZE, GRIDSIZE, 1)]
@@ -1030,11 +1040,12 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	if (f2PosSampleCOS.y < 0 || f2PosSampleCOS.y > fPlaneSizeY)
 		return;
 
+	float sample_dist = g_cbVobj.sample_dist;
 	// start position //
 	//vmfloat3 f3PosSampleWS = f3PosSampleWS_C + f3VecSampleUpWS * (f2PosSampleCOS.y - fPlaneCenterY)
 	//	+ f3VecSampleViewWS * fStepLength * (float)m;
 	float3 pos_ray_start_ws = f3PosSampleWS_C + f3VecSampleUpWS * (f2PosSampleCOS.y - fPlaneCenterY);
-	float3 dir_sample_ws = f3VecSampleViewWS * g_cbVobj.sample_dist;
+	float3 dir_sample_ws = f3VecSampleViewWS * sample_dist;
 
 	// DVR ray-casting core part
 #if RAYMODE == 0 // DVR
@@ -1048,7 +1059,6 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 		// care for clip plane ... 
 	}
 
-	float sample_dist = g_cbVobj.sample_dist;
 	float3 view_dir = normalize(dir_sample_ws);
 	//vis_out = float4(TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts), 1);
 	//return;
@@ -1080,31 +1090,47 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	//return;
 	//////////
 
-
 	int start_idx = 0;
+
+#if VR_MODE != 3
+	// note that raycasters except vismask mode (or x-ray) use SLAB sample
+	start_idx = 1;
+	//float3 grad_prev = GRAD_VOL(pos_ray_start_ts);
+	float3 grad_prev = GradientVolume2(pos_ray_start_ts, g_cbVobj.vec_grad_x, g_cbVobj.vec_grad_y, g_cbVobj.vec_grad_z, tex3D_volume);
+	int sample_prev = sample_v;
+#endif
+
 	if (hit_step == 0)
 	{
-		start_idx = 1;
 		float4 vis_otf = (float4) 0;
+		start_idx++;
+
+#if VR_MODE != 3
+		float3 grad = GRAD_VOL(pos_ray_start_ts + dir_sample_ts);
+		float3 gradSlab = grad + grad_prev;
+		grad_prev = grad;
+		if (Vis_Volume_And_Check_Slab(vis_otf, sample_prev, sample_prev, pos_ray_start_ts))
+#else
 		if (Vis_Volume_And_Check(vis_otf, sample_v, pos_ray_start_ts))
+#endif
 		{
-			float4 vis_sample = vis_otf;
 			float depth_sample = depth_hit;
+#if VR_MODE != 3
+			// note that depth_hit is the front boundary of slab
+			depth_sample += sample_dist; // slab's back boundary
+#endif
+
+			float4 vis_sample = vis_otf;
 #if VR_MODE == 2
-			float grad_len;
-			GRAD_NRL_VOL(pos_ray_start_ts, dir_sample_ws, grad_len);
+			float grad_len = length(gradSlab);
 			//float modulator = pow(min(grad_len * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(g_cbVobj.kappa_i, g_cbVobj.kappa_s));
 			float modulator = min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
 			vis_sample *= modulator;
 #endif
 			//vis_sample *= mask_weight;
-
 			vis_out += vis_sample * (1.f - vis_out.a);
-
 		}
 	}
-
-	int sample_prev = sample_v;
 
 	[loop]
 	for (i = start_idx; i < num_ray_samples; i++)
@@ -1115,6 +1141,9 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 
 		if (blkSkip.blk_value > 0)
 		{
+#if VR_MODE != 3
+			bool isPrevValid = true;
+#endif
 			[loop]
 			for (int j = 0; j < blkSkip.num_skip_steps; j++, i++)
 			{
@@ -1122,19 +1151,34 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 				float3 pos_sample_blk_ts = pos_ray_start_ts + dir_sample_ts * (float)i;
 
 				float4 vis_otf = (float4) 0;
+#if VR_MODE != 3
+				if (Vis_Volume_And_Check_Slab(vis_otf, sample_v, sample_prev, pos_sample_blk_ts))
+				{
+					float3 grad = GRAD_VOL(pos_sample_blk_ts);
+					if (!isPrevValid) {
+						float3 pos_prev_sample_blk_ts = pos_sample_blk_ts - dir_sample_ts;
+						grad_prev = GRAD_VOL(pos_prev_sample_blk_ts);
+					}
+					isPrevValid = true;
+
+					float3 gradSlab = grad + grad_prev;
+					grad_prev = grad;
+
+					float grad_len = length(gradSlab);
+					float3 nrl = gradSlab / (grad_len + 0.000001f);
+#else
 				if (Vis_Volume_And_Check(vis_otf, sample_v, pos_sample_blk_ts))
-				//if (Vis_Volume_And_Check_Slab(vis_otf, sample_v, sample_prev, pos_sample_blk_ts))
 				{
 					float grad_len;
 					float3 nrl = GRAD_NRL_VOL(pos_sample_blk_ts, dir_sample_ws, grad_len);
+#endif
 					float shade = 1.f;
 					if (grad_len > 0)
 						shade = PhongBlinnVr(view_dir, g_cbVobj.pb_shading_factor, light_dirinv, nrl, true);
-					//vis_otf *= 0.01;
+					
 					float4 vis_sample = float4(shade * vis_otf.rgb, vis_otf.a);
 					float depth_sample = depth_hit + (float)i * sample_dist;
 #if VR_MODE == 2
-					float __s = abs(dot(view_dir, nrl));
 					//g_cbVobj.kappa_i
 					//float modulator = pow(min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(g_cbVobj.kappa_i * max(__s, 0.1f), g_cbVobj.kappa_s));
 					float modulator = min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
@@ -1150,13 +1194,21 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 						break;
 					}
 				} // if(sample valid check)
+#if VR_MODE != 3
+				else {
+					isPrevValid = false;
+				}
 				sample_prev = sample_v;
+#endif
 			} // for (int j = 0; j < blkSkip.num_skip_steps; j++, i++)
 		}
 		else
 		{
 			i += blkSkip.num_skip_steps;
+#if VR_MODE != 3
 			sample_prev = 0;
+			grad_prev = (float3)0;
+#endif
 		}
 		// this is for outer loop's i++
 		i -= 1;
