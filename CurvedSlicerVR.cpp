@@ -106,8 +106,8 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 			exe_path.erase(0, pos + delimiter.length());
 		}
 		//hlslobj_path += "..\\..\\VmModuleProjects\\renderer_gpudx11\\shader_compiled_objs\\";
-		//hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
-		hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
+		hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
+		//hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
 		//cout << hlslobj_path << endl;
 
 		string prefix_path = hlslobj_path;
@@ -183,6 +183,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	{
 		gpu_profile = _fncontainer->fnParams.GetParam("_bool_GpuProfile", false);
 	}
+	gpu_profile = true;
 
 	GpuRes gres_fb_rgba, gres_fb_depthcs, gres_fb_vrdepthcs;
 	GpuRes gres_fb_k_buffer, gres_fb_counter;
@@ -298,7 +299,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	// 	const int __BLOCKSIZE = 8;
 	// 	uint num_grid_x = (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
 	// 	uint num_grid_y = (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
-	const int __BLOCKSIZE = _fncontainer->fnParams.GetParam("_int_GpuThreadBlockSize", (int)8);
+	const int __BLOCKSIZE = _fncontainer->fnParams.GetParam("_int_GpuThreadBlockSize", (int)2);
 	uint num_grid_x = __BLOCKSIZE == 1 ? fb_size_cur.x : (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
 	uint num_grid_y = __BLOCKSIZE == 1 ? fb_size_cur.y : (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
 
@@ -390,6 +391,8 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	// Initial Setting of Frame Buffers //
 	int count_call_render = iobj->GetObjParam("_int_NumCallRenders", (int)0);
 	bool is_performed_ssao = false;
+
+	___GpuProfile("VR Begin");
 
 	for (VmActor* actor : dvr_volumes)
 	{
@@ -530,6 +533,13 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 			gres_vol.res_values.GetParam("HEIGHT", (uint)0),
 			gres_vol.res_values.GetParam("DEPTH", (uint)0));
 		grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, actor, high_samplerate ? 2.f : 1.f, false, tmap_data->valid_min_idx.x, gres_volblk.options["FORMAT"] == DXGI_FORMAT_R16_UNORM ? 65535.f : 1.f);
+		if (is_modulation_mode && ((uint)vol_data->vol_size.x * (uint)vol_data->vol_size.y * (uint)vol_data->vol_size.z > 1000000)) {
+			//cbVolumeObj.opacity_correction *= 2.f;
+			//cbVolumeObj.sample_dist *= 2.f;
+			//cbVolumeObj.vec_grad_x *= 2.f;
+			//cbVolumeObj.vec_grad_y *= 2.f;
+			//cbVolumeObj.vec_grad_z *= 2.f;
+		}
 		cbVolumeObj.pb_shading_factor = material_phongCoeffs;
 		cbVolumeObj.outline_color = (uint)(outline_color.r * 255.f) | ((uint)(outline_color.g * 255.f) << 8) | ((uint)(outline_color.b * 255.f) << 16) | (uint)(outline_thickness << 24);
 		if (is_ghost_mode) {
@@ -645,7 +655,9 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 
 	//dx11DeviceImmContext->Flush();
 	//printf("# Textures : %d, # Drawing : %d, # RTBuffer Change : %d, # Merging : %d\n", iNumTexureLayers, iCountRendering, iCountRTBuffers, iCountMerging);
-
+	
+	___GpuProfile("VR Begin", true);
+	
 	bool is_system_out = true;
 	// APPLY HWND MODE
 	HWND hWnd = (HWND)_fncontainer->fnParams.GetParam("_hwnd_WindowHandle", (HWND)NULL);

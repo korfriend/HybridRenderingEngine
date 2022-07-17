@@ -4,7 +4,7 @@
 
 using namespace grd_helper;
 
-#define __BLKLEVEL 0
+#define __BLKLEVEL 1
 
 namespace grd_helper
 {
@@ -1820,7 +1820,7 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 	cb_volume.vol_size = vmfloat3((float)vol_data->vol_size.x, (float)vol_data->vol_size.y, (float)vol_data->vol_size.z);
 
 	// from pmapDValueVolume //
-	float fSamplePrecisionLevel = actor->GetParam("_float_SamplePrecisionLevel", 1.f);
+	float fSamplePrecisionLevel = actor->GetParam("_float_SamplePrecisionLevel", 1.0f);
 	if (fSamplePrecisionLevel > 0)
 	{
 		cb_volume.sample_dist /= fSamplePrecisionLevel;

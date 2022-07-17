@@ -638,7 +638,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	bool apply_samplerate2gradient = _fncontainer->fnParams.GetParam("_bool_ApplySampleRateToGradient", false);
 	bool reload_hlsl_objs = _fncontainer->fnParams.GetParam("_bool_ReloadHLSLObjFiles", false);
 
-	int __BLOCKSIZE = _fncontainer->fnParams.GetParam("_int_GpuThreadBlockSize", (int)8);
+	int __BLOCKSIZE = _fncontainer->fnParams.GetParam("_int_GpuThreadBlockSize", (int)4);
 	float v_thickness = _fncontainer->fnParams.GetParam("_float_VZThickness", 0.0f);
 	float gi_v_thickness = _fncontainer->fnParams.GetParam("_float_GIVZThickness", v_thickness);
 	float scale_z_res = _fncontainer->fnParams.GetParam("_float_zResScale", 1.0f);
