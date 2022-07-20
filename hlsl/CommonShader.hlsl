@@ -580,12 +580,32 @@ float4 LoadSlabOtfBuf_PreInt(const in int sample_v, const in int sample_prev, co
 	return vis_otf;
 }
 
-float4 LoadOtfBufId(const in int sample_value, const in Buffer<float4> buf_otf, const in float opacity_correction, const in int id)
+float4 LoadOtfBufId(const in int sample_v, const in Buffer<float4> buf_otf, const in float opacity_correction, const in int id)
 {
-    float4 vis_otf = buf_otf[sample_value + id * g_cbTmap.tmap_size_x];
+    float4 vis_otf = buf_otf[sample_v + id * g_cbTmap.tmap_size_x];
     vis_otf.a *= opacity_correction;
     vis_otf.rgb *= vis_otf.a; // associate color
     return vis_otf;
+}
+
+float4 LoadSlabOtfBufId_PreInt(const in int sample_v, const in int sample_prev, const in Buffer<float4> buf_preintotf, const in float opacity_correction, const in int id)
+{
+	float4 vis_otf = (float4)0;
+
+	int diff = sample_v - sample_prev;
+	if (diff == 0) diff = 1;
+
+	float divDiff = 1.f / (float)diff;
+
+	int offset = id * g_cbTmap.tmap_size_x;
+	float4 f4OtfColorPrev = buf_preintotf[sample_prev + offset];
+	float4 f4OtfColorNext = buf_preintotf[sample_v + offset];
+
+	vis_otf.rgb = (f4OtfColorNext.rgb - f4OtfColorPrev.rgb) * divDiff;
+	//vis_otf.a = 1.f - exp(-(f4OtfColorNext.a - f4OtfColorPrev.a) * divDiff * opacity_correction)
+	vis_otf.a = (f4OtfColorNext.a - f4OtfColorPrev.a) * divDiff * opacity_correction;
+	vis_otf.rgb *= vis_otf.a; // associate color
+	return vis_otf;
 }
 
 int LoadMaxValueInt(float3 pos_ts, float3 size_tex3d, const int scale, const in Texture3D tex3d_data)

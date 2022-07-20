@@ -22,6 +22,9 @@ RWTexture2D<float> vr_fragment_1sthit_write : register(u4);
 Texture2DArray<unorm float> ao_textures : register(t10);
 Texture2D<unorm float> ao_vr_texture : register(t20);
 
+Buffer<float3> buf_curvePoints : register(t30);
+Buffer<float3> buf_curveTangents : register(t31);
+
 // same as Sr_Common.hlsl
 float4 VrOutlineTest(const in int2 tex2d_xy, inout float depth_c, const in float discont_depth_criterion, const in float3 edge_color, const in int thick)
 {
@@ -196,7 +199,7 @@ bool Vis_Volume_And_Check(inout float4 vis_otf, inout int sample_v, const in flo
 	int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
 	//int mask_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, g_cbVobj.mask_value_range, tex3D_volmask);
 	vis_otf = LoadOtfBufId(fsample * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
-	return vis_otf.a >= FLT_OPACITY_MIN__ && mask_vint > 0;//&& mask_vint == 3;
+	return vis_otf.a >= FLT_OPACITY_MIN__;//&& mask_vint > 0;//&& mask_vint == 3;
 #elif SCULPT_MASK == 1
 	int max_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, 255, tex3D_volmask);
     int sculpt_value = (int) (g_cbVobj.vobj_flag >> 24);
@@ -212,6 +215,7 @@ bool Vis_Volume_And_Check_Slab(inout float4 vis_otf, inout int sample_v, int sam
 {
 	float fsample = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
 	sample_v = (int)(fsample * g_cbVobj.value_range + 0.5f);
+	float fsample_prev = (float)sample_prev / g_cbVobj.value_range;
 #if OTF_MASK==1
 	//int max_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, 255, tex3D_volmask);
 	//int mask_otf_id = buf_ids[max_vint];
@@ -219,12 +223,16 @@ bool Vis_Volume_And_Check_Slab(inout float4 vis_otf, inout int sample_v, int sam
 	//return (uint)(vis_otf.a * 255.f) > FLT_MIN;
 	int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
 	//int mask_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, g_cbVobj.mask_value_range, tex3D_volmask);
-	vis_otf = LoadOtfBufId(fsample * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
-	return vis_otf.a >= FLT_OPACITY_MIN__ && mask_vint > 0;//&& mask_vint == 3;
+	//vis_otf = LoadOtfBufId(fsample * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
+	vis_otf = LoadSlabOtfBufId_PreInt(fsample * g_cbTmap.tmap_size_x, fsample_prev * g_cbTmap.tmap_size_x, buf_preintotf, g_cbVobj.opacity_correction, mask_vint);
+
+	//if (mask_vint == 0) sample_v = 0;
+
+	return vis_otf.a >= FLT_OPACITY_MIN__;//&& mask_vint > 0;//&& mask_vint == 3;
 #elif SCULPT_MASK == 1
 	int max_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, 255, tex3D_volmask);
 	int sculpt_value = (int)(g_cbVobj.vobj_flag >> 24);
-	vis_otf = LoadOtfBuf(sample_v, buf_otf, g_cbVobj.opacity_correction);
+	vis_otf = LoadSlabOtfBufId_PreInt(fsample * g_cbTmap.tmap_size_x, fsample_prev * g_cbTmap.tmap_size_x, buf_preintotf, g_cbVobj.opacity_correction, mask_vint);
 	return ((uint)(vis_otf.a * 255.f) > 0) && (max_vint == 0 || max_vint > sculpt_value);
 #else 
 	//float sample_slab = (fsample + (float)sample_prev / g_cbVobj.value_range) * 0.5f;
@@ -234,7 +242,6 @@ bool Vis_Volume_And_Check_Slab(inout float4 vis_otf, inout int sample_v, int sam
 	//vis_otf = LoadOtfBuf(fsample * g_cbTmap.tmap_size_x, buf_otf, 1);// g_cbVobj.opacity_correction);
 	//return vis_otf.a >= FLT_OPACITY_MIN__;
 
-	float fsample_prev = (float)sample_prev / g_cbVobj.value_range;
 	vis_otf = LoadSlabOtfBuf_PreInt(fsample * g_cbTmap.tmap_size_x, fsample_prev * g_cbTmap.tmap_size_x, buf_preintotf, g_cbVobj.opacity_correction);// g_cbVobj.opacity_correction);
 	return vis_otf.a >= FLT_OPACITY_MIN__;
 #endif
@@ -495,12 +502,6 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #if RAYMODE != 0
     fragment_zdepth[tex2d_xy] = depth_out = fs[0].z;
 #endif
-
-	//Texture2D<unorm float4> ao_textures[MAX_LAYERS / 4] : register(t10);
-	//Texture2D<unorm float> ao_vr_texture : register(t20);
-	//fragment_vis[tex2d_xy] = float4((float3)(1.f - ao_textures[0][tex2d_xy].x), 1);
-	//fragment_vis[tex2d_xy] = float4((float3)(1.f - ao_vr_texture[tex2d_xy].x), 1);
-	//return;
 
     // Image Plane's Position and Camera State //
     float3 pos_ip_ss = float3(tex2d_xy, 0.0f);
@@ -917,9 +918,6 @@ void VR_SURFACE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	uint dvr_hit_enc = hit_step == 0 ? 2 : 1;
 	fragment_counter[DTid.xy] = fcnt | (dvr_hit_enc << 24);
 }
-
-Buffer<float3> buf_curvePoints : register(t30);
-Buffer<float3> buf_curveTangents : register(t31);
 
 [numthreads(GRIDSIZE_VR, GRIDSIZE_VR, 1)]
 void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)

@@ -496,6 +496,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50004), "VR_OPAQUE_FM_cs_5_0", "cs_5_0"), VR_OPAQUE_FM_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50005), "VR_CONTEXT_FM_cs_5_0", "cs_5_0"), VR_CONTEXT_FM_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50011), "VR_MULTIOTF_FM_cs_5_0", "cs_5_0"), VR_MULTIOTF_FM_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50041), "VR_MULTIOTF_CONTEXT_FM_cs_5_0", "cs_5_0"), VR_MULTIOTF_CONTEXT_FM_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50012), "VR_MASKVIS_FM_cs_5_0", "cs_5_0"), VR_MASKVIS_FM_cs_5_0);
 		
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50013), "VR_DEFAULT_cs_5_0", "cs_5_0"), VR_DEFAULT_cs_5_0);
@@ -1095,7 +1096,8 @@ bool grd_helper::UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, const bool isPre
 			//frfba.r *= frfba.a;
 			//frfba.g *= frfba.a;
 			//frfba.b *= frfba.a;
-			f4ColorPreIntTF[0] = frfba;
+			int offset = i * tmap_data->array_lengths.x;
+			f4ColorPreIntTF[0 + offset] = frfba;
 			for (int j = 1; j < tmap_data->array_lengths.x; j++)
 			{
 				vmbyte4 rgba = py4OTF[j];
@@ -1103,7 +1105,7 @@ bool grd_helper::UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, const bool isPre
 				//frfba.r *= frfba.a;
 				//frfba.g *= frfba.a;
 				//frfba.b *= frfba.a;
-				f4ColorPreIntTF[j] = f4ColorPreIntTF[j - 1] + frfba;
+				f4ColorPreIntTF[j + offset] = f4ColorPreIntTF[j - 1 + offset] + frfba;
 			}
 		}
 	}

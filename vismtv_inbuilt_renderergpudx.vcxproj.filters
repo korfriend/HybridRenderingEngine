@@ -146,5 +146,8 @@
     <FxCompile Include="hlsl\kbuf\Sr_Kbuf.hlsl">
       <Filter>hlsl source code\k buf</Filter>
     </FxCompile>
+    <FxCompile Include="PathTracer.hlsl">
+      <Filter>hlsl source code</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

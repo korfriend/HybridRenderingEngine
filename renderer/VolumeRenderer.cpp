@@ -106,13 +106,13 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			exe_path.erase(0, pos + delimiter.length());
 		}
 		//hlslobj_path += "..\\..\\VmModuleProjects\\renderer_gpudx11\\shader_compiled_objs\\";
-		hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
-		//hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
+		//hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
+		hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
 		//cout << hlslobj_path << endl;
 
 		string prefix_path = hlslobj_path;
 
-#define CS_NUM 20
+#define CS_NUM 21
 #define SET_CS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(COMPUTE_SHADER, NAME), dx11CShader, true)
 
 		string strNames_CS[CS_NUM] = {
@@ -128,6 +128,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			  ,"VR_OPAQUE_FM_cs_5_0"
 			  ,"VR_CONTEXT_FM_cs_5_0"
 			  ,"VR_MULTIOTF_FM_cs_5_0"
+			  ,"VR_MULTIOTF_CONTEXT_FM_cs_5_0"
 			  ,"VR_MASKVIS_FM_cs_5_0"
 			  ,"VR_DEFAULT_DKBZ_cs_5_0"
 			  ,"VR_OPAQUE_DKBZ_cs_5_0"
@@ -434,7 +435,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #pragma region Actor Parameters
 #define __RM_DEFAULT 0
 #define __RM_MODULATION 1
-#define __RM_MODULATION_MASK 2
+#define __RM_MULTIOTF_MODULATION 2
 #define __RM_CLIPOPAQUE 20
 #define __RM_OPAQUE 21
 #define __RM_SCULPTMASK 22
@@ -459,7 +460,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			is_xray_mode = true;
 			break;
 		case __RM_MODULATION:
-		case __RM_MODULATION_MASK:
+		case __RM_MULTIOTF_MODULATION:
 			GradientMagnitudeAnalysis(grad_minmax, vobj);
 			is_modulation_mode = true;
 			break;
@@ -683,8 +684,21 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			case MFR_MODE::STATIC_KB:
 			case MFR_MODE::DYNAMIC_FB:
 				cshader = apply_fragmerge ? GETCS(VR_MULTIOTF_FM_cs_5_0) : GETCS(VR_MULTIOTF_cs_5_0); break;
-			//case MFR_MODE::DYNAMIC_KB:
-			//	cshader = apply_fragmerge ? GETCS(VR_MULTIOTF_DKBZ_cs_5_0) : GETCS(VR_MULTIOTF_DFB_cs_5_0); break;
+			case MFR_MODE::DYNAMIC_KB:
+				assert(0); break;
+			default:
+				VMERRORMESSAGE("DOES NOT SUPPORT!!");
+			}
+			break;
+		case __RM_MULTIOTF_MODULATION:
+			switch (mode_OIT)
+			{
+			case MFR_MODE::STATIC_KB:
+			case MFR_MODE::DYNAMIC_FB:
+				assert(apply_fragmerge);
+				cshader = GETCS(VR_MULTIOTF_CONTEXT_FM_cs_5_0); break;
+			case MFR_MODE::DYNAMIC_KB:
+				assert(0); break;
 			default:
 				VMERRORMESSAGE("DOES NOT SUPPORT!!");
 			}
