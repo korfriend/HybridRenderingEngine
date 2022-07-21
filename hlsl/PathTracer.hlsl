@@ -29,10 +29,16 @@ void ThickSlicePathTracer( uint3 DTid : SV_DispatchThreadID )
 
 }
 
-#define EntrypointSentinel 0x76543210
+#define EntrypointSentinel (int) 0x76543210 
 #define MaxBlockHeight 6
 
-enum Refl_t { DIFF, METAL, SPEC, REFR, COAT };  // material types
+typedef int Refl_t;
+#define DIFF 0
+#define METAL 1
+#define SPEC 2
+#define REFR 3
+#define COAT 4
+//enum Refl_t { DIFF = 0, METAL, SPEC, REFR, COAT };  // material types
 
 // CUDA textures containing scene data
 //texture<float4, 1, cudaReadModeElementType> bvhNodesTexture;
@@ -41,14 +47,19 @@ enum Refl_t { DIFF, METAL, SPEC, REFR, COAT };  // material types
 //texture<int, 1, cudaReadModeElementType> triIndicesTexture;
 //texture<float4, 1, cudaReadModeElementType> HDRtexture;
 
-inline float3 max3f(const float3& v1, const float3& v2) {
-	return float3(v1.x * v1.x > v2.x * v2.x ? v1.x : v2.x, v1.y * v1.y > v2.y * v2.y ? v1.y : v2.y, v1.z * v1.z > v2.z * v2.z ? v1.z : v2.z);
-}
+//inline float3 max3f(const float3 v1, const float3 v2) {
+//	return float3(v1.x * v1.x > v2.x * v2.x ? v1.x : v2.x, v1.y * v1.y > v2.y * v2.y ? v1.y : v2.y, v1.z * v1.z > v2.z * v2.z ? v1.z : v2.z);
+//}
+//#define __max3f(v1, v2) float3(v1.x * v1.x > v2.x * v2.x ? v1.x : v2.x, v1.y * v1.y > v2.y * v2.y ? v1.y : v2.y, v1.z * v1.z > v2.z * v2.z ? v1.z : v2.z)
+//#define __min3f(v1, v2) float3(v1.x * v1.x < v2.x * v2.x ? v1.x : v2.x, v1.y * v1.y < v2.y * v2.y ? v1.y : v2.y, v1.z * v1.z < v2.z * v2.z ? v1.z : v2.z)
+#define max3f max
+#define min3f min
 
 struct Ray {
 	float3 orig;	// ray origin
 	float3 dir;		// ray direction	
-	Ray(float3 o_, float3 d_) : orig(o_), dir(d_) {}
+	//Ray(float3 o_, float3 d_) : orig(o_), dir(d_) {}
+	//Ray(float3 o_, float3 d_) { orig = o_; dir = d_; }
 };
 
 struct Sphere {
@@ -57,14 +68,14 @@ struct Sphere {
 	float3 pos, emi, col;	// position, emission, color 
 	Refl_t refl;			// reflection type (DIFFuse, SPECular, REFRactive)
 
-	float intersect(const Ray& r) const { // returns distance, 0 if nohit 
+	float intersect(const Ray r) { // returns distance, 0 if nohit 
 
 		// ray/sphere intersection
 		float3 op = pos - r.orig;
 		float t, epsilon = 0.01f;
 		float b = dot(op, r.dir);
 		float disc = b * b - dot(op, op) + rad * rad; // discriminant of quadratic formula
-		if (disc < 0) return 0; else disc = sqrtf(disc);
+		if (disc < 0) return 0; else disc = sqrt(disc);
 		return (t = b - disc) > epsilon ? t : ((t = b + disc) > epsilon ? t : 0.0f);
 	}
 };
@@ -99,19 +110,25 @@ Sphere spheres[] = {
 // Using Kepler's video instructions, see http://docs.nvidia.com/cuda/parallel-thread-execution/#axzz3jbhbcTZf																			//  : "=r"(v) overwrites v and puts it in a register
 // see https://gcc.gnu.org/onlinedocs/gcc/Extended-Asm.html
 
-int   min_min(int a, int b, int c) { int v; asm("vmin.s32.s32.s32.min %0, %1, %2, %3;" : "=r"(v) : "r"(a), "r"(b), "r"(c)); return v; }
-int   min_max(int a, int b, int c) { int v; asm("vmin.s32.s32.s32.max %0, %1, %2, %3;" : "=r"(v) : "r"(a), "r"(b), "r"(c)); return v; }
-int   max_min(int a, int b, int c) { int v; asm("vmax.s32.s32.s32.min %0, %1, %2, %3;" : "=r"(v) : "r"(a), "r"(b), "r"(c)); return v; }
-int   max_max(int a, int b, int c) { int v; asm("vmax.s32.s32.s32.max %0, %1, %2, %3;" : "=r"(v) : "r"(a), "r"(b), "r"(c)); return v; }
-float fmin_fmin(float3 a) { return asfloat(min_min(asint(a.x), asint(a.y), asint(a.z))); }
-float fmin_fmin(float a, float b, float c) { return asfloat(min_min(asint(a), asint(b), asint(c))); }
-float fmin_fmax(float a, float b, float c) { return asfloat(min_max(asint(a), asint(b), asint(c))); }
-float fmax_fmin(float a, float b, float c) { return asfloat(max_min(asint(a), asint(b), asint(c))); }
-float fmax_fmax(float a, float b, float c) { return asfloat(max_max(asint(a), asint(b), asint(c))); }
-float fmax_fmax(float3 a) { return asfloat(max_max(asint(a.x), asint(a.y), asint(a.z))); }
+//int   min_min(int a, int b, int c) { int v; asm("vmin.s32.s32.s32.min %0, %1, %2, %3;" : "=r"(v) : "r"(a), "r"(b), "r"(c)); return v; }
+//int   min_max(int a, int b, int c) { int v; asm("vmin.s32.s32.s32.max %0, %1, %2, %3;" : "=r"(v) : "r"(a), "r"(b), "r"(c)); return v; }
+//int   max_min(int a, int b, int c) { int v; asm("vmax.s32.s32.s32.min %0, %1, %2, %3;" : "=r"(v) : "r"(a), "r"(b), "r"(c)); return v; }
+//int   max_max(int a, int b, int c) { int v; asm("vmax.s32.s32.s32.max %0, %1, %2, %3;" : "=r"(v) : "r"(a), "r"(b), "r"(c)); return v; }
+//float fmin_fmin(float3 a) { return asfloat(min_min(asint(a.x), asint(a.y), asint(a.z))); }
+//float fmin_fmin(float a, float b, float c) { return asfloat(min_min(asint(a), asint(b), asint(c))); }
+//float fmin_fmax(float a, float b, float c) { return asfloat(min_max(asint(a), asint(b), asint(c))); }
+//float fmax_fmin(float a, float b, float c) { return asfloat(max_min(asint(a), asint(b), asint(c))); }
+//float fmax_fmax(float a, float b, float c) { return asfloat(max_max(asint(a), asint(b), asint(c))); }
+//float fmax_fmax(float3 a) { return asfloat(max_max(asint(a.x), asint(a.y), asint(a.z))); }
+#define   min_min(a, b, c) min(min(a, b), c)
+#define   min_max(a, b, c) max(min(a, b), c)
+#define   max_min(a, b, c) min(max(a, b), c)
+#define   max_max(a, b, c) max(max(a, b), c)
+#define   f3min_min(a) min_min(a.x, a.y, a.z)
+#define   f3max_max(a) max_max(a.x, a.y, a.z)
 
-float spanBeginKepler(float a0, float a1, float b0, float b1, float c0, float c1, float d) { return fmax_fmax(min(a0, a1), min(b0, b1), fmin_fmax(c0, c1, d)); }
-float spanEndKepler(float a0, float a1, float b0, float b1, float c0, float c1, float d) { return fmin_fmin(max(a0, a1), max(b0, b1), fmax_fmin(c0, c1, d)); }
+float spanBeginKepler(float a0, float a1, float b0, float b1, float c0, float c1, float d) { return max_max(min(a0, a1), min(b0, b1), min_max(c0, c1, d)); }
+float spanEndKepler(float a0, float a1, float b0, float b1, float c0, float c1, float d) { return min_min(max(a0, a1), max(b0, b1), max_min(c0, c1, d)); }
 
 // standard ray box intersection routines (for debugging purposes only)
 // based on Intersect::RayBox() in original Aila/Laine code
@@ -122,7 +139,7 @@ float spanBeginKepler2(float lo_x, float hi_x, float lo_y, float hi_y, float lo_
 
 	float3 realmin = min3f(t0, t1);
 
-	float raybox_tmin = realmin.max(); // maxmin
+	float raybox_tmin = f3max_max(realmin); // realmin.max(); // maxmin
 
 	//return Vec2f(tmin, tmax);
 	return raybox_tmin;
@@ -133,25 +150,25 @@ float spanEndKepler2(float lo_x, float hi_x, float lo_y, float hi_y, float lo_z,
 	float3 t0 = float3(lo_x, lo_y, lo_z);
 	float3 t1 = float3(hi_x, hi_y, hi_z);
 
-	float3 realmax = max3f(t0, t1);
+	float3 realmax = max(t0, t1);
 
-	float raybox_tmax = fmax_fmax(realmax); /// minmax
+	float raybox_tmax = f3max_max(realmax); /// minmax
 
 	//return Vec2f(tmin, tmax);
 	return raybox_tmax;
 }
 
-void swap2(int& a, int& b) { int temp = a; a = b; b = temp; }
+void swap2(int a, int b) { int temp = a; a = b; b = temp; }
 
 // standard ray triangle intersection routines (for debugging purposes only)
 // based on Intersect::RayTriangle() in original Aila/Laine code
-float3 intersectRayTriangle(const float3& v0, const float3& v1, const float3& v2, const float4& rayorig, const float4& raydir) {
+float3 intersectRayTriangle(const float3 v0, const float3 v1, const float3 v2, const float4 rayorig, const float4 raydir) {
 
 	const float3 rayorig3f = float3(rayorig.x, rayorig.y, rayorig.z);
 	const float3 raydir3f = float3(raydir.x, raydir.y, raydir.z);
 
 	const float EPSILON = 0.00001f; // works better
-	const float3 miss(F32_MAX, F32_MAX, F32_MAX);
+	const float3 miss = float3(F32_MAX, F32_MAX, F32_MAX);
 
 	float raytmin = rayorig.w;
 	float raytmax = raydir.w;
@@ -224,9 +241,6 @@ void DEBUGintersectBVHandTriangles(const in float4 rayorig, const in float4 rayd
 	int		nodeAddr;
 	int     hitIndex;
 	float	hitT;
-	int threadId1;
-
-	threadId1 = threadIdx.x + blockDim.x * (threadIdx.y + blockDim.y * (blockIdx.x + gridDim.x * blockIdx.y));
 
 	origx = rayorig.x;
 	origy = rayorig.y;
@@ -237,10 +251,13 @@ void DEBUGintersectBVHandTriangles(const in float4 rayorig, const in float4 rayd
 	tmin = rayorig.w;
 
 	// ooeps is very small number, used instead of raydir xyz component when that component is near zero
-	float ooeps = exp2f(-80.0f); // Avoid div by zero, returns 1/2^80, an extremely small number
-	idirx = 1.0f / (fabsf(raydir.x) > ooeps ? raydir.x : copysignf(ooeps, raydir.x)); // inverse ray direction
-	idiry = 1.0f / (fabsf(raydir.y) > ooeps ? raydir.y : copysignf(ooeps, raydir.y)); // inverse ray direction
-	idirz = 1.0f / (fabsf(raydir.z) > ooeps ? raydir.z : copysignf(ooeps, raydir.z)); // inverse ray direction
+	float ooeps = exp2(-80.0f); // Avoid div by zero, returns 1/2^80, an extremely small number
+	float signx = raydir.x > 0 ? 1.f : -1.f;
+	float signy = raydir.y > 0 ? 1.f : -1.f;
+	float signz = raydir.z > 0 ? 1.f : -1.f;
+	idirx = 1.0f / (abs(raydir.x) > ooeps ? raydir.x : signx * ooeps); // inverse ray direction
+	idiry = 1.0f / (abs(raydir.y) > ooeps ? raydir.y : signy * ooeps); // inverse ray direction
+	idirz = 1.0f / (abs(raydir.z) > ooeps ? raydir.z : signz * ooeps); // inverse ray direction
 	oodx = origx * idirx;  // ray origin / ray direction
 	oody = origy * idiry;  // ray origin / ray direction
 	oodz = origz * idirz;  // ray origin / ray direction
@@ -259,11 +276,10 @@ void DEBUGintersectBVHandTriangles(const in float4 rayorig, const in float4 rayd
 		bool searchingLeaf = true; // flag required to increase efficiency of threads in warp
 		while (nodeAddr >= 0 && nodeAddr != EntrypointSentinel)
 		{
-			int nodeIdx = 
-			float4* ptr = (float4*)((char*)gpuNodes + nodeAddr);
-			float4 n0xy = ptr[0]; // childnode 0, xy-bounds (c0.lo.x, c0.hi.x, c0.lo.y, c0.hi.y)		
-			float4 n1xy = ptr[1]; // childnode 1. xy-bounds (c1.lo.x, c1.hi.x, c1.lo.y, c1.hi.y)		
-			float4 nz = ptr[2]; // childnodes 0 and 1, z-bounds(c0.lo.z, c0.hi.z, c1.lo.z, c1.hi.z)			
+			int nodeIdx = nodeAddr / 4; // float4* ptr = (float4*)((char*)gpuNodes + nodeAddr);
+			float4 n0xy = gpuNodes[nodeIdx];// ptr[0]; // childnode 0, xy-bounds (c0.lo.x, c0.hi.x, c0.lo.y, c0.hi.y)		
+			float4 n1xy = gpuNodes[nodeIdx + 1];//ptr[1]; // childnode 1. xy-bounds (c1.lo.x, c1.hi.x, c1.lo.y, c1.hi.y)		
+			float4 nz = gpuNodes[nodeIdx + 2];//ptr[2]; // childnodes 0 and 1, z-bounds(c0.lo.z, c0.hi.z, c1.lo.z, c1.hi.z)			
 
 			// ptr[3] contains indices to 2 childnodes in case of innernode, see below
 			// (childindex = size of array during building, see CudaBVH.cpp)

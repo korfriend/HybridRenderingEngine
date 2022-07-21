@@ -112,7 +112,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 
 		string prefix_path = hlslobj_path;
 
-#define CS_NUM 5
+#define CS_NUM 7
 #define SET_CS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(COMPUTE_SHADER, NAME), dx11CShader, true)
 
 		string strNames_CS[CS_NUM] = {
@@ -121,6 +121,8 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 			  ,"PanoVR_RAYSUM_cs_5_0"
 			  ,"PanoVR_DEFAULT_cs_5_0"
 			  ,"PanoVR_MODULATE_cs_5_0"
+			  ,"PanoVR_MULTIOTF_DEFAULT_cs_5_0"
+			  ,"PanoVR_MULTIOTF_MODULATE_cs_5_0"
 		};
 
 		for (int i = 0; i < CS_NUM; i++)
@@ -403,7 +405,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 #pragma region Actor Parameters
 #define __RM_DEFAULT 0
 #define __RM_MODULATION 1
-#define __RM_MODULATION_MASK 2
+#define __RM_MULTIOTF_MODULATION 2
 #define __RM_CLIPOPAQUE 20
 #define __RM_OPAQUE 21
 #define __RM_SCULPTMASK 22
@@ -427,7 +429,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 			is_xray_mode = true;
 			break;
 		case __RM_MODULATION:
-		case __RM_MODULATION_MASK:
+		case __RM_MULTIOTF_MODULATION:
 			GradientMagnitudeAnalysis(grad_minmax, vobj);
 			is_modulation_mode = true;
 			break;
@@ -620,11 +622,12 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		case __RM_RAYMIN: cshader = GETCS(PanoVR_RAYMIN_cs_5_0); break;
 		case __RM_RAYMAX: cshader = GETCS(PanoVR_RAYMAX_cs_5_0); break;
 		case __RM_RAYSUM: cshader = GETCS(PanoVR_RAYSUM_cs_5_0); break;
-		case __RM_MODULATION: cshader = GETCS(PanoVR_MODULATE_cs_5_0); break;
 		case __RM_DEFAULT: cshader = GETCS(PanoVR_DEFAULT_cs_5_0); break;
+		case __RM_MODULATION: cshader = GETCS(PanoVR_MODULATE_cs_5_0); break;
+		case __RM_MULTIOTF: cshader = GETCS(PanoVR_MULTIOTF_DEFAULT_cs_5_0); break;
+		case __RM_MULTIOTF_MODULATION: cshader = GETCS(PanoVR_MULTIOTF_MODULATE_cs_5_0); break;
 		case __RM_CLIPOPAQUE:
 		case __RM_OPAQUE:
-		case __RM_MULTIOTF:
 		case __RM_VISVOLMASK:
 		case __RM_SCULPTMASK:
 		default:

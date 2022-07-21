@@ -518,6 +518,8 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60003), "PanoVR_RAYSUM_cs_5_0", "cs_5_0"), PanoVR_RAYSUM_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60004), "PanoVR_DEFAULT_cs_5_0", "cs_5_0"), PanoVR_DEFAULT_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60005), "PanoVR_MODULATE_cs_5_0", "cs_5_0"), PanoVR_MODULATE_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60006), "PanoVR_MULTIOTF_DEFAULT_cs_5_0", "cs_5_0"), PanoVR_MULTIOTF_DEFAULT_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60007), "PanoVR_MULTIOTF_MODULATE_cs_5_0", "cs_5_0"), PanoVR_MULTIOTF_MODULATE_cs_5_0);
 	}
 
 	g_pvmCommonParams->is_initialized = true;
