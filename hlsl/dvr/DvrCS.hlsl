@@ -177,7 +177,7 @@ bool Sample_Volume_And_Check(inout int sample_v, const in float3 pos_sample_ts, 
     //return (uint)(vis_otf.a * 255.f) > 0;
 	int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
 	//int mask_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, g_cbVobj.mask_value_range, tex3D_volmask);
-	return sample_v >= min_valid_v && mask_vint > 0;
+	return sample_v >= min_valid_v;
 #elif SCULPT_MASK == 1
 	int max_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, 255, tex3D_volmask);
     int sculpt_value = (int) (g_cbVobj.vobj_flag >> 24);
@@ -225,7 +225,6 @@ bool Vis_Volume_And_Check_Slab(inout float4 vis_otf, inout int sample_v, int sam
 	//int mask_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, g_cbVobj.mask_value_range, tex3D_volmask);
 	//vis_otf = LoadOtfBufId(fsample * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
 	vis_otf = LoadSlabOtfBufId_PreInt(fsample * g_cbTmap.tmap_size_x, fsample_prev * g_cbTmap.tmap_size_x, buf_preintotf, g_cbVobj.opacity_correction, mask_vint);
-
 	//if (mask_vint == 0) sample_v = 0;
 
 	return vis_otf.a >= FLT_OPACITY_MIN__;//&& mask_vint > 0;//&& mask_vint == 3;

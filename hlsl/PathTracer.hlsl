@@ -8,27 +8,6 @@
 #define F32_MIN          (1.175494351e-38f)
 #define F32_MAX          (3.402823466e+38f)
 
-[numthreads(GRIDSIZE, GRIDSIZE, 1)]
-void ThickSlicePathTracer( uint3 DTid : SV_DispatchThreadID )
-{
-	int2 cip_xy = int2(DTid.xy);
-
-	// do not compute 1st hit surface separately
-	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
-		return;
-
-	const uint k_value = g_cbCamState.k_value;
-	uint bytes_per_frag = 4 * NUM_ELES_PER_FRAG;
-	uint pixel_id = cip_xy.y * g_cbCamState.rt_width + cip_xy.x;
-	uint bytes_frags_per_pixel = k_value * bytes_per_frag;
-	uint addr_base = pixel_id * bytes_frags_per_pixel;
-
-	float4 vis_out = 0;
-	float depth_out = 0;
-
-
-}
-
 #define EntrypointSentinel (int) 0x76543210 
 #define MaxBlockHeight 6
 
@@ -225,8 +204,8 @@ Buffer<int> buf_gpuTriIndices : register(t3);
 // modified intersection routine (uses regular instead of woopified triangles) for debugging purposes
 
 void DEBUGintersectBVHandTriangles(const in float4 rayorig, const in float4 raydir,
-	const in Buffer<float4> gpuNodes, // const in Buffer<float4> gpuTriWoops, const in Buffer<float4> gpuDebugTris, const in Buffer<int> gpuTriIndices,
-	inout int hitTriIdx, inout float hitdistance, inout int debugbingo, inout float3 trinormal, int leafcount, int tricount, bool needClosestHit) 
+	const in Buffer<float4> gpuNodes, const in Buffer<float4> gpuDebugTris, const in Buffer<int> gpuTriIndices, // const in Buffer<float4> gpuTriWoops,
+	inout int hitTriIdx, inout float hitdistance, inout int debugbingo, inout float3 trinormal, bool needClosestHit) 
 {
 	int traversalStack[STACK_SIZE];
 
@@ -269,14 +248,16 @@ void DEBUGintersectBVHandTriangles(const in float4 rayorig, const in float4 rayd
 	hitIndex = -1;  // No triangle intersected so far.
 	hitT = raydir.w;
 
+	[loop]
 	while (nodeAddr != EntrypointSentinel) // EntrypointSentinel = 0x76543210 
 	{
 		// Traverse internal nodes until all SIMD lanes have found a leaf.
 
 		bool searchingLeaf = true; // flag required to increase efficiency of threads in warp
+		[loop]
 		while (nodeAddr >= 0 && nodeAddr != EntrypointSentinel)
 		{
-			int nodeIdx = nodeAddr / 4; // float4* ptr = (float4*)((char*)gpuNodes + nodeAddr);
+			int nodeIdx = nodeAddr >> 2; // float4* ptr = (float4*)((char*)gpuNodes + nodeAddr);
 			float4 n0xy = gpuNodes[nodeIdx];// ptr[0]; // childnode 0, xy-bounds (c0.lo.x, c0.hi.x, c0.lo.y, c0.hi.y)		
 			float4 n1xy = gpuNodes[nodeIdx + 1];//ptr[1]; // childnode 1. xy-bounds (c1.lo.x, c1.hi.x, c1.lo.y, c1.hi.y)		
 			float4 nz = gpuNodes[nodeIdx + 2];//ptr[2]; // childnodes 0 and 1, z-bounds(c0.lo.z, c0.hi.z, c1.lo.z, c1.hi.z)			
@@ -317,7 +298,9 @@ void DEBUGintersectBVHandTriangles(const in float4 rayorig, const in float4 rayd
 
 			else  // one or both children intersected
 			{
-				int2 cnodes = *(int2*) & ptr[3];
+				float4 tmpLoadF4 = gpuNodes[nodeIdx + 3];
+				int2 cnodes = int2(asint(tmpLoadF4.x), asint(tmpLoadF4.y));// = *(int2*) & ptr[3];
+
 				// set nodeAddr equal to intersected childnode (first childnode when both children are intersected)
 				nodeAddr = (traverseChild0) ? cnodes.x : cnodes.y;
 
@@ -348,26 +331,25 @@ void DEBUGintersectBVHandTriangles(const in float4 rayorig, const in float4 rayd
 			// NOTE: inline PTX implementation of "if(!__any(leafAddr >= 0)) break;".
 			// tried everything with CUDA 4.2 but always got several redundant instructions.
 
-			// if (!searchingLeaf){ break;  }  
+			if (!searchingLeaf){ break;  }  
 
-			// if (!__any(searchingLeaf)) break; // "__any" keyword: if none of the threads is searching a leaf, in other words
 			// if all threads in the warp found a leafnode, then break from while loop and go to triangle intersection
 
-			// if(!__any(leafAddr >= 0))   /// als leafAddr in PTX code >= 0, dan is het geen echt leafNode   
-			//    break;
+			if(!leafAddr >= 0)   /// als leafAddr in PTX code >= 0, dan is het geen echt leafNode   
+			   break;
 
-			unsigned int mask; // mask replaces searchingLeaf in PTX code
-
-			asm("{\n"
-			"   .reg .pred p;               \n"
-				"setp.ge.s32        p, %1, 0;   \n"
-				"vote.ballot.b32    %0,p;       \n"
-				"}"
-				: "=r"(mask)
-				: "r"(leafAddr));
-
-			if (!mask)
-				break;
+			//unsigned int mask; // mask replaces searchingLeaf in PTX code
+			//
+			//asm("{\n"
+			//"   .reg .pred p;               \n"
+			//	"setp.ge.s32        p, %1, 0;   \n"
+			//	"vote.ballot.b32    %0,p;       \n"
+			//	"}"
+			//	: "=r"(mask)
+			//	: "r"(leafAddr));
+			//
+			//if (!mask)
+			//	break;
 		}
 
 		///////////////////////////////////////
@@ -386,7 +368,7 @@ void DEBUGintersectBVHandTriangles(const in float4 rayorig, const in float4 rayd
 				float4 v0f = gpuDebugTris[triAddr + 0];
 
 				// End marker 0x80000000 (= negative zero) => all triangles in leaf processed. --> terminate 				
-				if (__float_as_int(v0f.x) == 0x80000000) break;
+				if (asuint(v0f.x) == 0x80000000) break;
 
 				float4 v1f = gpuDebugTris[triAddr + 1];
 				float4 v2f = gpuDebugTris[triAddr + 2];
@@ -395,12 +377,10 @@ void DEBUGintersectBVHandTriangles(const in float4 rayorig, const in float4 rayd
 				const float3 v1 = float3(v1f.x, v1f.y, v1f.z);
 				const float3 v2 = float3(v2f.x, v2f.y, v2f.z);
 
-				// convert float4 to Vec4f
+				float4 rayorigfloat4 = float4(rayorig.x, rayorig.y, rayorig.z, rayorig.w);
+				float4 raydirfloat4 = float4(raydir.x, raydir.y, raydir.z, raydir.w);
 
-				Vec4f rayorigvec4f = Vec4f(rayorig.x, rayorig.y, rayorig.z, rayorig.w);
-				Vec4f raydirvec4f = Vec4f(raydir.x, raydir.y, raydir.z, raydir.w);
-
-				float3 bary = intersectRayTriangle(v0, v1, v2, rayorigvec4f, raydirvec4f);
+				float3 bary = intersectRayTriangle(v0, v1, v2, rayorigfloat4, raydirfloat4);
 
 				float t = bary.z; // hit distance along ray
 
@@ -444,8 +424,62 @@ void DEBUGintersectBVHandTriangles(const in float4 rayorig, const in float4 rayd
 	hitdistance = hitT;
 }
 
+
+[numthreads(GRIDSIZE, GRIDSIZE, 1)]
+void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
+{
+	int2 ss_xy = int2(DTid.xy);
+
+	// do not compute 1st hit surface separately
+	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
+		return;
+
+	const uint k_value = g_cbCamState.k_value;
+	uint bytes_per_frag = 4 * NUM_ELES_PER_FRAG;
+	uint pixel_id = ss_xy.y * g_cbCamState.rt_width + ss_xy.x;
+	uint bytes_frags_per_pixel = k_value * bytes_per_frag;
+	uint addr_base = pixel_id * bytes_frags_per_pixel;
+
+	float4 vis_out = 0;
+	float depth_out = 0;
+
+	// Image Plane's Position and Camera State //
+	float3 pos_ip_ss = float3(ss_xy, 0.0f);
+	float3 pos_ip_ws = TransformPoint(pos_ip_ss, g_cbCamState.mat_ss2ws);
+	float3 ray_dir_unit_ws = g_cbCamState.dir_view_ws;
+	if (g_cbCamState.cam_flag & 0x1)
+		ray_dir_unit_ws = pos_ip_ws - g_cbCamState.pos_cam_ws;
+	ray_dir_unit_ws = normalize(ray_dir_unit_ws);
+
+	////////////////////////////
+	int hitTriIdx = -1;
+	int bestTriIdx = -1;
+	int geomtype = -1;
+	float hitDistance = 1e20;
+	float scene_t = 1e20;
+	float3 objcol = float3(0, 0, 0);
+	float3 emit = float3(0, 0, 0);
+	float3 hitpoint; // intersection point
+	float3 n; // normal
+	float3 nl; // oriented normal
+	float3 nextdir; // ray direction of next path segment
+	float3 trinormal = float3(0, 0, 0);
+	Refl_t refltype;
+	float ray_tmin = 0.00001f;
+	float ray_tmax = 1e20; // use thickness!!
+
+	// intersect all triangles in the scene stored in BVH
+	int debugbingo = 0;
+	float4 rayorig = float4(pos_ip_ws, ray_tmin);
+	float4 raydir = float4(ray_dir_unit_ws, ray_tmax);
+	DEBUGintersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuDebugTris, buf_gpuTriIndices, bestTriIdx, hitDistance, debugbingo, trinormal, false);
+
+	//finalcol += renderKernel(&randState, HDRmap, gpuNodes, gpuTriWoops, gpuDebugTris, gpuTriIndices, originInWorldSpace, rayInWorldSpace, leafcount, tricount);
+
+}
+
 /*
-__device__ void intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
+void intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 	const float4* gpuNodes, const float4* gpuTriWoops, const float4* gpuDebugTris, const int* gpuTriIndices,
 	int& hitTriIdx, float& hitdistance, int& debugbingo, float3& trinormal, int leafcount, int tricount, bool anyHit)
 {
