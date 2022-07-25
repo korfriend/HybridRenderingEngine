@@ -8,7 +8,7 @@
 #define F32_MIN          (1.175494351e-38f)
 #define F32_MAX          (3.402823466e+38f)
 
-#define EntrypointSentinel (int) 0x76543210 
+#define EntrypointSentinel 0x76543210 
 #define MaxBlockHeight 6
 
 typedef int Refl_t;
@@ -26,13 +26,12 @@ typedef int Refl_t;
 //texture<int, 1, cudaReadModeElementType> triIndicesTexture;
 //texture<float4, 1, cudaReadModeElementType> HDRtexture;
 
-//inline float3 max3f(const float3 v1, const float3 v2) {
-//	return float3(v1.x * v1.x > v2.x * v2.x ? v1.x : v2.x, v1.y * v1.y > v2.y * v2.y ? v1.y : v2.y, v1.z * v1.z > v2.z * v2.z ? v1.z : v2.z);
-//}
-//#define __max3f(v1, v2) float3(v1.x * v1.x > v2.x * v2.x ? v1.x : v2.x, v1.y * v1.y > v2.y * v2.y ? v1.y : v2.y, v1.z * v1.z > v2.z * v2.z ? v1.z : v2.z)
-//#define __min3f(v1, v2) float3(v1.x * v1.x < v2.x * v2.x ? v1.x : v2.x, v1.y * v1.y < v2.y * v2.y ? v1.y : v2.y, v1.z * v1.z < v2.z * v2.z ? v1.z : v2.z)
-#define max3f max
-#define min3f min
+typedef float3 Vec3f;
+typedef float4 Vec4f;
+
+Vec3f absmax3f(const Vec3f v1, const Vec3f v2) {
+	return Vec3f(v1.x * v1.x > v2.x * v2.x ? v1.x : v2.x, v1.y * v1.y > v2.y * v2.y ? v1.y : v2.y, v1.z * v1.z > v2.z * v2.z ? v1.z : v2.z);
+}
 
 struct Ray {
 	float3 orig;	// ray origin
@@ -89,36 +88,36 @@ Sphere spheres[] = {
 // Using Kepler's video instructions, see http://docs.nvidia.com/cuda/parallel-thread-execution/#axzz3jbhbcTZf																			//  : "=r"(v) overwrites v and puts it in a register
 // see https://gcc.gnu.org/onlinedocs/gcc/Extended-Asm.html
 
-//int   min_min(int a, int b, int c) { int v; asm("vmin.s32.s32.s32.min %0, %1, %2, %3;" : "=r"(v) : "r"(a), "r"(b), "r"(c)); return v; }
-//int   min_max(int a, int b, int c) { int v; asm("vmin.s32.s32.s32.max %0, %1, %2, %3;" : "=r"(v) : "r"(a), "r"(b), "r"(c)); return v; }
-//int   max_min(int a, int b, int c) { int v; asm("vmax.s32.s32.s32.min %0, %1, %2, %3;" : "=r"(v) : "r"(a), "r"(b), "r"(c)); return v; }
-//int   max_max(int a, int b, int c) { int v; asm("vmax.s32.s32.s32.max %0, %1, %2, %3;" : "=r"(v) : "r"(a), "r"(b), "r"(c)); return v; }
-//float fmin_fmin(float3 a) { return asfloat(min_min(asint(a.x), asint(a.y), asint(a.z))); }
-//float fmin_fmin(float a, float b, float c) { return asfloat(min_min(asint(a), asint(b), asint(c))); }
-//float fmin_fmax(float a, float b, float c) { return asfloat(min_max(asint(a), asint(b), asint(c))); }
-//float fmax_fmin(float a, float b, float c) { return asfloat(max_min(asint(a), asint(b), asint(c))); }
-//float fmax_fmax(float a, float b, float c) { return asfloat(max_max(asint(a), asint(b), asint(c))); }
-//float fmax_fmax(float3 a) { return asfloat(max_max(asint(a.x), asint(a.y), asint(a.z))); }
-#define   min_min(a, b, c) min(min(a, b), c)
-#define   min_max(a, b, c) max(min(a, b), c)
-#define   max_min(a, b, c) min(max(a, b), c)
-#define   max_max(a, b, c) max(max(a, b), c)
-#define   f3min_min(a) min_min(a.x, a.y, a.z)
-#define   f3max_max(a) max_max(a.x, a.y, a.z)
+int   min_min(int a, int b, int c) { return min(min(a, b), c); }
+int   min_max(int a, int b, int c) { return max(min(a, b), c); }
+int   max_min(int a, int b, int c) { return min(max(a, b), c); }
+int   max_max(int a, int b, int c) { return max(max(a, b), c); }
+float fmin_fmin(float a, float b, float c) { return min(min(a, b), c); }
+float fmin_fmax(float a, float b, float c) { return max(min(a, b), c); }
+float fmax_fmin(float a, float b, float c) { return min(max(a, b), c); }
+float fmax_fmax(float a, float b, float c) { return max(max(a, b), c); }
 
-float spanBeginKepler(float a0, float a1, float b0, float b1, float c0, float c1, float d) { return max_max(min(a0, a1), min(b0, b1), min_max(c0, c1, d)); }
-float spanEndKepler(float a0, float a1, float b0, float b1, float c0, float c1, float d) { return min_min(max(a0, a1), max(b0, b1), max_min(c0, c1, d)); }
+#define fminf min
+#define fmaxf max
+#define min3f min
+#define max3f max
+
+float v3maxf(float3 v3) { return fmax_fmax(v3.x, v3.y, v3.z); }
+float v3minf(float3 v3) { return fmin_fmin(v3.x, v3.y, v3.z); }
+
+float spanBeginKepler(float a0, float a1, float b0, float b1, float c0, float c1, float d) { return fmax_fmax(fminf(a0, a1), fminf(b0, b1), fmin_fmax(c0, c1, d)); }
+float spanEndKepler(float a0, float a1, float b0, float b1, float c0, float c1, float d) { return fmin_fmin(fmaxf(a0, a1), fmaxf(b0, b1), fmax_fmin(c0, c1, d)); }
 
 // standard ray box intersection routines (for debugging purposes only)
 // based on Intersect::RayBox() in original Aila/Laine code
 float spanBeginKepler2(float lo_x, float hi_x, float lo_y, float hi_y, float lo_z, float hi_z, float d) {
 
-	float3 t0 = float3(lo_x, lo_y, lo_z);
-	float3 t1 = float3(hi_x, hi_y, hi_z);
+	Vec3f t0 = Vec3f(lo_x, lo_y, lo_z);
+	Vec3f t1 = Vec3f(hi_x, hi_y, hi_z);
 
-	float3 realmin = min3f(t0, t1);
+	Vec3f realmin = min3f(t0, t1);
 
-	float raybox_tmin = f3max_max(realmin); // realmin.max(); // maxmin
+	float raybox_tmin = v3maxf(realmin); // maxmin
 
 	//return Vec2f(tmin, tmax);
 	return raybox_tmin;
@@ -126,71 +125,52 @@ float spanBeginKepler2(float lo_x, float hi_x, float lo_y, float hi_y, float lo_
 
 float spanEndKepler2(float lo_x, float hi_x, float lo_y, float hi_y, float lo_z, float hi_z, float d) {
 
-	float3 t0 = float3(lo_x, lo_y, lo_z);
-	float3 t1 = float3(hi_x, hi_y, hi_z);
+	Vec3f t0 = Vec3f(lo_x, lo_y, lo_z);
+	Vec3f t1 = Vec3f(hi_x, hi_y, hi_z);
 
-	float3 realmax = max(t0, t1);
+	Vec3f realmax = max3f(t0, t1);
 
-	float raybox_tmax = f3max_max(realmax); /// minmax
+	float raybox_tmax = v3minf(realmax);// .min(); /// minmax
 
 	//return Vec2f(tmin, tmax);
 	return raybox_tmax;
 }
 
-void swap2(int a, int b) { int temp = a; a = b; b = temp; }
+void swap2(inout int a, inout int b) { int temp = a; a = b; b = temp; }
 
 // standard ray triangle intersection routines (for debugging purposes only)
 // based on Intersect::RayTriangle() in original Aila/Laine code
-float3 intersectRayTriangle(const float3 v0, const float3 v1, const float3 v2, const float4 rayorig, const float4 raydir) {
+#define __EPSILON 0.00001f // works better
+Vec3f intersectRayTriangle(const Vec3f v0, const Vec3f v1, const Vec3f v2, const Vec4f rayorig, const Vec4f raydir) {
+	const Vec3f miss = Vec3f(F32_MAX, F32_MAX, F32_MAX);
 
-	const float3 rayorig3f = float3(rayorig.x, rayorig.y, rayorig.z);
-	const float3 raydir3f = float3(raydir.x, raydir.y, raydir.z);
-
-	const float EPSILON = 0.00001f; // works better
-	const float3 miss = float3(F32_MAX, F32_MAX, F32_MAX);
-
-	float raytmin = rayorig.w;
-	float raytmax = raydir.w;
-
-	float3 edge1 = v1 - v0;
-	float3 edge2 = v2 - v0;
-
-	float3 tvec = rayorig3f - v0;
-	float3 pvec = cross(raydir3f, edge2);
-	float det = dot(edge1, pvec);
-
-	float invdet = 1.0f / det;
-
-	float u = dot(tvec, pvec) * invdet;
-
-	float3 qvec = cross(tvec, edge1);
-
-	float v = dot(raydir3f, qvec) * invdet;
-
-	if (det > EPSILON)
-	{
-		if (u < 0.0f || u > 1.0f) return miss; // 1.0 want = det * 1/det  
-		if (v < 0.0f || (u + v) > 1.0f) return miss;
-		// if u and v are within these bounds, continue and go to float t = dot(...	           
-	}
-
-	else if (det < -EPSILON)
-	{
-		if (u > 0.0f || u < 1.0f) return miss;
-		if (v > 0.0f || (u + v) < 1.0f) return miss;
-		// else continue
-	}
-
-	else // if det is not larger (more positive) than EPSILON or not smaller (more negative) than -EPSILON, there is a "miss"
+	Vec3f v0v1 = v1 - v0;
+	Vec3f v0v2 = v2 - v0;
+	Vec3f pvec = cross(raydir.xyz, v0v2);
+	float det = dot(v0v1, pvec);
+#ifdef CULLING 
+	// if the determinant is negative the triangle is backfacing
+	// if the determinant is close to 0, the ray misses the triangle
+	if (det < __EPSILON) 
 		return miss;
+#else 
+	// ray and triangle are parallel if det is close to 0
+	if (abs(det) < __EPSILON)
+		return miss;
+#endif 
+	float invDet = 1 / det;
 
-	float t = dot(edge2, qvec) * invdet;
+	Vec3f tvec = rayorig.xyz - v0;
+	float u = dot(tvec, pvec) * invDet;
+	if (u < 0 || u > 1) return miss;
 
-	if (t > raytmin && t < raytmax)
-		return float3(u, v, t);
+	Vec3f qvec = cross(tvec, v0v1);
+	float v = dot(raydir.xyz, qvec) * invDet;
+	if (v < 0 || u + v > 1) return miss;
 
-	// otherwise (t < raytmin or t > raytmax) miss
-	return miss;
+	float t = dot(v0v2, qvec) * invDet;
+
+	return Vec3f(u, v, t); //true;
 }
 
 Buffer<float3> buf_curvePoints : register(t30);
@@ -201,9 +181,23 @@ Buffer<float4> buf_gpuTriWoops : register(t1);
 Buffer<float4> buf_gpuDebugTris : register(t2);
 Buffer<int> buf_gpuTriIndices : register(t3);
 
+Texture2DArray g_texRgbaArray : register(t10); // for cmm text and ply textures
+Texture2D g_tex2D_Mat_KA : register(t11);
+Texture2D g_tex2D_Mat_KD : register(t12);
+Texture2D g_tex2D_Mat_KS : register(t13);
+Texture2D g_tex2D_Mat_NS : register(t14);
+Texture2D g_tex2D_Mat_BUMP : register(t15);
+Texture2D g_tex2D_Mat_D : register(t16);
+
+RWTexture2D<uint> fragment_counter : register(u0);
+RWByteAddressBuffer deep_k_buf : register(u1);
+RWBuffer<uint> picking_buf : register(u2);
+RWTexture2D<float4> fragment_vis : register(u3);
+RWTexture2D<float> fragment_zdepth : register(u4);
+
 // modified intersection routine (uses regular instead of woopified triangles) for debugging purposes
 
-void DEBUGintersectBVHandTriangles(const in float4 rayorig, const in float4 raydir,
+int DEBUGintersectBVHandTriangles(const in float4 rayorig, const in float4 raydir,
 	const in Buffer<float4> gpuNodes, const in Buffer<float4> gpuDebugTris, const in Buffer<int> gpuTriIndices, // const in Buffer<float4> gpuTriWoops,
 	inout int hitTriIdx, inout float hitdistance, inout int debugbingo, inout float3 trinormal, bool needClosestHit) 
 {
@@ -231,17 +225,18 @@ void DEBUGintersectBVHandTriangles(const in float4 rayorig, const in float4 rayd
 
 	// ooeps is very small number, used instead of raydir xyz component when that component is near zero
 	float ooeps = exp2(-80.0f); // Avoid div by zero, returns 1/2^80, an extremely small number
-	float signx = raydir.x > 0 ? 1.f : -1.f;
-	float signy = raydir.y > 0 ? 1.f : -1.f;
-	float signz = raydir.z > 0 ? 1.f : -1.f;
-	idirx = 1.0f / (abs(raydir.x) > ooeps ? raydir.x : signx * ooeps); // inverse ray direction
-	idiry = 1.0f / (abs(raydir.y) > ooeps ? raydir.y : signy * ooeps); // inverse ray direction
-	idirz = 1.0f / (abs(raydir.z) > ooeps ? raydir.z : signz * ooeps); // inverse ray direction
+	float ooeps_x = raydir.x >= 0 ? ooeps : -ooeps;
+	float ooeps_y = raydir.y >= 0 ? ooeps : -ooeps;
+	float ooeps_z = raydir.z >= 0 ? ooeps : -ooeps;
+	idirx = 1.0f / (abs(raydir.x) > ooeps ? raydir.x : ooeps_x); // inverse ray direction
+	idiry = 1.0f / (abs(raydir.y) > ooeps ? raydir.y : ooeps_y); // inverse ray direction
+	idirz = 1.0f / (abs(raydir.z) > ooeps ? raydir.z : ooeps_z); // inverse ray direction
 	oodx = origx * idirx;  // ray origin / ray direction
 	oody = origy * idiry;  // ray origin / ray direction
 	oodz = origz * idirz;  // ray origin / ray direction
 
 	traversalStack[0] = EntrypointSentinel; // Bottom-most entry. 0x76543210 is 1985229328 in decimal
+	// stackPtr = (char*)&traversalStack[0];
 	idxStak = 0; // point stackPtr (idxStak) to bottom of traversal stack = EntryPointSentinel
 	leafAddr = 0;   // No postponed leaf.
 	nodeAddr = 0;   // Start from the root.
@@ -249,15 +244,15 @@ void DEBUGintersectBVHandTriangles(const in float4 rayorig, const in float4 rayd
 	hitT = raydir.w;
 
 	[loop]
-	while (nodeAddr != EntrypointSentinel) // EntrypointSentinel = 0x76543210 
+	while ((uint)nodeAddr != EntrypointSentinel) // EntrypointSentinel = 0x76543210 
 	{
 		// Traverse internal nodes until all SIMD lanes have found a leaf.
 
 		bool searchingLeaf = true; // flag required to increase efficiency of threads in warp
 		[loop]
-		while (nodeAddr >= 0 && nodeAddr != EntrypointSentinel)
+		while (nodeAddr >= 0 && (uint)nodeAddr != EntrypointSentinel)
 		{
-			int nodeIdx = nodeAddr >> 2; // float4* ptr = (float4*)((char*)gpuNodes + nodeAddr);
+			int nodeIdx = nodeAddr >> 4; // float4* ptr = (float4*)((char*)gpuNodes + nodeAddr);
 			float4 n0xy = gpuNodes[nodeIdx];// ptr[0]; // childnode 0, xy-bounds (c0.lo.x, c0.hi.x, c0.lo.y, c0.hi.y)		
 			float4 n1xy = gpuNodes[nodeIdx + 1];//ptr[1]; // childnode 1. xy-bounds (c1.lo.x, c1.hi.x, c1.lo.y, c1.hi.y)		
 			float4 nz = gpuNodes[nodeIdx + 2];//ptr[2]; // childnodes 0 and 1, z-bounds(c0.lo.z, c0.hi.z, c1.lo.z, c1.hi.z)			
@@ -275,14 +270,14 @@ void DEBUGintersectBVHandTriangles(const in float4 rayorig, const in float4 rayd
 			float c0hiz = nz.y * idirz - oodz; // nz.y   = c0.hi.z, child 0 maxbound z
 			float c1loz = nz.z * idirz - oodz; // nz.z   = c1.lo.z, child 1 minbound z
 			float c1hiz = nz.w * idirz - oodz; // nz.w   = c1.hi.z, child 1 maxbound z
-			float c0min = spanBeginKepler2(c0lox, c0hix, c0loy, c0hiy, c0loz, c0hiz, tmin); // Tesla does max4(min, min, min, tmin)
-			float c0max = spanEndKepler2(c0lox, c0hix, c0loy, c0hiy, c0loz, c0hiz, hitT); // Tesla does min4(max, max, max, tmax)
+			float c0min = spanBeginKepler(c0lox, c0hix, c0loy, c0hiy, c0loz, c0hiz, tmin); // Tesla does max4(min, min, min, tmin)
+			float c0max = spanEndKepler(c0lox, c0hix, c0loy, c0hiy, c0loz, c0hiz, hitT); // Tesla does min4(max, max, max, tmax)
 			float c1lox = n1xy.x * idirx - oodx; // n1xy.x = c1.lo.x, child 1 minbound x
 			float c1hix = n1xy.y * idirx - oodx; // n1xy.y = c1.hi.x, child 1 maxbound x
 			float c1loy = n1xy.z * idiry - oody; // n1xy.z = c1.lo.y, child 1 minbound y
 			float c1hiy = n1xy.w * idiry - oody; // n1xy.w = c1.hi.y, child 1 maxbound y
-			float c1min = spanBeginKepler2(c1lox, c1hix, c1loy, c1hiy, c1loz, c1hiz, tmin);
-			float c1max = spanEndKepler2(c1lox, c1hix, c1loy, c1hiy, c1loz, c1hiz, hitT);
+			float c1min = spanBeginKepler(c1lox, c1hix, c1loy, c1hiy, c1loz, c1hiz, tmin);
+			float c1max = spanEndKepler(c1lox, c1hix, c1loy, c1hiy, c1loz, c1hiz, hitT);
 
 			float ray_tmax = 1e20;
 			bool traverseChild0 = (c0min <= c0max) && (c0min >= tmin) && (c0min <= ray_tmax);
@@ -293,13 +288,11 @@ void DEBUGintersectBVHandTriangles(const in float4 rayorig, const in float4 rayd
 				nodeAddr = traversalStack[idxStak];// *(int*)stackPtr; // fetch next node by popping stack
 				idxStak -= 1; // stackPtr -= 4; // popping decrements stack by 4 bytes (because stackPtr is a pointer to char) 
 			}
-
 			// Otherwise => fetch child pointers.
-
 			else  // one or both children intersected
 			{
-				float4 tmpLoadF4 = gpuNodes[nodeIdx + 3];
-				int2 cnodes = int2(asint(tmpLoadF4.x), asint(tmpLoadF4.y));// = *(int2*) & ptr[3];
+				float4 nodef4 = gpuNodes[nodeIdx + 3];
+				int2 cnodes = int2(asint(nodef4.x), asint(nodef4.y));// = *(int2*) & ptr[3];
 
 				// set nodeAddr equal to intersected childnode (first childnode when both children are intersected)
 				nodeAddr = (traverseChild0) ? cnodes.x : cnodes.y;
@@ -331,14 +324,18 @@ void DEBUGintersectBVHandTriangles(const in float4 rayorig, const in float4 rayd
 			// NOTE: inline PTX implementation of "if(!__any(leafAddr >= 0)) break;".
 			// tried everything with CUDA 4.2 but always got several redundant instructions.
 
-			if (!searchingLeaf){ break;  }  
+			// if (!searchingLeaf){ break;  }  
 
+			// if (!__any(searchingLeaf)) break; // "__any" keyword: if none of the threads is searching a leaf, in other words
 			// if all threads in the warp found a leafnode, then break from while loop and go to triangle intersection
 
-			if(!leafAddr >= 0)   /// als leafAddr in PTX code >= 0, dan is het geen echt leafNode   
-			   break;
+			// if(!__any(leafAddr >= 0))   /// als leafAddr in PTX code >= 0, dan is het geen echt leafNode   
+			//    break;
 
 			//unsigned int mask; // mask replaces searchingLeaf in PTX code
+			if (leafAddr < 0) {
+				break;
+			}
 			//
 			//asm("{\n"
 			//"   .reg .pred p;               \n"
@@ -351,31 +348,31 @@ void DEBUGintersectBVHandTriangles(const in float4 rayorig, const in float4 rayd
 			//if (!mask)
 			//	break;
 		}
-
 		///////////////////////////////////////
 		/// LEAF NODE / TRIANGLE INTERSECTION
 		///////////////////////////////////////
 
+		[loop]
 		while (leafAddr < 0)  // if leafAddr is negative, it points to an actual leafnode (when positive or 0 it's an innernode
 		{
 			// leafAddr is stored as negative number, see cidx[i] = ~triWoopData.getSize(); in CudaBVH.cpp
-
+			[loop]
 			for (int triAddr = ~leafAddr;; triAddr += 3)
 			{    // no defined upper limit for loop, continues until leaf terminator code 0x80000000 is encountered
 
 				// Read first 16 bytes of the triangle.
 				// fetch first triangle vertex
-				float4 v0f = gpuDebugTris[triAddr + 0];
+				float3 v0 = gpuDebugTris[triAddr + 0].xyz;
 
 				// End marker 0x80000000 (= negative zero) => all triangles in leaf processed. --> terminate 				
-				if (asuint(v0f.x) == 0x80000000) break;
+				if (asuint(v0.x) == 0x80000000) break;
 
-				float4 v1f = gpuDebugTris[triAddr + 1];
-				float4 v2f = gpuDebugTris[triAddr + 2];
+				float3 v1 = gpuDebugTris[triAddr + 1].xyz;
+				float3 v2 = gpuDebugTris[triAddr + 2].xyz;
 
-				const float3 v0 = float3(v0f.x, v0f.y, v0f.z);
-				const float3 v1 = float3(v1f.x, v1f.y, v1f.z);
-				const float3 v2 = float3(v2f.x, v2f.y, v2f.z);
+				//const float3 v0 = float3(v0f.x, v0f.y, v0f.z);
+				//const float3 v1 = float3(v1f.x, v1f.y, v1f.z);
+				//const float3 v2 = float3(v2f.x, v2f.y, v2f.z);
 
 				float4 rayorigfloat4 = float4(rayorig.x, rayorig.y, rayorig.z, rayorig.w);
 				float4 raydirfloat4 = float4(raydir.x, raydir.y, raydir.z, raydir.w);
@@ -416,76 +413,22 @@ void DEBUGintersectBVHandTriangles(const in float4 rayorig, const in float4 rayd
 	if (hitIndex != -1) {
 		// remapping tri indices delayed until this point for performance reasons
 		// (slow global memory lookup in de gpuTriIndices array) because multiple triangles per node can potentially be hit
-
 		hitIndex = gpuTriIndices[hitIndex];
 	}
 
 	hitTriIdx = hitIndex;
 	hitdistance = hitT;
+
+	return 0;
 }
 
-
-[numthreads(GRIDSIZE, GRIDSIZE, 1)]
-void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
-{
-	int2 ss_xy = int2(DTid.xy);
-
-	// do not compute 1st hit surface separately
-	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
-		return;
-
-	const uint k_value = g_cbCamState.k_value;
-	uint bytes_per_frag = 4 * NUM_ELES_PER_FRAG;
-	uint pixel_id = ss_xy.y * g_cbCamState.rt_width + ss_xy.x;
-	uint bytes_frags_per_pixel = k_value * bytes_per_frag;
-	uint addr_base = pixel_id * bytes_frags_per_pixel;
-
-	float4 vis_out = 0;
-	float depth_out = 0;
-
-	// Image Plane's Position and Camera State //
-	float3 pos_ip_ss = float3(ss_xy, 0.0f);
-	float3 pos_ip_ws = TransformPoint(pos_ip_ss, g_cbCamState.mat_ss2ws);
-	float3 ray_dir_unit_ws = g_cbCamState.dir_view_ws;
-	if (g_cbCamState.cam_flag & 0x1)
-		ray_dir_unit_ws = pos_ip_ws - g_cbCamState.pos_cam_ws;
-	ray_dir_unit_ws = normalize(ray_dir_unit_ws);
-
-	////////////////////////////
-	int hitTriIdx = -1;
-	int bestTriIdx = -1;
-	int geomtype = -1;
-	float hitDistance = 1e20;
-	float scene_t = 1e20;
-	float3 objcol = float3(0, 0, 0);
-	float3 emit = float3(0, 0, 0);
-	float3 hitpoint; // intersection point
-	float3 n; // normal
-	float3 nl; // oriented normal
-	float3 nextdir; // ray direction of next path segment
-	float3 trinormal = float3(0, 0, 0);
-	Refl_t refltype;
-	float ray_tmin = 0.00001f;
-	float ray_tmax = 1e20; // use thickness!!
-
-	// intersect all triangles in the scene stored in BVH
-	int debugbingo = 0;
-	float4 rayorig = float4(pos_ip_ws, ray_tmin);
-	float4 raydir = float4(ray_dir_unit_ws, ray_tmax);
-	DEBUGintersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuDebugTris, buf_gpuTriIndices, bestTriIdx, hitDistance, debugbingo, trinormal, false);
-
-	//finalcol += renderKernel(&randState, HDRmap, gpuNodes, gpuTriWoops, gpuDebugTris, gpuTriIndices, originInWorldSpace, rayInWorldSpace, leafcount, tricount);
-
-}
-
-/*
-void intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
-	const float4* gpuNodes, const float4* gpuTriWoops, const float4* gpuDebugTris, const int* gpuTriIndices,
-	int& hitTriIdx, float& hitdistance, int& debugbingo, float3& trinormal, int leafcount, int tricount, bool anyHit)
+int intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
+	const in Buffer<float4> gpuNodes, const in Buffer<float4> gpuTriWoops, const in Buffer<int> gpuTriIndices,
+	inout int hitTriIdx, inout float hitdistance, inout int debugbingo, inout float3 trinormal, bool anyHit)
 {
 	// assign a CUDA thread to every pixel by using the threadIndex
 	// global threadId, see richiesams blogspot
-	int thread_index = (blockIdx.x + blockIdx.y * gridDim.x) * (blockDim.x * blockDim.y) + (threadIdx.y * blockDim.x) + threadIdx.x;
+	//int thread_index = (blockIdx.x + blockIdx.y * gridDim.x) * (blockDim.x * blockDim.y) + (threadIdx.y * blockDim.x) + threadIdx.x;
 
 	///////////////////////////////////////////
 	//// FERMI / KEPLER KERNEL
@@ -507,7 +450,7 @@ void intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 	float   idirx, idiry, idirz;    // 1 / ray direction
 	float   oodx, oody, oodz;       // ray origin / ray direction
 
-	char* stackPtr;               // Current position in traversal stack.
+	int idxStak; //char* stackPtr;               // Current position in traversal stack.
 	int     leafAddr;               // If negative, then first postponed leaf, non-negative if no leaf (innernode).
 	int     nodeAddr;
 	int     hitIndex;               // Triangle index of the closest intersection, -1 if none.
@@ -516,13 +459,13 @@ void intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 	//int     leafAddr2;              // Second postponed leaf, non-negative if none.  
 	//int     nodeAddr = EntrypointSentinel; // Non-negative: current internal node, negative: second postponed leaf.
 
-	int threadId1; // ipv rayidx
+	//int threadId1; // ipv rayidx
 
 	// Initialize (stores local variables in registers)
 	{
 		// Pick ray index.
 
-		threadId1 = threadIdx.x + blockDim.x * (threadIdx.y + blockDim.y * (blockIdx.x + gridDim.x * blockIdx.y));
+		//threadId1 = threadIdx.x + blockDim.x * (threadIdx.y + blockDim.y * (blockIdx.x + gridDim.x * blockIdx.y));
 
 
 		// Fetch ray.
@@ -541,10 +484,13 @@ void intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 		tmin = rayorig.w;
 
 		// ooeps is very small number, used instead of raydir xyz component when that component is near zero
-		float ooeps = exp2f(-80.0f); // Avoid div by zero, returns 1/2^80, an extremely small number
-		idirx = 1.0f / (fabsf(raydir.x) > ooeps ? raydir.x : copysignf(ooeps, raydir.x)); // inverse ray direction
-		idiry = 1.0f / (fabsf(raydir.y) > ooeps ? raydir.y : copysignf(ooeps, raydir.y)); // inverse ray direction
-		idirz = 1.0f / (fabsf(raydir.z) > ooeps ? raydir.z : copysignf(ooeps, raydir.z)); // inverse ray direction
+		float ooeps = exp2(-80.0f); // Avoid div by zero, returns 1/2^80, an extremely small number
+		float ooeps_x = raydir.x >= 0 ? ooeps : -ooeps;
+		float ooeps_y = raydir.y >= 0 ? ooeps : -ooeps;
+		float ooeps_z = raydir.z >= 0 ? ooeps : -ooeps;
+		idirx = 1.0f / (abs(raydir.x) > ooeps ? raydir.x : ooeps_x); // inverse ray direction
+		idiry = 1.0f / (abs(raydir.y) > ooeps ? raydir.y : ooeps_y); // inverse ray direction
+		idirz = 1.0f / (abs(raydir.z) > ooeps ? raydir.z : ooeps_z); // inverse ray direction
 		oodx = origx * idirx;  // ray origin / ray direction
 		oody = origy * idiry;  // ray origin / ray direction
 		oodz = origz * idirz;  // ray origin / ray direction
@@ -552,7 +498,7 @@ void intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 		// Setup traversal + initialisation
 
 		traversalStack[0] = EntrypointSentinel; // Bottom-most entry. 0x76543210 (1985229328 in decimal)
-		stackPtr = (char*)&traversalStack[0]; // point stackPtr to bottom of traversal stack = EntryPointSentinel
+		idxStak = 0;//stackPtr = (char*)&traversalStack[0]; // point stackPtr to bottom of traversal stack = EntryPointSentinel
 		leafAddr = 0;   // No postponed leaf.
 		nodeAddr = 0;   // Start from the root.
 		hitIndex = -1;  // No triangle intersected so far.
@@ -560,22 +506,24 @@ void intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 	}
 
 	// Traversal loop.
-
-	while (nodeAddr != EntrypointSentinel)
+	[loop]
+	while ((uint)nodeAddr != EntrypointSentinel)
 	{
 		// Traverse internal nodes until all SIMD lanes have found a leaf.
 
 		bool searchingLeaf = true; // required for warp efficiency
-		while (nodeAddr >= 0 && nodeAddr != EntrypointSentinel)
+		[loop]
+		while (nodeAddr >= 0 && (uint)nodeAddr != EntrypointSentinel)
 		{
 			// Fetch AABBs of the two child nodes.
 
 			// nodeAddr is an offset in number of bytes (char) in gpuNodes array
 
-			float4* ptr = (float4*)((char*)gpuNodes + nodeAddr);
-			float4 n0xy = ptr[0]; // childnode 0, xy-bounds (c0.lo.x, c0.hi.x, c0.lo.y, c0.hi.y)		
-			float4 n1xy = ptr[1]; // childnode 1, xy-bounds (c1.lo.x, c1.hi.x, c1.lo.y, c1.hi.y)		
-			float4 nz = ptr[2]; // childnode 0 and 1, z-bounds (c0.lo.z, c0.hi.z, c1.lo.z, c1.hi.z)		
+			// float4* ptr = (float4*)((char*)gpuNodes + nodeAddr);
+			int nodeIdx = nodeAddr >> 4;
+			float4 n0xy = gpuNodes[nodeIdx];// ptr[0]; // childnode 0, xy-bounds (c0.lo.x, c0.hi.x, c0.lo.y, c0.hi.y)		
+			float4 n1xy = gpuNodes[nodeIdx + 1];//ptr[1]; // childnode 1, xy-bounds (c1.lo.x, c1.hi.x, c1.lo.y, c1.hi.y)		
+			float4 nz = gpuNodes[nodeIdx + 2];//ptr[2]; // childnode 0 and 1, z-bounds (c0.lo.z, c0.hi.z, c1.lo.z, c1.hi.z)		
 			// ptr[3] contains indices to 2 childnodes in case of innernode, see below
 			// (childindex = size of array during building, see CudaBVH.cpp)
 
@@ -604,22 +552,25 @@ void intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 			// ray box intersection boundary tests:
 
 			float ray_tmax = 1e20;
-			bool traverseChild0 = (c0min <= c0max); // && (c0min >= tmin) && (c0min <= ray_tmax);
-			bool traverseChild1 = (c1min <= c1max); // && (c1min >= tmin) && (c1min <= ray_tmax);
+			bool traverseChild0 = (c0min <= c0max) && (c0min >= tmin) && (c0min <= ray_tmax);
+			bool traverseChild1 = (c1min <= c1max) && (c1min >= tmin) && (c1min <= ray_tmax);
 
 			// Neither child was intersected => pop stack.
 
 			if (!traverseChild0 && !traverseChild1)
 			{
-				nodeAddr = *(int*)stackPtr; // fetch next node by popping the stack 
-				stackPtr -= 4; // popping decrements stackPtr by 4 bytes (because stackPtr is a pointer to char)   
+				nodeAddr = traversalStack[idxStak];// *(int*)stackPtr; // fetch next node by popping the stack 
+				idxStak -= 1; // stackPtr -= 4; // popping decrements stackPtr by 4 bytes (because stackPtr is a pointer to char)   
 			}
 
 			// Otherwise, one or both children intersected => fetch child pointers.
 
 			else
 			{
-				int2 cnodes = *(int2*) & ptr[3];
+				//int2 cnodes = *(int2*) & ptr[3];
+				float4 nodef4 = gpuNodes[nodeIdx + 3];
+				int2 cnodes = int2(asint(nodef4.x), asint(nodef4.y));// = *(int2*) & ptr[3];
+			
 				// set nodeAddr equal to intersected childnode index (or first childnode when both children are intersected)
 				nodeAddr = (traverseChild0) ? cnodes.x : cnodes.y;
 
@@ -629,8 +580,8 @@ void intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 				{
 					if (c1min < c0min)
 						swap2(nodeAddr, cnodes.y);
-					stackPtr += 4;  // pushing increments stack by 4 bytes (stackPtr is a pointer to char)
-					*(int*)stackPtr = cnodes.y; // push furthest node on the stack
+					idxStak += 1; //stackPtr += 4;  // pushing increments stack by 4 bytes (stackPtr is a pointer to char)
+					traversalStack[idxStak] = cnodes.y; //*(int*)stackPtr = cnodes.y; // push furthest node on the stack
 				}
 			}
 
@@ -641,8 +592,8 @@ void intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 			{
 				searchingLeaf = false; // required for warp efficiency
 				leafAddr = nodeAddr;
-				nodeAddr = *(int*)stackPtr;  // pops next node from stack
-				stackPtr -= 4;  // decrements stackptr by 4 bytes (because stackPtr is a pointer to char)
+				nodeAddr = traversalStack[idxStak];//*(int*)stackPtr;  // pops next node from stack
+				idxStak -= 1;// stackPtr -= 4;  // decrements stackptr by 4 bytes (because stackPtr is a pointer to char)
 			}
 
 			// All SIMD lanes have found a leaf => process them.
@@ -663,18 +614,21 @@ void intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 			// NOTE: inline PTX implementation of "if(!__any(leafAddr >= 0)) break;".
 			// tried everything with CUDA 4.2 but always got several redundant instructions.
 
-			unsigned int mask; // replaces searchingLeaf
-
-			asm("{\n"
-			"   .reg .pred p;               \n"
-				"setp.ge.s32        p, %1, 0;   \n"
-				"vote.ballot.b32    %0,p;       \n"
-				"}"
-				: "=r"(mask)
-				: "r"(leafAddr));
-
-			if (!mask)
+			//unsigned int mask; // mask replaces searchingLeaf in PTX code
+			if (leafAddr < 0) {
 				break;
+			}
+
+			//asm("{\n"
+			//"   .reg .pred p;               \n"
+			//	"setp.ge.s32        p, %1, 0;   \n"
+			//	"vote.ballot.b32    %0,p;       \n"
+			//	"}"
+			//	: "=r"(mask)
+			//	: "r"(leafAddr));
+
+			//if (!mask)
+			//	break;
 		}
 
 
@@ -683,22 +637,22 @@ void intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 		//////////////////////////////////////
 
 		// Process postponed leaf nodes.
-
+		[loop]
 		while (leafAddr < 0)  /// if leafAddr is negative, it points to an actual leafnode (when positive or 0 it's an innernode)
 		{
 			// Intersect the ray against each triangle using Sven Woop's algorithm.
 			// Woop ray triangle intersection: Woop triangles are unit triangles. Each ray
 			// must be transformed to "unit triangle space", before testing for intersection
-
+			[loop]
 			for (int triAddr = ~leafAddr;; triAddr += 3)  // triAddr is index in triWoop array (and bitwise complement of leafAddr)
 			{ // no defined upper limit for loop, continues until leaf terminator code 0x80000000 is encountered
 
 				// Read first 16 bytes of the triangle.
 				// fetch first precomputed triangle edge
-				float4 v00 = tex1Dfetch(triWoopTexture, triAddr);
+				float4 v00 = gpuTriWoops[triAddr];// tex1Dfetch(triWoopTexture, triAddr);
 
 				// End marker 0x80000000 (negative zero) => all triangles in leaf processed --> terminate
-				if (__float_as_int(v00.x) == 0x80000000)
+				if (asuint(v00.x) == 0x80000000)
 					break;
 
 				// Compute and check intersection t-value (hit distance along ray).
@@ -711,7 +665,7 @@ void intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 					// Compute and check barycentric u.
 
 					// fetch second precomputed triangle edge
-					float4 v11 = tex1Dfetch(triWoopTexture, triAddr + 1);
+					float4 v11 = gpuTriWoops[triAddr + 1];// tex1Dfetch(triWoopTexture, triAddr + 1);
 					float Ox = v11.w + origx * v11.x + origy * v11.y + origz * v11.z;  // Origin.x
 					float Dx = dirx * v11.x + diry * v11.y + dirz * v11.z;  // Direction.x
 					float u = Ox + t * Dx; /// parametric equation of a ray (intersection point)
@@ -721,7 +675,7 @@ void intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 						// Compute and check barycentric v.
 
 						// fetch third precomputed triangle edge
-						float4 v22 = tex1Dfetch(triWoopTexture, triAddr + 2);
+						float4 v22 = gpuTriWoops[triAddr + 2];// tex1Dfetch(triWoopTexture, triAddr + 2);
 						float Oy = v22.w + origx * v22.x + origy * v22.y + origz * v22.z;
 						float Dy = dirx * v22.x + diry * v22.y + dirz * v22.z;
 						float v = Oy + t * Dy;
@@ -756,8 +710,8 @@ void intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 			leafAddr = nodeAddr;
 			if (nodeAddr < 0)    // nodeAddr is an actual leaf when < 0
 			{
-				nodeAddr = *(int*)stackPtr;  // pop stack
-				stackPtr -= 4;               // decrement with 4 bytes to get the next int (stackPtr is char*)
+				nodeAddr = traversalStack[idxStak];//*(int*)stackPtr;  // pop stack
+				idxStak -= 1;// stackPtr -= 4;               // decrement with 4 bytes to get the next int (stackPtr is char*)
 			}
 		} // end leaf/triangle intersection loop
 	} // end traversal loop (AABB and triangle intersection)
@@ -765,487 +719,163 @@ void intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 	// Remap intersected triangle index, and store the result.
 
 	if (hitIndex != -1) {
-		hitIndex = tex1Dfetch(triIndicesTexture, hitIndex);
+		hitIndex = gpuTriIndices[hitIndex];// tex1Dfetch(triIndicesTexture, hitIndex);
 		// remapping tri indices delayed until this point for performance reasons
 		// (slow texture memory lookup in de triIndicesTexture) because multiple triangles per node can potentially be hit
 	}
 
 	hitTriIdx = hitIndex;
 	hitdistance = hitT;
+
+	return 0;
 }
 
-// union struct required for mapping pixel colours to OpenGL buffer
-union Colour  // 4 bytes = 4 chars = 1 float
+[numthreads(GRIDSIZE, GRIDSIZE, 1)]
+void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 {
-	float c;
-	uchar4 components;
-};
+	int2 ss_xy = int2(DTid.xy);
 
-__device__ float3 renderKernel(curandState* randstate, const float4* HDRmap, const float4* gpuNodes, const float4* gpuTriWoops,
-	const float4* gpuDebugTris, const int* gpuTriIndices, float3& rayorig, float3& raydir, unsigned int leafcount, unsigned int tricount)
-{
-	float3 mask = float3(1.0f, 1.0f, 1.0f); // colour mask
-	float3 accucolor = float3(0.0f, 0.0f, 0.0f); // accumulated colour
-	float3 direct = float3(0, 0, 0);
+	// do not compute 1st hit surface separately
+	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
+		return;
 
-	for (int bounces = 0; bounces < 4; bounces++) {  // iteration up to 4 bounces (instead of recursion in CPU code)
+	const uint k_value = g_cbCamState.k_value;
+	uint bytes_per_frag = 4 * NUM_ELES_PER_FRAG;
+	uint pixel_id = ss_xy.y * g_cbCamState.rt_width + ss_xy.x;
+	uint bytes_frags_per_pixel = k_value * bytes_per_frag;
+	uint addr_base = pixel_id * bytes_frags_per_pixel;
 
-		int hitSphereIdx = -1;
-		int hitTriIdx = -1;
-		int bestTriIdx = -1;
-		int geomtype = -1;
-		float hitSphereDist = 1e20;
-		float hitDistance = 1e20;
-		float scene_t = 1e20;
-		float3 objcol = float3(0, 0, 0);
-		float3 emit = float3(0, 0, 0);
-		float3 hitpoint; // intersection point
-		float3 n; // normal
-		float3 nl; // oriented normal
-		float3 nextdir; // ray direction of next path segment
-		float3 trinormal = float3(0, 0, 0);
-		Refl_t refltype;
-		float ray_tmin = 0.00001f;
-		float ray_tmax = 1e20;
+	float4 vis_out = 0;
+	float depth_out = 0;
 
-		// intersect all triangles in the scene stored in BVH
+	// Image Plane's Position and Camera State //
+	float3 pos_ip_ss = float3(ss_xy, 0.0f);
+	float3 pos_ip_ws = TransformPoint(pos_ip_ss, g_cbCamState.mat_ss2ws);
+	float3 ray_dir_unit_ws = g_cbCamState.dir_view_ws;
+	if (g_cbCamState.cam_flag & 0x1)
+		ray_dir_unit_ws = pos_ip_ws - g_cbCamState.pos_cam_ws;
+	ray_dir_unit_ws = normalize(ray_dir_unit_ws);
 
-		int debugbingo = 0;
+	////////////////////////////
+	int hitTriIdx = -1;
+	//int bestTriIdx = -1;
+	//int geomtype = -1;
+	float hitDistance = 1e20;
+	//float scene_t = 1e20;
+	//float3 objcol = float3(0, 0, 0);
+	//float3 emit = float3(0, 0, 0);
+	//float3 hitpoint; // intersection point
+	//float3 n; // normal
+	//float3 nl; // oriented normal
+	//float3 nextdir; // ray direction of next path segment
+	float3 trinormal = float3(0, 0, 0);
+	Refl_t refltype;
+	float ray_tmin = 0.00001f;
+	float ray_tmax = 1e20; // use thickness!!
 
-		intersectBVHandTriangles(make_float4(rayorig.x, rayorig.y, rayorig.z, ray_tmin), make_float4(raydir.x, raydir.y, raydir.z, ray_tmax),
-			gpuNodes, gpuTriWoops, gpuDebugTris, gpuTriIndices, bestTriIdx, hitDistance, debugbingo, trinormal, leafcount, tricount, false);
+	// intersect all triangles in the scene stored in BVH
+	int debugbingo = 0;
+	//float planeThickness = g_cbCamState.far_plane;
 
-		//DEBUGintersectBVHandTriangles(make_float4(rayorig.x, rayorig.y, rayorig.z, ray_tmin), make_float4(raydir.x, raydir.y, raydir.z, ray_tmax),
-		//gpuNodes, gpuTriWoops, gpuDebugTris, gpuTriIndices, bestTriIdx, hitDistance, debugbingo, trinormal, leafcount, tricount, false);
+	//pos_ip_ws = float3(0, 0, 0);
+	//ray_dir_unit_ws = float3(0, 1, 0);
+	float3 ray_orig_os = TransformPoint(pos_ip_ws, g_cbPobj.mat_ws2os);
+	float3 ray_dir_unit_os = normalize(TransformVector(ray_dir_unit_ws, g_cbPobj.mat_ws2os));
 
+	float4 rayorig = float4(ray_orig_os, ray_tmin);
+	float4 raydir = float4(ray_dir_unit_os, ray_tmax);
+	//DEBUGintersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuDebugTris, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
+	intersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
 
-		// intersect all spheres in the scene
+	if (hitTriIdx == -1)
+		return;
 
-		// float3 required for sphere intersection (to avoid "dynamic allocation not allowed" error)
-		float3 rayorig_flt3 = make_float3(rayorig.x, rayorig.y, rayorig.z);
-		float3 raydir_flt3 = make_float3(raydir.x, raydir.y, raydir.z);
+	float3 posHitOS = ray_orig_os + hitDistance * ray_dir_unit_os;
+	float3 posHitWS = TransformPoint(posHitOS, g_cbPobj.mat_os2ws);
 
-		float numspheres = sizeof(spheres) / sizeof(Sphere);
-		for (int i = int(numspheres); i--;)  // for all spheres in scene
-			// keep track of distance from origin to closest intersection point
-			if ((hitSphereDist = spheres[i].intersect(Ray(rayorig_flt3, raydir_flt3))) && hitSphereDist < scene_t && hitSphereDist > 0.01f) {
-				scene_t = hitSphereDist; hitSphereIdx = i; geomtype = 1;
-			}
+	float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
+	float zThickness = 0;
+	float zDepth = 0;
+	if (dot(trinormal, ray_dir_unit_os) > 0) {
+		// inside the object
+		//visOut = float4(0, 0, 1, 1);
+		zThickness = zDepth = length(posHitWS - pos_ip_ws);
+	}
+	else {
+		// find the other side one.
+		hitTriIdx = -1;
+		rayorig = float4(ray_orig_os + (hitDistance + 0.0001f) * ray_dir_unit_os, ray_tmin);
+		//DEBUGintersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuDebugTris, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
+		intersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
 
-		if (hitDistance < scene_t && hitDistance > ray_tmin) // triangle hit
+		if (dot(trinormal, ray_dir_unit_os) < 0 || hitTriIdx == -1) 
 		{
-			scene_t = hitDistance;
-			hitTriIdx = bestTriIdx;
-			geomtype = 2;
+			// just for debug..
+			// not allowed in the closed object
+			v_rgba = float4(1, 0, 0, 1);
 		}
+		else
+		{
+			float3 pos2ndHitOS = rayorig.xyz + hitDistance * ray_dir_unit_os;
+			float3 pos2ndHitWS = TransformPoint(pos2ndHitOS, g_cbPobj.mat_os2ws);
 
-		// sky gradient colour
-		//float t = 0.5f * (raydir.y + 1.2f);
-		//float3 skycolor = float3(1.0f, 1.0f, 1.0f) * (1.0f - t) + float3(0.9f, 0.3f, 0.0f) * t;
-
-#ifdef HDR
-		// HDR 
-
-		if (scene_t > 1e19) { // if ray misses scene, return sky
-
-			// HDR environment map code based on Syntopia "Path tracing 3D fractals"
-			// http://blog.hvidtfeldts.net/index.php/2015/01/path-tracing-3d-fractals/
-			// https://github.com/Syntopia/Fragmentarium/blob/master/Fragmentarium-Source/Examples/Include/IBL-Pathtracer.frag
-			// GLSL code: 
-			// vec3 equirectangularMap(sampler2D sampler, vec3 dir) {
-			//		dir = normalize(dir);
-			//		vec2 longlat = vec2(atan(dir.y, dir.x) + RotateMap, acos(dir.z));
-			//		return texture2D(sampler, longlat / vec2(2.0*PI, PI)).xyz; }
-
-			// Convert (normalized) dir to spherical coordinates.
-			float longlatX = atan2f(raydir.x, raydir.z); // Y is up, swap x for y and z for x
-			longlatX = longlatX < 0.f ? longlatX + TWO_PI : longlatX;  // wrap around full circle if negative
-			float longlatY = acosf(raydir.y); // add RotateMap at some point, see Fragmentarium
-
-			// map theta and phi to u and v texturecoordinates in [0,1] x [0,1] range
-			float offsetY = 0.5f;
-			float u = longlatX / TWO_PI; // +offsetY;
-			float v = longlatY / M_PI;
-
-			// map u, v to integer coordinates
-			int u2 = (int)(u * HDRwidth); //% HDRwidth;
-			int v2 = (int)(v * HDRheight); // % HDRheight;
-
-			// compute the texel index in the HDR map 
-			int HDRtexelidx = u2 + v2 * HDRwidth;
-
-			//float4 HDRcol = HDRmap[HDRtexelidx];
-			float4 HDRcol = tex1Dfetch(HDRtexture, HDRtexelidx);  // fetch from texture
-			float3 HDRcol2 = float3(HDRcol.x, HDRcol.y, HDRcol.z);
-
-			emit = HDRcol2 * 2.0f;
-			accucolor += (mask * emit);
-			return accucolor;
+			zThickness = length(posHitWS - pos2ndHitWS);
+			zDepth = length(posHitWS - pos_ip_ws);
 		}
-
-#endif // end of HDR
-
-		// SPHERES:
-		if (geomtype == 1) {
-			Sphere& hitsphere = spheres[hitSphereIdx]; // hit object with closest intersection
-			hitpoint = rayorig + raydir * scene_t;  // intersection point on object
-			n = float3(hitpoint.x - hitsphere.pos.x, hitpoint.y - hitsphere.pos.y, hitpoint.z - hitsphere.pos.z);	// normal
-			n.normalize();
-			nl = dot(n, raydir) < 0 ? n : n * -1; // correctly oriented normal
-			objcol = float3(hitsphere.col.x, hitsphere.col.y, hitsphere.col.z);   // object colour
-			emit = float3(hitsphere.emi.x, hitsphere.emi.y, hitsphere.emi.z);  // object emission
-			refltype = hitsphere.refl;
-			accucolor += (mask * emit);
-		}
-
-		// TRIANGLES:
-		if (geomtype == 2) {
-
-			//pBestTri = &pTriangles[triangle_id];
-			hitpoint = rayorig + raydir * scene_t; // intersection point
-
-			// float4 normal = tex1Dfetch(triNormalsTexture, pBestTriIdx);	
-			n = trinormal;
-			n.normalize();
-			nl = dot(n, raydir) < 0 ? n : n * -1;  // correctly oriented normal
-			//float3 colour = hitTriIdx->_colorf;
-			float3 colour = float3(0.9f, 0.3f, 0.0f); // hardcoded triangle colour  .9f, 0.3f, 0.0f
-			refltype = COAT; // objectmaterial
-			objcol = colour;
-			emit = float3(0.0, 0.0, 0);  // object emission
-			accucolor += (mask * emit);
-		}
-
-		// basic material system, all parameters are hard-coded (such as phong exponent, index of refraction)
-
-		// diffuse material, based on smallpt by Kevin Beason 
-		if (refltype == DIFF) {
-
-			// pick two random numbers
-			float phi = 2 * M_PI * curand_uniform(randstate);
-			float r2 = curand_uniform(randstate);
-			float r2s = sqrtf(r2);
-
-			// compute orthonormal coordinate frame uvw with hitpoint as origin 
-			float3 w = nl; w.normalize();
-			float3 u = cross((fabs(w.x) > .1 ? float3(0, 1, 0) : float3(1, 0, 0)), w); u.normalize();
-			float3 v = cross(w, u);
-
-			// compute cosine weighted random ray direction on hemisphere 
-			nextdir = u * cosf(phi) * r2s + v * sinf(phi) * r2s + w * sqrtf(1 - r2);
-			nextdir.normalize();
-
-			// offset origin next path segment to prevent self intersection
-			hitpoint += nl * 0.001f; // scene size dependent
-
-			// multiply mask with colour of object
-			mask *= objcol;
-
-		} // end diffuse material
-
-		// Phong metal material from "Realistic Ray Tracing", P. Shirley
-		if (refltype == METAL) {
-
-			// compute random perturbation of ideal reflection vector
-			// the higher the phong exponent, the closer the perturbed vector is to the ideal reflection direction
-			float phi = 2 * M_PI * curand_uniform(randstate);
-			float r2 = curand_uniform(randstate);
-			float phongexponent = 30;
-			float cosTheta = powf(1 - r2, 1.0f / (phongexponent + 1));
-			float sinTheta = sqrtf(1 - cosTheta * cosTheta);
-
-			// create orthonormal basis uvw around reflection vector with hitpoint as origin 
-			// w is ray direction for ideal reflection
-			float3 w = raydir - n * 2.0f * dot(n, raydir); w.normalize();
-			float3 u = cross((fabs(w.x) > .1 ? float3(0, 1, 0) : float3(1, 0, 0)), w); u.normalize();
-			float3 v = cross(w, u); // v is already normalised because w and u are normalised
-
-			// compute cosine weighted random ray direction on hemisphere 
-			nextdir = u * cosf(phi) * sinTheta + v * sinf(phi) * sinTheta + w * cosTheta;
-			nextdir.normalize();
-
-			// offset origin next path segment to prevent self intersection
-			hitpoint += nl * 0.0001f;  // scene size dependent
-
-			// multiply mask with colour of object
-			mask *= objcol;
-		}
-
-		// ideal specular reflection (mirror) 
-		if (refltype == SPEC) {
-
-			// compute relfected ray direction according to Snell's law
-			nextdir = raydir - n * dot(n, raydir) * 2.0f;
-			nextdir.normalize();
-
-			// offset origin next path segment to prevent self intersection
-			hitpoint += nl * 0.001f;
-
-			// multiply mask with colour of object
-			mask *= objcol;
-		}
-
-
-		// COAT material based on https://github.com/peterkutz/GPUPathTracer
-		// randomly select diffuse or specular reflection
-		// looks okay-ish but inaccurate (no Fresnel calculation yet)
-		if (refltype == COAT) {
-
-			float rouletteRandomFloat = curand_uniform(randstate);
-			float threshold = 0.05f;
-			float3 specularColor = float3(1, 1, 1);  // hard-coded
-			bool reflectFromSurface = (rouletteRandomFloat < threshold); //computeFresnel(make_float3(n.x, n.y, n.z), incident, incidentIOR, transmittedIOR, reflectionDirection, transmissionDirection).reflectionCoefficient);
-
-			if (reflectFromSurface) { // calculate perfectly specular reflection
-
-				// Ray reflected from the surface. Trace a ray in the reflection direction.
-				// TODO: Use Russian roulette instead of simple multipliers! 
-				// (Selecting between diffuse sample and no sample (absorption) in this case.)
-
-				mask *= specularColor;
-				nextdir = raydir - n * 2.0f * dot(n, raydir);
-				nextdir.normalize();
-
-				// offset origin next path segment to prevent self intersection
-				hitpoint += nl * 0.001f; // scene size dependent
-			}
-
-			else {  // calculate perfectly diffuse reflection
-
-				float r1 = 2 * M_PI * curand_uniform(randstate);
-				float r2 = curand_uniform(randstate);
-				float r2s = sqrtf(r2);
-
-				// compute orthonormal coordinate frame uvw with hitpoint as origin 
-				float3 w = nl; w.normalize();
-				float3 u = cross((fabs(w.x) > .1 ? float3(0, 1, 0) : float3(1, 0, 0)), w); u.normalize();
-				float3 v = cross(w, u);
-
-				// compute cosine weighted random ray direction on hemisphere 
-				nextdir = u * cosf(r1) * r2s + v * sinf(r1) * r2s + w * sqrtf(1 - r2);
-				nextdir.normalize();
-
-				// offset origin next path segment to prevent self intersection
-				hitpoint += nl * 0.001f;  // // scene size dependent
-
-				// multiply mask with colour of object
-				mask *= objcol;
-			}
-		} // end COAT
-
-		// perfectly refractive material (glass, water)
-		if (refltype == REFR) {
-
-			bool into = dot(n, nl) > 0; // is ray entering or leaving refractive material?
-			float nc = 1.0f;  // Index of Refraction air
-			float nt = 1.4f;  // Index of Refraction glass/water
-			float nnt = into ? nc / nt : nt / nc;  // IOR ratio of refractive materials
-			float ddn = dot(raydir, nl);
-			float cos2t = 1.0f - nnt * nnt * (1.f - ddn * ddn);
-
-			if (cos2t < 0.0f) // total internal reflection 
-			{
-				nextdir = raydir - n * 2.0f * dot(n, raydir);
-				nextdir.normalize();
-
-				// offset origin next path segment to prevent self intersection
-				hitpoint += nl * 0.001f; // scene size dependent
-			}
-			else // cos2t > 0
-			{
-				// compute direction of transmission ray
-				float3 tdir = raydir * nnt;
-				tdir -= n * ((into ? 1 : -1) * (ddn * nnt + sqrtf(cos2t)));
-				tdir.normalize();
-
-				float R0 = (nt - nc) * (nt - nc) / (nt + nc) * (nt + nc);
-				float c = 1.f - (into ? -ddn : dot(tdir, n));
-				float Re = R0 + (1.f - R0) * c * c * c * c * c;
-				float Tr = 1 - Re; // Transmission
-				float P = .25f + .5f * Re;
-				float RP = Re / P;
-				float TP = Tr / (1.f - P);
-
-				// randomly choose reflection or transmission ray
-				if (curand_uniform(randstate) < 0.2) // reflection ray
-				{
-					mask *= RP;
-					nextdir = raydir - n * 2.0f * dot(n, raydir);
-					nextdir.normalize();
-
-					hitpoint += nl * 0.001f; // scene size dependent
-				}
-				else // transmission ray
-				{
-					mask *= TP;
-					nextdir = tdir;
-					nextdir.normalize();
-
-					hitpoint += nl * 0.001f; // epsilon must be small to avoid artefacts
-				}
-			}
-		}
-
-		// set up origin and direction of next path segment
-		rayorig = hitpoint;
-		raydir = nextdir;
-	} // end bounces for loop
-
-	return accucolor;
-}
-
-__global__ void PathTracingKernel(Vec3f* output, Vec3f* accumbuffer, const float4* HDRmap, const float4* gpuNodes, const float4* gpuTriWoops,
-	const float4* gpuDebugTris, const int* gpuTriIndices, unsigned int framenumber, unsigned int hashedframenumber, unsigned int leafcount,
-	unsigned int tricount, const Camera* cudaRendercam)
-{
-	// assign a CUDA thread to every pixel by using the threadIndex
-	unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
-	unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
-
-	// global threadId, see richiesams blogspot
-	int threadId = (blockIdx.x + blockIdx.y * gridDim.x) * (blockDim.x * blockDim.y) + (threadIdx.y * blockDim.x) + threadIdx.x;
-	//int pixelx = threadId % scrwidth; // pixel x-coordinate on screen
-	//int pixely = threadId / scrwidth; // pixel y-coordintate on screen
-
-	// create random number generator and initialise with hashed frame number, see RichieSams blogspot
-	curandState randState; // state of the random number generator, to prevent repetition
-	curand_init(hashedframenumber + threadId, 0, 0, &randState);
-
-	float3 finalcol; // final pixel colour 
-	finalcol = float3(0.0f, 0.0f, 0.0f); // reset colour to zero for every pixel	
-	//float3 rendercampos = float3(0, 0.2, 4.6f); 
-	float3 rendercampos = float3(cudaRendercam->position.x, cudaRendercam->position.y, cudaRendercam->position.z);
-
-	int i = (scrheight - y - 1) * scrwidth + x; // pixel index in buffer	
-	int pixelx = x; // pixel x-coordinate on screen
-	int pixely = scrheight - y - 1; // pixel y-coordintate on screen
-
-	float3 camdir = float3(0, -0.042612, -1); camdir.normalize();
-	float3 cx = float3(scrwidth * .5135f / scrheight, 0.0f, 0.0f);  // ray direction offset along X-axis 
-	float3 cy = (cross(cx, camdir)).normalize() * .5135f; // ray dir offset along Y-axis, .5135 is FOV angle
-
-
-	for (int s = 0; s < samps; s++) {
-
-		// compute primary ray direction
-		// use camera view of current frame (transformed on CPU side) to create local orthonormal basis
-		float3 rendercamview = float3(cudaRendercam->view.x, cudaRendercam->view.y, cudaRendercam->view.z); rendercamview.normalize(); // view is already supposed to be normalized, but normalize it explicitly just in case.
-		float3 rendercamup = float3(cudaRendercam->up.x, cudaRendercam->up.y, cudaRendercam->up.z); rendercamup.normalize();
-		float3 horizontalAxis = cross(rendercamview, rendercamup); horizontalAxis.normalize(); // Important to normalize!
-		float3 verticalAxis = cross(horizontalAxis, rendercamview); verticalAxis.normalize(); // verticalAxis is normalized by default, but normalize it explicitly just for good measure.
-
-		float3 middle = rendercampos + rendercamview;
-		float3 horizontal = horizontalAxis * tanf(cudaRendercam->fov.x * 0.5 * (M_PI / 180)); // Treating FOV as the full FOV, not half, so multiplied by 0.5
-		float3 vertical = verticalAxis * tanf(-cudaRendercam->fov.y * 0.5 * (M_PI / 180)); // Treating FOV as the full FOV, not half, so multiplied by 0.5
-
-		// anti-aliasing
-		// calculate center of current pixel and add random number in X and Y dimension
-		// based on https://github.com/peterkutz/GPUPathTracer 
-
-		float jitterValueX = curand_uniform(&randState) - 0.5;
-		float jitterValueY = curand_uniform(&randState) - 0.5;
-		float sx = (jitterValueX + pixelx) / (cudaRendercam->resolution.x - 1);
-		float sy = (jitterValueY + pixely) / (cudaRendercam->resolution.y - 1);
-
-		// compute pixel on screen
-		float3 pointOnPlaneOneUnitAwayFromEye = middle + (horizontal * ((2 * sx) - 1)) + (vertical * ((2 * sy) - 1));
-		float3 pointOnImagePlane = rendercampos + ((pointOnPlaneOneUnitAwayFromEye - rendercampos) * cudaRendercam->focalDistance); // Important for depth of field!		
-
-		// calculation of depth of field / camera aperture 
-		// based on https://github.com/peterkutz/GPUPathTracer 
-
-		float3 aperturePoint = float3(0, 0, 0);
-
-		if (cudaRendercam->apertureRadius > 0.00001) { // the small number is an epsilon value.
-
-			// generate random numbers for sampling a point on the aperture
-			float random1 = curand_uniform(&randState);
-			float random2 = curand_uniform(&randState);
-
-			// randomly pick a point on the circular aperture
-			float angle = TWO_PI * random1;
-			float distance = cudaRendercam->apertureRadius * sqrtf(random2);
-			float apertureX = cos(angle) * distance;
-			float apertureY = sin(angle) * distance;
-
-			aperturePoint = rendercampos + (horizontalAxis * apertureX) + (verticalAxis * apertureY);
-		}
-		else { // zero aperture
-			aperturePoint = rendercampos;
-		}
-
-		// calculate ray direction of next ray in path
-		float3 apertureToImagePlane = pointOnImagePlane - aperturePoint;
-		apertureToImagePlane.normalize(); // ray direction needs to be normalised
-
-		// ray direction
-		float3 rayInWorldSpace = apertureToImagePlane;
-		rayInWorldSpace.normalize();
-
-		// ray origin
-		float3 originInWorldSpace = aperturePoint;
-
-		finalcol += renderKernel(&randState, HDRmap, gpuNodes, gpuTriWoops, gpuDebugTris, gpuTriIndices, originInWorldSpace, rayInWorldSpace, leafcount, tricount);
-		finalcol *= (1.0f / samps);
 	}
 
-	// add pixel colour to accumulation buffer (accumulates all samples) 
-	accumbuffer[i] += finalcol;
+	bool store_to_kbuf = BitCheck(g_cbCamState.cam_flag, 3);
+	if (store_to_kbuf) {
+		Fragment frag;
+		frag.i_vis = ConvertFloat4ToUInt(v_rgba);
+		frag.zthick = zThickness;
+		frag.z = zDepth;
+		frag.opacity_sum = 1.f;
 
-	// averaged colour: divide colour by the number of calculated frames so far
-	float3 tempcol = accumbuffer[i] / framenumber;
+		Fragment fragPrev = (Fragment)0;
+		fragPrev.z = FLT_MAX;
+		uint numGrag = fragment_counter[ss_xy];
+		if (numGrag > 0) {
+			GET_FRAG(fragPrev, addr_base, 0); // from K-buffer
+			Fragment fragMerge;
+			if (frag.z > fragPrev.z)
+				fragMerge = MergeFrags_ver2(fragPrev, frag, 1.f);
+			else
+				fragMerge = MergeFrags_ver2(frag, fragPrev, 1.f);
+			SET_FRAG(addr_base, 0, fragMerge);
+			v_rgba = ConvertUIntToFloat4(fragMerge.i_vis);
+		}
+		else {
+			SET_FRAG(addr_base, 0, frag);
+		}
 
-	Colour fcolour;
-	float3 colour = float3(clamp(tempcol.x, 0.0f, 1.0f), clamp(tempcol.y, 0.0f, 1.0f), clamp(tempcol.z, 0.0f, 1.0f));
-
-	// convert from 96-bit to 24-bit colour + perform gamma correction
-	fcolour.components = make_uchar4((unsigned char)(powf(colour.x, 1 / 2.2f) * 255),
-		(unsigned char)(powf(colour.y, 1 / 2.2f) * 255),
-		(unsigned char)(powf(colour.z, 1 / 2.2f) * 255), 1);
-
-	// store pixel coordinates and pixelcolour in OpenGL readable outputbuffer
-	output[i] = float3(x, y, fcolour.c);
-}
-
-bool firstTime = true;
-
-// the gateway to CUDA, called from C++ (in void disp() in main.cpp)
-void cudaRender(const float4* nodes, const float4* triWoops, const float4* debugTris, const int* triInds,
-	Vec3f* outputbuf, Vec3f* accumbuf, const float4* HDRmap, const unsigned int framenumber, const unsigned int hashedframenumber,
-	const unsigned int nodeSize, const unsigned int leafnodecnt, const unsigned int tricnt, const Camera* cudaRenderCam) {
-
-	if (firstTime) {
-		// if this is the first time cudarender() is called,
-		// bind the scene data to CUDA textures!
-		firstTime = false;
-
-		cudaChannelFormatDesc channel0desc = cudaCreateChannelDesc<int>();
-		cudaBindTexture(NULL, &triIndicesTexture, triInds, &channel0desc, (tricnt * 3 + leafnodecnt) * sizeof(int));  // is tricnt wel juist??
-
-		cudaChannelFormatDesc channel1desc = cudaCreateChannelDesc<float4>();
-		cudaBindTexture(NULL, &triWoopTexture, triWoops, &channel1desc, (tricnt * 3 + leafnodecnt) * sizeof(float4));
-
-		cudaChannelFormatDesc channel3desc = cudaCreateChannelDesc<float4>();
-		cudaBindTexture(NULL, &bvhNodesTexture, nodes, &channel3desc, nodeSize * 5 * sizeof(float4));  /// 5 is niet goed
-
-		HDRtexture.filterMode = cudaFilterModeLinear;
-
-		cudaChannelFormatDesc channel4desc = cudaCreateChannelDesc<float4>();
-		cudaBindTexture(NULL, &HDRtexture, HDRmap, &channel4desc, HDRwidth * HDRheight * sizeof(float4));  // 2k map:
-
-		printf("CudaWoopTriangles texture initialised, tri count: %d\n", tricnt);
+		//v_rgba = ConvertUIntToFloat4(fragMerge.i_vis);
 	}
 
-	dim3 block(16, 16, 1);   // dim3 CUDA specific syntax, block and grid are required to schedule CUDA threads over streaming multiprocessors
-	dim3 grid(scrwidth / block.x, scrheight / block.y, 1);
+	fragment_counter[ss_xy] = 1;
+	fragment_vis[ss_xy] = v_rgba;
+	//fragment_vis[ss_xy] = dot(trinormal, ray_dir_unit_os) > 0 ? float4(1, 0, 0, 1) : float4(0, 0, 1, 1);
 
-	// Configure grid and block sizes:
-	int threadsPerBlock = 256;
-	// Compute the number of blocks required, performing a ceiling operation to make sure there are enough:
-	int fullBlocksPerGrid = ((scrwidth * scrheight) + threadsPerBlock - 1) / threadsPerBlock;
-	// <<<fullBlocksPerGrid, threadsPerBlock>>>
-	PathTracingKernel << <grid, block >> > (outputbuf, accumbuf, HDRmap, nodes, triWoops, debugTris,
-		triInds, framenumber, hashedframenumber, leafnodecnt, tricnt, cudaRenderCam);  // texdata, texoffsets
+	//fragment_vis[ss_xy] = float4((raydir + (float3)1) / 2, 1);
+	return;
+	//fragment_counter[ss_xy] = test;
+	//return;
+	//finalcol += renderKernel(&randState, HDRmap, gpuNodes, gpuTriWoops, gpuDebugTris, gpuTriIndices, originInWorldSpace, rayInWorldSpace, leafcount, tricount);
 
+	//if (ret == 0)
+	//	fragment_vis[tex2d_xy] = float4(0, 0, 0, 1);
+	//if (ret == 1)
+	//	fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
+	//if (ret == 2)
+	//	fragment_vis[tex2d_xy] = float4(0, 1, 0, 1);
+	//if (ret == 3)
+	//	fragment_vis[tex2d_xy] = float4(0, 0, 1, 1);
+	//if (ret == 4)
+	//	fragment_vis[tex2d_xy] = float4(1, 1, 0, 1);
+	//if (ret == 5)
+	//	fragment_vis[tex2d_xy] = float4(0, 1, 1, 1);
+	//if (ret == 6)
+	//	fragment_vis[tex2d_xy] = float4(1, 0, 1, 1);
+	//if (ret == 7)
+	//	fragment_vis[tex2d_xy] = float4(1, 1, 1, 1);
 }
-/**/

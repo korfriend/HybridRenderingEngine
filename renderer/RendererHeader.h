@@ -22,7 +22,7 @@ using namespace fncontainer;
 using namespace vmgpuinterface;
 using namespace grd_helper;
 
-bool RenderSrCurvedSlicer(VmFnContainer* _fncontainer,
+bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	VmGpuManager* gpu_manager,
 	grd_helper::GpuDX11CommonParameters* dx11CommonParams,
 	LocalProgress* progress,
@@ -65,7 +65,7 @@ void ComputeDOF(__ID3D11DeviceContext* dx11DeviceImmContext,
 
 void GradientMagnitudeAnalysis(vmfloat2& grad_minmax, VmVObjectVolume* vobj);
 
-#define IS_SAFE_OBJ(OBJID) ((OBJID & 0xFFFF) >= 65536 - 4096)
+//#define IS_SAFE_OBJ(OBJID) ((OBJID & 0xFFFF) >= 65536 - 4096)
 
 enum MFR_MODE
 {

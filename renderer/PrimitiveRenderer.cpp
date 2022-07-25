@@ -694,8 +694,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			hlslobj_path += token + "\\";
 			exe_path.erase(0, pos + delimiter.length());
 		}
-		hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
-		//hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
+		//hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
+		hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
 		//cout << hlslobj_path << endl;
 
 		string prefix_path = hlslobj_path;
@@ -1342,7 +1342,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			if(prim_data->ptype == vmenums::PrimitiveTypeLINE || grd_helper::CollisionCheck(actor->matWS2OS, prim_data->aabb_os, picking_ray_origin, picking_ray_dir))
 				general_oit_routine_objs.push_back(actor);
 			//std::cout << "###### obb ray intersection : " << actor->actorId << std::endl;
-			general_oit_routine_objs.push_back(actor);
 			// NOTE THAT is_picking_routine allows only general_oit_routine_objs!!
 			continue;
 		}
@@ -1666,7 +1665,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				cbPolygonObj.depth_thres = outline_depthThres;
 				cbPolygonObj.pobj_dummy_0 = (int)(outline_color.r * 255.f) | (int)(outline_color.g * 255.f) << 8 | (int)(outline_color.b * 255.f) << 16;
 			}
-			if (is_ghost_mode && !IS_SAFE_OBJ(pobj->GetObjectID()))
+			if (is_ghost_mode)// && !IS_SAFE_OBJ(pobj->GetObjectID()))
 			{
 				bool is_ghost_surface = actor->GetParam("_bool_IsGhostSurface", false);
 				bool is_only_hotspot_visible = actor->GetParam("_bool_IsOnlyHotSpotVisible", false);

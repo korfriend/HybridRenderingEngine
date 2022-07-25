@@ -190,7 +190,6 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	GpuRes gres_fb_rgba, gres_fb_depthcs, gres_fb_vrdepthcs;
 	GpuRes gres_fb_k_buffer, gres_fb_counter;
 	GpuRes gres_fb_sys_rgba, gres_fb_sys_depthcs;
-	GpuRes gres_fb_ref_pidx;
 
 	grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D,
 		D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8G8B8A8_UNORM, 0);

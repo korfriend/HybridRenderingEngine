@@ -509,7 +509,8 @@ namespace grd_helper
 	struct CB_PolygonObject
 	{
 		vmmat44f mat_os2ws;
-		vmmat44f mat_os2ps; // optional
+		vmmat44f mat_ws2os;
+		vmmat44f mat_os2ps;
 		
 		// if 1) color map model, or 2) vertex color model
 		// use Ka as material description for shading.

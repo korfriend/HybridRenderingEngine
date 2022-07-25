@@ -520,6 +520,8 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60005), "PanoVR_MODULATE_cs_5_0", "cs_5_0"), PanoVR_MODULATE_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60006), "PanoVR_MULTIOTF_DEFAULT_cs_5_0", "cs_5_0"), PanoVR_MULTIOTF_DEFAULT_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60007), "PanoVR_MULTIOTF_MODULATE_cs_5_0", "cs_5_0"), PanoVR_MULTIOTF_MODULATE_cs_5_0);
+
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60100), "ThickSlicePathTracer_cs_5_0", "cs_5_0"), ThickSlicePathTracer_cs_5_0);
 	}
 
 	g_pvmCommonParams->is_initialized = true;
@@ -1858,6 +1860,7 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 	PrimitiveData* pobj_data = pobj->GetPrimitiveData();
 
 	cb_polygon.mat_os2ws = TRANSPOSE(actor->matOS2WS);
+	cb_polygon.mat_ws2os = TRANSPOSE(actor->matWS2OS);
 
 	if (is_annotation_obj)// && prim_data->texture_res)
 	{

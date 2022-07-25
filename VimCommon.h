@@ -47,6 +47,7 @@
 #define __WINDOWS
 #define __FILEMAP
 #ifdef __WINDOWS
+
 #include <windows.h>
 #endif
 
@@ -1756,6 +1757,8 @@ namespace vmobjects
 		uint KDTSearchKnn(const vmfloat3& p_src, const int k, size_t* out_ids, float* out_dists);
 		void UpdateBVHTree(int min_size = -1, int max_size = -1); // for primitives
 		void* GetBVHTree();
+		bool GetBVHTreeBuffers(vmint4** nodePtr, int* nodeSize, vmint4** triWoopPtr, int* triWoopSize,
+			vmint4** triDebugPtr, int* triDebugSize, int** cpuTriIndicesPtr, int* triIndicesSize);
 	};
 }; // namespace vmobjects
 
