@@ -224,6 +224,9 @@ bool Vis_Volume_And_Check_Slab(inout float4 vis_otf, inout int sample_v, int sam
 	int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
 	//int mask_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, g_cbVobj.mask_value_range, tex3D_volmask);
 	//vis_otf = LoadOtfBufId(fsample * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
+
+	//if (g_cbVobj.mask_value_range * fsample < g_cbTmap.first_nonzeroalpha_index) return false;
+
 	vis_otf = LoadSlabOtfBufId_PreInt(fsample * g_cbTmap.tmap_size_x, fsample_prev * g_cbTmap.tmap_size_x, buf_preintotf, g_cbVobj.opacity_correction, mask_vint);
 	//if (mask_vint == 0) sample_v = 0;
 
@@ -514,7 +517,6 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	//if (num_frags == 7)
 	//	fragment_vis[tex2d_xy] = float4(1, 1, 1, 1);
 	//return;
-
 
 
 
@@ -982,6 +984,8 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	if (num_ray_samples < 1)
 		return;
 
+
+	//return;
 	Fragment fs[VR_MAX_LAYERS];
 
 	[loop]
@@ -1106,7 +1110,7 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	//float3 pos_sample_ts = pos_ray_start_ts + dir_sample_ts * (float)(0 + 1);
 	//float4 __vis_otf = (float4) 0;
 	//Vis_Volume_And_Check(__vis_otf, sample_v, pos_sample_ts);
-	//fragment_vis[cip_xy] = __vis_otf;// float4((pos_ray_start_ws + float3(1, 1, 1)) / 2, 1);
+	//fragment_vis[cip_xy] = float4((pos_ray_start_ts + float3(1, 1, 1)) / 2, 1);
 	//return;
 	//////////
 
@@ -1120,6 +1124,7 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	int sample_prev = sample_v;
 #endif
 
+	/*
 	if (hit_step == 0)
 	{
 		float4 vis_otf = (float4) 0;
@@ -1143,14 +1148,27 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 			float4 vis_sample = vis_otf;
 #if VR_MODE == 2
 			float grad_len = length(gradSlab);
-			//float modulator = pow(min(grad_len * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(g_cbVobj.kappa_i, g_cbVobj.kappa_s));
-			float modulator = min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
+			float3 nrl = gradSlab / (grad_len + 0.0001f);
+			grad_len *= 0.5f;
+
+			float depth_sample = depth_hit + (float)i * sample_dist;
+			float __s = grad_len > 0.001f ? abs(dot(view_dir, nrl)) : 0;
+			float kappa_t = 5.0;// g_cbVobj.kappa_i;
+			float kappa_s = 0.5;// g_cbVobj.kappa_s;
+			//float modulator = pow(min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(kappa_i * max(__s, 0.1f), kappa_s));
+			//float modulator = pow(min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(kappa_i * max(__s, 0.1f), kappa_s));
+			float modulator = min(grad_len * 2.f * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
+			float dist_plane_sq = fPlaneThickness * 0.5f - depth_sample;
+			dist_plane_sq /= fPlaneThickness * 0.5f;
+			dist_plane_sq *= dist_plane_sq;
+			modulator *= pow(max(1.f - dist_plane_sq, 0.1), kappa_t) * pow(max(1.f - __s, 0.1), kappa_s);
 			vis_sample *= modulator;
 #endif
 			//vis_sample *= mask_weight;
 			vis_out += vis_sample * (1.f - vis_out.a);
 		}
 	}
+	/**/
 
 	[loop]
 	for (i = start_idx; i < num_ray_samples; i++)
@@ -1173,6 +1191,7 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 				float4 vis_otf = (float4) 0;
 #if VR_MODE != 3
 				if (Vis_Volume_And_Check_Slab(vis_otf, sample_v, sample_prev, pos_sample_blk_ts))
+				//if (Vis_Volume_And_Check(vis_otf, sample_v, pos_sample_blk_ts))
 				{
 					float3 grad = GRAD_VOL(pos_sample_blk_ts);
 					if (!isPrevValid) {
@@ -1185,7 +1204,7 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 					grad_prev = grad;
 
 					float grad_len = length(gradSlab);
-					float3 nrl = gradSlab / (grad_len + 0.000001f);
+					float3 nrl = gradSlab / (grad_len + 0.0001f);
 					grad_len *= 0.5f;
 #else
 				if (Vis_Volume_And_Check(vis_otf, sample_v, pos_sample_blk_ts))
@@ -1200,7 +1219,7 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 					float4 vis_sample = float4(shade * vis_otf.rgb, vis_otf.a);
 #if VR_MODE == 2
 					float depth_sample = depth_hit + (float)i * sample_dist;
-					float __s = abs(dot(view_dir, nrl));
+					float __s = grad_len > 0.001f ? abs(dot(view_dir, nrl)) : 0;
 					float kappa_t = 5.0;// g_cbVobj.kappa_i;
 					float kappa_s = 0.5;// g_cbVobj.kappa_s;
 					//float modulator = pow(min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(kappa_i * max(__s, 0.1f), kappa_s));

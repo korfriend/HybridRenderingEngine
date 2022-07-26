@@ -736,7 +736,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	int2 ss_xy = int2(DTid.xy);
 
 	// do not compute 1st hit surface separately
-	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
+	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height || g_cbPobj.alpha < 0.001f)
 		return;
 
 	const uint k_value = g_cbCamState.k_value;
@@ -749,13 +749,79 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	float depth_out = 0;
 
 	// Image Plane's Position and Camera State //
+#if CURVEDPLANE == 0
 	float3 pos_ip_ss = float3(ss_xy, 0.0f);
 	float3 pos_ip_ws = TransformPoint(pos_ip_ss, g_cbCamState.mat_ss2ws);
 	float3 ray_dir_unit_ws = g_cbCamState.dir_view_ws;
 	if (g_cbCamState.cam_flag & 0x1)
 		ray_dir_unit_ws = pos_ip_ws - g_cbCamState.pos_cam_ws;
 	ray_dir_unit_ws = normalize(ray_dir_unit_ws);
+#else
+	int2 i2SizeBuffer = int2(g_cbCamState.rt_width, g_cbCamState.rt_height);
+	int iPlaneSizeX = g_cbCurvedSlicer.numCurvePoints;
+	float3 f3VecSampleUpWS = g_cbCurvedSlicer.planeUp;
+	bool bIsRightSide = BitCheck(g_cbCurvedSlicer.flag, 0);
+	float3 f3PosTopLeftCOS = g_cbCurvedSlicer.posTopLeftCOS;
+	float3 f3PosTopRightCOS = g_cbCurvedSlicer.posTopRightCOS;
+	float3 f3PosBottomLeftCOS = g_cbCurvedSlicer.posBottomLeftCOS;
+	float3 f3PosBottomRightCOS = g_cbCurvedSlicer.posBottomRightCOS;
+	float fPlaneThickness = g_cbCurvedSlicer.thicknessPlane;
+	float fPlaneSizeY = g_cbCurvedSlicer.planeHeight;
+	float fPlaneCenterY = fPlaneSizeY * 0.5f;
+	const float fThicknessPosition = 0;
+	const float merging_beta = 1.0;
 
+	int2 cip_xy = ss_xy;
+	// i ==> cip_xy.x
+	float fRatio0 = (float)((i2SizeBuffer.x - 1) - cip_xy.x) / (float)(i2SizeBuffer.x - 1);
+	float fRatio1 = (float)(cip_xy.x) / (float)(i2SizeBuffer.x - 1);
+
+	float2 f2PosInterTopCOS, f2PosInterBottomCOS, f2PosSampleCOS;
+	f2PosInterTopCOS.x = fRatio0 * f3PosTopLeftCOS.x + fRatio1 * f3PosTopRightCOS.x;
+	f2PosInterTopCOS.y = fRatio0 * f3PosTopLeftCOS.y + fRatio1 * f3PosTopRightCOS.y;
+
+	if (f2PosInterTopCOS.x < 0 || f2PosInterTopCOS.x >= (float)(iPlaneSizeX - 1))
+		return;
+
+	int iPosSampleCOS = (int)floor(f2PosInterTopCOS.x);
+	float fInterpolateRatio = f2PosInterTopCOS.x - iPosSampleCOS;
+
+	int iMinMaxAddrX = min(max(iPosSampleCOS, 0), iPlaneSizeX - 1);
+	int iMinMaxAddrNextX = min(max(iPosSampleCOS + 1, 0), iPlaneSizeX - 1);
+
+	float3 f3PosSampleWS_C0 = buf_curvePoints[iMinMaxAddrX];
+	float3 f3PosSampleWS_C1 = buf_curvePoints[iMinMaxAddrNextX];
+	float3 f3PosSampleWS_C_ = f3PosSampleWS_C0 * (1.f - fInterpolateRatio) + f3PosSampleWS_C1 * fInterpolateRatio;
+
+	float3 f3VecSampleTangentWS_0 = buf_curveTangents[iMinMaxAddrX];
+	float3 f3VecSampleTangentWS_1 = buf_curveTangents[iMinMaxAddrNextX];
+	float3 f3VecSampleTangentWS = normalize(f3VecSampleTangentWS_0 * (1.f - fInterpolateRatio) + f3VecSampleTangentWS_1 * fInterpolateRatio);
+	float3 f3VecSampleViewWS = normalize(cross(f3VecSampleUpWS, f3VecSampleTangentWS));
+
+	if (bIsRightSide)
+		f3VecSampleViewWS *= -1.f;
+	float3 f3PosSampleWS_C = f3PosSampleWS_C_ + f3VecSampleViewWS * (fThicknessPosition - fPlaneThickness * 0.5f);
+	//f3VecSampleUpWS *= fPlanePitch; // already multiplied
+
+	f2PosInterBottomCOS.x = fRatio0 * f3PosBottomLeftCOS.x + fRatio1 * f3PosBottomRightCOS.x;
+	f2PosInterBottomCOS.y = fRatio0 * f3PosBottomLeftCOS.y + fRatio1 * f3PosBottomRightCOS.y;
+
+	// j ==> cip_xy.y
+	float fRatio0Y = (float)((i2SizeBuffer.y - 1) - cip_xy.y) / (float)(i2SizeBuffer.y - 1);
+	float fRatio1Y = (float)(cip_xy.y) / (float)(i2SizeBuffer.y - 1);
+
+	f2PosSampleCOS.x = fRatio0Y * f2PosInterTopCOS.x + fRatio1Y * f2PosInterBottomCOS.x;
+	f2PosSampleCOS.y = fRatio0Y * f2PosInterTopCOS.y + fRatio1Y * f2PosInterBottomCOS.y;
+
+	if (f2PosSampleCOS.y < 0 || f2PosSampleCOS.y > fPlaneSizeY)
+		return;
+
+	// start position //
+	//vmfloat3 f3PosSampleWS = f3PosSampleWS_C + f3VecSampleUpWS * (f2PosSampleCOS.y - fPlaneCenterY)
+	//	+ f3VecSampleViewWS * fStepLength * (float)m;
+	float3 pos_ip_ws = f3PosSampleWS_C + f3VecSampleUpWS * (f2PosSampleCOS.y - fPlaneCenterY);
+	float3 ray_dir_unit_ws = f3VecSampleViewWS; // already normalized
+#endif
 	////////////////////////////
 	int hitTriIdx = -1;
 	//int bestTriIdx = -1;
@@ -775,34 +841,42 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 
 	// intersect all triangles in the scene stored in BVH
 	int debugbingo = 0;
-	//float planeThickness = g_cbCamState.far_plane;
+	float planeThickness = fPlaneThickness;// g_cbCamState.far_plane;
 
 	//pos_ip_ws = float3(0, 0, 0);
 	//ray_dir_unit_ws = float3(0, 1, 0);
-	float3 ray_orig_os = TransformPoint(pos_ip_ws, g_cbPobj.mat_ws2os);
-	float3 ray_dir_unit_os = normalize(TransformVector(ray_dir_unit_ws, g_cbPobj.mat_ws2os));
+	float3 ray_orig_os = pos_ip_ws;// TransformPoint(pos_ip_ws, g_cbPobj.mat_ws2os);
+	float3 ray_dir_unit_os = ray_dir_unit_ws;// normalize(TransformVector(ray_dir_unit_ws, g_cbPobj.mat_ws2os));
 
 	float4 rayorig = float4(ray_orig_os, ray_tmin);
 	float4 raydir = float4(ray_dir_unit_os, ray_tmax);
 	//DEBUGintersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuDebugTris, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
 	intersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
 
-	if (hitTriIdx == -1)
+	bool isInside = dot(trinormal, ray_dir_unit_os) > 0;
+	if (hitTriIdx < 0 )
 		return;
 
+	if (!isInside && hitDistance > planeThickness)
+		return;
+
+//	if ((!isInside && hitTriIdx != -1 && hitDistance > planeThickness))
+//		fragment_vis[ss_xy] = float4(0, 1, 0, 1);
+	
 	float3 posHitOS = ray_orig_os + hitDistance * ray_dir_unit_os;
 	float3 posHitWS = TransformPoint(posHitOS, g_cbPobj.mat_os2ws);
 
 	float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
 	float zThickness = 0;
-	float zDepth = 0;
-	if (dot(trinormal, ray_dir_unit_os) > 0) {
+	float zDepth = 0;// min(length(posHitWS - pos_ip_ws), planeThickness);
+	if (isInside) {
 		// inside the object
-		//visOut = float4(0, 0, 1, 1);
-		zThickness = zDepth = length(posHitWS - pos_ip_ws);
+		//v_rgba = float4(1, 1, 1, 1);
+		zThickness = zDepth = min(length(posHitWS - pos_ip_ws), planeThickness);
 	}
-	else {
+	else if (planeThickness > 0) {
 		// find the other side one.
+		// this is valid only for thick plane mode
 		hitTriIdx = -1;
 		rayorig = float4(ray_orig_os + (hitDistance + 0.0001f) * ray_dir_unit_os, ray_tmin);
 		//DEBUGintersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuDebugTris, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
@@ -812,7 +886,8 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		{
 			// just for debug..
 			// not allowed in the closed object
-			v_rgba = float4(1, 0, 0, 1);
+			// fragment_vis[ss_xy] = v_rgba = float4(1, 0, 0, 1);
+			return;
 		}
 		else
 		{
@@ -820,62 +895,58 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 			float3 pos2ndHitWS = TransformPoint(pos2ndHitOS, g_cbPobj.mat_os2ws);
 
 			zThickness = length(posHitWS - pos2ndHitWS);
-			zDepth = length(posHitWS - pos_ip_ws);
+			zDepth = length(pos2ndHitWS - pos_ip_ws);
 		}
 	}
 
-	bool store_to_kbuf = BitCheck(g_cbCamState.cam_flag, 3);
-	if (store_to_kbuf) {
-		Fragment frag;
-		frag.i_vis = ConvertFloat4ToUInt(v_rgba);
-		frag.zthick = zThickness;
-		frag.z = zDepth;
-		frag.opacity_sum = 1.f;
+	if (planeThickness > 0 && v_rgba.a > 0) {
+		// effect for x-ray
+		v_rgba.a *= max((planeThickness - zDepth + zThickness) / planeThickness, 0.1f);
+		v_rgba.rgb *= v_rgba.a;
+	}
 
+	uint numFrag = fragment_counter[ss_xy];
+
+	Fragment frag;
+	frag.i_vis = ConvertFloat4ToUInt(v_rgba);
+	frag.zthick = zThickness;
+	frag.z = zDepth;
+	frag.opacity_sum = v_rgba.a;
+	Fragment fragMerge = (Fragment)frag;
+
+	if (numFrag > 0) {
 		Fragment fragPrev = (Fragment)0;
-		fragPrev.z = FLT_MAX;
-		uint numGrag = fragment_counter[ss_xy];
-		if (numGrag > 0) {
-			GET_FRAG(fragPrev, addr_base, 0); // from K-buffer
-			Fragment fragMerge;
+		GET_FRAG(fragPrev, addr_base, 0); // from K-buffer
+
+		if (planeThickness > 0) {
 			if (frag.z > fragPrev.z)
 				fragMerge = MergeFrags_ver2(fragPrev, frag, 1.f);
 			else
 				fragMerge = MergeFrags_ver2(frag, fragPrev, 1.f);
-			SET_FRAG(addr_base, 0, fragMerge);
+
 			v_rgba = ConvertUIntToFloat4(fragMerge.i_vis);
 		}
 		else {
-			SET_FRAG(addr_base, 0, frag);
-		}
+			v_rgba = MixOpt(v_rgba, v_rgba.a, ConvertUIntToFloat4(fragPrev.i_vis), fragPrev.opacity_sum);
 
-		//v_rgba = ConvertUIntToFloat4(fragMerge.i_vis);
+			fragMerge = frag;
+			//fragMerge.zthick = 0;
+			fragMerge.i_vis = ConvertFloat4ToUInt(v_rgba);
+			fragMerge.opacity_sum += fragPrev.opacity_sum;
+		}
 	}
 
+	bool store_to_kbuf = BitCheck(g_cbCamState.cam_flag, 3) && planeThickness > 0;
+	if (store_to_kbuf) {
+		SET_FRAG(addr_base, 0, fragMerge);
+		//v_rgba = ConvertUIntToFloat4(fragMerge.i_vis);
+	}
+	else 
+		fragment_vis[ss_xy] = v_rgba;
+
+	//fragment_vis[ss_xy] = float4(1, 1, 0, 1);
 	fragment_counter[ss_xy] = 1;
 	fragment_vis[ss_xy] = v_rgba;
-	//fragment_vis[ss_xy] = dot(trinormal, ray_dir_unit_os) > 0 ? float4(1, 0, 0, 1) : float4(0, 0, 1, 1);
 
-	//fragment_vis[ss_xy] = float4((raydir + (float3)1) / 2, 1);
 	return;
-	//fragment_counter[ss_xy] = test;
-	//return;
-	//finalcol += renderKernel(&randState, HDRmap, gpuNodes, gpuTriWoops, gpuDebugTris, gpuTriIndices, originInWorldSpace, rayInWorldSpace, leafcount, tricount);
-
-	//if (ret == 0)
-	//	fragment_vis[tex2d_xy] = float4(0, 0, 0, 1);
-	//if (ret == 1)
-	//	fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
-	//if (ret == 2)
-	//	fragment_vis[tex2d_xy] = float4(0, 1, 0, 1);
-	//if (ret == 3)
-	//	fragment_vis[tex2d_xy] = float4(0, 0, 1, 1);
-	//if (ret == 4)
-	//	fragment_vis[tex2d_xy] = float4(1, 1, 0, 1);
-	//if (ret == 5)
-	//	fragment_vis[tex2d_xy] = float4(0, 1, 1, 1);
-	//if (ret == 6)
-	//	fragment_vis[tex2d_xy] = float4(1, 0, 1, 1);
-	//if (ret == 7)
-	//	fragment_vis[tex2d_xy] = float4(1, 1, 1, 1);
 }

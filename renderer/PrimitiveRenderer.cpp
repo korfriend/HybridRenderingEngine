@@ -1363,8 +1363,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			VmActor* temp_actor = &temperal_actors[temperal_actors.size() - 1];
 			temp_actor->color = actor->GetParam("_float4_WireColor", vmfloat4(0));
 			temp_actor->SetParam("_bool_IsWireframe", true);
-			foremost_surfaces_routine_objs.push_back(temp_actor);
-
+			//foremost_surfaces_routine_objs.push_back(temp_actor);
 			// trick for using 'z-thickness blending' between wires and surfaces
 			is_foremost_surfaces = false;
 		}
@@ -1380,6 +1379,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		else
 			general_oit_routine_objs.push_back(actor);
 	}
+
+	for (VmActor& __actor : temperal_actors)
+		foremost_surfaces_routine_objs.push_back(&__actor);
 
 	bool gpu_profile = false;
 	if (fb_size_cur.x > 200 && fb_size_cur.y > 200)
@@ -2103,7 +2105,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
 
 			// note that if is_picking_routine == true, the following branch will not be allowed!
-			if (render_pass == RENDER_GEOPASS::PASS_SINGLELAYERS)
+			if (render_pass == RENDER_GEOPASS::PASS_SINGLELAYERS 
+				|| render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES)
 			{
 				assert(mode_OIT == MFR_MODE::STATIC_KB || mode_OIT == MFR_MODE::DYNAMIC_KB);
 
@@ -2191,11 +2194,11 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
 	};
 
-	auto RenderOut = [&iobj, &___GpuProfile, &fb_size_cur, &dx11DeviceImmContext,
+	auto RenderOut = [&iobj, &___GpuProfile, &fb_size_cur, &dx11DeviceImmContext, &is_final_renderer,
 		&gres_fb_rgba, &gres_fb_depthcs, &gres_fb_sys_rgba, &gres_fb_sys_depthcs, &gpu_manager, &is_rgba](const int count_call_render, const HWND hWnd) {
 
 		// APPLY HWND MODE
-		if (hWnd)
+		if (hWnd && is_final_renderer)
 		{
 			ID3D11Texture2D* pTex2dHwndRT = NULL;
 			ID3D11RenderTargetView* pHwndRTV = NULL;
@@ -2358,17 +2361,18 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		cbCamState.iSrCamDummy__2 = *(uint*)&scale_z_res;
 		SetCamConstBuf(cbCamState);
 
-		if (foremost_surfaces_routine_objs.size() > 0) { ////// CHECK LATER... TO DO
-
-			// DO NOT STORE the rendering result INTO the Render-out RTs
-			// Instead, STORE it into new RTs dedicated to foremost_surfaces_routine_objs rendering (better option for performance opt)
-
-			___GpuProfile("Opaque Surface");
-			// Opaque Foremost Rendering for 
-			RenderStage1(foremost_surfaces_routine_objs, mode_OIT, RENDER_GEOPASS::PASS_OPAQUESURFACES
-				, false /*is_frag_counter_buffer*/, is_ghost_mode, false /*is_picking_routine*/, apply_fragmerge, false);
-			___GpuProfile("Opaque Surface", true);
-		}
+		// in the future, this rendering can be used for enhancing rendering performance
+		//if (foremost_surfaces_routine_objs.size() > 0) { ////// CHECK LATER... TO DO
+		//
+		//	// DO NOT STORE the rendering result INTO the Render-out RTs
+		//	// Instead, STORE it into new RTs dedicated to foremost_surfaces_routine_objs rendering (better option for performance opt)
+		//
+		//	___GpuProfile("Opaque Surface");
+		//	// Opaque Foremost Rendering for 
+		//	RenderStage1(foremost_surfaces_routine_objs, mode_OIT, RENDER_GEOPASS::PASS_OPAQUESURFACES
+		//		, false /*is_frag_counter_buffer*/, is_ghost_mode, false /*is_picking_routine*/, apply_fragmerge, false);
+		//	___GpuProfile("Opaque Surface", true);
+		//}
 
 		if (mode_OIT != MFR_MODE::STATIC_KB) {
 			assert(mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB);
@@ -2549,6 +2553,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 		if (!is_final_renderer || check_pixel_transmittance
 			|| single_layer_routine_objs.size() > 0
+			|| foremost_surfaces_routine_objs.size() > 0
 			|| cbEnvState.r_kernel_ao > 0
 			|| (cbEnvState.dof_lens_r > 0 && cam_obj->IsPerspective())) {
 			// which means the k-buffer will be used for the following renderer
@@ -2565,6 +2570,23 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 		// Note that the following rendering process allows only for SKB!
 		if (cbCamState.cam_flag && (0x1 << 3)) {
+
+			if (foremost_surfaces_routine_objs.size() > 0) { ////// CHECK LATER... TO DO
+				// DO NOT STORE the rendering result INTO the Render-out RTs
+				// Instead, STORE it into new RTs dedicated to foremost_surfaces_routine_objs rendering (better option for performance opt)
+
+				___GpuProfile("Opaque Surface");
+				// Opaque Foremost Rendering for 
+				RenderStage1(foremost_surfaces_routine_objs, MFR_MODE::STATIC_KB, RENDER_GEOPASS::PASS_OPAQUESURFACES
+					, false /*is_frag_counter_buffer*/, is_ghost_mode, false /*is_picking_routine*/, apply_fragmerge, false);
+				___GpuProfile("Opaque Surface", true);
+
+				___GpuProfile("2nd-Resolve Pass (SKB)");
+				// Dynamic FB layers into K-buffer if there is post-processing (SS algorithms) or single layer pass
+				ResolvePass(MFR_MODE::STATIC_KB, apply_fragmerge);
+				___GpuProfile("2nd-Resolve Pass (SKB)", true);
+			}
+
 			if (single_layer_routine_objs.size() > 0) {
 				// this is for CS to insert the single layer into the k-buffer
 				cbCamState.cam_flag |= (0x1 << 1); // 2nd bit : perform RT to k-buffer : 0 (just RT), 1 : (perform after silhouette processing)

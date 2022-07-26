@@ -779,12 +779,6 @@ void intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 
 
 
-
-
-
-
-
-
 bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	VmGpuManager* gpu_manager,
 	grd_helper::GpuDX11CommonParameters* dx11CommonParams,
@@ -829,8 +823,10 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	bool is_ghost_mode = _fncontainer->fnParams.GetParam("_bool_GhostEffect", false);
 	bool is_rgba = _fncontainer->fnParams.GetParam("_bool_IsRGBA", false); // false means bgra
 
+	float planeThickness = _fncontainer->fnParams.GetParam("_float_PlaneThickness", 0.f);
+
 	bool is_system_out = false;
-	if (is_final_renderer) is_system_out = true;
+	if (is_final_renderer || planeThickness == 0.f) is_system_out = true;
 
 	bool only_surface_test = _fncontainer->fnParams.GetParam("_bool_OnlySurfaceTest", false);
 	bool test_consoleout = _fncontainer->fnParams.GetParam("_bool_TestConsoleOut", false);
@@ -1049,10 +1045,13 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 #pragma endregion 
 
 #pragma region // IOBJECT CPU
-	while (iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, 1) != NULL)
-		iobj->DeleteFrameBuffer(FrameBufferUsageRENDEROUT, 1);
+	while (iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, 2) != NULL)
+		iobj->DeleteFrameBuffer(FrameBufferUsageRENDEROUT, 2);
 	if (!iobj->ReplaceFrameBuffer(FrameBufferUsageRENDEROUT, 0, data_type::dtype<vmbyte4>(), ("common render out frame buffer : defined in vismtv_inbuilt_renderergpudx module")))
 		iobj->InsertFrameBuffer(data_type::dtype<vmbyte4>(), FrameBufferUsageRENDEROUT, ("common render out frame buffer : defined in vismtv_inbuilt_renderergpudx module"));
+	if (iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, 1) == NULL)
+		iobj->InsertFrameBuffer(data_type::dtype<vmbyte4>(), FrameBufferUsageRENDEROUT, ("temp render out frame buffer Backup : defined in vismtv_inbuilt_renderergpudx module"));
+
 
 	while (iobj->GetFrameBuffer(FrameBufferUsageDEPTH, 1) != NULL)
 		iobj->DeleteFrameBuffer(FrameBufferUsageDEPTH, 1);
@@ -1114,6 +1113,31 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 
 	uint num_grid_x = __BLOCKSIZE == 1 ? fb_size_cur.x : (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
 	uint num_grid_y = __BLOCKSIZE == 1 ? fb_size_cur.y : (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
+
+	bool curved_slicer = _fncontainer->fnParams.GetParam("_bool_IsNonlinear", false);
+	if (curved_slicer) {
+		vector<vmfloat3>& vtrCurveInterpolations = *_fncontainer->fnParams.GetParamPtr<vector<vmfloat3>>("_vlist_FLOAT3_CurveInterpolations");
+		vector<vmfloat3>& vtrCurveUpVectors = *_fncontainer->fnParams.GetParamPtr<vector<vmfloat3>>("_vlist_FLOAT3_CurveUpVectors");
+		vector<vmfloat3>& vtrCurveTangentVectors = *_fncontainer->fnParams.GetParamPtr<vector<vmfloat3>>("_vlist_FLOAT3_CurveTangentVectors");
+		GpuRes gres_cpPoints, gres_cpTangents;
+		int num_curvedPoints = (int)vtrCurveInterpolations.size();
+		if (num_curvedPoints < 1)
+			return false;
+		grd_helper::UpdateCustomBuffer(gres_cpPoints, iobj, "CurvedPlanePoints", &vtrCurveInterpolations[0], num_curvedPoints, DXGI_FORMAT_R32G32B32_FLOAT, 12);
+		grd_helper::UpdateCustomBuffer(gres_cpTangents, iobj, "CurvedPlaneTangents", &vtrCurveTangentVectors[0], num_curvedPoints, DXGI_FORMAT_R32G32B32_FLOAT, 12);
+		dx11DeviceImmContext->CSSetShaderResources(30, 1, (ID3D11ShaderResourceView**)&gres_cpPoints.alloc_res_ptrs[DTYPE_SRV]);
+		dx11DeviceImmContext->CSSetShaderResources(31, 1, (ID3D11ShaderResourceView**)&gres_cpTangents.alloc_res_ptrs[DTYPE_SRV]);
+	
+		float sample_dist = 1.f;
+		CB_CurvedSlicer cbCurvedSlicer;
+		grd_helper::SetCb_CurvedSlicer(cbCurvedSlicer, _fncontainer, iobj, sample_dist);
+		D3D11_MAPPED_SUBRESOURCE mappedResCurvedSlicerState;
+		dx11DeviceImmContext->Map(cbuf_curvedslicer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCurvedSlicerState);
+		CB_CurvedSlicer* cbCurvedSlicerData = (CB_CurvedSlicer*)mappedResCurvedSlicerState.pData;
+		memcpy(cbCurvedSlicerData, &cbCurvedSlicer, sizeof(CB_CurvedSlicer));
+		dx11DeviceImmContext->Unmap(cbuf_curvedslicer, 0);
+		dx11DeviceImmContext->CSSetConstantBuffers(10, 1, &cbuf_curvedslicer);
+	}
 
 #pragma region // Camera & Light Setting
 	VmCObject* cam_obj = iobj->GetCameraObject();
@@ -1367,7 +1391,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		&light_src, &default_phong_lighting_coeff, &default_point_thickness, &default_surfel_size, &default_line_thickness, &default_color_cmmobj, &use_spinlock_pixsynch, &use_blending_option_MomentOIT,
 		&count_call_render, &progress, &cam_obj,
 		&clr_float_zero_4, &clr_float_fltmax_4, &dx11DSVNULL, &dx11RTVsNULL, &dx11UAVs_NULL, &dx11SRVs_NULL
-	](vector<VmActor*>& actor_list, const bool is_ghost_mode, const bool is_picking_routine)
+	](vector<VmActor*>& actor_list, const bool curved_slicer, const bool is_ghost_mode, const bool is_picking_routine)
 	{
 
 		// main geometry rendering process
@@ -1487,107 +1511,106 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			bool fillInside = true;
 			if (fillInside)
 			{
+				vmint4* nodePtr;
+				int nodeSize;
+				vmint4* triWoopPtr;
+				int triWoopSize;
+				vmint4* triDebugPtr;
+				int triDebugSize;
+				int* cpuTriIndicesPtr;
+				int triIndicesSize;
+				pobj->GetBVHTreeBuffers(&nodePtr, &nodeSize, &triWoopPtr, &triWoopSize,
+					&triDebugPtr, &triDebugSize, &cpuTriIndicesPtr, &triIndicesSize);
+
+				GpuRes bvhNode, bvhTriWoop, bvhTriDebug, bvhIndice;
+				grd_helper::UpdateCustomBuffer(bvhNode, pobj, "BvhNode", nodePtr, nodeSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4));
+				grd_helper::UpdateCustomBuffer(bvhTriWoop, pobj, "BvhTriWoop", triWoopPtr, triWoopSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4));
+				grd_helper::UpdateCustomBuffer(bvhTriDebug, pobj, "BvhTriDebug", triDebugPtr, triDebugSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4));
+				grd_helper::UpdateCustomBuffer(bvhIndice, pobj, "BvhIndice", cpuTriIndicesPtr, triIndicesSize, DXGI_FORMAT_R32_SINT, sizeof(int));
+
+				dx11DeviceImmContext->CSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&bvhNode.alloc_res_ptrs[DTYPE_SRV]);
+				dx11DeviceImmContext->CSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&bvhTriWoop.alloc_res_ptrs[DTYPE_SRV]);
+				dx11DeviceImmContext->CSSetShaderResources(2, 1, (ID3D11ShaderResourceView**)&bvhTriDebug.alloc_res_ptrs[DTYPE_SRV]);
+				dx11DeviceImmContext->CSSetShaderResources(3, 1, (ID3D11ShaderResourceView**)&bvhIndice.alloc_res_ptrs[DTYPE_SRV]);
+
+				// test //
+				if(0)
 				{
-					vmint4* nodePtr;
-					int nodeSize;
-					vmint4* triWoopPtr;
-					int triWoopSize;
-					vmint4* triDebugPtr;
-					int triDebugSize;
-					int* cpuTriIndicesPtr;
-					int triIndicesSize;
-					pobj->GetBVHTreeBuffers(&nodePtr, &nodeSize, &triWoopPtr, &triWoopSize,
-						&triDebugPtr, &triDebugSize, &cpuTriIndicesPtr, &triIndicesSize);
+					// mat_ss2ws
+					//CB_CameraState cbCamState;
+					//grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, gi_v_thickness);
 
-					GpuRes bvhNode, bvhTriWoop, bvhTriDebug, bvhIndice;
-					grd_helper::UpdateCustomBuffer(bvhNode, pobj, "BvhNode", nodePtr, nodeSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4));
-					grd_helper::UpdateCustomBuffer(bvhTriWoop, pobj, "BvhTriWoop", triWoopPtr, triWoopSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4));
-					grd_helper::UpdateCustomBuffer(bvhTriDebug, pobj, "BvhTriDebug", triDebugPtr, triDebugSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4));
-					grd_helper::UpdateCustomBuffer(bvhIndice, pobj, "BvhIndice", cpuTriIndicesPtr, triIndicesSize, DXGI_FORMAT_R32_SINT, sizeof(int));
+					auto TransformPoint = [](float3& p, vmmat44f& m) {
+						float3 tp;
+						fTransformPoint(&tp, &p, &m);
+						return tp;
+					};
+					auto TransformVector = [](float3& p, vmmat44f& m) {
+						float3 tp;
+						fTransformVector(&tp, &p, &m);
+						return tp;
+					};
 
-					dx11DeviceImmContext->CSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&bvhNode.alloc_res_ptrs[DTYPE_SRV]);
-					dx11DeviceImmContext->CSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&bvhTriWoop.alloc_res_ptrs[DTYPE_SRV]);
-					dx11DeviceImmContext->CSSetShaderResources(2, 1, (ID3D11ShaderResourceView**)&bvhTriDebug.alloc_res_ptrs[DTYPE_SRV]);
-					dx11DeviceImmContext->CSSetShaderResources(3, 1, (ID3D11ShaderResourceView**)&bvhIndice.alloc_res_ptrs[DTYPE_SRV]);
+					bool bbb = cam_obj->IsPerspective();
+					vmfloat3 pos_cam_ws, dir_view_ws;
+					cam_obj->GetCameraExtStatef(&pos_cam_ws, &dir_view_ws, NULL);
 
-					// test //
-					if(0)
-					{
-						// mat_ss2ws
-						//CB_CameraState cbCamState;
-						//grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, gi_v_thickness);
+					vmint2 ss_xy = vmint2(300, 300);
 
-						auto TransformPoint = [](float3& p, vmmat44f& m) {
-							float3 tp;
-							fTransformPoint(&tp, &p, &m);
-							return tp;
-						};
-						auto TransformVector = [](float3& p, vmmat44f& m) {
-							float3 tp;
-							fTransformVector(&tp, &p, &m);
-							return tp;
-						};
+					// Image Plane's Position and Camera State //
+					float3 pos_ip_ss = float3(ss_xy, 0.0f);
+					float3 pos_ip_ws = TransformPoint(pos_ip_ss, matSS2WS);
+					float3 ray_dir_unit_ws = dir_view_ws;
+					if (cam_obj->IsPerspective())
+						ray_dir_unit_ws = pos_ip_ws - pos_cam_ws;
+					ray_dir_unit_ws = normalize(ray_dir_unit_ws);
 
-						bool bbb = cam_obj->IsPerspective();
-						vmfloat3 pos_cam_ws, dir_view_ws;
-						cam_obj->GetCameraExtStatef(&pos_cam_ws, &dir_view_ws, NULL);
+					////////////////////////////
+					int hitTriIdx = -1;
+					int bestTriIdx = -1;
+					int geomtype = -1;
+					float hitDistance = 1e20;
+					float scene_t = 1e20;
+					float3 objcol = float3(0, 0, 0);
+					float3 emit = float3(0, 0, 0);
+					float3 hitpoint; // intersection point
+					float3 n; // normal
+					float3 nl; // oriented normal
+					float3 nextdir; // ray direction of next path segment
+					float3 trinormal = float3(0, 0, 0);
+					Refl_t refltype;
+					float ray_tmin = 0.00001f;
+					float ray_tmax = 1e20; // use thickness!!
 
-						vmint2 ss_xy = vmint2(300, 300);
-
-						// Image Plane's Position and Camera State //
-						float3 pos_ip_ss = float3(ss_xy, 0.0f);
-						float3 pos_ip_ws = TransformPoint(pos_ip_ss, matSS2WS);
-						float3 ray_dir_unit_ws = dir_view_ws;
-						if (cam_obj->IsPerspective())
-							ray_dir_unit_ws = pos_ip_ws - pos_cam_ws;
-						ray_dir_unit_ws = normalize(ray_dir_unit_ws);
-
-						////////////////////////////
-						int hitTriIdx = -1;
-						int bestTriIdx = -1;
-						int geomtype = -1;
-						float hitDistance = 1e20;
-						float scene_t = 1e20;
-						float3 objcol = float3(0, 0, 0);
-						float3 emit = float3(0, 0, 0);
-						float3 hitpoint; // intersection point
-						float3 n; // normal
-						float3 nl; // oriented normal
-						float3 nextdir; // ray direction of next path segment
-						float3 trinormal = float3(0, 0, 0);
-						Refl_t refltype;
-						float ray_tmin = 0.00001f;
-						float ray_tmax = 1e20; // use thickness!!
-
-						// intersect all triangles in the scene stored in BVH
-						int debugbingo = 0;
+					// intersect all triangles in the scene stored in BVH
+					int debugbingo = 0;
 						
-						float3 ray_orig_os = float3(0, 0, 0);// TransformPoint(pos_ip_ws, actor->matWS2OS);
-						float3 ray_dir_unit_os = normalize(TransformVector(ray_dir_unit_ws, actor->matWS2OS) + float3(0.3, 0, 0));
+					float3 ray_orig_os = float3(0, 0, 0);// TransformPoint(pos_ip_ws, actor->matWS2OS);
+					float3 ray_dir_unit_os = normalize(TransformVector(ray_dir_unit_ws, actor->matWS2OS) + float3(0.3, 0, 0));
 
-						float4 rayorig = float4(ray_orig_os, ray_tmin);
-						float4 raydir = float4(ray_dir_unit_os, ray_tmax);
+					float4 rayorig = float4(ray_orig_os, ray_tmin);
+					float4 raydir = float4(ray_dir_unit_os, ray_tmax);
 
-						float3 __mmmax(-FLT_MAX, -FLT_MAX, -FLT_MAX);
-						float3 __mmmin(FLT_MAX, FLT_MAX, FLT_MAX);
-						float4* ddd = (float4*)triDebugPtr;
-						for (int ii = 0; ii < triDebugSize; ii++) {
-							__mmmin = min3f(__mmmin, float3(ddd[ii].x, ddd[ii].y, ddd[ii].z));
-							__mmmax = max3f(__mmmax, float3(ddd[ii].x, ddd[ii].y, ddd[ii].z));
-						}
-
-						DEBUGintersectBVHandTriangles(rayorig, raydir, (float4*)nodePtr, (float4*)triWoopPtr, (float4*)triDebugPtr, cpuTriIndicesPtr, bestTriIdx, hitDistance, debugbingo, trinormal, false);
-						//int num_frags = intersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, bestTriIdx, hitDistance, debugbingo, trinormal, false);
-
-						int gg = 0;
+					float3 __mmmax(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+					float3 __mmmin(FLT_MAX, FLT_MAX, FLT_MAX);
+					float4* ddd = (float4*)triDebugPtr;
+					for (int ii = 0; ii < triDebugSize; ii++) {
+						__mmmin = min3f(__mmmin, float3(ddd[ii].x, ddd[ii].y, ddd[ii].z));
+						__mmmax = max3f(__mmmax, float3(ddd[ii].x, ddd[ii].y, ddd[ii].z));
 					}
+
+					DEBUGintersectBVHandTriangles(rayorig, raydir, (float4*)nodePtr, (float4*)triWoopPtr, (float4*)triDebugPtr, cpuTriIndicesPtr, bestTriIdx, hitDistance, debugbingo, trinormal, false);
+					//int num_frags = intersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, bestTriIdx, hitDistance, debugbingo, trinormal, false);
+
+					int gg = 0;
 				}
 
 				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs, dx11UAVs, NULL);
 
-				// buffer setting //
-				// store to K-Buffer
-				dx11DeviceImmContext->CSSetShader(GETCS(ThickSlicePathTracer_cs_5_0), NULL, 0);
+				if (curved_slicer)
+					dx11DeviceImmContext->CSSetShader(GETCS(CurvedThickSlicePathTracer_cs_5_0), NULL, 0);
+				else
+					dx11DeviceImmContext->CSSetShader(GETCS(ThickSlicePathTracer_cs_5_0), NULL, 0);
 
 				//dx11DeviceImmContext->Flush();
 				dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
@@ -1693,11 +1716,11 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		}
 	};
 
-	auto RenderOut = [&iobj, &___GpuProfile, &fb_size_cur, &dx11DeviceImmContext,
+	auto RenderOut = [&iobj, &___GpuProfile, &fb_size_cur, &dx11DeviceImmContext, &is_final_renderer, &planeThickness,
 		&gres_fb_rgba, &gres_fb_depthcs, &gres_fb_sys_rgba, &gres_fb_sys_depthcs, &gpu_manager, &is_rgba](const int count_call_render, const HWND hWnd) {
 
 		// APPLY HWND MODE
-		if (hWnd)
+		if (hWnd && is_final_renderer)
 		{
 			ID3D11Texture2D* pTex2dHwndRT = NULL;
 			ID3D11RenderTargetView* pHwndRTV = NULL;
@@ -1707,7 +1730,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			return;
 		}
 
-		FrameBuffer* fb_rout = (FrameBuffer*)iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, 0);
+		FrameBuffer* fb_rout = (FrameBuffer*)iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, planeThickness == 0.f && !is_final_renderer ? 1 : 0);
 		FrameBuffer* fb_dout = (FrameBuffer*)iobj->GetFrameBuffer(FrameBufferUsageDEPTH, 0);
 
 		if (count_call_render == 0)	// this means that there is no valid rendering pass
@@ -1778,7 +1801,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	dx11DeviceImmContext->CSSetConstantBuffers(0, 1, &cbuf_cam_state);
 	CB_CameraState cbCamState;
 	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, gi_v_thickness);
-	if (!is_final_renderer) {
+	if (!is_system_out) {
 		// which means the k-buffer will be used for the following renderer
 		// stores the fragments into the k-buffer and do not store the rendering result into RT
 		cbCamState.cam_flag |= (0x1 << 3);
@@ -1805,7 +1828,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 
 		___GpuProfile("Picking");
 
-		PathTracer(slicer_actors, is_ghost_mode, true); // is_picking_routine = true
+		PathTracer(slicer_actors, curved_slicer, is_ghost_mode, true); // is_picking_routine = true
 
 #pragma region copyback to sysmem
 		dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_picking_system_buffer.alloc_res_ptrs[DTYPE_RES],
@@ -1863,14 +1886,14 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 
 		___GpuProfile("PathTracer");
 		// buffer filling
-		PathTracer(slicer_actors, is_ghost_mode, false); // is_picking_routine = false
+		PathTracer(slicer_actors, curved_slicer, is_ghost_mode, false); // is_picking_routine = false
 		___GpuProfile("PathTracer", true);
 
 		// Set NULL States //
 		//dx11DeviceImmContext->CSSetUnorderedAccessViews(1, NUM_UAVs_GEO, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 		dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
 
-		if (is_final_renderer) {
+		if (is_system_out) {
 			___GpuProfile("Copyback");
 			RenderOut(count_call_render, hWnd);
 			___GpuProfile("Copyback", true);
