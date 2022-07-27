@@ -698,7 +698,7 @@ namespace grd_helper
 		vmfloat3 posTopRightCOS;
 		float planeHeight;
 		vmfloat3 posBottomLeftCOS;
-		float thicknessPlane;
+		float thicknessPlane; // use cam's far_plane
 		vmfloat3 posBottomRightCOS;
 		int numRaySteps;
 		vmfloat3 planeUp; // WS, length is planePitch

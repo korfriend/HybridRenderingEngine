@@ -1538,9 +1538,6 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 				if(0)
 				{
 					// mat_ss2ws
-					//CB_CameraState cbCamState;
-					//grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, gi_v_thickness);
-
 					auto TransformPoint = [](float3& p, vmmat44f& m) {
 						float3 tp;
 						fTransformPoint(&tp, &p, &m);
@@ -1809,6 +1806,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	dx11DeviceImmContext->CSSetConstantBuffers(0, 1, &cbuf_cam_state);
 	CB_CameraState cbCamState;
 	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, gi_v_thickness);
+	cbCamState.far_plane = planeThickness;
 	if (!is_system_out) {
 		// which means the k-buffer will be used for the following renderer
 		// stores the fragments into the k-buffer and do not store the rendering result into RT

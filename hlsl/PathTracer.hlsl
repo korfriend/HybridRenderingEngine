@@ -843,7 +843,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 
 	// intersect all triangles in the scene stored in BVH
 	int debugbingo = 0;
-	float planeThickness = g_cbCurvedSlicer.thicknessPlane;// g_cbCamState.far_plane;
+	float planeThickness = g_cbCamState.far_plane;// g_cbCurvedSlicer.thicknessPlane;// g_cbCamState.far_plane;
 
 	//pos_ip_ws = float3(0, 0, 0);
 	//ray_dir_unit_ws = float3(0, 1, 0);
@@ -955,7 +955,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	//fragment_vis[ss_xy] = float4(1, 1, 0, 1);
 	//fragment_vis[ss_xy] = v_rgba;
 	fragment_counter[ss_xy] = 1;
-	//if (planeThickness == 0.f)
+	if (planeThickness == 0.f)
 		fragment_zdepth[ss_xy] = 1.f;// asfloat(ConvertFloat4ToUInt(v_rgba));
 
 	return;
