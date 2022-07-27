@@ -739,6 +739,8 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height || g_cbPobj.alpha < 0.001f)
 		return;
 
+	fragment_zdepth[ss_xy] = 0;
+
 	const uint k_value = g_cbCamState.k_value;
 	uint bytes_per_frag = 4 * NUM_ELES_PER_FRAG;
 	uint pixel_id = ss_xy.y * g_cbCamState.rt_width + ss_xy.x;
@@ -841,7 +843,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 
 	// intersect all triangles in the scene stored in BVH
 	int debugbingo = 0;
-	float planeThickness = fPlaneThickness;// g_cbCamState.far_plane;
+	float planeThickness = g_cbCurvedSlicer.thicknessPlane;// g_cbCamState.far_plane;
 
 	//pos_ip_ws = float3(0, 0, 0);
 	//ray_dir_unit_ws = float3(0, 1, 0);
@@ -867,6 +869,11 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	float3 posHitWS = TransformPoint(posHitOS, g_cbPobj.mat_os2ws);
 
 	float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
+	if (planeThickness == 0.f)
+		v_rgba.a = min(0.9, v_rgba.a);
+
+	//v_rgba.a = 0.1;
+
 	float zThickness = 0;
 	float zDepth = 0;// min(length(posHitWS - pos_ip_ws), planeThickness);
 	if (isInside) {
@@ -941,12 +948,76 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		SET_FRAG(addr_base, 0, fragMerge);
 		//v_rgba = ConvertUIntToFloat4(fragMerge.i_vis);
 	}
-	else 
+	else {
 		fragment_vis[ss_xy] = v_rgba;
+	}
 
 	//fragment_vis[ss_xy] = float4(1, 1, 0, 1);
+	//fragment_vis[ss_xy] = v_rgba;
 	fragment_counter[ss_xy] = 1;
-	fragment_vis[ss_xy] = v_rgba;
+	//if (planeThickness == 0.f)
+		fragment_zdepth[ss_xy] = 1.f;// asfloat(ConvertFloat4ToUInt(v_rgba));
 
 	return;
+}
+
+float4 SlicerOutlineTest(const in int2 tex2d_xy, const in float3 edge_color, const in int thick)
+{
+	float fvcur = fragment_zdepth[tex2d_xy];
+	if (fvcur != 0.f)
+		return (float4)0;
+
+	float2 min_rect = (float2)0;
+	float2 max_rect = float2(g_cbCamState.rt_width - 1, g_cbCamState.rt_height - 1);
+
+	float4 vout = (float4) 0;
+	//float cloestDist = FLT_MAX;
+	int cnt = 0;
+	for (int y = -thick; y <= thick; y++) {
+		for (int x = -thick; x <= thick; x++) {
+			float2 neighbor_pos = tex2d_xy.xy + float2(x, y);
+			float2 v1 = min_rect - neighbor_pos;
+			float2 v2 = max_rect - neighbor_pos;
+			float2 v12 = v1 * v2;
+			if (v12.x >= 0 || v12.y >= 0)
+				continue;
+			float fv = fragment_zdepth[(int2)neighbor_pos];
+			if (fv == 1.f) {
+				//cloestDist = min(cloestDist, length(neighbor_pos - tex2d_xy.xy));
+				cnt++;
+			}
+		}
+	}
+
+	if (cnt == 0)
+		return (float4)0;
+	//float w = 2 * thick + 1;
+	float alpha = min(cnt / 3, 1.f);// min((thick + 1 - cloestDist) / thick, 1.0); // min((floaT)count / (w * w / 2.f), 1.f);
+	//alpha *= alpha;
+
+	vout = float4(edge_color * alpha, alpha);
+
+	return vout;
+}
+
+[numthreads(GRIDSIZE, GRIDSIZE, 1)]
+void Outline2D(uint3 DTid : SV_DispatchThreadID)
+{
+	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
+		return;
+	int2 ss_xy = int2(DTid.xy);
+
+	// (int)g_cbPobj.pix_thickness
+	float4 outline_color = SlicerOutlineTest(ss_xy, g_cbPobj.Kd, 2);
+	
+	if (outline_color.a == 0)
+	//float fvcur = fragment_zdepth[ss_xy];
+	//if (fvcur != 0.f)
+		return;
+
+	//float fvcur = fragment_zdepth[ss_xy];
+	//if (fvcur == 1.f)
+	//outline_color = float4(1, 0, 0, 1);
+
+	fragment_vis[ss_xy] = outline_color;
 }

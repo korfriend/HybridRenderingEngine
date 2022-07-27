@@ -660,7 +660,6 @@ void OIT_PRESET(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	}
 	else
 		v_rgba = sr_fragment_vis[tex2d_xy.xy];
-	//if(v_rgba.a == 0)
 
 	if (v_rgba.a <= 0.01)
 		return;

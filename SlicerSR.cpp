@@ -912,7 +912,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 
 #define VS_NUM 5
 #define GS_NUM 1
-#define CS_NUM 4
+#define CS_NUM 5
 #define SET_VS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(VERTEX_SHADER, NAME), __S, true)
 #define SET_CS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(COMPUTE_SHADER, NAME), __S, true)
 #define SET_GS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GEOMETRY_SHADER, NAME), __S, true)
@@ -987,6 +987,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		string strNames_CS[CS_NUM] = {
 			   "ThickSlicePathTracer_cs_5_0"
 			  ,"CurvedThickSlicePathTracer_cs_5_0"
+			  ,"SliceOutline_cs_5_0"
 			  ,"PickingThickSlice_cs_5_0"
 			  ,"PickingCurvedThickSlice_cs_5_0"
 		};
@@ -1389,7 +1390,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		&cbuf_cam_state, &cbuf_env_state, &cbuf_clip, &cbuf_pobj, &cbuf_vobj, &cbuf_reffect, &cbuf_tmap, &cbuf_hsmask,
 		&num_grid_x, &num_grid_y, &matWS2PS, &matWS2SS, &matSS2WS,
 		&light_src, &default_phong_lighting_coeff, &default_point_thickness, &default_surfel_size, &default_line_thickness, &default_color_cmmobj, &use_spinlock_pixsynch, &use_blending_option_MomentOIT,
-		&count_call_render, &progress, &cam_obj,
+		&count_call_render, &progress, &cam_obj, &planeThickness,
 		&clr_float_zero_4, &clr_float_fltmax_4, &dx11DSVNULL, &dx11RTVsNULL, &dx11UAVs_NULL, &dx11SRVs_NULL
 	](vector<VmActor*>& actor_list, const bool curved_slicer, const bool is_ghost_mode, const bool is_picking_routine)
 	{
@@ -1508,8 +1509,8 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 #define GETDEPTHSTENTIL(NAME) dx11CommonParams->get_depthstencil(#NAME)
 
 			// to do ray-tracer
-			bool fillInside = true;
-			if (fillInside)
+			//const bool fillInside = true;
+			//if (fillInside)
 			{
 				vmint4* nodePtr;
 				int nodeSize;
@@ -1615,6 +1616,13 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 				//dx11DeviceImmContext->Flush();
 				dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
 				//dx11DeviceImmContext->Flush();
+
+				if (planeThickness == 0.f) {
+					dx11DeviceImmContext->CSSetShader(GETCS(SliceOutline_cs_5_0), NULL, 0);
+					//dx11DeviceImmContext->Flush();
+					dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+					// SliceOutline_cs_5_0
+				}
 				
 				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 			}
