@@ -217,6 +217,10 @@ bool Vis_Volume_And_Check_Slab(inout float4 vis_otf, inout int sample_v, int sam
 	sample_v = (int)(fsample * g_cbVobj.value_range + 0.5f);
 	float fsample_prev = (float)sample_prev / g_cbVobj.value_range;
 #if OTF_MASK==1
+
+
+#define MULTIOTF_OLD 1
+#if MULTIOTF_OLD==1
 	//int max_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, 255, tex3D_volmask);
 	//int mask_otf_id = buf_ids[max_vint];
 	//vis_otf = LoadOtfBufId(sample_v, buf_otf, g_cbVobj.opacity_correction, mask_otf_id);
@@ -225,12 +229,64 @@ bool Vis_Volume_And_Check_Slab(inout float4 vis_otf, inout int sample_v, int sam
 	//int mask_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, g_cbVobj.mask_value_range, tex3D_volmask);
 	//vis_otf = LoadOtfBufId(fsample * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
 
-	//if (g_cbVobj.mask_value_range * fsample < g_cbTmap.first_nonzeroalpha_index) return false;
+	//if (g_cbTmap.tmap_size_x * fsample < g_cbTmap.first_nonzeroalpha_index
+	//	|| g_cbTmap.tmap_size_x * fsample_prev < g_cbTmap.first_nonzeroalpha_index) return false;
 
 	vis_otf = LoadSlabOtfBufId_PreInt(fsample * g_cbTmap.tmap_size_x, fsample_prev * g_cbTmap.tmap_size_x, buf_preintotf, g_cbVobj.opacity_correction, mask_vint);
 	//if (mask_vint == 0) sample_v = 0;
+	//vis_otf = LoadSlabOtfBuf_PreInt(fsample * g_cbTmap.tmap_size_x, fsample_prev * g_cbTmap.tmap_size_x, buf_preintotf, g_cbVobj.opacity_correction);// g_cbVobj.opacity_correction);
 
 	return vis_otf.a >= FLT_OPACITY_MIN__;//&& mask_vint > 0;//&& mask_vint == 3;
+#else
+	float3 pos_vs = float3(pos_sample_ts.x * g_cbVobj.vol_size.x - 0.5f,
+		pos_sample_ts.y * g_cbVobj.vol_size.y - 0.5f,
+		pos_sample_ts.z * g_cbVobj.vol_size.z - 0.5f);
+	int3 idx_vs = int3(pos_vs);
+
+	float samples[8];
+	samples[0] = tex3D_volume.Load(int4(idx_vs, 0)).r;
+	samples[1] = tex3D_volume.Load(int4(idx_vs + int3(1, 0, 0), 0)).r;
+	samples[2] = tex3D_volume.Load(int4(idx_vs + int3(0, 1, 0), 0)).r;
+	samples[3] = tex3D_volume.Load(int4(idx_vs + int3(1, 1, 0), 0)).r;
+	samples[4] = tex3D_volume.Load(int4(idx_vs + int3(0, 0, 1), 0)).r;
+	samples[5] = tex3D_volume.Load(int4(idx_vs + int3(1, 0, 1), 0)).r;
+	samples[6] = tex3D_volume.Load(int4(idx_vs + int3(0, 1, 1), 0)).r;
+	samples[7] = tex3D_volume.Load(int4(idx_vs + int3(1, 1, 1), 0)).r;
+
+	float mask_vints[8];
+	mask_vints[0] = tex3D_volmask.Load(int4(idx_vs, 0)).r;
+	mask_vints[1] = tex3D_volmask.Load(int4(idx_vs + int3(1, 0, 0), 0)).r;
+	mask_vints[2] = tex3D_volmask.Load(int4(idx_vs + int3(0, 1, 0), 0)).r;
+	mask_vints[3] = tex3D_volmask.Load(int4(idx_vs + int3(1, 1, 0), 0)).r;
+	mask_vints[4] = tex3D_volmask.Load(int4(idx_vs + int3(0, 0, 1), 0)).r;
+	mask_vints[5] = tex3D_volmask.Load(int4(idx_vs + int3(1, 0, 1), 0)).r;
+	mask_vints[6] = tex3D_volmask.Load(int4(idx_vs + int3(0, 1, 1), 0)).r;
+	mask_vints[7] = tex3D_volmask.Load(int4(idx_vs + int3(1, 1, 1), 0)).r;
+
+	float3 f3InterpolateRatio = pos_vs - idx_vs;
+
+	float fInterpolateWeights[8];
+	fInterpolateWeights[0] = (1.f - f3InterpolateRatio.z) * (1.f - f3InterpolateRatio.y) * (1.f - f3InterpolateRatio.x);
+	fInterpolateWeights[1] = (1.f - f3InterpolateRatio.z) * (1.f - f3InterpolateRatio.y) * f3InterpolateRatio.x;
+	fInterpolateWeights[2] = (1.f - f3InterpolateRatio.z) * f3InterpolateRatio.y * (1.f - f3InterpolateRatio.x);
+	fInterpolateWeights[3] = (1.f - f3InterpolateRatio.z) * f3InterpolateRatio.y * f3InterpolateRatio.x;
+	fInterpolateWeights[4] = f3InterpolateRatio.z * (1.f - f3InterpolateRatio.y) * (1.f - f3InterpolateRatio.x);
+	fInterpolateWeights[5] = f3InterpolateRatio.z * (1.f - f3InterpolateRatio.y) * f3InterpolateRatio.x;
+	fInterpolateWeights[6] = f3InterpolateRatio.z * f3InterpolateRatio.y * (1.f - f3InterpolateRatio.x);
+	fInterpolateWeights[7] = f3InterpolateRatio.z * f3InterpolateRatio.y * f3InterpolateRatio.x;
+
+	vis_otf = (float4)0;
+	[unroll]
+	for (int m = 0; m < 8; m++) {
+		float4 vis = LoadOtfBufId(samples[m] * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vints[m]);
+		vis_otf += vis * fInterpolateWeights[m];
+	}
+	return vis_otf.a >= FLT_OPACITY_MIN__;
+#endif
+
+
+
+
 #elif SCULPT_MASK == 1
 	int max_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, 255, tex3D_volmask);
 	int sculpt_value = (int)(g_cbVobj.vobj_flag >> 24);

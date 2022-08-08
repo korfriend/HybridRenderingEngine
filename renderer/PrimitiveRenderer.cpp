@@ -603,10 +603,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	mode_OIT = (MFR_MODE)min((int)mode_OIT, (int)MFR_MODE::MOMENT);
 	//if (mode_OIT == MFR_MODE::STATIC_KB_FM) apply_fragmerge = true;
 
-	bool is_picking_routine = _fncontainer->fnParams.GetParam("_bool_IsPickingRoutine", false);
-	if (is_picking_routine) mode_OIT = DYNAMIC_FB;
-	vmint2 picking_pos_ss = _fncontainer->fnParams.GetParam("_int2_PickingPosSS", vmint2(-1, -1));
-
 	int buf_ex_scale = _fncontainer->fnParams.GetParam("_int_BufExScale", (int)8); // scaling the capacity of the k-buffer for _bool_PixelTransmittance
 	bool use_blending_option_MomentOIT = _fncontainer->fnParams.GetParam("_bool_UseBlendingOptionMomentOIT", false);
 	bool check_pixel_transmittance = _fncontainer->fnParams.GetParam("_bool_PixelTransmittance", false);
@@ -642,6 +638,13 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	float v_thickness = _fncontainer->fnParams.GetParam("_float_VZThickness", 0.0f);
 	float gi_v_thickness = _fncontainer->fnParams.GetParam("_float_GIVZThickness", v_thickness);
 	float scale_z_res = _fncontainer->fnParams.GetParam("_float_zResScale", 1.0f);
+
+	bool is_picking_routine = _fncontainer->fnParams.GetParam("_bool_IsPickingRoutine", false);
+	if (is_picking_routine) {
+		mode_OIT = DYNAMIC_FB;
+		//gi_v_thickness = v_thickness = 0.0000001f;
+	}
+	vmint2 picking_pos_ss = _fncontainer->fnParams.GetParam("_int2_PickingPosSS", vmint2(-1, -1));
 
 	int i_test_shader = (int)_fncontainer->fnParams.GetParam("_int_ShaderTest", (int)0);
 

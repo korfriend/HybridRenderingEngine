@@ -1,4 +1,5 @@
 #include "RendererHeader.h"
+#include <time.h>
 
 using namespace grd_helper;
 
@@ -14,6 +15,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	dx11CommonParams->debug_info_queue->PushEmptyStorageFilter();
 #endif
 
+
+	clock_t start = clock();
+	
 #pragma region // Parameter Setting //
 	VmIObject* iobj = _fncontainer->fnParams.GetParam("_VmIObject*_RenderOut", (VmIObject*)NULL);
 	int k_value_old = iobj->GetObjParam("_int_NumK", (int)8);
@@ -54,6 +58,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	int test_mode = _fncontainer->fnParams.GetParam("_int_TestMode", (int)0);
 
 	bool recompile_hlsl = _fncontainer->fnParams.GetParam("_bool_ReloadHLSLObjFiles", false);
+
+	float samplePrecisionLevel = _fncontainer->fnParams.GetParam("_float_SamplePrecisionLevel", 1.0f);
 
 	VmLight* light = _fncontainer->fnParams.GetParam("_VmLight*_LightSource", (VmLight*)NULL);
 	VmLens* lens = _fncontainer->fnParams.GetParam("_VmLens*_CamLens", (VmLens*)NULL);
@@ -513,9 +519,13 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				vol_data = vobj->GetVolumeData();
 			}
 			else {
+				clock_t __start = clock();
+
 				GpuRes gres_mask_vol;
 				grd_helper::UpdateVolumeModel(gres_mask_vol, mask_vol_obj, true);
 				dx11DeviceImmContext->CSSetShaderResources(2, 1, (__SRV_PTR*)&gres_mask_vol.alloc_res_ptrs[DTYPE_SRV]);
+				
+				printf("######111 %f段\n", (double)(clock() - __start) / CLOCKS_PER_SEC);
 			}
 		}
 		else if (ray_cast_type == __RM_MULTIOTF || ray_cast_type == __RM_VISVOLMASK) {
@@ -527,8 +537,10 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->CSSetShaderResources(0, 1, (__SRV_PTR*)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
 
 		GpuRes gres_tmap_otf, gres_tmap_preintotf;
+		clock_t __start2 = clock();
 		grd_helper::UpdateTMapBuffer(gres_tmap_otf, tobj_otf, false);
 		grd_helper::UpdateTMapBuffer(gres_tmap_preintotf, tobj_otf, true);
+		printf("######222 %f段\n", (double)(clock() - __start2) / CLOCKS_PER_SEC);
 		dx11DeviceImmContext->CSSetShaderResources(3, 1, (__SRV_PTR*)&gres_tmap_otf.alloc_res_ptrs[DTYPE_SRV]);
 		dx11DeviceImmContext->CSSetShaderResources(13, 1, (__SRV_PTR*)&gres_tmap_preintotf.alloc_res_ptrs[DTYPE_SRV]);
 
@@ -554,18 +566,22 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			}
 		}
 		else {
+			clock_t __start3 = clock();
 			grd_helper::UpdateOtfBlocks(gres_volblk_otf, vobj, mask_vol_obj, tobj_otf, sculpt_index); // this tagged mask volume is always used even when MIP mode
 			volblk_srv = (__SRV_PTR)gres_volblk_otf.alloc_res_ptrs[DTYPE_SRV];
+			printf("######333 %f段\n", (double)(clock() - __start3) / CLOCKS_PER_SEC);
 		}
 		dx11DeviceImmContext->CSSetShaderResources(1, 1, (__SRV_PTR*)&volblk_srv);
 
-		bool high_samplerate = gres_vol.res_values.GetParam("SAMPLE_OFFSET_X", 1.f) > 1.f ||
-			gres_vol.res_values.GetParam("SAMPLE_OFFSET_Y", 1.f) > 1.f || gres_vol.res_values.GetParam("SAMPLE_OFFSET_Z", 1.f) > 1.f;
+		bool high_samplerate = gres_vol.res_values.GetParam("SAMPLE_OFFSET_X", 1.f) >= 2.f ||
+			gres_vol.res_values.GetParam("SAMPLE_OFFSET_Y", 1.f) >= 2.f || gres_vol.res_values.GetParam("SAMPLE_OFFSET_Z", 1.f) >= 2.f;
 		CB_VolumeObject cbVolumeObj;
-		vmint3 vol_sampled_size = vmint3(gres_vol.res_values.GetParam("WIDTH", (uint)0),
-			gres_vol.res_values.GetParam("HEIGHT", (uint)0),
-			gres_vol.res_values.GetParam("DEPTH", (uint)0));
-		grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, actor, high_samplerate ? 2.f : 1.f, false, tmap_data->valid_min_idx.x, gres_volblk.options["FORMAT"] == DXGI_FORMAT_R16_UNORM ? 65535.f : 1.f);
+		//vmint3 vol_sampled_size = vmint3(gres_vol.res_values.GetParam("WIDTH", (uint)0),
+		//	gres_vol.res_values.GetParam("HEIGHT", (uint)0),
+		//	gres_vol.res_values.GetParam("DEPTH", (uint)0));
+		//if ( && samplePrecisionLevel > 0)
+		//high_samplerate ? 2.f : 1.f
+		grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, actor, samplePrecisionLevel, false, tmap_data->valid_min_idx.x, gres_volblk.options["FORMAT"] == DXGI_FORMAT_R16_UNORM ? 65535.f : 1.f);
 		if (is_modulation_mode && ((uint)vol_data->vol_size.x * (uint)vol_data->vol_size.y * (uint)vol_data->vol_size.z > 1000000)) {
 			//cbVolumeObj.opacity_correction *= 2.f;
 			//cbVolumeObj.sample_dist *= 2.f;
@@ -1000,6 +1016,10 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	VMSAFE_RELEASE(pdxDSVOld);
 
 	iobj->SetDescriptor("vismtv_inbuilt_renderergpudx module : Volume Renderer");
+
+	clock_t finish = clock();
+	double duration = (double)(finish - start) / CLOCKS_PER_SEC;
+	printf("###################### %f段\n", duration);
 
 	return true;
 }

@@ -1094,6 +1094,8 @@ bool grd_helper::UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, const bool isPre
 	g_pvmCommonParams->dx11DeviceImmContext->Map((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes);
 	if (isPreInt) {
 		vmfloat4* f4ColorPreIntTF = (vmfloat4*)d11MappedRes.pData;
+
+#pragma omp parallel for 
 		for (int i = 0; i < tmap_data->array_lengths.y; i++)
 		{
 			vmbyte4* py4OTF = (vmbyte4*)tmap_data->tmap_buffers[i];
@@ -1117,6 +1119,7 @@ bool grd_helper::UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, const bool isPre
 	}
 	else {
 		vmbyte4* py4ColorTF = (vmbyte4*)d11MappedRes.pData;
+#pragma omp parallel for 
 		for (int i = 0; i < tmap_data->array_lengths.y; i++)
 		{
 			memcpy(&py4ColorTF[i * tmap_data->array_lengths.x], tmap_data->tmap_buffers[i], tmap_data->array_lengths.x * sizeof(vmbyte4));
@@ -1818,7 +1821,7 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 	else GMERRORMESSAGE("UNSUPPORTED FORMAT : grd_helper::SetCb_VolumeObj");
 
 	float minDistSample = (float)min(min(vol_data->vox_pitch.x, vol_data->vox_pitch.y), vol_data->vox_pitch.z);
-	float grad_offset_dist = apply_samplerate2gradient? minDistSample / sample_rate : minDistSample;
+	float grad_offset_dist = minDistSample;// apply_samplerate2gradient ? minDistSample / sample_rate : minDistSample;
 	fTransformVector((vmfloat3*)&cb_volume.vec_grad_x, &vmfloat3(grad_offset_dist, 0, 0), &mat_ws2ts);
 	fTransformVector((vmfloat3*)&cb_volume.vec_grad_y, &vmfloat3(0, grad_offset_dist, 0), &mat_ws2ts);
 	fTransformVector((vmfloat3*)&cb_volume.vec_grad_z, &vmfloat3(0, 0, grad_offset_dist), &mat_ws2ts);
@@ -1828,12 +1831,12 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 	cb_volume.vol_size = vmfloat3((float)vol_data->vol_size.x, (float)vol_data->vol_size.y, (float)vol_data->vol_size.z);
 
 	// from pmapDValueVolume //
-	float fSamplePrecisionLevel = actor->GetParam("_float_SamplePrecisionLevel", 1.0f);
-	if (fSamplePrecisionLevel > 0)
-	{
-		cb_volume.sample_dist /= fSamplePrecisionLevel;
-		cb_volume.opacity_correction /= fSamplePrecisionLevel;
-	}
+	//float fSamplePrecisionLevel = actor->GetParam("_float_SamplePrecisionLevel", 1.0f);
+	//if (fSamplePrecisionLevel > 0)
+	//{
+	//	cb_volume.sample_dist /= fSamplePrecisionLevel;
+	//	cb_volume.opacity_correction /= fSamplePrecisionLevel;
+	//}
 	cb_volume.vz_thickness = cb_volume.sample_dist;	// 현재 HLSL 은 Sample Distance 를 강제로 사용 중...
 	cb_volume.iso_value = iso_value;
 

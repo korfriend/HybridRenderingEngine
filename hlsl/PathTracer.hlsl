@@ -739,6 +739,9 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height || g_cbPobj.alpha < 0.001f)
 		return;
 
+	float fvPrev = fragment_zdepth[ss_xy];// asfloat(ConvertFloat4ToUInt(v_rgba));
+	if (fvPrev == 2.f) 
+		return;
 	fragment_zdepth[ss_xy] = 0;
 
 	const uint k_value = g_cbCamState.k_value;
@@ -870,7 +873,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 
 	float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
 	if (planeThickness == 0.f)
-		v_rgba.a = min(0.9, v_rgba.a);
+		v_rgba.a = min(0.5, v_rgba.a);
 
 	//v_rgba.a = 0.1;
 
@@ -915,7 +918,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	uint numFrag = fragment_counter[ss_xy];
 
 	Fragment frag;
-	frag.i_vis = ConvertFloat4ToUInt(v_rgba);
+	frag.i_vis = ConvertFloat4ToUInt(v_rgba); // current
 	frag.zthick = zThickness;
 	frag.z = zDepth;
 	frag.opacity_sum = v_rgba.a;
@@ -923,7 +926,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 
 	if (numFrag > 0) {
 		Fragment fragPrev = (Fragment)0;
-		GET_FRAG(fragPrev, addr_base, 0); // from K-buffer
+		GET_FRAG(fragPrev, addr_base, 0); // previous frag stored in K-buffer
 
 		if (planeThickness > 0) {
 			if (frag.z > fragPrev.z)
@@ -934,23 +937,22 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 			v_rgba = ConvertUIntToFloat4(fragMerge.i_vis);
 		}
 		else {
-			v_rgba = MixOpt(v_rgba, v_rgba.a, ConvertUIntToFloat4(fragPrev.i_vis), fragPrev.opacity_sum);
-
+			float4 v_rgbaPrev = ConvertUIntToFloat4(fragPrev.i_vis);
+			v_rgba = MixOpt(v_rgba, v_rgba.a, v_rgbaPrev, fragPrev.opacity_sum);
+			//v_rgba = float4(v_rgba.rgb, 1);//
 			fragMerge = frag;
 			//fragMerge.zthick = 0;
+			//v_rgba = float4(1, 0, 0, 1);
 			fragMerge.i_vis = ConvertFloat4ToUInt(v_rgba);
 			fragMerge.opacity_sum += fragPrev.opacity_sum;
 		}
 	}
 
 	bool store_to_kbuf = BitCheck(g_cbCamState.cam_flag, 3) && planeThickness > 0;
-	if (store_to_kbuf) {
-		SET_FRAG(addr_base, 0, fragMerge);
-		//v_rgba = ConvertUIntToFloat4(fragMerge.i_vis);
-	}
-	else {
+	SET_FRAG(addr_base, 0, fragMerge);
+
+	if (!store_to_kbuf)
 		fragment_vis[ss_xy] = v_rgba;
-	}
 
 	//fragment_vis[ss_xy] = float4(1, 1, 0, 1);
 	//fragment_vis[ss_xy] = v_rgba;
@@ -992,7 +994,7 @@ float4 SlicerOutlineTest(const in int2 tex2d_xy, const in float3 edge_color, con
 	if (cnt == 0)
 		return (float4)0;
 	//float w = 2 * thick + 1;
-	float alpha = min(cnt / 3, 1.f);// min((thick + 1 - cloestDist) / thick, 1.0); // min((floaT)count / (w * w / 2.f), 1.f);
+	float alpha = min(cnt / 3.f, 1.f);// min((thick + 1 - cloestDist) / thick, 1.0); // min((floaT)count / (w * w / 2.f), 1.f);
 	//alpha *= alpha;
 
 	vout = float4(edge_color * alpha, alpha);
@@ -1020,4 +1022,5 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 	//outline_color = float4(1, 0, 0, 1);
 
 	fragment_vis[ss_xy] = outline_color;
+	fragment_zdepth[ss_xy] = 2.f;
 }
