@@ -7,7 +7,7 @@
 #define D_PI 3.14159265358979323846
 #define F_PI 3.1415927
 #define GRIDSIZE 4
-#define GRIDSIZE_VR 2
+#define GRIDSIZE_VR 8
 #define ERT_ALPHA 0.98f
 
 #define FLT_MIN__ 0.000001f			// precision problem for zero-division 
@@ -170,10 +170,13 @@ struct HxCB_VolumeObject
 	// 24~31bit : Sculpt Mask Value (1 byte)
 	uint vobj_flag;
 	uint iso_value;
-	float mask_value_range;
 	uint outline_color; // 
+	uint v_dummy0;
 
 	float4 pb_shading_factor; // x : Ambient, y : Diffuse, z : Specular, w : specular
+
+	float3 mask_vol_size; // volume size stored in GPU memory
+	float mask_value_range;
 };
 
 struct HxCB_RenderingEffect // normally for each object
@@ -275,7 +278,7 @@ struct HxCB_CurvedSlicer
 	float3 posBottomLeftCOS;
 	float thicknessPlane;
 	float3 posBottomRightCOS;
-	int numRaySteps; 
+	uint __dummy0; 
 	float3 planeUp; // WS, length is planePitch
 	uint flag; // 1st bit : isRightSide
 };
@@ -562,12 +565,13 @@ float4 LoadSlabOtfBuf_Avg(const in int sample_v, const in int sample_prev, const
 	return vis_otf;
 }
 
-float4 LoadSlabOtfBuf_PreInt(const in int sample_v, const in int sample_prev, const in Buffer<float4> buf_preintotf, const in float opacity_correction)
+float4 LoadSlabOtfBuf_PreInt(const int sample_v, int sample_prev, const Buffer<float4> buf_preintotf, const float opacity_correction)
 {
 	float4 vis_otf = (float4)0;
 
+	if (sample_v == sample_prev) sample_prev++;
+
 	int diff = sample_v - sample_prev;
-	if (diff == 0) diff = 1;
 
 	float divDiff = 1.f / (float)diff;
 
@@ -589,12 +593,13 @@ float4 LoadOtfBufId(const in int sample_v, const in Buffer<float4> buf_otf, cons
     return vis_otf;
 }
 
-float4 LoadSlabOtfBufId_PreInt(const in int sample_v, const in int sample_prev, const in Buffer<float4> buf_preintotf, const in float opacity_correction, const in int id)
+float4 LoadSlabOtfBufId_PreInt(const int sample_v, int sample_prev, const Buffer<float4> buf_preintotf, const float opacity_correction, const int id)
 {
 	float4 vis_otf = (float4)0;
 
+	if (sample_v == sample_prev) sample_prev++;
+
 	int diff = sample_v - sample_prev;
-	if (diff == 0) diff = 1;
 
 	float divDiff = 1.f / (float)diff;
 
@@ -637,18 +642,25 @@ struct BlockSkip
     int blk_value;
     int num_skip_steps;
 };
-BlockSkip ComputeBlockSkip(const in float3 pos_start_ts, const in float3 vec_sample_ts, const in float3 size_volblk_ts, const in float volblk_value_range, const in Texture3D tex3d_blk_data)
+BlockSkip ComputeBlockSkip(const float3 pos_start_ts, const float3 vec_sample_ts, const float3 size_volblk_ts, const float volblk_value_range, const Texture3D tex3d_blk_data)
 {
     BlockSkip blk_v = (BlockSkip) 0;
     //int3 blk_id = int3(pos_start_ts.x / size_volblk_ts.x, pos_start_ts.y / size_volblk_ts.y, pos_start_ts.z / size_volblk_ts.z);
     int3 blk_id = pos_start_ts / size_volblk_ts;
-    blk_v.blk_value = (int) (tex3d_blk_data.Load(int4(blk_id, 0)).r * volblk_value_range + 0.5f);
+	blk_v.blk_value = (int)(tex3d_blk_data.Load(int4(blk_id, 0)).r * volblk_value_range + 0.5f);
     
     float3 pos_min_ts = float3(blk_id.x * size_volblk_ts.x, blk_id.y * size_volblk_ts.y, blk_id.z * size_volblk_ts.z);
     float3 pos_max_ts = pos_min_ts + size_volblk_ts;
     float2 hits_t = ComputeAaBbHits(pos_start_ts, pos_min_ts, pos_max_ts, vec_sample_ts);
     float dist_skip_ts = hits_t.y - hits_t.x;
-    blk_v.num_skip_steps = ceil(dist_skip_ts);
+	//if (dist_skip_ts < 0) {
+	//	float3 ss = float3(0, 0, 0);
+	//	hits_t = ComputeAaBbHits(ss, ss, size_volblk_ts, vec_sample_ts);
+	//	dist_skip_ts = hits_t.y - hits_t.x;
+	//}
+	blk_v.num_skip_steps = max(int(dist_skip_ts), 0);// +1;// +0.5) + 1;
+	//blk_v.num_skip_steps = (int)dist_skip_ts;// ceil(dist_skip_ts);
+	//blk_v.num_skip_steps = ceil(dist_skip_ts);
     return blk_v;
 };
 

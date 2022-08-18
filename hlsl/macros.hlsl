@@ -1,7 +1,7 @@
 
 #define LOAD_BLOCK_INFO(BLK, P, V, N, I) \
     BlockSkip BLK = ComputeBlockSkip(P, V, g_cbVobj.volblk_size_ts, g_cbVobj.volblk_value_range, tex3D_volblk);\
-    BLK.num_skip_steps = min(max(1, BLK.num_skip_steps), N - I);
+    BLK.num_skip_steps = min(BLK.num_skip_steps, N - I - 1);
 
 // NOTE THAT current low-res GPUs shows unexpected behavior when using sort_insert. 
 // Instead, Do USE sort_insertOpt and sort_shellOpt

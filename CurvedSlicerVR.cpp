@@ -46,16 +46,6 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 
 	bool recompile_hlsl = _fncontainer->fnParams.GetParam("_bool_ReloadHLSLObjFiles", false);
 
-	// curved slicer
-	float fExPlaneWidth = _fncontainer->fnParams.GetParam("_float_ExPlaneWidth", 1.f);
-	float fExPlaneHeight = _fncontainer->fnParams.GetParam("_float_ExPlaneHeight", 1.f);
-	float fExCurveThicknessPositionRange = _fncontainer->fnParams.GetParam("_float_CurveThicknessPositionRange", 1.f);
-	float fThicknessRatio = _fncontainer->fnParams.GetParam("_float_ThicknessRatio", 0.f);
-	bool bIsRightSide = _fncontainer->fnParams.GetParam("_bool_IsRightSide", false);
-	float fThicknessPosition = fThicknessRatio * fExCurveThicknessPositionRange * 0.5;
-	float fPlaneThickness = _fncontainer->fnParams.GetParam("_float_PlaneThickness", 0.f);
-	int iSlicerRayCastType = _fncontainer->fnParams.GetParam("_int_VolumeRayCastType", (int)0);	// 100
-
 	VmLight* light = _fncontainer->fnParams.GetParam("_VmLight*_LightSource", (VmLight*)NULL);
 	VmLens* lens = _fncontainer->fnParams.GetParam("_VmLens*_CamLens", (VmLens*)NULL);
 	LightSource light_src;
@@ -527,13 +517,8 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		}
 		dx11DeviceImmContext->CSSetShaderResources(1, 1, (__SRV_PTR*)&volblk_srv);
 
-		bool high_samplerate = gres_vol.res_values.GetParam("SAMPLE_OFFSET_X", 1.f) > 1.f ||
-			gres_vol.res_values.GetParam("SAMPLE_OFFSET_Y", 1.f) > 1.f || gres_vol.res_values.GetParam("SAMPLE_OFFSET_Z", 1.f) > 1.f;
 		CB_VolumeObject cbVolumeObj;
-		vmint3 vol_sampled_size = vmint3(gres_vol.res_values.GetParam("WIDTH", (uint)0),
-			gres_vol.res_values.GetParam("HEIGHT", (uint)0),
-			gres_vol.res_values.GetParam("DEPTH", (uint)0));
-		grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, actor, high_samplerate ? 2.f : 1.f, false, tmap_data->valid_min_idx.x, gres_volblk.options["FORMAT"] == DXGI_FORMAT_R16_UNORM ? 65535.f : 1.f);
+		grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, actor, gres_vol, tmap_data->valid_min_idx.x, gres_volblk.options["FORMAT"] == DXGI_FORMAT_R16_UNORM ? 65535.f : 1.f);
 		if (is_modulation_mode && ((uint)vol_data->vol_size.x * (uint)vol_data->vol_size.y * (uint)vol_data->vol_size.z > 1000000)) {
 			//cbVolumeObj.opacity_correction *= 2.f;
 			//cbVolumeObj.sample_dist *= 2.f;

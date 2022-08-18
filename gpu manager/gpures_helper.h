@@ -563,6 +563,7 @@ namespace grd_helper
 		float kappa_i; // 
 		float kappa_s; // 
 
+		// note vec_grad_x,y,z need to be computed w.r.t. vol_size (volume size stored in GPU memory)
 		vmfloat3 vec_grad_x; // ts
 		float value_range;
 		vmfloat3 vec_grad_y; // ts
@@ -579,11 +580,14 @@ namespace grd_helper
 		// 24~31bit : Sculpt Mask Value (1 byte)
 		uint vobj_flag;
 		uint iso_value;
-		float mask_value_range;
 		uint outline_color; // 
+		uint v_dummy0;
 
 		// light properties
 		vmfloat4 pb_shading_factor;	// x : Ambient, y : Diffuse, z : Specular, w : Specular power
+
+		vmfloat3 mask_vol_size; // volume size stored in GPU memory
+		float mask_value_range;
 
 		ZERO_SET(CB_VolumeObject)
 	};
@@ -700,7 +704,7 @@ namespace grd_helper
 		vmfloat3 posBottomLeftCOS;
 		float thicknessPlane; // use cam's far_plane
 		vmfloat3 posBottomRightCOS;
-		int numRaySteps;
+		uint __dummy0;
 		vmfloat3 planeUp; // WS, length is planePitch
 		uint flag; // 1st bit : isRightSide
 	};
@@ -713,7 +717,7 @@ namespace grd_helper
 	void SetCb_TMap(CB_TMAP& cb_tmap, VmObject* tobj);
 	//bool SetCbVrShadowMap(CB_VrShadowMap* pCBVrShadowMap, CB_VrCameraState* pCBVrCamStateForShadowMap, vmfloat3 f3PosOverviewBoxMinWS, vmfloat3 f3PosOverviewBoxMaxWS, map<string, void*>* pmapCustomParameter);
 	void SetCb_ClipInfo(CB_ClipInfo& cb_clip, VmVObject* obj, VmActor* actor);
-	void SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vobj, VmActor* actor, const float sample_rate, const bool apply_samplerate2gradient, const int iso_value, const float volblk_valuerange, const int sculpt_index = -1);
+	void SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vobj, VmActor* actor, GpuRes& gresVol, const int iso_value, const float volblk_valuerange, const int sculpt_index = -1);
 	void SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimitive* pobj, VmActor* actor, const vmmat44f& matWS2SS, const vmmat44f& matWS2PS, const bool is_annotation_obj, const bool use_vertex_color);
 	void SetCb_RenderingEffect(CB_RenderingEffect& cb_reffect, VmActor* actor);
 	void SetCb_VolumeRenderingEffect(CB_VolumeRenderingEffect& cb_vreffect, VmVObjectVolume* vobj, VmActor* actor);

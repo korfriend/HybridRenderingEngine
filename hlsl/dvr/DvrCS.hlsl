@@ -122,13 +122,14 @@ INVALID CASE IN THIS VERSION
 //    return (int) (tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r * g_cbVobj.value_range + 0.5f);
 //}
 
+// min_valid_v is g_cbTmap.first_nonzeroalpha_index
 #if VR_MODE == 3
-bool Sample_Volume_And_Check(inout int sample_v, const in float3 pos_sample_ts, const in int min_valid_v)
+bool Sample_Volume_And_Check(inout float sample_v, const float3 pos_sample_ts, const int min_valid_v)
 {
-	float fsample = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
+	sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
 	return sample_v > 0;
 }
-bool Vis_Volume_And_Check(inout float4 vis_otf, inout int sample_v, const in float3 pos_sample_ts)
+bool Vis_Volume_And_Check(inout float4 vis_otf, const float3 pos_sample_ts)
 {
 	float3 pos_vs = float3(pos_sample_ts.x * g_cbVobj.vol_size.x - 0.5f, 
 		pos_sample_ts.y * g_cbVobj.vol_size.y - 0.5f, 
@@ -166,156 +167,111 @@ bool Vis_Volume_And_Check(inout float4 vis_otf, inout int sample_v, const in flo
 	return vis_otf.a >= FLT_OPACITY_MIN__;
 }
 #else
-bool Sample_Volume_And_Check(inout int sample_v, const in float3 pos_sample_ts, const in int min_valid_v)
+bool Sample_Volume_And_Check(inout float sample_v, const float3 pos_sample_ts, const int min_valid_v)
 {
-	float fsample = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
-    sample_v = (int) (fsample * g_cbVobj.value_range + 0.5f);
+	sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
+    //sample_v = (int) (fsample * g_cbVobj.value_range + 0.5f);
 #if OTF_MASK==1
-    //int max_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, 255, tex3D_volmask);
-    //int mask_otf_id = buf_ids[max_vint];
-    //float4 vis_otf = LoadOtfBufId(sample_v, buf_otf, g_cbVobj.opacity_correction, mask_otf_id);
-    //return (uint)(vis_otf.a * 255.f) > 0;
 	int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
 	//int mask_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, g_cbVobj.mask_value_range, tex3D_volmask);
-	return sample_v >= min_valid_v;
+	return (sample_v * g_cbTmap.tmap_size_x) >= min_valid_v;
 #elif SCULPT_MASK == 1
-	int max_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, 255, tex3D_volmask);
+	int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
+	//int mask_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, g_cbVobj.mask_value_range, tex3D_volmask);
     int sculpt_value = (int) (g_cbVobj.vobj_flag >> 24);
-    return sample_v >= min_valid_v && (max_vint == 0 || max_vint > sculpt_value);
+    return (sample_v * g_cbTmap.tmap_size_x) >= min_valid_v && (mask_vint == 0 || mask_vint > sculpt_value);
 #else 
-    return sample_v >= min_valid_v;
+    return (sample_v * g_cbTmap.tmap_size_x) >= min_valid_v;
 #endif
 }
 
-bool Vis_Volume_And_Check(inout float4 vis_otf, inout int sample_v, const in float3 pos_sample_ts)
+bool Vis_Volume_And_Check(inout float4 vis_otf, inout float sample_v, const float3 pos_sample_ts)
 {
-	float fsample = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
-	sample_v = (int)(fsample * g_cbVobj.value_range + 0.5f);
+	sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
 #if OTF_MASK==1
-    //int max_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, 255, tex3D_volmask);
-    //int mask_otf_id = buf_ids[max_vint];
-    //vis_otf = LoadOtfBufId(sample_v, buf_otf, g_cbVobj.opacity_correction, mask_otf_id);
-    //return (uint)(vis_otf.a * 255.f) > FLT_MIN;
 	int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
 	//int mask_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, g_cbVobj.mask_value_range, tex3D_volmask);
-	vis_otf = LoadOtfBufId(fsample * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
+	vis_otf = LoadOtfBufId(sample_v * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
 	return vis_otf.a >= FLT_OPACITY_MIN__;//&& mask_vint > 0;//&& mask_vint == 3;
 #elif SCULPT_MASK == 1
-	int max_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, 255, tex3D_volmask);
+	int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
+	//int mask_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, g_cbVobj.mask_value_range, tex3D_volmask);
     int sculpt_value = (int) (g_cbVobj.vobj_flag >> 24);
-    vis_otf = LoadOtfBuf(sample_v, buf_otf, g_cbVobj.opacity_correction);
-    return ((uint)(vis_otf.a * 255.f) > 0) && (max_vint == 0 || max_vint > sculpt_value);
+    vis_otf = LoadOtfBuf(sample_v * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
+    return ((uint)(vis_otf.a * 255.f) > 0) && (mask_vint == 0 || mask_vint > sculpt_value);
 #else 
-	vis_otf = LoadOtfBuf(fsample * g_cbTmap.tmap_size_x, buf_otf, 1);// g_cbVobj.opacity_correction);
+	vis_otf = LoadOtfBuf(sample_v * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
     return vis_otf.a >= FLT_OPACITY_MIN__;
 #endif
 }
 
-bool Vis_Volume_And_Check_Slab(inout float4 vis_otf, inout int sample_v, int sample_prev, const in float3 pos_sample_ts)
+bool Vis_Volume_And_Check_Slab(inout float4 vis_otf, inout float sample_v, float sample_prev, const float3 pos_sample_ts)
 {
-	float fsample = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
-	sample_v = (int)(fsample * g_cbVobj.value_range + 0.5f);
-	float fsample_prev = (float)sample_prev / g_cbVobj.value_range;
+	sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
+
 #if OTF_MASK==1
-
-
-#define MULTIOTF_OLD 1
-#if MULTIOTF_OLD==1
-	//int max_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, 255, tex3D_volmask);
-	//int mask_otf_id = buf_ids[max_vint];
-	//vis_otf = LoadOtfBufId(sample_v, buf_otf, g_cbVobj.opacity_correction, mask_otf_id);
-	//return (uint)(vis_otf.a * 255.f) > FLT_MIN;
 	int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
 	//int mask_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, g_cbVobj.mask_value_range, tex3D_volmask);
-	//vis_otf = LoadOtfBufId(fsample * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
+
+	//float3 pos_vs = float3(pos_sample_ts.x * g_cbVobj.mask_vol_size.x - 0.5f,
+	//	pos_sample_ts.y * g_cbVobj.mask_vol_size.y - 0.5f,
+	//	pos_sample_ts.z * g_cbVobj.mask_vol_size.z - 0.5f);
+	//int3 idx_vs = int3(pos_vs);
+	//float mask_vints[8];
+	//const int offset = 2;
+	//mask_vints[0] = tex3D_volmask.Load(int4(idx_vs, 0)).r * g_cbVobj.mask_value_range + 0.5f;
+	//mask_vints[1] = tex3D_volmask.Load(int4(idx_vs + int3(offset, 0, 0), 0)).r * g_cbVobj.mask_value_range + 0.5f;
+	//mask_vints[2] = tex3D_volmask.Load(int4(idx_vs + int3(0, offset, 0), 0)).r * g_cbVobj.mask_value_range + 0.5f;
+	//mask_vints[3] = tex3D_volmask.Load(int4(idx_vs + int3(offset, offset, 0), 0)).r * g_cbVobj.mask_value_range + 0.5f;
+	//mask_vints[4] = tex3D_volmask.Load(int4(idx_vs + int3(0, 0, offset), 0)).r * g_cbVobj.mask_value_range + 0.5f;
+	//mask_vints[5] = tex3D_volmask.Load(int4(idx_vs + int3(offset, 0, offset), 0)).r * g_cbVobj.mask_value_range + 0.5f;
+	//mask_vints[6] = tex3D_volmask.Load(int4(idx_vs + int3(0, offset, offset), 0)).r * g_cbVobj.mask_value_range + 0.5f;
+	//mask_vints[7] = tex3D_volmask.Load(int4(idx_vs + int3(offset, offset, offset), 0)).r * g_cbVobj.mask_value_range + 0.5f;
+	//
+	//// 41 or 0 ¹ø 
+	//for (int i = 0; i < 8; i++) {
+	//	if ((int)mask_vints[i] == 41) {
+	//		if ((int)mask_vints[0] == 41 || (int)mask_vints[0] == 0) 
+	//		{
+	//			vis_otf = (float4)0;
+	//			return false;
+	//		}
+	//	}
+	//}
+	vis_otf = LoadOtfBufId(sample_v * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
 
 	//if (g_cbTmap.tmap_size_x * fsample < g_cbTmap.first_nonzeroalpha_index
 	//	|| g_cbTmap.tmap_size_x * fsample_prev < g_cbTmap.first_nonzeroalpha_index) return false;
 
-	vis_otf = LoadSlabOtfBufId_PreInt(fsample * g_cbTmap.tmap_size_x, fsample_prev * g_cbTmap.tmap_size_x, buf_preintotf, g_cbVobj.opacity_correction, mask_vint);
+	//vis_otf = LoadSlabOtfBufId_PreInt(fsample * g_cbTmap.tmap_size_x, fsample_prev * g_cbTmap.tmap_size_x, buf_preintotf, g_cbVobj.opacity_correction, mask_vint);
 	//if (mask_vint == 0) sample_v = 0;
 	//vis_otf = LoadSlabOtfBuf_PreInt(fsample * g_cbTmap.tmap_size_x, fsample_prev * g_cbTmap.tmap_size_x, buf_preintotf, g_cbVobj.opacity_correction);// g_cbVobj.opacity_correction);
 
 	return vis_otf.a >= FLT_OPACITY_MIN__;//&& mask_vint > 0;//&& mask_vint == 3;
-#else
-	float3 pos_vs = float3(pos_sample_ts.x * g_cbVobj.vol_size.x - 0.5f,
-		pos_sample_ts.y * g_cbVobj.vol_size.y - 0.5f,
-		pos_sample_ts.z * g_cbVobj.vol_size.z - 0.5f);
-	int3 idx_vs = int3(pos_vs);
-
-	float samples[8];
-	samples[0] = tex3D_volume.Load(int4(idx_vs, 0)).r;
-	samples[1] = tex3D_volume.Load(int4(idx_vs + int3(1, 0, 0), 0)).r;
-	samples[2] = tex3D_volume.Load(int4(idx_vs + int3(0, 1, 0), 0)).r;
-	samples[3] = tex3D_volume.Load(int4(idx_vs + int3(1, 1, 0), 0)).r;
-	samples[4] = tex3D_volume.Load(int4(idx_vs + int3(0, 0, 1), 0)).r;
-	samples[5] = tex3D_volume.Load(int4(idx_vs + int3(1, 0, 1), 0)).r;
-	samples[6] = tex3D_volume.Load(int4(idx_vs + int3(0, 1, 1), 0)).r;
-	samples[7] = tex3D_volume.Load(int4(idx_vs + int3(1, 1, 1), 0)).r;
-
-	float mask_vints[8];
-	mask_vints[0] = tex3D_volmask.Load(int4(idx_vs, 0)).r;
-	mask_vints[1] = tex3D_volmask.Load(int4(idx_vs + int3(1, 0, 0), 0)).r;
-	mask_vints[2] = tex3D_volmask.Load(int4(idx_vs + int3(0, 1, 0), 0)).r;
-	mask_vints[3] = tex3D_volmask.Load(int4(idx_vs + int3(1, 1, 0), 0)).r;
-	mask_vints[4] = tex3D_volmask.Load(int4(idx_vs + int3(0, 0, 1), 0)).r;
-	mask_vints[5] = tex3D_volmask.Load(int4(idx_vs + int3(1, 0, 1), 0)).r;
-	mask_vints[6] = tex3D_volmask.Load(int4(idx_vs + int3(0, 1, 1), 0)).r;
-	mask_vints[7] = tex3D_volmask.Load(int4(idx_vs + int3(1, 1, 1), 0)).r;
-
-	float3 f3InterpolateRatio = pos_vs - idx_vs;
-
-	float fInterpolateWeights[8];
-	fInterpolateWeights[0] = (1.f - f3InterpolateRatio.z) * (1.f - f3InterpolateRatio.y) * (1.f - f3InterpolateRatio.x);
-	fInterpolateWeights[1] = (1.f - f3InterpolateRatio.z) * (1.f - f3InterpolateRatio.y) * f3InterpolateRatio.x;
-	fInterpolateWeights[2] = (1.f - f3InterpolateRatio.z) * f3InterpolateRatio.y * (1.f - f3InterpolateRatio.x);
-	fInterpolateWeights[3] = (1.f - f3InterpolateRatio.z) * f3InterpolateRatio.y * f3InterpolateRatio.x;
-	fInterpolateWeights[4] = f3InterpolateRatio.z * (1.f - f3InterpolateRatio.y) * (1.f - f3InterpolateRatio.x);
-	fInterpolateWeights[5] = f3InterpolateRatio.z * (1.f - f3InterpolateRatio.y) * f3InterpolateRatio.x;
-	fInterpolateWeights[6] = f3InterpolateRatio.z * f3InterpolateRatio.y * (1.f - f3InterpolateRatio.x);
-	fInterpolateWeights[7] = f3InterpolateRatio.z * f3InterpolateRatio.y * f3InterpolateRatio.x;
-
-	vis_otf = (float4)0;
-	[unroll]
-	for (int m = 0; m < 8; m++) {
-		float4 vis = LoadOtfBufId(samples[m] * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vints[m]);
-		vis_otf += vis * fInterpolateWeights[m];
-	}
-	return vis_otf.a >= FLT_OPACITY_MIN__;
-#endif
-
-
-
 
 #elif SCULPT_MASK == 1
-	int max_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, 255, tex3D_volmask);
+	int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
+	//int mask_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, 255, tex3D_volmask);
 	int sculpt_value = (int)(g_cbVobj.vobj_flag >> 24);
-	vis_otf = LoadSlabOtfBufId_PreInt(fsample * g_cbTmap.tmap_size_x, fsample_prev * g_cbTmap.tmap_size_x, buf_preintotf, g_cbVobj.opacity_correction, mask_vint);
-	return ((uint)(vis_otf.a * 255.f) > 0) && (max_vint == 0 || max_vint > sculpt_value);
+	vis_otf = LoadSlabOtfBufId_PreInt(sample_v * g_cbTmap.tmap_size_x, sample_prev * g_cbTmap.tmap_size_x, buf_preintotf, g_cbVobj.opacity_correction, mask_vint);
+	return ((uint)(vis_otf.a * 255.f) > 0) && (mask_vint == 0 || mask_vint > sculpt_value);
 #else 
-	//float sample_slab = (fsample + (float)sample_prev / g_cbVobj.value_range) * 0.5f;
-	//vis_otf = LoadOtfBuf(sample_slab * g_cbTmap.tmap_size_x, buf_otf, 1);// g_cbVobj.opacity_correction);
-	//return vis_otf.a >= FLT_OPACITY_MIN__;
-
-	//vis_otf = LoadOtfBuf(fsample * g_cbTmap.tmap_size_x, buf_otf, 1);// g_cbVobj.opacity_correction);
-	//return vis_otf.a >= FLT_OPACITY_MIN__;
-
-	vis_otf = LoadSlabOtfBuf_PreInt(fsample * g_cbTmap.tmap_size_x, fsample_prev * g_cbTmap.tmap_size_x, buf_preintotf, g_cbVobj.opacity_correction);// g_cbVobj.opacity_correction);
+	vis_otf = LoadSlabOtfBuf_PreInt(sample_v * g_cbTmap.tmap_size_x, sample_prev * g_cbTmap.tmap_size_x, buf_preintotf, g_cbVobj.opacity_correction);
 	return vis_otf.a >= FLT_OPACITY_MIN__;
 #endif
 }
 #endif
 
-#define SURFACEREFINEMENTNUM 5
-void Compute_1stHit(inout int step, inout int sample_v, const in float3 pos_ray_start_ws, const in float3 dir_sample_ws, const in int num_ray_samples)
+#define ITERATION_REFINESURFACE 5
+void Find1stSampleHit(inout int step, const float3 pos_ray_start_ws, const float3 dir_sample_ws, const int num_ray_samples)
 {
     step = -1;
-    sample_v = 0;
+    float sample_v = 0;
 
     float3 pos_ray_start_ts = TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts);
     float3 dir_sample_ts = TransformVector(dir_sample_ws, g_cbVobj.mat_ws2ts);
     
-    int min_valid_v = g_cbTmap.first_nonzeroalpha_index;
+	int min_valid_v = g_cbTmap.first_nonzeroalpha_index;
     if (Sample_Volume_And_Check(sample_v, pos_ray_start_ts, min_valid_v))
     {
         step = 0;
@@ -337,8 +293,8 @@ void Compute_1stHit(inout int step, inout int sample_v, const in float3 pos_ray_
                 float3 pos_sample_blk_ts = pos_ray_start_ts + dir_sample_ts * (float) i;
                 if (Sample_Volume_And_Check(sample_v, pos_sample_blk_ts, min_valid_v))
                 {
-                    step = i;
-                    i = num_ray_samples;
+					step = i;
+					i = num_ray_samples;
                     k = num_ray_samples;
                     break;
                 } // if(sample valid check)
@@ -353,7 +309,8 @@ void Compute_1stHit(inout int step, inout int sample_v, const in float3 pos_ray_
     }
 }
 
-void SurfaceRefinement(inout float3 pos_refined_ws, inout int sample_v, const in float3 pos_sample_ws, const in float3 dir_sample_ws, const in int num_refinement)
+// 
+void FindNearestInsideSurface(inout float3 pos_refined_ws, const float3 pos_sample_ws, const float3 dir_sample_ws, const int num_refinement)
 {
     float3 pos_sample_ts = TransformPoint(pos_sample_ws, g_cbVobj.mat_ws2ts);
     float3 dir_sample_ts = TransformVector(dir_sample_ws, g_cbVobj.mat_ws2ts);
@@ -370,10 +327,9 @@ void SurfaceRefinement(inout float3 pos_refined_ws, inout int sample_v, const in
     {
         float3 pos_bis_ts = (pos_bis_s_ts + pos_bis_e_ts) * 0.5f;
         float t = (t0 + t1) * 0.5f;
-        int _sample_v = 0;
+        float _sample_v = 0;
         if (Sample_Volume_And_Check(_sample_v, pos_bis_ts, min_valid_v))
         {
-            sample_v = _sample_v;
             pos_bis_e_ts = pos_bis_ts;
             t1 = t;
         }
@@ -385,49 +341,6 @@ void SurfaceRefinement(inout float3 pos_refined_ws, inout int sample_v, const in
     }
 
     pos_refined_ws = pos_sample_ws + dir_sample_ws * (t1 - 1.f);
-}
-
-void SurfaceRefinement2(inout float3 pos_refined_ws, inout int sample_v, const in float3 pos_sample_ws, const in float3 dir_sample_ws, const in int num_refinement)
-{
-	float3 pos_sample_ts = TransformPoint(pos_sample_ws, g_cbVobj.mat_ws2ts);
-	float3 dir_sample_ts = TransformVector(dir_sample_ws, g_cbVobj.mat_ws2ts);
-	float t0 = 0, t1 = 1;
-
-	// Interval bisection
-	float3 pos_bis_s_ts = pos_sample_ts - dir_sample_ts;
-	float3 pos_bis_e_ts = pos_sample_ts;
-
-	float3 pos_bis_s_ws = pos_sample_ws - dir_sample_ws;
-	float3 pos_bis_e_ws = pos_sample_ws;
-
-	int min_valid_v = g_cbTmap.first_nonzeroalpha_index;
-
-	[loop]
-	for (int j = 0; j < num_refinement; j++)
-	{
-		float3 pos_bis_ts = (pos_bis_s_ts + pos_bis_e_ts) * 0.5f;
-		//float3 pos_bis_ws = (pos_bis_s_ws + pos_bis_e_ws) * 0.5f;
-		float t = (t0 + t1) * 0.5f;
-		int _sample_v = 0;
-		if (Sample_Volume_And_Check(_sample_v, pos_bis_ts, min_valid_v))
-		{
-			pos_bis_e_ts = pos_bis_ts;
-			//pos_bis_e_ws = pos_bis_ws;
-			t1 = t;
-		}
-		else
-		{
-			sample_v = _sample_v;
-			pos_bis_s_ts = pos_bis_ts;
-			//pos_bis_s_ws = pos_bis_ws;
-			t0 = t;
-		}
-	}
-
-	pos_refined_ws = pos_sample_ws + dir_sample_ws * (t0 - 1.f);
-	//pos_refined_ws = pos_bis_s_ws;
-	//pos_refined_ws = pos_sample_ws - dir_sample_ws;
-	//sample_v = 0;
 }
 
 #define GRAD_VOL(P) GradientVolume(P, g_cbVobj.vec_grad_x, g_cbVobj.vec_grad_y, g_cbVobj.vec_grad_z, tex3D_volume)
@@ -519,6 +432,9 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #endif
 
 	uint num_frags = fragment_counter[DTid.xy];
+	// 2 : on the clip plane
+	// 1 : outside the clip plane
+	// 0 : outside the volume
 	uint vr_hit_enc = num_frags >> 24;
 	num_frags = num_frags & 0xFFF;
 
@@ -574,8 +490,6 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	//	fragment_vis[tex2d_xy] = float4(1, 1, 1, 1);
 	//return;
 
-
-
 	fs[num_frags] = (Fragment)0;
 	fs[num_frags].z = FLT_MAX;
     fragment_vis[tex2d_xy] = vis_out;
@@ -597,6 +511,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	float3 vbos_hit_start_pos = pos_ip_ws;
 #if RAYMODE == 0 // DVR
 	//depth_out = fragment_zdepth[DTid.xy];
+	// use the result from VR_SURFACE
 	depth_out = vr_fragment_1sthit_read[DTid.xy];
 	
 	float4 outline_test = ConvertUIntToFloat4(g_cbVobj.outline_color);
@@ -651,7 +566,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
     float2 hits_t = ComputeVBoxHits(vbos_hit_start_pos, dir_sample_unit_ws, g_cbVobj.mat_alignedvbox_tr_ws2bs, g_cbClipInfo);
 	// 1st Exit in the case that there is no ray-intersecting boundary in the volume box
 	hits_t.y = min(g_cbCamState.far_plane, hits_t.y); // only available in orthogonal view (thickness slicer)
-    int num_ray_samples = (int) ((hits_t.y - hits_t.x) / g_cbVobj.sample_dist + 0.5f);
+    int num_ray_samples = ceil((hits_t.y - hits_t.x) / g_cbVobj.sample_dist);
     if (num_ray_samples <= 0)
         return;
 	// note hits_t.x >= 0
@@ -660,6 +575,8 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 	// DVR ray-casting core part
 #if RAYMODE == 0 // DVR
+	// check pos_ray_start_ws!!!!!!!!!!!!!!!! 
+
 	vis_out = 0;
 	depth_out = FLT_MAX;
 
@@ -699,28 +616,32 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	Fragment f_dly = fs[0]; // if no frag, the z-depth is infinite
 #endif
 
-	int start_idx = 0, sample_v = 0;
+	int start_idx = 0;
+	float sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_ray_start_ts, 0).r;
 
 #if VR_MODE != 3
 	// note that raycasters except vismask mode (or x-ray) use SLAB sample
 	start_idx = 1;
 	//float3 grad_prev = GRAD_VOL(pos_ray_start_ts);
 	float3 grad_prev = GradientVolume2(pos_ray_start_ts, g_cbVobj.vec_grad_x, g_cbVobj.vec_grad_y, g_cbVobj.vec_grad_z, tex3D_volume);
-	int sample_prev = (int)(tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_ray_start_ts, 0).r * g_cbVobj.value_range + 0.5f);
+	float sample_prev = sample_v;
 #endif
 	
-	if (vr_hit_enc == 2)
+	if (vr_hit_enc == 2) // on the clip plane
 	{
 		float4 vis_otf = (float4) 0;
 		start_idx++;
 
 #if VR_MODE != 3
-		float3 grad = GRAD_VOL(pos_ray_start_ts + dir_sample_ts);
+		float3 pos_sample_ts = pos_ray_start_ts + dir_sample_ts;
+
+		sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
+		float3 grad = GRAD_VOL(pos_sample_ts);
 		float3 gradSlab = grad + grad_prev;
 		grad_prev = grad;
-		if (Vis_Volume_And_Check_Slab(vis_otf, sample_prev, sample_prev, pos_ray_start_ts))
+		if (Vis_Volume_And_Check_Slab(vis_otf, sample_v, sample_prev, pos_sample_ts))
 #else
-		if (Vis_Volume_And_Check(vis_otf, sample_v, pos_ray_start_ts))
+		if (Vis_Volume_And_Check(vis_otf, pos_ray_start_ts))
 #endif
 		{
 			float depth_sample = depth_hit;
@@ -770,7 +691,8 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 				if (Vis_Volume_And_Check_Slab(vis_otf, sample_v, sample_prev, pos_sample_blk_ts))
 				{
 					float3 grad = GRAD_VOL(pos_sample_blk_ts);
-					if (!isPrevValid) {
+					if (!isPrevValid) 
+					{
 						//float3 pos_prev_sample_blk_ts = pos_sample_blk_ts - dir_sample_ts;
 						grad_prev = grad;// GRAD_VOL(pos_prev_sample_blk_ts);
 					}
@@ -780,9 +702,9 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 					grad_prev = grad;
 					
 					float grad_len = length(gradSlab);
-					float3 nrl = gradSlab / (grad_len + 0.000001f);
+					float3 nrl = gradSlab / (grad_len + 0.00001f);
 #else
-				if (Vis_Volume_And_Check(vis_otf, sample_v, pos_sample_blk_ts))
+				if (Vis_Volume_And_Check(vis_otf, pos_sample_blk_ts))
 				{
 					float grad_len;
 					float3 nrl = GRAD_NRL_VOL(pos_sample_blk_ts, dir_sample_ws, grad_len);
@@ -981,21 +903,30 @@ void VR_SURFACE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	if (num_ray_samples <= 0)
 		return;
 
-	int sample_v = 0;
 	int hit_step = -1;
 	float3 pos_start_ws = pos_ip_ws + dir_sample_unit_ws * hits_t.x;
-	Compute_1stHit(hit_step, sample_v, pos_start_ws, dir_sample_ws, num_ray_samples);
+	Find1stSampleHit(hit_step, pos_start_ws, dir_sample_ws, num_ray_samples);
 	if (hit_step < 0)
 		return;
+	
+	float3 pos_hit_ws = pos_start_ws + dir_sample_ws * (float)hit_step;
+	if (hit_step > 0) {
+		FindNearestInsideSurface(pos_hit_ws, pos_hit_ws, dir_sample_ws, ITERATION_REFINESURFACE);
+#if VR_MODE != 3
+		pos_hit_ws -= dir_sample_ws;
+#endif
+		if (dot(pos_hit_ws - pos_start_ws, dir_sample_ws) <= 0)
+			pos_hit_ws = pos_start_ws;
+	}
 
-	float3 pos_hit_ws;
-	// note that sample_v is first set by Compute_1stHit
-	SurfaceRefinement(pos_hit_ws, sample_v, pos_start_ws + dir_sample_ws * (float)hit_step, dir_sample_ws, SURFACEREFINEMENTNUM);
 	float depth_hit = length(pos_hit_ws - pos_ip_ws);
 
 	vr_fragment_1sthit_write[DTid.xy] = depth_hit;
 	uint fcnt = fragment_counter[DTid.xy];
-	uint dvr_hit_enc = hit_step == 0 ? 2 : 1;
+	uint dvr_hit_enc = length(pos_hit_ws - pos_start_ws) < g_cbVobj.sample_dist ? 2 : 1;
+	// 2 : on the clip plane
+	// 1 : outside the clip plane
+	// 0 : outside the volume
 	fragment_counter[DTid.xy] = fcnt | (dvr_hit_enc << 24);
 }
 
@@ -1031,15 +962,9 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	//float3 posBottomLeftCOS;
 	//float thicknessPlane;
 	//float3 posBottomRightCOS;
-	//int numRaySteps; 
+	//uint __dummy0; 
 	//float3 planeUp; // WS, length is planePitch
 	//uint flag; // 1st bit : isRightSide
-
-	// precomputation
-	int num_ray_samples = g_cbCurvedSlicer.numRaySteps;
-	if (num_ray_samples < 1)
-		return;
-
 
 	//return;
 	Fragment fs[VR_MAX_LAYERS];
@@ -1104,6 +1029,7 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 
 	if (bIsRightSide)
 		f3VecSampleViewWS *= -1.f;
+	
 	float3 f3PosSampleWS_C = f3PosSampleWS_C_ + f3VecSampleViewWS * (fThicknessPosition - fPlaneThickness * 0.5f);
 	//f3VecSampleUpWS *= fPlanePitch; // already multiplied
 
@@ -1127,6 +1053,7 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	float3 pos_ray_start_ws = f3PosSampleWS_C + f3VecSampleUpWS * (f2PosSampleCOS.y - fPlaneCenterY);
 	float3 dir_sample_ws = f3VecSampleViewWS * sample_dist;
 
+	int num_ray_samples = ceil(fPlaneThickness / sample_dist);
 	// DVR ray-casting core part
 #if RAYMODE == 0 // DVR
 	// note that the gradient normal direction faces to the inside
@@ -1147,19 +1074,44 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	Fragment f_dly = fs[0]; // if no frag, the z-depth is infinite
 #endif
 
-	int sample_v = 0;
-	int hit_step = -1;
-	Compute_1stHit(hit_step, sample_v, pos_ray_start_ws, dir_sample_ws, num_ray_samples);
-	if (hit_step < 0)
+	int hit_step = 0;// -1;
+	//Find1stSampleHit(hit_step, pos_ray_start_ws, dir_sample_ws, num_ray_samples);
+	if (hit_step < 0) {
+		//fragment_vis[cip_xy] = float4(1, 1, 0, 1);
 		return;
+	}
 
-	float3 pos_hit_ws;
-	// note that sample_v is first set by Compute_1stHit
-	SurfaceRefinement(pos_hit_ws, sample_v, pos_ray_start_ws + dir_sample_ws * (float)hit_step, dir_sample_ws, SURFACEREFINEMENTNUM);
-	float depth_hit = length(pos_hit_ws - pos_ray_start_ws);
-	pos_ray_start_ws = pos_hit_ws;
-	
-	float3 pos_ray_start_ts = TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts);
+	float3 pos_hit_ws = pos_ray_start_ws + dir_sample_ws * (float)hit_step;
+	if (hit_step > 0) 
+	{
+		//FindNearestInsideSurface(pos_hit_ws, pos_hit_ws, dir_sample_ws, ITERATION_REFINESURFACE);
+#if VR_MODE != 3
+		pos_hit_ws -= dir_sample_ws;
+#endif
+		if (dot(pos_hit_ws - pos_ray_start_ws, dir_sample_ws) <= 0)
+			pos_hit_ws = pos_ray_start_ws;
+	}
+
+	float depthHit = length(pos_hit_ws - pos_ray_start_ws);
+	bool isOnPlane = depthHit < sample_dist - 0.001; // 0.001 for sample distance precision
+	//float remainThickness = fPlaneThickness - depthHit + sample_dist;
+	int num_new_ray_samples = int((fPlaneThickness - depthHit) / sample_dist + 0.5);
+	//int num_new_ray_samples = int((fPlaneThickness - depthHit) / sample_dist);
+	//if(dot(dir_sample_ws, float3(0, 1, 0)) < 0)
+	//	fragment_vis[cip_xy] = float4(1, 0, 0, 1);
+	//else
+	//	fragment_vis[cip_xy] = float4(1, 1, 0, 1);
+	//
+	//fragment_vis[cip_xy] = float4((float3) ((float)remainThickness / fPlaneThickness), 1);
+	//if(num_new_ray_samples > 10)
+	//	fragment_vis[cip_xy] = float4(1, 0, 0, 1);
+	//return;
+
+	//fragment_vis[cip_xy] = float4((float3)((float)num_new_ray_samples / num_ray_samples), 1);
+	//return;
+
+	// note that sample_v is first set by Find1stSampleHit
+	float3 pos_ray_hit_ts = TransformPoint(pos_hit_ws, g_cbVobj.mat_ws2ts);
 	float3 dir_sample_ts = TransformVector(dir_sample_ws, g_cbVobj.mat_ws2ts);
 
 	// test //
@@ -1170,32 +1122,36 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	//return;
 	//////////
 
+	float sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_ray_hit_ts, 0).r;
 	int start_idx = 0;
 
 #if VR_MODE != 3
 	// note that raycasters except vismask mode (or x-ray) use SLAB sample
 	start_idx = 1;
-	//float3 grad_prev = GRAD_VOL(pos_ray_start_ts);
-	float3 grad_prev = GradientVolume2(pos_ray_start_ts, g_cbVobj.vec_grad_x, g_cbVobj.vec_grad_y, g_cbVobj.vec_grad_z, tex3D_volume);
-	int sample_prev = sample_v;
+	//float3 grad_prev = GRAD_VOL(pos_ray_hit_ts);
+	float3 grad_prev = GradientVolume2(pos_ray_hit_ts, g_cbVobj.vec_grad_x, g_cbVobj.vec_grad_y, g_cbVobj.vec_grad_z, tex3D_volume);
+	float sample_prev = sample_v;
 #endif
 
-	/*
-	if (hit_step == 0)
+#if VR_MODE != 20
+	if (isOnPlane)//
 	{
 		float4 vis_otf = (float4) 0;
 		start_idx++;
 
 #if VR_MODE != 3
-		float3 grad = GRAD_VOL(pos_ray_start_ts + dir_sample_ts);
+		float3 pos_sample_ts = pos_ray_hit_ts + dir_sample_ts;
+
+		//sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
+		float3 grad = GRAD_VOL(pos_sample_ts);
 		float3 gradSlab = grad + grad_prev;
 		grad_prev = grad;
-		if (Vis_Volume_And_Check_Slab(vis_otf, sample_prev, sample_prev, pos_ray_start_ts))
+		if (Vis_Volume_And_Check_Slab(vis_otf, sample_v, sample_prev, pos_sample_ts))
+		//if (Vis_Volume_And_Check(vis_otf, sample_v, pos_sample_ts))
 #else
-		if (Vis_Volume_And_Check(vis_otf, sample_v, pos_ray_start_ts))
+		if (Vis_Volume_And_Check(vis_otf, pos_ray_hit_ts))
 #endif
 		{
-			//float depth_sample = depth_hit;
 #if VR_MODE != 3
 			// note that depth_hit is the front boundary of slab
 			//depth_sample += sample_dist; // slab's back boundary
@@ -1207,7 +1163,7 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 			float3 nrl = gradSlab / (grad_len + 0.0001f);
 			grad_len *= 0.5f;
 
-			float depth_sample = depth_hit + (float)i * sample_dist;
+			float depth_sample = depthHit + sample_dist;
 			float __s = grad_len > 0.001f ? abs(dot(view_dir, nrl)) : 0;
 			float kappa_t = 5.0;// g_cbVobj.kappa_i;
 			float kappa_s = 0.5;// g_cbVobj.kappa_s;
@@ -1222,16 +1178,39 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 #endif
 			//vis_sample *= mask_weight;
 			vis_out += vis_sample * (1.f - vis_out.a);
+			//fragment_vis[cip_xy] = float4(1, 0, 0, 1);
+			//return;
 		}
+		//fragment_vis[cip_xy] = float4(1, 0, 0, 1);
+		//return;
 	}
+#endif
 	/**/
+	//fragment_vis[cip_xy] = vis_out;
+	//return;
 
 	[loop]
-	for (i = start_idx; i < num_ray_samples; i++)
+	for (i = start_idx; i < num_new_ray_samples; i++) 
 	{
-		float3 pos_sample_ts = pos_ray_start_ts + dir_sample_ts * (float)i;
+		float3 pos_sample_ts = pos_ray_hit_ts + dir_sample_ts * (float)i;
 
-		LOAD_BLOCK_INFO(blkSkip, pos_sample_ts, dir_sample_ts, num_ray_samples, i);
+		LOAD_BLOCK_INFO(blkSkip, pos_sample_ts, dir_sample_ts, num_new_ray_samples, i);
+
+		//if (blkSkip.num_skip_steps == 0) {
+		//	vis_out = float4(1, 0, 0, 1);
+		//	break;
+		//}
+		//if (blkSkip.num_skip_steps < 0) {
+		//	vis_out = float4(0, 1, 0, 1);
+		//	break;
+		//}
+		//if (blkSkip.num_skip_steps > 100) {
+		//	vis_out = float4(1, 1, 0, 1);
+		//	break;
+		//}
+		//break;
+		//i += blkSkip.num_skip_steps;
+		//continue;
 
 		if (blkSkip.blk_value > 0)
 		{
@@ -1239,10 +1218,11 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 			bool isPrevValid = true;
 #endif
 			[loop]
-			for (int j = 0; j < blkSkip.num_skip_steps; j++, i++)
+			//for (int j = 0; j <= blkSkip.num_skip_steps && i + j < num_new_ray_samples; j++)
+			for (int j = 0; j <= blkSkip.num_skip_steps; j++)
 			{
 				//float3 pos_sample_blk_ws = pos_sample_ts + dir_sample_ws * (float) i;
-				float3 pos_sample_blk_ts = pos_ray_start_ts + dir_sample_ts * (float)i;
+				float3 pos_sample_blk_ts = pos_ray_hit_ts + dir_sample_ts * (float) (i + j);
 
 				float4 vis_otf = (float4) 0;
 #if VR_MODE != 3
@@ -1250,7 +1230,8 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 				//if (Vis_Volume_And_Check(vis_otf, sample_v, pos_sample_blk_ts))
 				{
 					float3 grad = GRAD_VOL(pos_sample_blk_ts);
-					if (!isPrevValid) {
+					if (!isPrevValid) 
+					{
 						//float3 pos_prev_sample_blk_ts = pos_sample_blk_ts - dir_sample_ts;
 						grad_prev = grad;// GRAD_VOL(pos_prev_sample_blk_ts);
 					}
@@ -1263,24 +1244,27 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 					float3 nrl = gradSlab / (grad_len + 0.0001f);
 					grad_len *= 0.5f;
 #else
-				if (Vis_Volume_And_Check(vis_otf, sample_v, pos_sample_blk_ts))
+				if (Vis_Volume_And_Check(vis_otf, pos_sample_blk_ts))
 				{
 					float grad_len;
 					float3 nrl = GRAD_NRL_VOL(pos_sample_blk_ts, dir_sample_ws, grad_len);
 #endif
 					float shade = 1.f;
-					//if (grad_len > 0)
-					//	shade = PhongBlinnVr(view_dir, g_cbVobj.pb_shading_factor, light_dirinv, nrl, true);
+#if VR_MODE != 2
+					if (grad_len > 0)
+						shade = PhongBlinnVr(view_dir, g_cbVobj.pb_shading_factor, light_dirinv, nrl, true);
+#endif
 					
 					float4 vis_sample = float4(shade * vis_otf.rgb, vis_otf.a);
 #if VR_MODE == 2
-					float depth_sample = depth_hit + (float)i * sample_dist;
+					float depth_sample = depthHit + (float)(i + j) * sample_dist;
 					float __s = grad_len > 0.001f ? abs(dot(view_dir, nrl)) : 0;
 					float kappa_t = 5.0;// g_cbVobj.kappa_i;
 					float kappa_s = 0.5;// g_cbVobj.kappa_s;
 					//float modulator = pow(min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(kappa_i * max(__s, 0.1f), kappa_s));
 					//float modulator = pow(min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(kappa_i * max(__s, 0.1f), kappa_s));
-					float modulator = min(grad_len * 2.f * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
+					//if (grad_len < 0.01f) grad_len = 0;
+					float modulator = max(min(grad_len * 2.f * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), 0.01);
 					float dist_plane_sq = fPlaneThickness * 0.5f - depth_sample;
 					dist_plane_sq /= fPlaneThickness * 0.5f;
 					dist_plane_sq *= dist_plane_sq;
@@ -1292,8 +1276,8 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 
 					if (vis_out.a >= ERT_ALPHA)
 					{
-						i = num_ray_samples;
-						j = num_ray_samples;
+						i = 10000000;//num_ray_samples;
+						j = 10000000;// num_ray_samples;
 						vis_out.a = 1.f;
 						break;
 					}
@@ -1305,17 +1289,18 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 				sample_prev = sample_v;
 #endif
 			} // for (int j = 0; j < blkSkip.num_skip_steps; j++, i++)
-		}
+			i += blkSkip.num_skip_steps;
+		} // if (blkSkip.blk_value > 0)
 		else
 		{
-			i += blkSkip.num_skip_steps;
+			i += blkSkip.num_skip_steps;// max(blkSkip.num_skip_steps - 1, 0);
 #if VR_MODE != 3
 			sample_prev = 0;
 			grad_prev = (float3)0;
 #endif
 		}
 		// this is for outer loop's i++
-		i -= 1;
+		//i -= 1;
 	}
 
 	REMAINING_MIX(vis_out, idx_dlayer, num_frags, fs);

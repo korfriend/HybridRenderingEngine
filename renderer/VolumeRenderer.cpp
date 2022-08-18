@@ -349,7 +349,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 // 	const int __BLOCKSIZE = 8;
 // 	uint num_grid_x = (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
 // 	uint num_grid_y = (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
-	const int __BLOCKSIZE = _fncontainer->fnParams.GetParam("_int_GpuThreadBlockSize", (int)2);
+	const int __BLOCKSIZE = _fncontainer->fnParams.GetParam("_int_GpuThreadBlockSize", (int)8);
 	uint num_grid_x = __BLOCKSIZE == 1 ? fb_size_cur.x : (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
 	uint num_grid_y = __BLOCKSIZE == 1 ? fb_size_cur.y : (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
 
@@ -511,6 +511,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 		VmVObjectVolume* mask_vol_obj = (VmVObjectVolume*)actor->GetAssociateRes("MASKVOLUME");
 
+		GpuRes gres_mask_vol;
 		if (mask_vol_obj != NULL)
 		{
 			if (ray_cast_type == __RM_VISVOLMASK) {
@@ -521,7 +522,6 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			else {
 				clock_t __start = clock();
 
-				GpuRes gres_mask_vol;
 				grd_helper::UpdateVolumeModel(gres_mask_vol, mask_vol_obj, true);
 				dx11DeviceImmContext->CSSetShaderResources(2, 1, (__SRV_PTR*)&gres_mask_vol.alloc_res_ptrs[DTYPE_SRV]);
 				
@@ -573,15 +573,13 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		}
 		dx11DeviceImmContext->CSSetShaderResources(1, 1, (__SRV_PTR*)&volblk_srv);
 
-		bool high_samplerate = gres_vol.res_values.GetParam("SAMPLE_OFFSET_X", 1.f) >= 2.f ||
-			gres_vol.res_values.GetParam("SAMPLE_OFFSET_Y", 1.f) >= 2.f || gres_vol.res_values.GetParam("SAMPLE_OFFSET_Z", 1.f) >= 2.f;
 		CB_VolumeObject cbVolumeObj;
 		//vmint3 vol_sampled_size = vmint3(gres_vol.res_values.GetParam("WIDTH", (uint)0),
 		//	gres_vol.res_values.GetParam("HEIGHT", (uint)0),
 		//	gres_vol.res_values.GetParam("DEPTH", (uint)0));
 		//if ( && samplePrecisionLevel > 0)
 		//high_samplerate ? 2.f : 1.f
-		grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, actor, samplePrecisionLevel, false, tmap_data->valid_min_idx.x, gres_volblk.options["FORMAT"] == DXGI_FORMAT_R16_UNORM ? 65535.f : 1.f);
+		grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, actor, gres_vol, tmap_data->valid_min_idx.x, gres_volblk.options["FORMAT"] == DXGI_FORMAT_R16_UNORM ? 65535.f : 1.f);
 		if (is_modulation_mode && ((uint)vol_data->vol_size.x * (uint)vol_data->vol_size.y * (uint)vol_data->vol_size.z > 1000000)) {
 			//cbVolumeObj.opacity_correction *= 2.f;
 			//cbVolumeObj.sample_dist *= 2.f;
@@ -605,6 +603,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			cbVolumeObj.kappa_s = actor->GetParam("_float_ModulationKappas", 1.f);
 		}
 		if (mask_vol_obj) {
+			cbVolumeObj.mask_vol_size = vmfloat3(gres_mask_vol.res_values.GetParam("WIDTH", (uint)1),
+				gres_mask_vol.res_values.GetParam("HEIGHT", (uint)1),
+				gres_mask_vol.res_values.GetParam("DEPTH", (uint)1));
 			VolumeData* mask_vol_data = mask_vol_obj->GetVolumeData();
 			if (mask_vol_data->store_dtype.type_bytes == data_type::dtype<byte>().type_bytes) // char
 				cbVolumeObj.mask_value_range = 255.f;

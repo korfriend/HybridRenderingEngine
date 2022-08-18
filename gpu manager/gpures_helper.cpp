@@ -591,7 +591,10 @@ int __UpdateBlocks(GpuRes& gres, const VmVObjectVolume* vobj, const string& vmod
 	gres.res_values.SetParam("DEPTH", (uint)volblk->blk_vol_size.z);
 
 	uint num_blk_units = volblk->blk_vol_size.x * volblk->blk_vol_size.y * volblk->blk_vol_size.z;
-	gres.options["FORMAT"] = (vmode == "OTFTAG") && num_blk_units >= 65535 ? DXGI_FORMAT_R32_FLOAT : DXGI_FORMAT_R16_UNORM;
+	gres.options["FORMAT"] = (vmode.find("OTFTAG") != string::npos) && num_blk_units >= 65535 ? DXGI_FORMAT_R32_FLOAT : DXGI_FORMAT_R16_UNORM;
+
+	//if (vmode.find("OTFTAG") != string::npos)
+	//	cout << vmode << endl;
 
 	g_pCGpuManager->GenerateGpuResource(gres);
 
@@ -601,9 +604,10 @@ int __UpdateBlocks(GpuRes& gres, const VmVObjectVolume* vobj, const string& vmod
 bool grd_helper::UpdateOtfBlocks(GpuRes& gres, VmVObjectVolume* main_vobj, VmVObjectVolume* mask_vobj,
 	VmObject* tobj, const int sculpt_value, LocalProgress* progress)
 {
-	int is_new = __UpdateBlocks(gres, main_vobj, "OTFTAG", progress);
-	
 	int tobj_id = tobj->GetObjectID();
+
+	int is_new = __UpdateBlocks(gres, main_vobj, string("OTFTAG_") + to_string(tobj_id), progress);
+	
 	vmdouble2 otf_Mm_range = vmdouble2(DBL_MAX, -DBL_MAX);
 	MapTable* tmap_data = tobj->GetObjParamPtr<MapTable>("_TableMap_OTF");
 
@@ -993,7 +997,11 @@ bool grd_helper::UpdateVolumeModel(GpuRes& gres, VmVObjectVolume* vobj, const bo
 	dvol_size.y = vol_data->vol_size.y;
 	dvol_size.z = vol_data->vol_size.z;
 
-	double dsize_vol_KB = dvol_size.x * dvol_size.y * dvol_size.z / 1024.0 * (double)vol_data->store_dtype.type_bytes;
+	double type_size = 2.0; // forced to 2 for using the same volume size of mask and main instead of using vol_data->store_dtype.type_bytes;
+
+	//if (use_nearest_max) half_criteria_KB /= 8;
+
+	double dsize_vol_KB = dvol_size.x * dvol_size.y * dvol_size.z / 1024.0 * type_size;
 	if (dsize_vol_KB > half_criteria_KB)
 	{
 		double dRescaleSize = pow(dsize_vol_KB / half_criteria_KB, 1.0 / 3.0);
@@ -1012,6 +1020,8 @@ RETRY:
 	gres.res_values.SetParam("SAMPLE_OFFSET_X", (float)sample_offset.x);
 	gres.res_values.SetParam("SAMPLE_OFFSET_Y", (float)sample_offset.y);
 	gres.res_values.SetParam("SAMPLE_OFFSET_Z", (float)sample_offset.z);
+
+	cout << "***************>> " << vol_size_x << ", " << vol_size_y << ", " << vol_size_z << endl;
 
 	if (vol_size_x > 2048)
 	{
@@ -1034,8 +1044,10 @@ RETRY:
 	sample_offset.z = (float)vol_data->vol_size.z / (float)vol_size_z;
 
 	printf("GPU Uploaded Volume Size : %d KB (%dx%dx%d) %d bytes\n",
-		vol_size_x * vol_size_y * vol_size_z / 1024 * vol_data->store_dtype.type_bytes,
-		vol_size_x, vol_size_y, vol_size_z, vol_data->store_dtype.type_bytes);
+		vol_size_x * vol_size_y * vol_size_z / 1024 * type_size,
+		vol_size_x, vol_size_y, vol_size_z, type_size);
+
+	cout << "************offset*>> " << sample_offset.x << ", " << sample_offset.y << ", " << sample_offset.z << endl;
 
 	g_pCGpuManager->GenerateGpuResource(gres);
 
@@ -1783,7 +1795,7 @@ void grd_helper::SetCb_Env(CB_EnvState& cb_env, VmCObject* ccobj, const LightSou
 	//}
 }
 
-void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vobj, VmActor* actor, const float sample_rate, const bool apply_samplerate2gradient, const int iso_value, const float volblk_valuerange, const int sculpt_index)
+void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vobj, VmActor* actor, GpuRes& gresVol, const int iso_value, const float volblk_valuerange, const int sculpt_index)
 {
 	VolumeData* vol_data = vobj->GetVolumeData();
 
@@ -1820,15 +1832,30 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 		cb_volume.value_range = 65535.f;
 	else GMERRORMESSAGE("UNSUPPORTED FORMAT : grd_helper::SetCb_VolumeObj");
 
-	float minDistSample = (float)min(min(vol_data->vox_pitch.x, vol_data->vox_pitch.y), vol_data->vox_pitch.z);
-	float grad_offset_dist = minDistSample;// apply_samplerate2gradient ? minDistSample / sample_rate : minDistSample;
+	vmfloat3 sampleOffset = vmfloat3(gresVol.res_values.GetParam("SAMPLE_OFFSET_X", 1.f),
+		gresVol.res_values.GetParam("SAMPLE_OFFSET_Y", 1.f),
+		gresVol.res_values.GetParam("SAMPLE_OFFSET_Z", 1.f));
+	float minDistSample = (float)min(min(vol_data->vox_pitch.x * sampleOffset.x, vol_data->vox_pitch.y * sampleOffset.y),
+		vol_data->vox_pitch.z * sampleOffset.z);
+	cout << "minDistSample >>>> " << minDistSample << endl;
+	float maxDistSample = (float)max(max(vol_data->vox_pitch.x * sampleOffset.x, vol_data->vox_pitch.y * sampleOffset.y),
+		vol_data->vox_pitch.z * sampleOffset.z);
+	cout << "maxDistSample >>>> " << maxDistSample << endl;
+	float grad_offset_dist = maxDistSample;
 	fTransformVector((vmfloat3*)&cb_volume.vec_grad_x, &vmfloat3(grad_offset_dist, 0, 0), &mat_ws2ts);
 	fTransformVector((vmfloat3*)&cb_volume.vec_grad_y, &vmfloat3(0, grad_offset_dist, 0), &mat_ws2ts);
 	fTransformVector((vmfloat3*)&cb_volume.vec_grad_z, &vmfloat3(0, 0, grad_offset_dist), &mat_ws2ts);
+	
+	const float sample_rate = 1.f;
 	cb_volume.opacity_correction = 1.f;
 	cb_volume.sample_dist = minDistSample / sample_rate;
 	cb_volume.opacity_correction /= sample_rate;
-	cb_volume.vol_size = vmfloat3((float)vol_data->vol_size.x, (float)vol_data->vol_size.y, (float)vol_data->vol_size.z);
+	
+	//cb_volume.vol_size = vmfloat3((float)vol_data->vol_size.x, (float)vol_data->vol_size.y, (float)vol_data->vol_size.z);
+
+	cb_volume.vol_size = vmfloat3(gresVol.res_values.GetParam("WIDTH", (uint)1),
+		gresVol.res_values.GetParam("HEIGHT", (uint)1),
+		gresVol.res_values.GetParam("DEPTH", (uint)1));
 
 	// from pmapDValueVolume //
 	//float fSamplePrecisionLevel = actor->GetParam("_float_SamplePrecisionLevel", 1.0f);
@@ -2155,7 +2182,7 @@ void grd_helper::SetCb_CurvedSlicer(CB_CurvedSlicer& cb_curvedSlicer, VmFnContai
 		cb_curvedSlicer.numCurvePoints = num_interpolation;
 		cb_curvedSlicer.planeHeight = fPlaneSizeY;
 		cb_curvedSlicer.thicknessPlane = fPlaneThickness;
-		cb_curvedSlicer.numRaySteps = iThicknessStep;
+		cb_curvedSlicer.__dummy0 = iThicknessStep;
 		vmfloat3 curvedPlaneUp;
 		fNormalizeVector(&curvedPlaneUp, &vtrCurveUpVectors[0]);
 		cb_curvedSlicer.planeUp = curvedPlaneUp * fPlanePitch;

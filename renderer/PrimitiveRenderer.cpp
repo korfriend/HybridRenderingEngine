@@ -1572,15 +1572,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				dx11DeviceImmContext->VSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
 				dx11DeviceImmContext->PSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
 
-
-				bool high_samplerate = gres_vol.res_values.GetParam("SAMPLE_OFFSET_X", (uint)1) > 1.f ||
-					gres_vol.res_values.GetParam("SAMPLE_OFFSET_Y", (uint)1) > 1.f || gres_vol.res_values.GetParam("SAMPLE_OFFSET_Z", (uint)1) > 1.f;
-
 				CB_VolumeObject cbVolumeObj;
-				vmint3 vol_sampled_size = vmint3(gres_vol.res_values.GetParam("WIDTH", (uint)0), 
-					gres_vol.res_values.GetParam("HEIGHT", (uint)0),
-					gres_vol.res_values.GetParam("DEPTH", (uint)0));
-				grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, actor, high_samplerate? 2.f : 1.f, false, 0, 1.f);
+				grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, actor, gres_vol, 0, 1.f);
 				cbVolumeObj.pb_shading_factor = material_phongCoeffs;
 				D3D11_MAPPED_SUBRESOURCE mappedResVolObj;
 				dx11DeviceImmContext->Map(cbuf_vobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResVolObj);

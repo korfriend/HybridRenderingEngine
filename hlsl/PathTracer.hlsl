@@ -850,8 +850,8 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 
 	//pos_ip_ws = float3(0, 0, 0);
 	//ray_dir_unit_ws = float3(0, 1, 0);
-	float3 ray_orig_os = pos_ip_ws;// TransformPoint(pos_ip_ws, g_cbPobj.mat_ws2os);
-	float3 ray_dir_unit_os = ray_dir_unit_ws;// normalize(TransformVector(ray_dir_unit_ws, g_cbPobj.mat_ws2os));
+	float3 ray_orig_os = TransformPoint(pos_ip_ws, g_cbPobj.mat_ws2os);
+	float3 ray_dir_unit_os = normalize(TransformVector(ray_dir_unit_ws, g_cbPobj.mat_ws2os));
 
 	float4 rayorig = float4(ray_orig_os, ray_tmin);
 	float4 raydir = float4(ray_dir_unit_os, ray_tmax);
