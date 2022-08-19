@@ -658,6 +658,7 @@ BlockSkip ComputeBlockSkip(const float3 pos_start_ts, const float3 vec_sample_ts
 	//	hits_t = ComputeAaBbHits(ss, ss, size_volblk_ts, vec_sample_ts);
 	//	dist_skip_ts = hits_t.y - hits_t.x;
 	//}
+	// here, max is for avoiding machine computation error
 	blk_v.num_skip_steps = max(int(dist_skip_ts), 0);// +1;// +0.5) + 1;
 	//blk_v.num_skip_steps = (int)dist_skip_ts;// ceil(dist_skip_ts);
 	//blk_v.num_skip_steps = ceil(dist_skip_ts);

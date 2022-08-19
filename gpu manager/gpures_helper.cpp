@@ -1005,7 +1005,8 @@ bool grd_helper::UpdateVolumeModel(GpuRes& gres, VmVObjectVolume* vobj, const bo
 	if (dsize_vol_KB > half_criteria_KB)
 	{
 		double dRescaleSize = pow(dsize_vol_KB / half_criteria_KB, 1.0 / 3.0);
-		sample_offset.x = sample_offset.y = sample_offset.z = (float)dRescaleSize;
+		//sample_offset.x = sample_offset.y = sample_offset.z = (float)dRescaleSize;
+		sample_offset.x = sample_offset.y = sample_offset.z = ceil((float)dRescaleSize);
 	}
 
 	////////////////////////////////////

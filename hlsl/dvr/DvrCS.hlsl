@@ -288,24 +288,25 @@ void Find1stSampleHit(inout int step, const float3 pos_ray_start_ws, const float
         if (blkSkip.blk_value > 0)
         {
 	        [loop]
-            for (int k = 0; k < blkSkip.num_skip_steps; k++, i++)
+            for (int k = 0; k <= blkSkip.num_skip_steps; k++)
             {
-                float3 pos_sample_blk_ts = pos_ray_start_ts + dir_sample_ts * (float) i;
+                float3 pos_sample_blk_ts = pos_ray_start_ts + dir_sample_ts * (float) (i + k);
                 if (Sample_Volume_And_Check(sample_v, pos_sample_blk_ts, min_valid_v))
                 {
-					step = i;
+					step = i + k;
 					i = num_ray_samples;
                     k = num_ray_samples;
                     break;
                 } // if(sample valid check)
             } // for(int k = 0; k < blkSkip.iNumStepSkip; k++, i++)
         }
-        else
-        {
-            i += blkSkip.num_skip_steps;
-        }
+        //else
+        //{
+        //    i += blkSkip.num_skip_steps;
+        //}
+		i += blkSkip.num_skip_steps;
 		// this is for outer loop's i++
-        i -= 1;
+        //i -= 1;
     }
 }
 
@@ -432,6 +433,9 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #endif
 
 	uint num_frags = fragment_counter[DTid.xy];
+#define __VRHIT_ON_CLIPPLANE 2
+#define __VRHIT_OUTSIDE_CLIPPLANE 1
+#define __VRHIT_OUTSIDE_VOLUME 0
 	// 2 : on the clip plane
 	// 1 : outside the clip plane
 	// 0 : outside the volume
@@ -515,7 +519,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	depth_out = vr_fragment_1sthit_read[DTid.xy];
 	
 	float4 outline_test = ConvertUIntToFloat4(g_cbVobj.outline_color);
-	if (outline_test.w > 0 && vr_hit_enc == 0) {
+	if (outline_test.w > 0 && vr_hit_enc == __VRHIT_OUTSIDE_VOLUME) {
 		// note that the outline appears over background of the DVR front-surface
 		float4 outline_color = VrOutlineTest(tex2d_xy, depth_out, 100000.f, outline_test.rgb, (int)(outline_test.w*255.f));
 		uint idx_dlayer = 0;
@@ -556,7 +560,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	//	fragment_vis[tex2d_xy] = vis_out;
 	//}
 
-	if (vr_hit_enc == 0)//depth_out > FLT_LARGE)
+	if (vr_hit_enc == __VRHIT_OUTSIDE_VOLUME)//depth_out > FLT_LARGE)
 	{
 		//fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
 		return;
@@ -575,7 +579,6 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 	// DVR ray-casting core part
 #if RAYMODE == 0 // DVR
-	// check pos_ray_start_ws!!!!!!!!!!!!!!!! 
 
 	vis_out = 0;
 	depth_out = FLT_MAX;
@@ -585,6 +588,10 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 	float3 pos_ray_start_ts = TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts);
 	float3 dir_sample_ts = TransformVector(dir_sample_ws, g_cbVobj.mat_ws2ts);
+
+	// check pos_ray_start_ws!!!!!!!!!!!!!!!! 
+	//fragment_vis[tex2d_xy] = float4((pos_ray_start_ts * 3 + (float3)1) * 0.5f, 1.f);
+	//return;
 
 	// check num_ray_samples/!!!
 	// test //
@@ -627,7 +634,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	float sample_prev = sample_v;
 #endif
 	
-	if (vr_hit_enc == 2) // on the clip plane
+	if (vr_hit_enc == __VRHIT_ON_CLIPPLANE) // on the clip plane
 	{
 		float4 vis_otf = (float4) 0;
 		start_idx++;
@@ -668,6 +675,10 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	/**/
 	int sample_count = 0;
 
+#if VR_MODE != 3
+	bool isPrevValid = true;
+#endif
+
 	[loop]
 	for (i = start_idx; i < num_ray_samples; i++)
 	{
@@ -677,24 +688,29 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 		if (blkSkip.blk_value > 0)
 		{
-#if VR_MODE != 3
-			bool isPrevValid = true;
-#endif
 			[loop]
-			for (int j = 0; j < blkSkip.num_skip_steps; j++, i++)
+			for (int j = 0; j <= blkSkip.num_skip_steps; j++)
 			{
 				//float3 pos_sample_blk_ws = pos_hit_ws + dir_sample_ws * (float) i;
-				float3 pos_sample_blk_ts = pos_ray_start_ts + dir_sample_ts * (float)i;
+				float3 pos_sample_blk_ts = pos_ray_start_ts + dir_sample_ts * (float)(i + j);
 
 				float4 vis_otf = (float4) 0;
 #if VR_MODE != 3
+				//if (!isPrevValid) {
+				//	//sample_prev = sample_v;
+				//	float3 pos_prev_sample_blk_ts = pos_sample_blk_ts - dir_sample_ts;
+				//	//grad_prev = GRAD_VOL(pos_prev_sample_blk_ts);
+				//	sample_prev = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_prev_sample_blk_ts, 0).r;
+				//}
 				if (Vis_Volume_And_Check_Slab(vis_otf, sample_v, sample_prev, pos_sample_blk_ts))
+				//if (Vis_Volume_And_Check(vis_otf, sample_v, pos_sample_blk_ts))
 				{
 					float3 grad = GRAD_VOL(pos_sample_blk_ts);
 					if (!isPrevValid) 
 					{
-						//float3 pos_prev_sample_blk_ts = pos_sample_blk_ts - dir_sample_ts;
-						grad_prev = grad;// GRAD_VOL(pos_prev_sample_blk_ts);
+						float3 pos_prev_sample_blk_ts = pos_sample_blk_ts - dir_sample_ts;
+						grad_prev = GRAD_VOL(pos_prev_sample_blk_ts);
+						//grad_prev = grad;// GRAD_VOL(pos_prev_sample_blk_ts);
 					}
 					isPrevValid = true;
 					
@@ -714,7 +730,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 						shade = PhongBlinnVr(view_dir, g_cbVobj.pb_shading_factor, light_dirinv, nrl, true);
 
 					float4 vis_sample = float4(shade * vis_otf.rgb, vis_otf.a);
-					float depth_sample = depth_hit + (float)i * sample_dist;
+					float depth_sample = depth_hit + (float)(i + j) * sample_dist;
 #if VR_MODE == 2
 					//g_cbVobj.kappa_i
 					//float modulator = pow(min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(g_cbVobj.kappa_i * max(__s, 0.1f), g_cbVobj.kappa_s));
@@ -746,14 +762,15 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		else
 		{
 			sample_count++;
-			i += blkSkip.num_skip_steps;
 #if VR_MODE != 3
 			sample_prev = 0;
+			isPrevValid = false;
 			grad_prev = (float3)0;
 #endif
 		}
+		i += blkSkip.num_skip_steps;
 		// this is for outer loop's i++
-		i -= 1;
+		//i -= 1;
 	}
 
 	vis_out.rgb *= (1.f - ao_vr);
@@ -1074,8 +1091,8 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	Fragment f_dly = fs[0]; // if no frag, the z-depth is infinite
 #endif
 
-	int hit_step = 0;// -1;
-	//Find1stSampleHit(hit_step, pos_ray_start_ws, dir_sample_ws, num_ray_samples);
+	int hit_step = -1;
+	Find1stSampleHit(hit_step, pos_ray_start_ws, dir_sample_ws, num_ray_samples);
 	if (hit_step < 0) {
 		//fragment_vis[cip_xy] = float4(1, 1, 0, 1);
 		return;
@@ -1133,7 +1150,7 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	float sample_prev = sample_v;
 #endif
 
-#if VR_MODE != 20
+#if VR_MODE != 2
 	if (isOnPlane)//
 	{
 		float4 vis_otf = (float4) 0;
@@ -1289,16 +1306,17 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 				sample_prev = sample_v;
 #endif
 			} // for (int j = 0; j < blkSkip.num_skip_steps; j++, i++)
-			i += blkSkip.num_skip_steps;
+			//i += blkSkip.num_skip_steps;
 		} // if (blkSkip.blk_value > 0)
 		else
 		{
-			i += blkSkip.num_skip_steps;// max(blkSkip.num_skip_steps - 1, 0);
+			//i += blkSkip.num_skip_steps;// max(blkSkip.num_skip_steps - 1, 0);
 #if VR_MODE != 3
 			sample_prev = 0;
 			grad_prev = (float3)0;
 #endif
 		}
+		i += blkSkip.num_skip_steps;
 		// this is for outer loop's i++
 		//i -= 1;
 	}
