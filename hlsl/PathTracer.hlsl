@@ -735,6 +735,13 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 {
 	int2 ss_xy = int2(DTid.xy);
 
+#if PICKING == 1
+	int x_pick_ss = g_cbCamState.iSrCamDummy__1 & 0xFFFF;
+	int y_pick_ss = g_cbCamState.iSrCamDummy__1 >> 16;
+	if (x_pick_ss != ss_xy.x || y_pick_ss != ss_xy.y)
+		return;
+#endif
+
 	// do not compute 1st hit surface separately
 	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height || g_cbPobj.alpha < 0.001f)
 		return;
@@ -908,6 +915,18 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 			zDepth = length(pos2ndHitWS - pos_ip_ws);
 		}
 	}
+
+#if PICKING == 1
+	uint fc = 0;
+	InterlockedAdd(fragment_counter[ss_xy], 1, fc);
+	picking_buf[5 * fc + 0] = g_cbPobj.pobj_dummy_0;
+	picking_buf[5 * fc + 1] = asuint(zDepth - zThickness);
+	//float3 posPlane = pos_ip_ws + ray_dir_unit_ws * (planeThickness * 0.5f);// -fThicknessPosition);
+	//picking_buf[5 * fc + 2] = asuint(posPlane.x);
+	//picking_buf[5 * fc + 3] = asuint(posPlane.y);
+	//picking_buf[5 * fc + 4] = asuint(posPlane.z);
+	return;
+#endif
 
 	if (planeThickness > 0 && v_rgba.a > 0) {
 		// effect for x-ray

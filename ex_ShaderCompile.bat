@@ -9,3 +9,6 @@ fxc /E CurvedSlicer /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/P
 fxc /E ThickSlicePathTracer /T cs_5_0 ./hlsl/PathTracer.hlsl /Fo ./shader_compiled_objs/ThickSlicePathTracer_cs_5_0 /D FRAG_MERGING=1 /D CURVEDPLANE=0
 fxc /E ThickSlicePathTracer /T cs_5_0 ./hlsl/PathTracer.hlsl /Fo ./shader_compiled_objs/CurvedThickSlicePathTracer_cs_5_0 /D FRAG_MERGING=1 /D CURVEDPLANE=1
 fxc /E Outline2D /T cs_5_0 ./hlsl/PathTracer.hlsl /Fo ./shader_compiled_objs/SliceOutline_cs_5_0 
+
+fxc /E ThickSlicePathTracer /T cs_5_0 ./hlsl/PathTracer.hlsl /Fo ./shader_compiled_objs/PickingThickSlice_cs_5_0 /D FRAG_MERGING=1 /D CURVEDPLANE=0 /D PICKING=1
+fxc /E ThickSlicePathTracer /T cs_5_0 ./hlsl/PathTracer.hlsl /Fo ./shader_compiled_objs/PickingCurvedThickSlice_cs_5_0 /D FRAG_MERGING=1 /D CURVEDPLANE=1 /D PICKING=1

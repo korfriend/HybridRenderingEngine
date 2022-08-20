@@ -1154,16 +1154,115 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 
 	vmfloat3 picking_ray_origin, picking_ray_dir;
 	if (is_picking_routine) {
-		cam_obj->GetCameraExtStatef(&picking_ray_origin, &picking_ray_dir, NULL);
-		vmfloat3 pos_picking_ws, pos_picking_ss(picking_pos_ss.x, picking_pos_ss.y, 0);
-		vmmath::fTransformPoint(&pos_picking_ws, &pos_picking_ss, &matSS2WS);
+		if (curved_slicer) {
+			float curved_plane_w, curved_plane_h;
+			int num_curve_width_pts;
+			
+			vector<vmfloat3>& curve_pos_pts = *_fncontainer->fnParams.GetParamPtr<vector<vmfloat3>>("_vlist_FLOAT3_CurveInterpolations");
+			vector<vmfloat3>& curve_up_pts = *_fncontainer->fnParams.GetParamPtr<vector<vmfloat3>>("_vlist_FLOAT3_CurveUpVectors");
+			vector<vmfloat3>& curve_tan_pts = *_fncontainer->fnParams.GetParamPtr<vector<vmfloat3>>("_vlist_FLOAT3_CurveTangentVectors");
 
-		if (cam_obj->IsPerspective()) {
-			picking_ray_dir = pos_picking_ws - picking_ray_origin;
-			vmmath::fNormalizeVector(&picking_ray_dir, &picking_ray_dir);
+			curved_plane_w = _fncontainer->fnParams.GetParam("_float_ExPlaneWidth", 1.f);
+			curved_plane_h = _fncontainer->fnParams.GetParam("_float_ExPlaneHeight", 1.f);
+			num_curve_width_pts = (int)curve_pos_pts.size();
+
+			vmfloat3 cam_pos_cws, cam_dir_cws, cam_up_cws;
+			cam_obj->GetCameraExtStatef(&cam_pos_cws, &cam_dir_cws, &cam_up_cws);
+			vmdouble2 ipSize;
+			cam_obj->GetCameraIntState(&ipSize, NULL, NULL, NULL);
+			vmfloat2 fIpSize = ipSize;
+
+			vmfloat3 cam_right_cws = normalize(cross(cam_dir_cws, cam_up_cws));
+			// if view is +z and up is +y, then x dir is left, which means that curve index increases along right to left
+			vmfloat3 pos_tl_cws = cam_pos_cws - cam_right_cws * fIpSize.x * 0.5f + cam_up_cws * fIpSize.y * 0.5f;
+			vmfloat3 pos_tr_cws = cam_pos_cws + cam_right_cws * fIpSize.x * 0.5f + cam_up_cws * fIpSize.y * 0.5f;
+			vmfloat3 pos_bl_cws = cam_pos_cws - cam_right_cws * fIpSize.x * 0.5f - cam_up_cws * fIpSize.y * 0.5f;
+			vmfloat3 pos_br_cws = cam_pos_cws + cam_right_cws * fIpSize.x * 0.5f - cam_up_cws * fIpSize.y * 0.5f;
+			float curve_plane_pitch = curved_plane_w / (float)num_curve_width_pts;
+			float num_curve_height_pts = curved_plane_h / curve_plane_pitch;
+			float num_curve_midheight_pts = num_curve_height_pts * 0.5f;
+			
+			vmmat44f mat_scale;// = scale(vmfloat3(curve_plane_pitch));
+			fMatrixScaling(&mat_scale, &vmfloat3(curve_plane_pitch, curve_plane_pitch, curve_plane_pitch));
+			vmmat44f mat_translate;// = translate(vmfloat3(-curved_plane_w * 0.5f, -curved_plane_h * 0.5f, -curve_plane_pitch * 0.5f));
+			fMatrixTranslation(&mat_translate, &vmfloat3(-curved_plane_w * 0.5f, -curved_plane_h * 0.5f, -curve_plane_pitch * 0.5f));
+			vmmat44f mat_cos2cws = mat_scale * mat_translate; //mat_translate * mat_scale;
+			vmmat44f mat_cws2cos = inverse(mat_cos2cws);
+
+			vmfloat3 pos_tl_cos;//transformPos(pos_tl_cws, mat_cws2cos);
+			fTransformPoint(&pos_tl_cos, &pos_tl_cws, &mat_cws2cos);
+			vmfloat3 pos_tr_cos;//transformPos(pos_tr_cws, mat_cws2cos);
+			fTransformPoint(&pos_tr_cos, &pos_tr_cws, &mat_cws2cos);
+			vmfloat3 pos_bl_cos;//transformPos(pos_bl_cws, mat_cws2cos);
+			fTransformPoint(&pos_bl_cos, &pos_bl_cws, &mat_cws2cos);
+			vmfloat3 pos_br_cos;//transformPos(pos_br_cws, mat_cws2cos);
+			fTransformPoint(&pos_br_cos, &pos_br_cws, &mat_cws2cos);
+
+			vmfloat2 pos_inter_top_cos, pos_inter_bottom_cos, pos_sample_cos;
+			float fRatio0 = (float)(((fb_size_cur.x - 1) - picking_pos_ss.x) / (float)(fb_size_cur.x - 1));
+			float fRatio1 = (float)(picking_pos_ss.x) / (float)(fb_size_cur.x - 1);
+			pos_inter_top_cos.x = fRatio0 * pos_tl_cos.x + fRatio1 * pos_tr_cos.x;
+			pos_inter_top_cos.y = fRatio0 * pos_tl_cos.y + fRatio1 * pos_tr_cos.y;
+			if (pos_inter_top_cos.x >= 0 && pos_inter_top_cos.x < (float)(num_curve_width_pts - 1)) {
+				int x_sample_cos = (int)floor(pos_inter_top_cos.x);
+				float x_ratio = pos_inter_top_cos.x - (float)x_sample_cos;
+				int addr_minmix_x = min(max(x_sample_cos, 0), num_curve_width_pts - 1);
+				int addr_minmax_nextx = min(max(x_sample_cos + 1, 0), num_curve_width_pts - 1);
+				vmfloat3 pos_sample_ws_c0 = curve_pos_pts[addr_minmix_x];
+				vmfloat3 pos_sample_ws_c1 = curve_pos_pts[addr_minmax_nextx];
+				vmfloat3 pos_sample_ws_c = pos_sample_ws_c0 * (1.f - x_ratio) + pos_sample_ws_c1 * x_ratio;
+
+				vmfloat3 up_sample_ws_c0 = curve_up_pts[addr_minmix_x];
+				vmfloat3 up_sample_ws_c1 = curve_up_pts[addr_minmax_nextx];
+				vmfloat3 up_sample_ws_c = up_sample_ws_c0 * (1.f - x_ratio) + up_sample_ws_c1 * x_ratio;
+
+				vmfloat3 tan_sample_ws_c0 = curve_tan_pts[addr_minmix_x];
+				vmfloat3 tan_sample_ws_c1 = curve_tan_pts[addr_minmax_nextx];
+				vmfloat3 tan_sample_ws_c = tan_sample_ws_c0 * (1.f - x_ratio) + tan_sample_ws_c1 * x_ratio;
+
+				//picking_ray_dir;// = normalize(cross(up_sample_ws_c, tan_sample_ws_c));
+				fCrossDotVector(&picking_ray_dir, &up_sample_ws_c, &tan_sample_ws_c);
+				fNormalizeVector(&picking_ray_dir, &picking_ray_dir);
+
+				up_sample_ws_c = normalize(up_sample_ws_c);
+				up_sample_ws_c *= curve_plane_pitch;
+				pos_inter_bottom_cos.x = fRatio0 * pos_bl_cos.x + fRatio1 * pos_br_cos.x;
+				pos_inter_bottom_cos.y = fRatio0 * pos_bl_cos.y + fRatio1 * pos_br_cos.y;
+
+				//================== y
+				float y_ratio0 = (float)((fb_size_cur.y - 1) - picking_pos_ss.y) / (float)(fb_size_cur.y - 1);
+				float y_ratio1 = (float)(picking_pos_ss.y) / (float)(fb_size_cur.y - 1);
+				pos_sample_cos.x = y_ratio0 * pos_inter_top_cos.x + y_ratio1 * pos_inter_bottom_cos.x;
+				pos_sample_cos.y = y_ratio0 * pos_inter_top_cos.y + y_ratio1 * pos_inter_bottom_cos.y;
+				if (pos_sample_cos.y < 0 || pos_sample_cos.y > num_curve_height_pts)
+					return false;
+				picking_ray_origin = pos_sample_ws_c + up_sample_ws_c * (pos_sample_cos.y - num_curve_midheight_pts);
+				bool bIsRightSide = _fncontainer->fnParams.GetParam("_bool_IsRightSide", false);
+				if (bIsRightSide)
+					picking_ray_dir *= -1.f;
+				float fPlaneThickness = _fncontainer->fnParams.GetParam("_float_PlaneThickness", 0.f);
+				picking_ray_origin -= picking_ray_dir * fPlaneThickness * 0.5f;
+			}
+			else 
+				return true;
+
+			//float fExCurveThicknessPositionRange = _fncontainer->fnParams.GetParam("_float_CurveThicknessPositionRange", 1.f);
+			//float fThicknessRatio = _fncontainer->fnParams.GetParam("_float_ThicknessRatio", 0.f);
+			//float fThicknessPosition = fThicknessRatio * fExCurveThicknessPositionRange * 0.5;
+			//float fPlaneThickness = _fncontainer->fnParams.GetParam("_float_PlaneThickness", 0.f);
 		}
 		else {
-			picking_ray_origin = pos_picking_ws;
+			cam_obj->GetCameraExtStatef(&picking_ray_origin, &picking_ray_dir, NULL);
+			vmfloat3 pos_picking_ws, pos_picking_ss(picking_pos_ss.x, picking_pos_ss.y, 0);
+			vmmath::fTransformPoint(&pos_picking_ws, &pos_picking_ss, &matSS2WS);
+
+			if (cam_obj->IsPerspective()) {
+				picking_ray_dir = pos_picking_ws - picking_ray_origin;
+				vmmath::fNormalizeVector(&picking_ray_dir, &picking_ray_dir);
+			}
+			else {
+				picking_ray_origin = pos_picking_ws;
+			}
 		}
 	}
 
@@ -1265,7 +1364,9 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			continue;
 
 		if (is_picking_routine) {
-			if (prim_data->ptype == vmenums::PrimitiveTypeLINE || grd_helper::CollisionCheck(actor->matWS2OS, prim_data->aabb_os, picking_ray_origin, picking_ray_dir))
+			if (prim_data->ptype == vmenums::PrimitiveTypeLINE || 
+				//grd_helper::CollisionCheck(actor->matWS2OS, prim_data->aabb_os, picking_ray_origin, picking_ray_dir) ||
+				curved_slicer)
 				slicer_actors.push_back(actor);
 			//std::cout << "###### obb ray intersection : " << actor->actorId << std::endl;
 			// NOTE THAT is_picking_routine allows only general_oit_routine_objs!!
@@ -1606,9 +1707,13 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs, dx11UAVs, NULL);
 
 				if (curved_slicer)
-					dx11DeviceImmContext->CSSetShader(GETCS(CurvedThickSlicePathTracer_cs_5_0), NULL, 0);
+					dx11DeviceImmContext->CSSetShader(
+						is_picking_routine ? GETCS(PickingCurvedThickSlice_cs_5_0) :
+						GETCS(CurvedThickSlicePathTracer_cs_5_0), NULL, 0);
 				else
-					dx11DeviceImmContext->CSSetShader(GETCS(ThickSlicePathTracer_cs_5_0), NULL, 0);
+					dx11DeviceImmContext->CSSetShader(
+						is_picking_routine ? GETCS(PickingThickSlice_cs_5_0) :
+						GETCS(ThickSlicePathTracer_cs_5_0), NULL, 0);
 
 				//dx11DeviceImmContext->Flush();
 				dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
@@ -1826,10 +1931,9 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	___GpuProfile("Render Slicer");
 
 	if (is_picking_routine) {
-		if (is_picking_routine) {
-			cbCamState.iSrCamDummy__1 = (picking_pos_ss.x & 0xFFFF | picking_pos_ss.y << 16);
-			cbCamState.cam_flag |= (0x1 << 5);
-		}
+		cbCamState.iSrCamDummy__1 = (picking_pos_ss.x & 0xFFFF | picking_pos_ss.y << 16);
+		cbCamState.cam_flag |= (0x1 << 5);
+		
 		SetCamConstBuf(cbCamState);
 
 		___GpuProfile("Picking");
@@ -1846,7 +1950,10 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		HRESULT hr = dx11DeviceImmContext->Map((ID3D11Buffer*)gres_picking_system_buffer.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysPicking);
 		uint* picking_buf = (uint*)mappedResSysPicking.pData;
 		int num_layers = 0;
-		for (int i = 0; i < max_picking_layers; i += 2) {
+		// note each layer has 5 integer-stored data 
+		// id, depth, planePos.xyz
+		for (int i = 0; i < max_picking_layers; i += 2) 
+		{ 
 			uint obj_id = picking_buf[i];
 			if (obj_id == 0) break;
 

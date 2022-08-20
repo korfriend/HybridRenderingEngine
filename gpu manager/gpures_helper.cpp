@@ -524,6 +524,8 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60100), "ThickSlicePathTracer_cs_5_0", "cs_5_0"), ThickSlicePathTracer_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60101), "CurvedThickSlicePathTracer_cs_5_0", "cs_5_0"), CurvedThickSlicePathTracer_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60102), "SliceOutline_cs_5_0", "cs_5_0"), SliceOutline_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60103), "PickingThickSlice_cs_5_0", "cs_5_0"), PickingThickSlice_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60104), "PickingCurvedThickSlice_cs_5_0", "cs_5_0"), PickingCurvedThickSlice_cs_5_0);
 	}
 
 	g_pvmCommonParams->is_initialized = true;
