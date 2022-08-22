@@ -478,6 +478,7 @@ int intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 		origx = rayorig.x;
 		origy = rayorig.y;
 		origz = rayorig.z;
+
 		dirx = raydir.x;
 		diry = raydir.y;
 		dirz = raydir.z;
@@ -861,6 +862,9 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	float3 ray_dir_unit_os = normalize(TransformVector(ray_dir_unit_ws, g_cbPobj.mat_ws2os));
 
 	float4 rayorig = float4(ray_orig_os, ray_tmin);
+	if (rayorig.z == 0) rayorig.z += 0.00000193f; // trick... for avoiding zero block skipping error
+	if (rayorig.y == 0) rayorig.y += 0.00000193f; // trick... for avoiding zero block skipping error
+	if (rayorig.x == 0) rayorig.x += 0.00000193f; // trick... for avoiding zero block skipping error
 	float4 raydir = float4(ray_dir_unit_os, ray_tmax);
 	//DEBUGintersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuDebugTris, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
 	intersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
@@ -919,8 +923,8 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 #if PICKING == 1
 	uint fc = 0;
 	InterlockedAdd(fragment_counter[ss_xy], 1, fc);
-	picking_buf[5 * fc + 0] = g_cbPobj.pobj_dummy_0;
-	picking_buf[5 * fc + 1] = asuint(zDepth - zThickness);
+	picking_buf[2 * fc + 0] = g_cbPobj.pobj_dummy_0;
+	picking_buf[2 * fc + 1] = asuint(zDepth - zThickness);
 	//float3 posPlane = pos_ip_ws + ray_dir_unit_ws * (planeThickness * 0.5f);// -fThicknessPosition);
 	//picking_buf[5 * fc + 2] = asuint(posPlane.x);
 	//picking_buf[5 * fc + 3] = asuint(posPlane.y);
