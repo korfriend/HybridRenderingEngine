@@ -861,10 +861,11 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	float3 ray_orig_os = TransformPoint(pos_ip_ws, g_cbPobj.mat_ws2os);
 	float3 ray_dir_unit_os = normalize(TransformVector(ray_dir_unit_ws, g_cbPobj.mat_ws2os));
 
+	if (ray_orig_os.z == 0) ray_orig_os.z = 0.0000123f; // trick... for avoiding zero block skipping error
+	if (ray_orig_os.y == 0) ray_orig_os.y = 0.0000123f; // trick... for avoiding zero block skipping error
+	if (ray_orig_os.x == 0) ray_orig_os.x = 0.0000123f; // trick... for avoiding zero block skipping error
+
 	float4 rayorig = float4(ray_orig_os, ray_tmin);
-	if (rayorig.z == 0) rayorig.z += 0.00000193f; // trick... for avoiding zero block skipping error
-	if (rayorig.y == 0) rayorig.y += 0.00000193f; // trick... for avoiding zero block skipping error
-	if (rayorig.x == 0) rayorig.x += 0.00000193f; // trick... for avoiding zero block skipping error
 	float4 raydir = float4(ray_dir_unit_os, ray_tmax);
 	//DEBUGintersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuDebugTris, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
 	intersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
@@ -952,12 +953,22 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		GET_FRAG(fragPrev, addr_base, 0); // previous frag stored in K-buffer
 
 		if (planeThickness > 0) {
+			Fragment_OUT fragMergeOut;
 			if (frag.z > fragPrev.z)
-				fragMerge = MergeFrags_ver2(fragPrev, frag, 1.f);
+				fragMergeOut = MergeFrags(fragPrev, frag, 1.0f);
 			else
-				fragMerge = MergeFrags_ver2(frag, fragPrev, 1.f);
+				fragMergeOut = MergeFrags(frag, fragPrev, 1.0f);
 
-			v_rgba = ConvertUIntToFloat4(fragMerge.i_vis);
+			fragMerge.z = fragMergeOut.f_posterior.z;
+			fragMerge.zthick = fragMerge.z
+				- min(fragMergeOut.f_prior.z - fragMergeOut.f_prior.zthick, fragMergeOut.f_posterior.z - fragMergeOut.f_posterior.zthick);
+			fragMerge.opacity_sum = fragMergeOut.f_prior.opacity_sum + fragMergeOut.f_posterior.opacity_sum;
+			float4 v_rgbaPrior = ConvertUIntToFloat4(fragMergeOut.f_prior.i_vis);
+			float4 v_rgbaPosterior = ConvertUIntToFloat4(fragMergeOut.f_posterior.i_vis);
+			v_rgba = v_rgbaPrior.rgba * v_rgbaPrior.a + (1 - v_rgbaPrior.a) * v_rgbaPosterior.rgba;
+			//fragMerge = fragPrev;
+			fragMerge.i_vis = ConvertFloat4ToUInt(v_rgba);
+			//v_rgba = ConvertUIntToFloat4(fragMerge.i_vis);
 		}
 		else {
 			float4 v_rgbaPrev = ConvertUIntToFloat4(fragPrev.i_vis);
