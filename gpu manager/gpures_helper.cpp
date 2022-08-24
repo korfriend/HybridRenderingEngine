@@ -572,7 +572,7 @@ void grd_helper::DeinitializePresettings()
 	g_pvmCommonParams->is_initialized = false;
 }
 
-int __UpdateBlocks(GpuRes& gres, const VmVObjectVolume* vobj, const string& vmode, LocalProgress* progress)
+int __UpdateBlocks(GpuRes& gres, const VmVObjectVolume* vobj, const string& vmode, const DXGI_FORMAT dxformat, LocalProgress* progress)
 {
 	gres.vm_src_id = vobj->GetObjectID();
 	gres.res_name = string("VBLOCKS_MODE_") + vmode;
@@ -594,7 +594,14 @@ int __UpdateBlocks(GpuRes& gres, const VmVObjectVolume* vobj, const string& vmod
 	gres.res_values.SetParam("DEPTH", (uint)volblk->blk_vol_size.z);
 
 	uint num_blk_units = volblk->blk_vol_size.x * volblk->blk_vol_size.y * volblk->blk_vol_size.z;
-	gres.options["FORMAT"] = (vmode.find("OTFTAG") != string::npos) && num_blk_units >= 65535 ? DXGI_FORMAT_R32_FLOAT : DXGI_FORMAT_R16_UNORM;
+	if(vmode.find("OTFTAG") != string::npos)
+		assert(dxformat == DXGI_FORMAT_R8_UNORM);
+	else if(vmode.find("VMIN") != string::npos || vmode.find("VMAX") != string::npos)
+		assert(dxformat == DXGI_FORMAT_R16_UNORM);
+	else 
+		assert(0);
+	//gres.options["FORMAT"] = (vmode.find("OTFTAG") != string::npos) && num_blk_units >= 65535 ? DXGI_FORMAT_R32_FLOAT : DXGI_FORMAT_R16_UNORM;
+	gres.options["FORMAT"] = dxformat;
 
 	//if (vmode.find("OTFTAG") != string::npos)
 	//	cout << vmode << endl;
@@ -609,7 +616,7 @@ bool grd_helper::UpdateOtfBlocks(GpuRes& gres, VmVObjectVolume* main_vobj, VmVOb
 {
 	int tobj_id = tobj->GetObjectID();
 
-	int is_new = __UpdateBlocks(gres, main_vobj, string("OTFTAG_") + to_string(tobj_id), progress);
+	int is_new = __UpdateBlocks(gres, main_vobj, string("OTFTAG_") + to_string(tobj_id), DXGI_FORMAT_R8_UNORM, progress);
 	
 	vmdouble2 otf_Mm_range = vmdouble2(DBL_MAX, -DBL_MAX);
 	MapTable* tmap_data = tobj->GetObjParamPtr<MapTable>("_TableMap_OTF");
@@ -734,16 +741,17 @@ bool grd_helper::UpdateOtfBlocks(GpuRes& gres, VmVObjectVolume* main_vobj, VmVOb
 					+ (y + blk_bnd_size.y) * blk_sample_width.x + (z + blk_bnd_size.z) * blk_sample_slice;
 				if (tag_blks[addr_sample_cpu] != 0)
 				{
-					if (_format == (int)DXGI_FORMAT_R32_FLOAT)
-					{
-						((float*)d11MappedRes.pData)[y*d11MappedRes.RowPitch / 4 + z * d11MappedRes.DepthPitch / 4 + x] = (float)(++count);
-						//((uint*)d11MappedRes.pData)[count_id] = ++count;
-					}
-					else // DXGI_FORMAT_R16_UNORM
-					{
-						((ushort*)d11MappedRes.pData)[y*d11MappedRes.RowPitch / 2 + z * d11MappedRes.DepthPitch / 2 + x] = (ushort)(++count);
-						//((ushort*)d11MappedRes.pData)[count_id] = (ushort)(++count);
-					}
+					//if (_format == (int)DXGI_FORMAT_R32_FLOAT)
+					//{
+					//	((float*)d11MappedRes.pData)[y*d11MappedRes.RowPitch / 4 + z * d11MappedRes.DepthPitch / 4 + x] = (float)(++count);
+					//	//((uint*)d11MappedRes.pData)[count_id] = ++count;
+					//}
+					//else // DXGI_FORMAT_R16_UNORM
+					//{
+					//	((ushort*)d11MappedRes.pData)[y*d11MappedRes.RowPitch / 2 + z * d11MappedRes.DepthPitch / 2 + x] = (ushort)(++count);
+					//	//((ushort*)d11MappedRes.pData)[count_id] = (ushort)(++count);
+					//}
+					((byte*)d11MappedRes.pData)[y * d11MappedRes.RowPitch / 1 + z * d11MappedRes.DepthPitch / 1 + x] = 255;
 				}
 				count_id++;
 			}
@@ -795,8 +803,8 @@ bool grd_helper::UpdateOtfBlocks(GpuRes& gres, VmVObjectVolume* main_vobj, VmVOb
 
 bool grd_helper::UpdateMinMaxBlocks(GpuRes& gres_min, GpuRes& gres_max, const VmVObjectVolume* vobj, LocalProgress* progress)
 {
-	int is_new1 = __UpdateBlocks(gres_min, vobj, "VMIN", progress);
-	int is_new2 = __UpdateBlocks(gres_max, vobj, "VMAX", progress);
+	int is_new1 = __UpdateBlocks(gres_min, vobj, "VMIN", DXGI_FORMAT_R16_UNORM, progress);
+	int is_new2 = __UpdateBlocks(gres_max, vobj, "VMAX", DXGI_FORMAT_R16_UNORM, progress);
 	if (is_new1 == 0 && is_new2 == 0) return true;
 
 	const VolumeData* vol_data = ((VmVObjectVolume*)vobj)->GetVolumeData();
@@ -874,7 +882,7 @@ template <typename GPUTYPE, typename CPUTYPE> bool __FillVolumeValues(CPUTYPE* g
 				fPosY = (float)y / (float)(cpu_resize.y - 1) * (float)(cpu_size.y - 1);
 
 			for (int x = 0; x < (int)cpu_resize.x; x++)
-			{
+			{ 
 				CPUTYPE tVoxelValue = 0;
 				if (is_downscaled)
 				{

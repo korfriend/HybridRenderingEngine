@@ -639,7 +639,7 @@ int LoadMaxValueInt(float3 pos_ts, float3 size_tex3d, const int scale, const in 
 
 struct BlockSkip
 {
-    int blk_value;
+    float blk_value;
     int num_skip_steps;
 };
 BlockSkip ComputeBlockSkip(const float3 pos_start_ts, const float3 vec_sample_ts, const float3 size_volblk_ts, const float volblk_value_range, const Texture3D tex3d_blk_data)
@@ -647,7 +647,8 @@ BlockSkip ComputeBlockSkip(const float3 pos_start_ts, const float3 vec_sample_ts
     BlockSkip blk_v = (BlockSkip) 0;
     //int3 blk_id = int3(pos_start_ts.x / size_volblk_ts.x, pos_start_ts.y / size_volblk_ts.y, pos_start_ts.z / size_volblk_ts.z);
     int3 blk_id = pos_start_ts / size_volblk_ts;
-	blk_v.blk_value = (int)(tex3d_blk_data.Load(int4(blk_id, 0)).r * volblk_value_range + 0.5f);
+	//blk_v.blk_value = (int)(tex3d_blk_data.Load(int4(blk_id, 0)).r * volblk_value_range + 0.5f);
+	blk_v.blk_value = tex3d_blk_data.Load(int4(blk_id, 0)).r;
     
     float3 pos_min_ts = float3(blk_id.x * size_volblk_ts.x, blk_id.y * size_volblk_ts.y, blk_id.z * size_volblk_ts.z);
     float3 pos_max_ts = pos_min_ts + size_volblk_ts;

@@ -455,8 +455,6 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		ao_vr = ao_vr_texture[DTid.xy];
 	}
 
-	return;
-
 	[loop]
     for (int i = 0; i < (int)num_frags; i++)
     {
@@ -787,7 +785,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	float3 pos_lucky_sample_ws = pos_ray_start_ws + dir_sample_ws * (float)luckyStep;
 	float3 pos_lucky_sample_ts = TransformPoint(pos_lucky_sample_ws, g_cbVobj.mat_ws2ts);
 #if RAYMODE==2
-	float sample_v_prev = g_cbVobj.value_range;
+	float sample_v_prev = 1.f;// g_cbVobj.value_range;
 #else
 	float sample_v_prev = 0;/// tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_lucky_sample_ts, 0).r* g_cbVobj.value_range;
 #endif
@@ -811,16 +809,16 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #if RAYMODE == 1 || RAYMODE == 2
 		LOAD_BLOCK_INFO(blkSkip, pos_sample_ts, dir_sample_ts, num_ray_samples, i);
 #if RAYMODE == 1
-		if (blkSkip.blk_value > (int)sample_v_prev)
+		if (blkSkip.blk_value > sample_v_prev)
 #elif RAYMODE == 2
-		if (blkSkip.blk_value < (int)sample_v_prev)
+		if (blkSkip.blk_value < sample_v_prev)
 #endif
 		{
 			count++;
-			for (int k = 0; k < blkSkip.num_skip_steps; k++, i++)
+			for (int k = 0; k <= blkSkip.num_skip_steps; k++)
 			{
-				float3 pos_sample_in_blk_ts = pos_ray_start_ts + dir_sample_ts * (float)i;
-				float sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_in_blk_ts, 0).r * g_cbVobj.value_range;
+				float3 pos_sample_in_blk_ts = pos_ray_start_ts + dir_sample_ts * (float)(i + k);
+				float sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_in_blk_ts, 0).r;// *g_cbVobj.value_range;
 #if RAYMODE == 1
 				if (sample_v > sample_v_prev)
 #else	// ~RM_RAYMAX
@@ -835,12 +833,9 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 				}
 			}
 		}
-		else
-		{
-			i += blkSkip.num_skip_steps;
-		}
+		i += blkSkip.num_skip_steps;
 		// this is for outer loop's i++
-		i -= 1;
+		//i -= 1;
 #else	// ~(RAYMODE == 1 || RAYMODE == 2) , which means RAYSUM 
 		float sample_v_norm = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
 #if OTF_MASK == 1
@@ -867,9 +862,9 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #if OTF_MASK == 1
 	float sample_mask_v = tex3D_volmask.SampleLevel(g_samplerPoint, pos_sample_ts, 0).r * g_cbVolObj.mask_value_range;
 	int mask_vint = (int)(sample_mask_v + 0.5f);
-	float4 vis_otf = LoadOtfBufId(sample_v_prev / g_cbVobj.value_range * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
+	float4 vis_otf = LoadOtfBufId(sample_v_prev * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
 #else
-	float4 vis_otf = LoadOtfBuf(sample_v_prev / g_cbVobj.value_range * g_cbTmap.tmap_size_x, buf_otf, 1);// g_cbVobj.opacity_correction);
+	float4 vis_otf = LoadOtfBuf(sample_v_prev* g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);// g_cbVobj.opacity_correction);
 #endif
 #endif
 
@@ -1373,7 +1368,7 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	float3 pos_lucky_sample_ws = pos_ray_start_ws + dir_sample_ws * (float)luckyStep;
 	float3 pos_lucky_sample_ts = TransformPoint(pos_lucky_sample_ws, g_cbVobj.mat_ws2ts);
 #if RAYMODE==2
-	float sample_v_prev = g_cbVobj.value_range;
+	float sample_v_prev = 1.f;
 #else
 	float sample_v_prev = 0;/// tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_lucky_sample_ts, 0).r* g_cbVobj.value_range;
 #endif
@@ -1399,16 +1394,16 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 #if RAYMODE == 1 || RAYMODE == 2
 		LOAD_BLOCK_INFO(blkSkip, pos_sample_ts, dir_sample_ts, num_ray_samples, i);
 #if RAYMODE == 1
-		if (blkSkip.blk_value > (int)sample_v_prev)
+		if (blkSkip.blk_value > sample_v_prev)
 #elif RAYMODE == 2
-		if (blkSkip.blk_value < (int)sample_v_prev)
+		if (blkSkip.blk_value < sample_v_prev)
 #endif
 		{
 			count++;
-			for (int k = 0; k < blkSkip.num_skip_steps; k++, i++)
+			for (int k = 0; k <= blkSkip.num_skip_steps; k++)
 			{
-				float3 pos_sample_in_blk_ts = pos_ray_start_ts + dir_sample_ts * (float)i;
-				float sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_in_blk_ts, 0).r * g_cbVobj.value_range;
+				float3 pos_sample_in_blk_ts = pos_ray_start_ts + dir_sample_ts * (float)(i + k);
+				float sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_in_blk_ts, 0).r;// *g_cbVobj.value_range;
 #if RAYMODE == 1
 				if (sample_v > sample_v_prev)
 #else	// ~RM_RAYMAX
@@ -1423,12 +1418,7 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 				}
 			}
 		}
-		else
-		{
-			i += blkSkip.num_skip_steps;
-		}
-		// this is for outer loop's i++
-		i -= 1;
+		i += blkSkip.num_skip_steps;
 #else	// ~(RAYMODE == 1 || RAYMODE == 2) , which means RAYSUM 
 		float sample_v_norm = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
 #if OTF_MASK == 1
@@ -1436,7 +1426,7 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 		int mask_vint = (int)(sample_mask_v + 0.5f);
 		float4 vis_otf = LoadOtfBufId(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
 #else	// OTF_MASK != 1
-		float4 vis_otf = LoadOtfBuf(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, 1);// g_cbVobj.opacity_correction);
+		float4 vis_otf = LoadOtfBuf(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);// g_cbVobj.opacity_correction);
 #endif
 		if (vis_otf.a > 0)
 		{
@@ -1455,9 +1445,9 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 #if OTF_MASK == 1
 	float sample_mask_v = tex3D_volmask.SampleLevel(g_samplerPoint, pos_sample_ts, 0).r * g_cbVolObj.mask_value_range;
 	int mask_vint = (int)(sample_mask_v + 0.5f);
-	float4 vis_otf = LoadOtfBufId(sample_v_prev / g_cbVobj.value_range * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
+	float4 vis_otf = LoadOtfBufId(sample_v_prev * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
 #else
-	float4 vis_otf = LoadOtfBuf(sample_v_prev / g_cbVobj.value_range * g_cbTmap.tmap_size_x, buf_otf, 1);// g_cbVobj.opacity_correction);
+	float4 vis_otf = LoadOtfBuf(sample_v_prev * g_cbTmap.tmap_size_x, buf_otf, 1);// g_cbVobj.opacity_correction);
 #endif
 #endif
 
