@@ -175,7 +175,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	{
 		gpu_profile = _fncontainer->fnParams.GetParam("_bool_GpuProfile", false);
 	}
-	gpu_profile = true;
+	//gpu_profile = true;
 
 	GpuRes gres_fb_rgba, gres_fb_depthcs, gres_fb_vrdepthcs;
 	GpuRes gres_fb_k_buffer, gres_fb_counter;

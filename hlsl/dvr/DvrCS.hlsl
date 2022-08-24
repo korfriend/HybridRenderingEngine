@@ -894,6 +894,46 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 }
 
 [numthreads(GRIDSIZE_VR, GRIDSIZE_VR, 1)]
+void FillDither(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
+{
+	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
+		return;
+
+	int2 tex2d_xy = int2(DTid.xy);
+
+	if (DTid.x % 2 == 0 && DTid.x % 2 == 0)
+		return;
+
+	//fragment_vis[tex2d_xy] = vis_out;
+	//fragment_zdepth[tex2d_xy] = depth_out;
+
+	float4 rgbaRendered[4];
+	int count = 0;
+	if (DTid.x % 2 != 0 && DTid.y % 2 == 0) {
+		rgbaRendered[count++] = fragment_vis[tex2d_xy - int2(1, 0)];
+		rgbaRendered[count++] = fragment_vis[tex2d_xy + int2(1, 0)];
+	}
+	else if (DTid.x % 2 == 0 && DTid.y % 2 != 0) {
+		rgbaRendered[count++] = fragment_vis[tex2d_xy - int2(0, 1)];
+		rgbaRendered[count++] = fragment_vis[tex2d_xy + int2(0, 1)];
+	}
+	else if (DTid.x % 2 != 0 && DTid.y % 2 != 0) {
+		rgbaRendered[count++] = fragment_vis[tex2d_xy - int2(1, 1)];
+		rgbaRendered[count++] = fragment_vis[tex2d_xy + int2(1, 1)];
+		rgbaRendered[count++] = fragment_vis[tex2d_xy + int2(-1, 1)];
+		rgbaRendered[count++] = fragment_vis[tex2d_xy + int2(1, -1)];
+	}
+	else return;
+
+	float4 v_rgba = (float4)0;
+	for (int i = 0; i < count; i++) {
+		v_rgba += rgbaRendered[i];
+	}
+	v_rgba /= 4.f;
+	fragment_vis[tex2d_xy] = v_rgba;
+}
+
+[numthreads(GRIDSIZE_VR, GRIDSIZE_VR, 1)]
 void VR_SURFACE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
 {
 	int2 tex2d_xy = int2(DTid.xy);

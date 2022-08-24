@@ -491,6 +491,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50001), "VR_RAYMIN_cs_5_0", "cs_5_0"), VR_RAYMIN_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50002), "VR_RAYSUM_cs_5_0", "cs_5_0"), VR_RAYSUM_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50006), "VR_SURFACE_cs_5_0", "cs_5_0"), VR_SURFACE_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50100), "FillDither_cs_5_0", "cs_5_0"), FillDither_cs_5_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50003), "VR_DEFAULT_FM_cs_5_0", "cs_5_0"), VR_DEFAULT_FM_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50004), "VR_OPAQUE_FM_cs_5_0", "cs_5_0"), VR_OPAQUE_FM_cs_5_0);
@@ -849,7 +850,7 @@ auto GetOption = [](const GpuRes& gres, const std::string& flag_name) -> uint
 };
 
 template <typename GPUTYPE, typename CPUTYPE> bool __FillVolumeValues(CPUTYPE* gpu_data, const GPUTYPE** cpu_data,
-	const bool is_downscaled, const bool use_nearest_max, const int valueoffset,
+	const bool is_downscaled, const bool use_nearest, const int valueoffset,
 	const vmint3& cpu_size, const vmint3& cpu_resize, const vmint3& cpu_bnd_size, const vmint2& gpu_row_depth_pitch, LocalProgress* progress)
 {
 	int cpu_sample_width = cpu_size.x + cpu_bnd_size.x * 2;
@@ -881,38 +882,45 @@ template <typename GPUTYPE, typename CPUTYPE> bool __FillVolumeValues(CPUTYPE* g
 					if (cpu_resize.x > 1)
 						fPosX = (float)x / (float)(cpu_resize.x - 1) * (float)(cpu_size.x - 1);
 
-					vmint3 i3PosSampleVS = vmint3((int)fPosX, (int)fPosY, (int)fPosZ);
+					if (use_nearest) {
+						vmint3 i3PosSampleVS = vmint3((int)(fPosX + 0.5f), (int)(fPosY + 0.5f), (int)(fPosZ + 0.5f));
+						int iMinMaxAddrX = min(max(i3PosSampleVS.x, 0), cpu_size.x - 1) + cpu_bnd_size.x;
+						int iMinMaxAddrY = (min(max(i3PosSampleVS.y, 0), cpu_size.y - 1) + cpu_bnd_size.y) * cpu_sample_width;
+						int iSampleAddrZ = i3PosSampleVS.z + cpu_bnd_size.z;
 
-					int iMinMaxAddrX = min(max(i3PosSampleVS.x, 0), cpu_size.x - 1) + cpu_bnd_size.x;
-					int iMinMaxAddrNextX = min(max(i3PosSampleVS.x + 1, 0), cpu_size.x - 1) + cpu_bnd_size.x;
-					int iMinMaxAddrY = (min(max(i3PosSampleVS.y, 0), cpu_size.y - 1) + cpu_bnd_size.y) * cpu_sample_width;
-					int iMinMaxAddrNextY = (min(max(i3PosSampleVS.y + 1, 0), cpu_size.y - 1) + cpu_bnd_size.y) * cpu_sample_width;
+						tVoxelValue = cpu_data[iSampleAddrZ][iMinMaxAddrX + iMinMaxAddrY] + valueoffset;
+					}
+					else {
+						vmint3 i3PosSampleVS = vmint3((int)fPosX, (int)fPosY, (int)fPosZ);
 
-					int iSampleAddr0 = iMinMaxAddrX + iMinMaxAddrY;
-					int iSampleAddr1 = iMinMaxAddrNextX + iMinMaxAddrY;
-					int iSampleAddr2 = iMinMaxAddrX + iMinMaxAddrNextY;
-					int iSampleAddr3 = iMinMaxAddrNextX + iMinMaxAddrNextY;
-					int iSampleAddrZ0 = i3PosSampleVS.z + cpu_bnd_size.z;
-					int iSampleAddrZ1 = i3PosSampleVS.z + cpu_bnd_size.z + 1;
+						int iMinMaxAddrX = min(max(i3PosSampleVS.x, 0), cpu_size.x - 1) + cpu_bnd_size.x;
+						int iMinMaxAddrNextX = min(max(i3PosSampleVS.x + 1, 0), cpu_size.x - 1) + cpu_bnd_size.x;
+						int iMinMaxAddrY = (min(max(i3PosSampleVS.y, 0), cpu_size.y - 1) + cpu_bnd_size.y) * cpu_sample_width;
+						int iMinMaxAddrNextY = (min(max(i3PosSampleVS.y + 1, 0), cpu_size.y - 1) + cpu_bnd_size.y) * cpu_sample_width;
 
-					if (i3PosSampleVS.z < 0)
-						iSampleAddrZ0 = iSampleAddrZ1;
-					else if (i3PosSampleVS.z >= cpu_size.z - 1)
-						iSampleAddrZ1 = iSampleAddrZ0;
+						int iSampleAddr0 = iMinMaxAddrX + iMinMaxAddrY;
+						int iSampleAddr1 = iMinMaxAddrNextX + iMinMaxAddrY;
+						int iSampleAddr2 = iMinMaxAddrX + iMinMaxAddrNextY;
+						int iSampleAddr3 = iMinMaxAddrNextX + iMinMaxAddrNextY;
+						int iSampleAddrZ0 = i3PosSampleVS.z + cpu_bnd_size.z;
+						int iSampleAddrZ1 = i3PosSampleVS.z + cpu_bnd_size.z + 1;
 
-					CPUTYPE tSampleValues[8];
-					tSampleValues[0] = cpu_data[iSampleAddrZ0][iSampleAddr0];
-					tSampleValues[1] = cpu_data[iSampleAddrZ0][iSampleAddr1];
-					tSampleValues[2] = cpu_data[iSampleAddrZ0][iSampleAddr2];
-					tSampleValues[3] = cpu_data[iSampleAddrZ0][iSampleAddr3];
-					tSampleValues[4] = cpu_data[iSampleAddrZ1][iSampleAddr0];
-					tSampleValues[5] = cpu_data[iSampleAddrZ1][iSampleAddr1];
-					tSampleValues[6] = cpu_data[iSampleAddrZ1][iSampleAddr2];
-					tSampleValues[7] = cpu_data[iSampleAddrZ1][iSampleAddr3];
-					float fSampleTrilinear = 0;
+						if (i3PosSampleVS.z < 0)
+							iSampleAddrZ0 = iSampleAddrZ1;
+						else if (i3PosSampleVS.z >= cpu_size.z - 1)
+							iSampleAddrZ1 = iSampleAddrZ0;
 
-					if (!use_nearest_max)
-					{
+						CPUTYPE tSampleValues[8];
+						tSampleValues[0] = cpu_data[iSampleAddrZ0][iSampleAddr0];
+						tSampleValues[1] = cpu_data[iSampleAddrZ0][iSampleAddr1];
+						tSampleValues[2] = cpu_data[iSampleAddrZ0][iSampleAddr2];
+						tSampleValues[3] = cpu_data[iSampleAddrZ0][iSampleAddr3];
+						tSampleValues[4] = cpu_data[iSampleAddrZ1][iSampleAddr0];
+						tSampleValues[5] = cpu_data[iSampleAddrZ1][iSampleAddr1];
+						tSampleValues[6] = cpu_data[iSampleAddrZ1][iSampleAddr2];
+						tSampleValues[7] = cpu_data[iSampleAddrZ1][iSampleAddr3];
+						float fSampleTrilinear = 0;
+
 						vmfloat3 f3InterpolateRatio;
 						f3InterpolateRatio.x = fPosX - i3PosSampleVS.x;
 						f3InterpolateRatio.y = fPosY - i3PosSampleVS.y;
@@ -932,17 +940,8 @@ template <typename GPUTYPE, typename CPUTYPE> bool __FillVolumeValues(CPUTYPE* g
 						{
 							fSampleTrilinear += tSampleValues[m] * fInterpolateWeights[m];
 						}
+						tVoxelValue = (CPUTYPE)((int)fSampleTrilinear + valueoffset);
 					}
-					else
-					{
-						for (int m = 0; m < 8; m++)
-						{
-							fSampleTrilinear = tSampleValues[m];
-							if (fSampleTrilinear > 0)
-								break;
-						}
-					}
-					tVoxelValue = (CPUTYPE)((int)fSampleTrilinear + valueoffset);
 				}
 				else
 				{
@@ -1024,7 +1023,7 @@ RETRY:
 	gres.res_values.SetParam("SAMPLE_OFFSET_Y", (float)sample_offset.y);
 	gres.res_values.SetParam("SAMPLE_OFFSET_Z", (float)sample_offset.z);
 
-	cout << "***************>> " << vol_size_x << ", " << vol_size_y << ", " << vol_size_z << endl;
+	//cout << "***************>> " << vol_size_x << ", " << vol_size_y << ", " << vol_size_z << endl;
 
 	if (vol_size_x > 2048)
 	{
@@ -1050,7 +1049,7 @@ RETRY:
 		vol_size_x * vol_size_y * vol_size_z / 1024 * type_size,
 		vol_size_x, vol_size_y, vol_size_z, type_size);
 
-	cout << "************offset*>> " << sample_offset.x << ", " << sample_offset.y << ", " << sample_offset.z << endl;
+	//cout << "************offset*>> " << sample_offset.x << ", " << sample_offset.y << ", " << sample_offset.z << endl;
 
 	g_pCGpuManager->GenerateGpuResource(gres);
 
@@ -1840,19 +1839,21 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 		gresVol.res_values.GetParam("SAMPLE_OFFSET_Z", 1.f));
 	float minDistSample = (float)min(min(vol_data->vox_pitch.x * sampleOffset.x, vol_data->vox_pitch.y * sampleOffset.y),
 		vol_data->vox_pitch.z * sampleOffset.z);
-	cout << "minDistSample >>>> " << minDistSample << endl;
+	//cout << "minDistSample >>>> " << minDistSample << endl;
 	float maxDistSample = (float)max(max(vol_data->vox_pitch.x * sampleOffset.x, vol_data->vox_pitch.y * sampleOffset.y),
 		vol_data->vox_pitch.z * sampleOffset.z);
-	cout << "maxDistSample >>>> " << maxDistSample << endl;
+	//cout << "maxDistSample >>>> " << maxDistSample << endl;
 	float grad_offset_dist = maxDistSample;
 	fTransformVector((vmfloat3*)&cb_volume.vec_grad_x, &vmfloat3(grad_offset_dist, 0, 0), &mat_ws2ts);
 	fTransformVector((vmfloat3*)&cb_volume.vec_grad_y, &vmfloat3(0, grad_offset_dist, 0), &mat_ws2ts);
 	fTransformVector((vmfloat3*)&cb_volume.vec_grad_z, &vmfloat3(0, 0, grad_offset_dist), &mat_ws2ts);
 	
-	const float sample_rate = 1.f;
+	//const float sample_rate = 1.f;
+	float sample_rate = actor->GetParam("_float_SamplePrecisionLevel", 1.0f);
 	cb_volume.opacity_correction = 1.f;
 	cb_volume.sample_dist = minDistSample / sample_rate;
-	cb_volume.opacity_correction /= sample_rate;
+	// note preintegration technique implies opacity correction w.r.t. sample distance
+	//cb_volume.opacity_correction /= sample_rate;
 	
 	//cb_volume.vol_size = vmfloat3((float)vol_data->vol_size.x, (float)vol_data->vol_size.y, (float)vol_data->vol_size.z);
 

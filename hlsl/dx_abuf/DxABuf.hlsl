@@ -162,6 +162,7 @@ void OIT_A_BUFFER_FILL(__VS_OUT input)
 
 void PICKING_A_BUFFER_FILL(__VS_OUT input)
 {
+	//POBJ_PRE_CONTEXT;
 	if (g_cbPobj.alpha < 0.00001) clip(-1);
 	int2 tex2d_xy = int2(input.f4PosSS.xy);
 	int x_pick_ss = g_cbCamState.iSrCamDummy__1 & 0xFFFF;

@@ -439,6 +439,7 @@ namespace grd_helper
 		// 5th bit : only for DFB without (S)FM. stores all fragments into the framebuffer (using offset table)
 		// 6th bit : 0 : (normal rendering), 1 : picking mode
 		// 7th bit : 0 : (stores the final RGBA and depth to RT), 1 : (does not store them) // will be deprecated
+		// 8th bit : 0 : full raycaster, 1 : half raycaster for 4x faster volume rendering
 		uint cam_flag;
 		// used for 1) A-Buffer prefix computations /*deprecated*/ or 2) beta (asfloat) for merging operation
 		uint iSrCamDummy__0; 

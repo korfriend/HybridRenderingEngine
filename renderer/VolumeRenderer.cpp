@@ -16,7 +16,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #endif
 
 
-	clock_t start = clock();
+	//clock_t start = clock();
 	
 #pragma region // Parameter Setting //
 	VmIObject* iobj = _fncontainer->fnParams.GetParam("_VmIObject*_RenderOut", (VmIObject*)NULL);
@@ -59,7 +59,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 	bool recompile_hlsl = _fncontainer->fnParams.GetParam("_bool_ReloadHLSLObjFiles", false);
 
-	float samplePrecisionLevel = _fncontainer->fnParams.GetParam("_float_SamplePrecisionLevel", 1.0f);
+	//float samplePrecisionLevel = _fncontainer->fnParams.GetParam("_float_SamplePrecisionLevel", 1.0f);
 
 	VmLight* light = _fncontainer->fnParams.GetParam("_VmLight*_LightSource", (VmLight*)NULL);
 	VmLens* lens = _fncontainer->fnParams.GetParam("_VmLens*_CamLens", (VmLens*)NULL);
@@ -118,7 +118,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 		string prefix_path = hlslobj_path;
 
-#define CS_NUM 21
+#define CS_NUM 22
 #define SET_CS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(COMPUTE_SHADER, NAME), dx11CShader, true)
 
 		string strNames_CS[CS_NUM] = {
@@ -143,6 +143,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			  ,"VR_OPAQUE_DFB_cs_5_0"
 			  ,"VR_CONTEXT_DFB_cs_5_0"
 			  ,"VR_SURFACE_cs_5_0"
+			  ,"FillDither_cs_5_0"
 		};
 
 		for (int i = 0; i < CS_NUM; i++)
@@ -215,7 +216,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		gpu_profile = _fncontainer->fnParams.GetParam("_bool_GpuProfile", false);
 	}
 	// test //
-	gpu_profile = true;
+	//gpu_profile = true;
 
 	GpuRes gres_fb_rgba, gres_fb_depthcs, gres_fb_vrdepthcs;
 	GpuRes gres_fb_k_buffer, gres_fb_counter;
@@ -520,12 +521,12 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				vol_data = vobj->GetVolumeData();
 			}
 			else {
-				clock_t __start = clock();
+				//clock_t __start = clock();
 
 				grd_helper::UpdateVolumeModel(gres_mask_vol, mask_vol_obj, true);
 				dx11DeviceImmContext->CSSetShaderResources(2, 1, (__SRV_PTR*)&gres_mask_vol.alloc_res_ptrs[DTYPE_SRV]);
 				
-				printf("######111 %f段\n", (double)(clock() - __start) / CLOCKS_PER_SEC);
+				//printf("######111 %f段\n", (double)(clock() - __start) / CLOCKS_PER_SEC);
 			}
 		}
 		else if (ray_cast_type == __RM_MULTIOTF || ray_cast_type == __RM_VISVOLMASK) {
@@ -537,10 +538,10 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->CSSetShaderResources(0, 1, (__SRV_PTR*)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
 
 		GpuRes gres_tmap_otf, gres_tmap_preintotf;
-		clock_t __start2 = clock();
+		//clock_t __start2 = clock();
 		grd_helper::UpdateTMapBuffer(gres_tmap_otf, tobj_otf, false);
 		grd_helper::UpdateTMapBuffer(gres_tmap_preintotf, tobj_otf, true);
-		printf("######222 %f段\n", (double)(clock() - __start2) / CLOCKS_PER_SEC);
+		//printf("######222 %f段\n", (double)(clock() - __start2) / CLOCKS_PER_SEC);
 		dx11DeviceImmContext->CSSetShaderResources(3, 1, (__SRV_PTR*)&gres_tmap_otf.alloc_res_ptrs[DTYPE_SRV]);
 		dx11DeviceImmContext->CSSetShaderResources(13, 1, (__SRV_PTR*)&gres_tmap_preintotf.alloc_res_ptrs[DTYPE_SRV]);
 
@@ -566,10 +567,10 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			}
 		}
 		else {
-			clock_t __start3 = clock();
+			//clock_t __start3 = clock();
 			grd_helper::UpdateOtfBlocks(gres_volblk_otf, vobj, mask_vol_obj, tobj_otf, sculpt_index); // this tagged mask volume is always used even when MIP mode
 			volblk_srv = (__SRV_PTR)gres_volblk_otf.alloc_res_ptrs[DTYPE_SRV];
-			printf("######333 %f段\n", (double)(clock() - __start3) / CLOCKS_PER_SEC);
+			//printf("######333 %f段\n", (double)(clock() - __start3) / CLOCKS_PER_SEC);
 		}
 		dx11DeviceImmContext->CSSetShaderResources(1, 1, (__SRV_PTR*)&volblk_srv);
 
@@ -750,6 +751,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		if ((mode_OIT == MFR_MODE::DYNAMIC_FB && !apply_fragmerge) || mode_OIT == MFR_MODE::DYNAMIC_KB) // filling
 			dx11DeviceImmContext->CSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]); // search why this does not work
 		
+		const bool is_dither = true;
+
 		if(ray_cast_type != __RM_RAYMIN
 			&& ray_cast_type != __RM_RAYMAX
 			&& ray_cast_type != __RM_RAYSUM) {
@@ -794,6 +797,10 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #ifdef __DX_DEBUG_QUERY
 		dx11CommonParams->debug_info_queue->PushEmptyStorageFilter();
 #endif
+		//if (is_dither) {
+		//	dx11DeviceImmContext->CSSetShader(GETCS(FillDither_cs_5_0), NULL, 0);
+		//	dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+		//}
 		count_call_render++;
 
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
@@ -1018,9 +1025,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 	iobj->SetDescriptor("vismtv_inbuilt_renderergpudx module : Volume Renderer");
 
-	clock_t finish = clock();
-	double duration = (double)(finish - start) / CLOCKS_PER_SEC;
-	printf("###################### %f段\n", duration);
+	//clock_t finish = clock();
+	//double duration = (double)(finish - start) / CLOCKS_PER_SEC;
+	//printf("###################### %f段\n", duration);
 
 	return true;
 }

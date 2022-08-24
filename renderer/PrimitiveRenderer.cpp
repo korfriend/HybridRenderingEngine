@@ -1399,6 +1399,13 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	}
 #pragma endregion 
 
+	//if (is_picking_routine) {
+	//	cout << "PICKING SCREEN POS : " << picking_pos_ss.x << ", " << picking_pos_ss.y << endl;
+	//	for (auto a : general_oit_routine_objs) {
+	//		cout << "PICKING TARGET ACTORS : " << a->actorId << endl;
+	//	}
+	//}
+
 	map<string, vmint2> profile_map;
 	if (gpu_profile)
 	{
@@ -2315,8 +2322,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		int num_layers = 0;
 		for (int i = 0; i < max_picking_layers; i += 2) {
 			uint obj_id = picking_buf[i];
-			if (obj_id == 0) break;
-
+			if (obj_id == 0) continue;
+			
 			float pick_depth = *(float*)&picking_buf[i + 1];
 
 			auto it = picking_layers_id_depth.find(obj_id);
@@ -2345,7 +2352,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		for (auto& it : picking_layers_depth_id) {
 			vmfloat3 pos_pick = picking_ray_origin + picking_ray_dir * it.first;
 			picking_pos_out.push_back(pos_pick);
-			picking_id_out.push_back(it.second);
+			picking_id_out.push_back(it.second); 
+			//std::cout << "PICKING ACTORS : " << it.second << std::endl;
 		}
 
 		_fncontainer->fnParams.SetParam("_vlist_float3_PickPos", picking_pos_out);
