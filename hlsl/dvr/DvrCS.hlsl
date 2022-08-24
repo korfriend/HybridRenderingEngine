@@ -455,6 +455,8 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		ao_vr = ao_vr_texture[DTid.xy];
 	}
 
+	return;
+
 	[loop]
     for (int i = 0; i < (int)num_frags; i++)
     {

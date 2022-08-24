@@ -27,10 +27,10 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	vmfloat4 default_phong_lighting_coeff = vmfloat4(0.2, 1.0, 0.5, 5); // Emission, Diffusion, Specular, Specular Power
 	bool force_to_update_otf = _fncontainer->fnParams.GetParam("_bool_ForceToUpdateOtf", false);
 	bool show_block_test = _fncontainer->fnParams.GetParam("_bool_IsShowBlock", false);
-	float v_thickness = (float)_fncontainer->fnParams.GetParam("_float_VZThickness", 0.0);
+	float v_thickness = (float)_fncontainer->fnParams.GetParam("_float_VZThickness", 0.f);
 	bool check_pixel_transmittance = _fncontainer->fnParams.GetParam("_bool_PixelTransmittance", false);
 
-	float merging_beta = (float)_fncontainer->fnParams.GetParam("_float_MergingBeta", 0.5);
+	float merging_beta = (float)_fncontainer->fnParams.GetParam("_float_MergingBeta", 0.5f);
 	bool is_rgba = _fncontainer->fnParams.GetParam("_bool_IsRGBA", false); // false means bgra
 	bool is_ghost_mode = _fncontainer->fnParams.GetParam("_bool_GhostEffect", false);
 	bool blur_SSAO = _fncontainer->fnParams.GetParam("_bool_BlurSSAO", true);
