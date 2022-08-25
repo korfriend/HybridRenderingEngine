@@ -1580,7 +1580,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				dx11DeviceImmContext->PSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
 
 				CB_VolumeObject cbVolumeObj;
-				grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, actor, gres_vol, 0, 1.f);
+				grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, actor, gres_vol, 0, 1.f, 1.f, false);
 				cbVolumeObj.pb_shading_factor = material_phongCoeffs;
 				D3D11_MAPPED_SUBRESOURCE mappedResVolObj;
 				dx11DeviceImmContext->Map(cbuf_vobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResVolObj);

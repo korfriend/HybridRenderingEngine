@@ -1805,7 +1805,7 @@ void grd_helper::SetCb_Env(CB_EnvState& cb_env, VmCObject* ccobj, const LightSou
 	//}
 }
 
-void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vobj, VmActor* actor, GpuRes& gresVol, const int iso_value, const float volblk_valuerange, const int sculpt_index)
+void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vobj, VmActor* actor, GpuRes& gresVol, const int iso_value, const float volblk_valuerange, const float sample_precision, const bool is_xraymode, const int sculpt_index)
 {
 	VolumeData* vol_data = vobj->GetVolumeData();
 
@@ -1857,11 +1857,12 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 	fTransformVector((vmfloat3*)&cb_volume.vec_grad_z, &vmfloat3(0, 0, grad_offset_dist), &mat_ws2ts);
 	
 	//const float sample_rate = 1.f;
-	float sample_rate = actor->GetParam("_float_SamplePrecisionLevel", 1.0f);
+	float sample_rate = sample_precision;// actor->GetParam("_float_SamplePrecisionLevel", 1.0f);
 	cb_volume.opacity_correction = 1.f;
 	cb_volume.sample_dist = minDistSample / sample_rate;
 	// note preintegration technique implies opacity correction w.r.t. sample distance
-	//cb_volume.opacity_correction /= sample_rate;
+	if( is_xraymode ) 
+		cb_volume.opacity_correction /= sample_rate;
 	
 	//cb_volume.vol_size = vmfloat3((float)vol_data->vol_size.x, (float)vol_data->vol_size.y, (float)vol_data->vol_size.z);
 
