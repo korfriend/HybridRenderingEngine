@@ -1111,16 +1111,20 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	// DVR ray-casting core part
 #if RAYMODE == 0 // DVR
 	// note that the gradient normal direction faces to the inside
+	float3 view_dir = normalize(dir_sample_ws);
 	float3 light_dirinv = -g_cbEnv.dir_light_ws;
-	if (g_cbEnv.env_flag & 0x1)
+	if (g_cbEnv.env_flag & 0x1) {
 		light_dirinv = -normalize(pos_ray_start_ws - g_cbEnv.pos_light_ws);
+	}
+	else if (g_cbEnv.env_flag & 0x4) {
+		light_dirinv = -view_dir;
+	}
 
 	uint idx_dlayer = 0;
 	{
 		// care for clip plane ... 
 	}
 
-	float3 view_dir = normalize(dir_sample_ws);
 	//vis_out = float4(TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts), 1);
 	//return;
 

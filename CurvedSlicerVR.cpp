@@ -318,7 +318,8 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 
 	CB_EnvState cbEnvState;
 	grd_helper::SetCb_Env(cbEnvState, cam_obj, light_src, global_lighting, lens_effect);
-	cbEnvState.env_flag |= 0x2;
+	if(light_src.is_on_camera)
+		cbEnvState.env_flag |= 0x4;
 	D3D11_MAPPED_SUBRESOURCE mappedResEnvState;
 	dx11DeviceImmContext->Map(cbuf_env_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResEnvState);
 	CB_EnvState* cbEnvStateData = (CB_EnvState*)mappedResEnvState.pData;

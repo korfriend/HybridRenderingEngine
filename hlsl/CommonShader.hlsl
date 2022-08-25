@@ -60,6 +60,7 @@ struct HxCB_EnvState
 	float3 pos_light_ws;
 	// 1st bit : 0 (parallel), 1 : (spot)
 	// 2nd bit : 0 (only polygons for SSAO), 1 : (volume G buffer for SSAO)
+	// 3rd bit : 0 (use light source), 1 : (use view dir for light)
 	// 10th~13th bit : 0 (no SSAO output to render buffer), 1~8: (0~7th layer of SSAO to render buffer), 9: vr layer of SSAO to render buffer
 	uint env_flag;
 
