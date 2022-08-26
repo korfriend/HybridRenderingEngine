@@ -1805,7 +1805,7 @@ void grd_helper::SetCb_Env(CB_EnvState& cb_env, VmCObject* ccobj, const LightSou
 	//}
 }
 
-void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vobj, VmActor* actor, GpuRes& gresVol, const int iso_value, const float volblk_valuerange, const float sample_precision, const bool is_xraymode, const int sculpt_index)
+void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vobj, const vmmat44f& matWS2OS, GpuRes& gresVol, const int iso_value, const float volblk_valuerange, const float sample_precision, const bool is_xraymode, const int sculpt_index)
 {
 	VolumeData* vol_data = vobj->GetVolumeData();
 
@@ -1816,7 +1816,7 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 	if (sculpt_index >= 0)
 		cb_volume.vobj_flag |= sculpt_index << 24;
 
-	vmmat44f matWS2VS = actor->matWS2OS * vobj->GetMatrixOS2RSf();
+	vmmat44f matWS2VS = matWS2OS * vobj->GetMatrixOS2RSf();
 
 	vmmat44f matVS2TS;
 	vmmat44f matShift, matScale;
@@ -1833,7 +1833,7 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 	vmfloat3 aabb_size = aabb_os.pos_max - aabb_os.pos_min;
 	fMatrixScaling(&mat_s, &vmfloat3(1. / aabb_size.x, 1. / aabb_size.y, 1. / aabb_size.z));
 
-	vmmat44f matWS2BS = actor->matWS2OS * mat_s;
+	vmmat44f matWS2BS = matWS2OS * mat_s;
 	cb_volume.mat_alignedvbox_tr_ws2bs = TRANSPOSE(matWS2BS);
 
 	if (vol_data->store_dtype.type_bytes == data_type::dtype<byte>().type_bytes) // char

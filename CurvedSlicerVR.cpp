@@ -520,7 +520,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->CSSetShaderResources(1, 1, (__SRV_PTR*)&volblk_srv);
 
 		CB_VolumeObject cbVolumeObj;
-		grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, actor, gres_vol, tmap_data->valid_min_idx.x, gres_volblk.options["FORMAT"] == DXGI_FORMAT_R16_UNORM ? 65535.f : 255.f, samplePrecisionLevel, is_xray_mode);
+		grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, actor->matWS2OS, gres_vol, tmap_data->valid_min_idx.x, gres_volblk.options["FORMAT"] == DXGI_FORMAT_R16_UNORM ? 65535.f : 255.f, samplePrecisionLevel, is_xray_mode);
 		if (is_modulation_mode && ((uint)vol_data->vol_size.x * (uint)vol_data->vol_size.y * (uint)vol_data->vol_size.z > 1000000)) {
 			//cbVolumeObj.opacity_correction *= 2.f;
 			//cbVolumeObj.sample_dist *= 2.f;

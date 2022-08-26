@@ -106,7 +106,7 @@ struct HxCB_PolygonObject
 {
     float4x4 mat_os2ws;
 	float4x4 mat_ws2os; 
-	float4x4 mat_os2ps; 
+	float4x4 mat_os2ps;
     
     float3 Ka;
     float Ns;

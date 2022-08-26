@@ -1579,8 +1579,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				dx11DeviceImmContext->VSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
 				dx11DeviceImmContext->PSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
 
+				vmmat44f matGeoOS2VolOS = actor->GetParam("_matrix44f_GeoOS2VolOS", vmmat44f());
 				CB_VolumeObject cbVolumeObj;
-				grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, actor, gres_vol, 0, 1.f, 1.f, false);
+				grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, matGeoOS2VolOS, gres_vol, 0, 65535.f, 1.f, false);
 				cbVolumeObj.pb_shading_factor = material_phongCoeffs;
 				D3D11_MAPPED_SUBRESOURCE mappedResVolObj;
 				dx11DeviceImmContext->Map(cbuf_vobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResVolObj);
