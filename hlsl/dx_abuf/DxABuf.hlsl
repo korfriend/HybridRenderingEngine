@@ -87,6 +87,28 @@ void OIT_A_BUFFER_FILL(__VS_OUT input)
 		if (d <= 0.01) clip(-1);
 		v_rgba.a *= d;
 	}
+#elif __RENDERING_MODE == 5
+	// note g_cbVolObj.mat_ws2ts represents SrcOS2DstTS
+	float4x4 matSrcWS2DstTS = g_cbPobj.mat_ws2os; // col major g_cbVobj.mat_ws2ts * 
+	float3 posTS = TransformPoint(input.f3PosWS, matSrcWS2DstTS);
+	//float sample_v = g_tex3DVolume.SampleLevel(g_samplerLinear_clamp, posTS, 0).r;
+	float3 tt = (posTS + (float3)2.0f) * 0.2f;
+	float sample_v = g_tex3DVolume.SampleLevel(g_samplerLinear_clamp, tt, 0).r;
+	//v_rgba = g_f4bufOTF[sample_v * g_cbTmap.tmap_size_x * 100];
+	v_rgba = g_f4bufOTF[30];
+	v_rgba.a = 1.f;
+	//v_rgba = float4((float3)sample_v * 1.f, 1);
+	//if (sample_v > 0)
+	//	v_rgba = float4(1, 1, 0, 1);
+	//if (tt.x > 1 && tt.y > 1 && tt.z > 1)
+	//	v_rgba = float4(1, 1, 1, 1);
+	//if (tt.x < 1.0 && tt.y < 1.0 && tt.z < 1.0)
+	//	v_rgba = float4(0, 1, 1, 1);
+
+	//if (tt.x < 1.0 && tt.y < 1.0 && tt.z < 1.0
+	//	&& tt.x > 0.0 && tt.y > 0.0 && tt.z > 0.0)
+	//	v_rgba = float4(0, 1, 1, 1);
+
 #else
 	float3 Ka, Kd, Ks;
 	float Ns = g_cbPobj.Ns;

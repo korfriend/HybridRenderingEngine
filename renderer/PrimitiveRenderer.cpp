@@ -697,8 +697,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			hlslobj_path += token + "\\";
 			exe_path.erase(0, pos + delimiter.length());
 		}
-		//hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
-		hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
+		hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
+		//hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
 		//cout << hlslobj_path << endl;
 
 		string prefix_path = hlslobj_path;
@@ -711,7 +711,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 #define VS_NUM 5
 #define GS_NUM 3
-#define PS_NUM 69
+#define PS_NUM 70
 #define CS_NUM 27
 #define SET_VS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(VERTEX_SHADER, NAME), __S, true)
 #define SET_PS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(PIXEL_SHADER, NAME), __S, true)
@@ -846,6 +846,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			,"SR_OIT_ABUFFER_MULTITEXTMAPPING_ps_5_0"
 			,"SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0"
 			,"SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0"
+			,"SR_OIT_ABUFFER_VOLUMEMAP_ps_5_0"
 
 			,"SR_MOMENT_GEN_ps_5_0"
 			,"SR_MOMENT_GEN_TEXT_ps_5_0"
@@ -1552,31 +1553,14 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #pragma endregion
 
 #pragma region GPU resource updates
-			VmObject* tobj_otf = (VmObject*)actor->GetAssociateRes("OTF");
-			VmObject* tobj_maptable = (VmObject*)actor->GetAssociateRes("MAPTABLE");
+			//VmObject* tobj_otf = (VmObject*)actor->GetAssociateRes("OTF"); 
+			VmObject* tobj_maptable = (VmObject*)actor->GetAssociateRes("MAPTABLE"); // single one
 			VmVObjectVolume* vobj = (VmVObjectVolume*)actor->GetAssociateRes("VOLUME");
 
 			if (vobj) {
 				GpuRes gres_vol, gres_tmap_otf;
 				grd_helper::UpdateVolumeModel(gres_vol, vobj, false, progress);
-				if (tobj_otf) {
-					grd_helper::UpdateTMapBuffer(gres_tmap_otf, tobj_otf);
-					//grd_helper::UpdateOtfBlocks(gres_volblk_otf, vobj, NULL, tobj_otf, 0);
-					dx11DeviceImmContext->VSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_tmap_otf.alloc_res_ptrs[DTYPE_SRV]);
-					dx11DeviceImmContext->PSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_tmap_otf.alloc_res_ptrs[DTYPE_SRV]);
-
-					CB_TMAP cbTmap;
-					grd_helper::SetCb_TMap(cbTmap, tobj_otf);
-					D3D11_MAPPED_SUBRESOURCE mappedResTmap;
-					dx11DeviceImmContext->Map(cbuf_tmap, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResTmap);
-					CB_TMAP* cbTmapData = (CB_TMAP*)mappedResTmap.pData;
-					memcpy(cbTmapData, &cbTmap, sizeof(CB_TMAP));
-					dx11DeviceImmContext->Unmap(cbuf_tmap, 0);
-
-					dx11DeviceImmContext->PSSetConstantBuffers(5, 1, &cbuf_tmap);
-				}
-
-				dx11DeviceImmContext->VSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
+				//dx11DeviceImmContext->VSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
 				dx11DeviceImmContext->PSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
 
 				vmmat44f matGeoOS2VolOS = actor->GetParam("_matrix44f_GeoOS2VolOS", vmmat44f());
@@ -1591,7 +1575,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 				dx11DeviceImmContext->PSSetConstantBuffers(4, 1, &cbuf_vobj);
 			}
-			else if (tobj_maptable){
+			if (tobj_maptable){
 				GpuRes gres_tmap_maptble;
 				grd_helper::UpdateTMapBuffer(gres_tmap_maptble, tobj_maptable);
 
@@ -1764,6 +1748,10 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_TEXTUREIMGMAP_ROV_ps_5_0);
 						break;
 					}
+				else if (vobj && tobj_maptable) {
+					assert(mode_OIT == MFR_MODE::DYNAMIC_FB);
+					dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_ABUFFER_VOLUMEMAP_ps_5_0);
+				}
 				else
 					switch (mode_OIT)
 					{
