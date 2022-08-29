@@ -716,6 +716,9 @@ bool __ReleaseGpuResource(GpuRes& gres, const bool call_clearstate)
 		case DTYPE_RES:
 		{
 			ID3D11Resource* pdx11Resource = (ID3D11Resource*)it->second;
+
+			//gres.rtype
+
 			VMSAFE_RELEASE(pdx11Resource);
 			break;
 		}

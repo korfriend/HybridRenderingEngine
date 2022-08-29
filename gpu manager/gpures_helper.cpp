@@ -126,7 +126,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		descBlend.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
 		ID3D11BlendState* blender_state;
 		hr |= g_pvmCommonParams->dx11Device->CreateBlendState(&descBlend, &blender_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(BLEND_STATE, "ADD"), blender_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::BLEND_STATE, "ADD"), blender_state);
 
 		D3D11_RASTERIZER_DESC2 descRaster;
 		ZeroMemory(&descRaster, sizeof(D3D11_RASTERIZER_DESC));
@@ -144,50 +144,50 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		descRaster.ConservativeRaster = D3D11_CONSERVATIVE_RASTERIZATION_MODE_OFF;
 		ID3D11RasterizerState2* raster_state;
 		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "SOLID_CW"), raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "SOLID_CW"), raster_state);
 		descRaster.AntialiasedLineEnable = true;
 		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "AA_SOLID_CW"), raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "AA_SOLID_CW"), raster_state);
 		//descRaster.CullMode = D3D11_CULL_FRONT;
 		descRaster.CullMode = D3D11_CULL_BACK;
 		descRaster.FrontCounterClockwise = TRUE;
 		descRaster.AntialiasedLineEnable = false;
 		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "SOLID_CCW"), raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "SOLID_CCW"), raster_state);
 		descRaster.AntialiasedLineEnable = true;
 		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "AA_SOLID_CCW"), raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "AA_SOLID_CCW"), raster_state);
 		descRaster.CullMode = D3D11_CULL_NONE;
 		descRaster.AntialiasedLineEnable = false;
 		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "SOLID_NONE"), raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "SOLID_NONE"), raster_state);
 		descRaster.AntialiasedLineEnable = true;
 		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "AA_SOLID_NONE"), raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "AA_SOLID_NONE"), raster_state);
 
 		descRaster.FillMode = D3D11_FILL_WIREFRAME;
 		descRaster.CullMode = D3D11_CULL_BACK;
 		descRaster.ConservativeRaster = D3D11_CONSERVATIVE_RASTERIZATION_MODE_OFF;
 		descRaster.AntialiasedLineEnable = false;
 		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "WIRE_CW"), raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "WIRE_CW"), raster_state);
 		descRaster.AntialiasedLineEnable = true;
 		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "AA_WIRE_CW"), raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "AA_WIRE_CW"), raster_state);
 		descRaster.CullMode = D3D11_CULL_FRONT;
 		descRaster.AntialiasedLineEnable = false;
 		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "WIRE_CCW"), raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "WIRE_CCW"), raster_state);
 		descRaster.AntialiasedLineEnable = true;
 		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "AA_WIRE_CCW"), raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "AA_WIRE_CCW"), raster_state);
 		descRaster.CullMode = D3D11_CULL_NONE;
 		descRaster.AntialiasedLineEnable = false;
 		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "WIRE_NONE"), raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "WIRE_NONE"), raster_state);
 		descRaster.AntialiasedLineEnable = true;
 		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(RASTERIZER_STATE, "AA_WIRE_NONE"), raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "AA_WIRE_NONE"), raster_state);
 	}
 	{
 		D3D11_DEPTH_STENCIL_DESC descDepthStencil;
@@ -198,16 +198,16 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		descDepthStencil.StencilEnable = FALSE;
 		ID3D11DepthStencilState* ds_state;
 		hr |= g_pvmCommonParams->dx11Device->CreateDepthStencilState(&descDepthStencil, &ds_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(DEPTHSTENCIL_STATE, "LESSEQUAL"), ds_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::DEPTHSTENCIL_STATE, "LESSEQUAL"), ds_state);
 		descDepthStencil.DepthFunc = D3D11_COMPARISON_ALWAYS;
 		hr |= g_pvmCommonParams->dx11Device->CreateDepthStencilState(&descDepthStencil, &ds_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(DEPTHSTENCIL_STATE, "ALWAYS"), ds_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::DEPTHSTENCIL_STATE, "ALWAYS"), ds_state);
 		descDepthStencil.DepthFunc = D3D11_COMPARISON_GREATER;
 		hr |= g_pvmCommonParams->dx11Device->CreateDepthStencilState(&descDepthStencil, &ds_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(DEPTHSTENCIL_STATE, "GREATER"), ds_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::DEPTHSTENCIL_STATE, "GREATER"), ds_state);
 		descDepthStencil.DepthFunc = D3D11_COMPARISON_LESS;
 		hr |= g_pvmCommonParams->dx11Device->CreateDepthStencilState(&descDepthStencil, &ds_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(DEPTHSTENCIL_STATE, "LESS"), ds_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::DEPTHSTENCIL_STATE, "LESS"), ds_state);
 	}
 	{
 		D3D11_SAMPLER_DESC descSampler;
@@ -226,30 +226,30 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		descSampler.MinLOD = FLT_MIN;
 		ID3D11SamplerState* sampler_state;
 		hr |= g_pvmCommonParams->dx11Device->CreateSamplerState(&descSampler, &sampler_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(SAMPLER_STATE, "POINT_CLAMP"), sampler_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::SAMPLER_STATE, "POINT_CLAMP"), sampler_state);
 		descSampler.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;	// NEAREST by ROUND
 		hr |= g_pvmCommonParams->dx11Device->CreateSamplerState(&descSampler, &sampler_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(SAMPLER_STATE, "LINEAR_CLAMP"), sampler_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::SAMPLER_STATE, "LINEAR_CLAMP"), sampler_state);
 
 		descSampler.AddressU = D3D11_TEXTURE_ADDRESS_BORDER;
 		descSampler.AddressV = D3D11_TEXTURE_ADDRESS_BORDER;
 		descSampler.AddressW = D3D11_TEXTURE_ADDRESS_BORDER;
 		descSampler.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;	// NEAREST by ROUND
 		hr |= g_pvmCommonParams->dx11Device->CreateSamplerState(&descSampler, &sampler_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(SAMPLER_STATE, "LINEAR_ZEROBORDER"), sampler_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::SAMPLER_STATE, "LINEAR_ZEROBORDER"), sampler_state);
 		descSampler.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;	// NEAREST by ROUND
 		hr |= g_pvmCommonParams->dx11Device->CreateSamplerState(&descSampler, &sampler_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(SAMPLER_STATE, "POINT_ZEROBORDER"), sampler_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::SAMPLER_STATE, "POINT_ZEROBORDER"), sampler_state);
 
 		descSampler.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
 		descSampler.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
 		descSampler.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
 		descSampler.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;	// NEAREST by ROUND
 		hr |= g_pvmCommonParams->dx11Device->CreateSamplerState(&descSampler, &sampler_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(SAMPLER_STATE, "LINEAR_WRAP"), sampler_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::SAMPLER_STATE, "LINEAR_WRAP"), sampler_state);
 		descSampler.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;	// NEAREST by ROUND
 		hr |= g_pvmCommonParams->dx11Device->CreateSamplerState(&descSampler, &sampler_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(SAMPLER_STATE, "POINT_WRAP"), sampler_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::SAMPLER_STATE, "POINT_WRAP"), sampler_state);
 	}
 	{
 		D3D11_BUFFER_DESC descCB;
@@ -329,8 +329,8 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 				return E_FAIL;
 			}
 			if(in_layout)
-				g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(INPUT_LAYOUT, name_layer), in_layout);
-			g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(VERTEX_SHADER, name_shader), vshader);
+				g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, name_layer), in_layout);
+			g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, name_shader), vshader);
 			return S_OK;
 		};
 		auto register_shader = [&](const LPCWSTR pSrcResource, const string& name_shader, const string& profile)
@@ -341,11 +341,11 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 				VMSAFE_RELEASE(shader);
 				return E_FAIL;
 			}
-			GpuhelperResType _type = VERTEX_SHADER;
-			if (profile.compare(0, 2, "vs") == 0) _type = VERTEX_SHADER;
-			else if (profile.compare(0, 2, "ps") == 0) _type = PIXEL_SHADER;
-			else if (profile.compare(0, 2, "gs") == 0) _type = GEOMETRY_SHADER;
-			else if (profile.compare(0, 2, "cs") == 0) _type = COMPUTE_SHADER;
+			GpuhelperResType _type = GpuhelperResType::VERTEX_SHADER;
+			if (profile.compare(0, 2, "vs") == 0) _type = GpuhelperResType::VERTEX_SHADER;
+			else if (profile.compare(0, 2, "ps") == 0) _type = GpuhelperResType::PIXEL_SHADER;
+			else if (profile.compare(0, 2, "gs") == 0) _type = GpuhelperResType::GEOMETRY_SHADER;
+			else if (profile.compare(0, 2, "cs") == 0) _type = GpuhelperResType::COMPUTE_SHADER;
 			else GMERRORMESSAGE("UN DEFINED SHADER TYPE ! : grd_helper::InitializePresettings");
 
 			g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(_type, name_shader), shader);

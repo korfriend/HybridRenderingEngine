@@ -18,4 +18,54 @@ using namespace DirectX;
 #define GMERRORMESSAGE(a) ::MessageBoxA(NULL, a, NULL, MB_OK)
 #define VMERRORMESSAGE(a) printf(a)
 
+enum class GpuhelperResType {
+	VERTEX_SHADER = 0,
+	PIXEL_SHADER,
+	GEOMETRY_SHADER,
+	COMPUTE_SHADER,
+	DEPTHSTENCIL_STATE,
+	RASTERIZER_STATE,
+	SAMPLER_STATE,
+	INPUT_LAYOUT,
+	BLEND_STATE,
+
+	CONST_BUFFER,
+	BUFFER1D,
+	BUFFER2D,
+	BUFFER3D,
+	TEXTURE1D,
+	TEXTURE2D,
+	TEXTURE2DARRAY,
+	TEXTURE3D,
+};
+
+
+inline void __check_and_release(GpuhelperResType res_type, ID3D11DeviceChild* res)
+{
+	//res->Release();
+	switch (res_type)
+	{
+	case GpuhelperResType::VERTEX_SHADER:			((ID3D11VertexShader*)res)->Release(); break;
+	case GpuhelperResType::PIXEL_SHADER:			((ID3D11PixelShader*)res)->Release(); break;
+	case GpuhelperResType::GEOMETRY_SHADER:		((ID3D11GeometryShader*)res)->Release(); break;
+	case GpuhelperResType::COMPUTE_SHADER:		((ID3D11ComputeShader*)res)->Release(); break;
+	case GpuhelperResType::DEPTHSTENCIL_STATE:	((ID3D11DepthStencilState*)res)->Release(); break;
+	case GpuhelperResType::RASTERIZER_STATE:		((ID3D11RasterizerState2*)res)->Release(); break;
+	case GpuhelperResType::SAMPLER_STATE:			((ID3D11SamplerState*)res)->Release(); break;
+	case GpuhelperResType::INPUT_LAYOUT:			((ID3D11InputLayout*)res)->Release(); break;
+	case GpuhelperResType::BLEND_STATE:			((ID3D11BlendState*)res)->Release(); break;
+		
+	case GpuhelperResType::CONST_BUFFER:
+	case GpuhelperResType::BUFFER1D:
+	case GpuhelperResType::BUFFER2D:
+	case GpuhelperResType::BUFFER3D:
+	case GpuhelperResType::TEXTURE1D:
+	case GpuhelperResType::TEXTURE2D:
+	case GpuhelperResType::TEXTURE2DARRAY:
+	case GpuhelperResType::TEXTURE3D:
+	default:
+		GMERRORMESSAGE("UNEXPECTED RESTYPE : ~GpuDX11CommonParameters");
+	}
+};
+
 //#define USE_DX11_3

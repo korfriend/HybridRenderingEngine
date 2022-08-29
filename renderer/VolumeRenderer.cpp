@@ -119,7 +119,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		string prefix_path = hlslobj_path;
 
 #define CS_NUM 22
-#define SET_CS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(COMPUTE_SHADER, NAME), dx11CShader, true)
+#define SET_CS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::COMPUTE_SHADER, NAME), dx11CShader, true)
 
 		string strNames_CS[CS_NUM] = {
 			   "VR_RAYMAX_cs_5_0"

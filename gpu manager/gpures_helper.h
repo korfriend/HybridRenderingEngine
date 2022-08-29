@@ -21,20 +21,6 @@ namespace grd_helper
 {
 	using namespace std;
 
-	enum GpuhelperResType {
-		VERTEX_SHADER = 0,
-		PIXEL_SHADER,
-		GEOMETRY_SHADER,
-		COMPUTE_SHADER,
-		//BUFFER, // constant buffer
-		DEPTHSTENCIL_STATE,
-		RASTERIZER_STATE,
-		BLEND_STATE,
-		SAMPLER_STATE,
-		INPUT_LAYOUT,
-		ETC,
-	};
-
 #define NUM_MATERIALS 6
 	static string g_materials[NUM_MATERIALS] = { "MAP_KA", "MAP_KD", "MAP_KS", "MAP_NS", "MAP_BUMP", "MAP_D" };
 
@@ -62,8 +48,8 @@ namespace grd_helper
 	public:
 		bool operator()(const COMRES_INDICATOR& a, const COMRES_INDICATOR& b) const
 		{
-			string a_str = to_string(a.res_type) + "_" + a.res_name;
-			string b_str = to_string(b.res_type) + "_" + b.res_name;
+			string a_str = to_string((int)a.res_type) + "_" + a.res_name;
+			string b_str = to_string((int)b.res_type) + "_" + b.res_name;
 			return a_str < b_str;
 			//if (a_str.compare(b_str) < 0)
 			//	return true;
@@ -92,26 +78,6 @@ namespace grd_helper
 #ifdef __DX_DEBUG_QUERY
 		ID3D11InfoQueue* debug_info_queue;
 #endif
-		std::function<void(GpuhelperResType res_type, ID3D11DeviceChild* res)> __check_and_release = [](GpuhelperResType res_type, ID3D11DeviceChild* res)
-		{
-			res->Release();
-			//switch (res_type)
-			//{
-			//case VERTEX_SHADER:			((ID3D11VertexShader*)res)->Release(); break;
-			//case PIXEL_SHADER:			((ID3D11PixelShader*)res)->Release(); break;
-			//case GEOMETRY_SHADER:		((ID3D11GeometryShader*)res)->Release(); break;
-			//case COMPUTE_SHADER:		((ID3D11ComputeShader*)res)->Release(); break;
-			////case BUFFER:				((ID3D11Buffer*)res)->Release(); break;
-			//case DEPTHSTENCIL_STATE:	((ID3D11DepthStencilState*)res)->Release(); break;
-			//case RASTERIZER_STATE:		((ID3D11RasterizerState2*)res)->Release(); break;
-			//case SAMPLER_STATE:			((ID3D11SamplerState*)res)->Release(); break;
-			//case INPUT_LAYOUT:			((ID3D11InputLayout*)res)->Release(); break;
-			//case BLEND_STATE:			((ID3D11BlendState*)res)->Release(); break;
-			//case ETC:
-			//default:
-			//	GMERRORMESSAGE("UNEXPECTED RESTYPE : ~GpuDX11CommonParameters");
-			//}
-		};
 
 		GCRMAP dx11_cres;
 		CONSTBUFMAP dx11_cbuf;
@@ -210,36 +176,36 @@ namespace grd_helper
 
 		ID3D11SamplerState* get_sampler(const string& name)
 		{
-			return (ID3D11SamplerState*)safe_get_res(COMRES_INDICATOR(SAMPLER_STATE, name));
+			return (ID3D11SamplerState*)safe_get_res(COMRES_INDICATOR(GpuhelperResType::SAMPLER_STATE, name));
 		}
 		ID3D11RasterizerState2* get_rasterizer(const string& name)
 		{
-			return (ID3D11RasterizerState2*)safe_get_res(COMRES_INDICATOR(RASTERIZER_STATE, name));
+			return (ID3D11RasterizerState2*)safe_get_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, name));
 		}
 		ID3D11BlendState* get_blender(const string& name)
 		{
-			return (ID3D11BlendState*)safe_get_res(COMRES_INDICATOR(BLEND_STATE, name));
+			return (ID3D11BlendState*)safe_get_res(COMRES_INDICATOR(GpuhelperResType::BLEND_STATE, name));
 		}
 		ID3D11DepthStencilState* get_depthstencil(const string& name)
 		{
-			return (ID3D11DepthStencilState*)safe_get_res(COMRES_INDICATOR(DEPTHSTENCIL_STATE, name));
+			return (ID3D11DepthStencilState*)safe_get_res(COMRES_INDICATOR(GpuhelperResType::DEPTHSTENCIL_STATE, name));
 		}
 
 		ID3D11VertexShader* get_vshader(const string& name)
 		{
-			return (ID3D11VertexShader*)safe_get_res(COMRES_INDICATOR(VERTEX_SHADER, name));
+			return (ID3D11VertexShader*)safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, name));
 		}
 		ID3D11PixelShader* get_pshader(const string& name)
 		{
-			return (ID3D11PixelShader*)safe_get_res(COMRES_INDICATOR(PIXEL_SHADER, name));
+			return (ID3D11PixelShader*)safe_get_res(COMRES_INDICATOR(GpuhelperResType::PIXEL_SHADER, name));
 		}
 		ID3D11GeometryShader* get_gshader(const string& name)
 		{
-			return (ID3D11GeometryShader*)safe_get_res(COMRES_INDICATOR(GEOMETRY_SHADER, name));
+			return (ID3D11GeometryShader*)safe_get_res(COMRES_INDICATOR(GpuhelperResType::GEOMETRY_SHADER, name));
 		}
 		ID3D11ComputeShader* get_cshader(const string& name)
 		{
-			return (ID3D11ComputeShader*)safe_get_res(COMRES_INDICATOR(COMPUTE_SHADER, name));
+			return (ID3D11ComputeShader*)safe_get_res(COMRES_INDICATOR(GpuhelperResType::COMPUTE_SHADER, name));
 		}
 
 		GpuDX11CommonParameters()
