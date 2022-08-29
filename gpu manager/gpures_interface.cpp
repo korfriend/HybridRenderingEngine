@@ -717,20 +717,26 @@ bool __ReleaseGpuResource(GpuRes& gres, const bool call_clearstate)
 		{
 			ID3D11Resource* pdx11Resource = (ID3D11Resource*)it->second;
 
-			//gres.rtype
+			switch (gres.rtype) {
+			case RTYPE_BUFFER: ((ID3D11Buffer*)pdx11Resource)->Release();  break;
+			case RTYPE_TEXTURE1D: ((ID3D11Texture1D*)pdx11Resource)->Release();  break;
+			case RTYPE_TEXTURE2D: ((ID3D11Texture2D*)pdx11Resource)->Release();  break;
+			case RTYPE_TEXTURE3D: ((ID3D11Texture3D*)pdx11Resource)->Release();  break;
+			default: break;
+			}
 
-			VMSAFE_RELEASE(pdx11Resource);
+			//VMSAFE_RELEASE(pdx11Resource);
 			break;
 		}
-		case DTYPE_RTV:
-		case DTYPE_DSV:
-		case DTYPE_SRV:
-		case DTYPE_UAV:
-		{
-			ID3D11View* pdx11View = (ID3D11View*)it->second;
-			VMSAFE_RELEASE(pdx11View);
-			break;
-		}
+		case DTYPE_RTV: ((ID3D11RenderTargetView*)it->second)->Release();  break;
+		case DTYPE_DSV: ((ID3D11DepthStencilView*)it->second)->Release();  break;
+		case DTYPE_SRV:	((ID3D11ShaderResourceView*)it->second)->Release();  break;
+		case DTYPE_UAV:	((ID3D11UnorderedAccessView*)it->second)->Release();  break;
+		//{
+		//	ID3D11View* pdx11View = (ID3D11View*)it->second;
+		//	VMSAFE_RELEASE(pdx11View);
+		//	break;
+		//}
 		default:
 			break;
 		}

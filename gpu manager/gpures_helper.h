@@ -95,7 +95,7 @@ namespace grd_helper
 			auto it = dx11_cbuf.find(name);
 			if (it != dx11_cbuf.end())
 			{
-				it->second->Release();
+				((ID3D11Buffer*)it->second)->Release();
 				dx11_cbuf.erase(it);
 			}
 		}
@@ -250,7 +250,7 @@ namespace grd_helper
 
 			for (auto it = dx11_cbuf.begin(); it != dx11_cbuf.end(); it++)
 			{
-				it->second->Release();
+				((ID3D11Buffer*)it->second)->Release();
 			}
 			dx11_cbuf.clear();
 

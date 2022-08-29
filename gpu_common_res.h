@@ -35,13 +35,14 @@ enum class GpuhelperResType {
 	BUFFER3D,
 	TEXTURE1D,
 	TEXTURE2D,
-	TEXTURE2DARRAY,
 	TEXTURE3D,
 };
 
 
 inline void __check_and_release(GpuhelperResType res_type, ID3D11DeviceChild* res)
 {
+	// I think 'res->Release()' is enough for releasing GPU memory because
+	// 	   COM system manages its memory inside the data structure and data/type identification
 	//res->Release();
 	switch (res_type)
 	{
@@ -61,7 +62,6 @@ inline void __check_and_release(GpuhelperResType res_type, ID3D11DeviceChild* re
 	case GpuhelperResType::BUFFER3D:
 	case GpuhelperResType::TEXTURE1D:
 	case GpuhelperResType::TEXTURE2D:
-	case GpuhelperResType::TEXTURE2DARRAY:
 	case GpuhelperResType::TEXTURE3D:
 	default:
 		GMERRORMESSAGE("UNEXPECTED RESTYPE : ~GpuDX11CommonParameters");
