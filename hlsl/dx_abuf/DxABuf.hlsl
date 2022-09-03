@@ -89,7 +89,7 @@ void OIT_A_BUFFER_FILL(__VS_OUT input)
 	}
 #elif __RENDERING_MODE == 5
 	// note g_cbVolObj.mat_ws2ts represents SrcOS2DstTS
-	//float4x4 matSrcWS2DstTS = g_cbVobj.mat_ws2ts * g_cbPobj.mat_ws2os; // 	col major 
+	//float4x4 matSrcWS2DstTS = g_cbVobj.mat_ws2ts * g_cbPobj.mat_ws2os; // use mul instructor!! 	col major 
 	float3 posOS = TransformPoint(input.f3PosWS, g_cbPobj.mat_ws2os);
 	float3 posTS = TransformPoint(posOS, g_cbVobj.mat_ws2ts);
 	//float sample_v = g_tex3DVolume.SampleLevel(g_samplerLinear_clamp, posTS, 0).r;
@@ -101,29 +101,13 @@ void OIT_A_BUFFER_FILL(__VS_OUT input)
 
 	if (nor_len > 0)
 	{
-		float3 Ka = v_rgba.rgb, Kd = v_rgba.rgb, Ks = v_rgba.rgb;
+		float3 Ka = v_rgba.rgb * g_cbPobj.Ka * 1.5, Kd = v_rgba.rgb * g_cbPobj.Kd * 1.5, Ks = v_rgba.rgb * g_cbPobj.Ks * 1.5;
 		Ka *= g_cbEnv.ltint_ambient.rgb;
 		Kd *= g_cbEnv.ltint_diffuse.rgb;
 		Ks *= g_cbEnv.ltint_spec.rgb;
 		float Ns = g_cbPobj.Ns;
 		ComputeColor(v_rgba.rgb, Ka, Kd, Ks, Ns, 1.0, input.f3PosWS, view_dir, nor, nor_len);
 	}
-	//v_rgba = g_f4bufOTF[500];// g_cbTmap.tmap_size_x];
-	//v_rgba = g_f4bufOTF[70];
-	//v_rgba.a = 1.f;
-	//v_rgba = float4((float3)sample_v * 1.f, 1);
-	//v_rgba = float4(posTS, 1);
-	//if (sample_v > 0)
-	//	v_rgba = float4(1, 1, 0, 1);
-	//if (tt.x > 1 && tt.y > 1 && tt.z > 1)
-	//	v_rgba = float4(1, 1, 1, 1);
-	//if (tt.x < 1.0 && tt.y < 1.0 && tt.z < 1.0)
-	//	v_rgba = float4(0, 1, 1, 1);
-
-	//if (tt.x < 1.0 && tt.y < 1.0 && tt.z < 1.0
-	//	&& tt.x > 0.0 && tt.y > 0.0 && tt.z > 0.0)
-	//	v_rgba = float4(0, 1, 1, 1);
-
 #else
 	float3 Ka, Kd, Ks;
 	float Ns = g_cbPobj.Ns;
