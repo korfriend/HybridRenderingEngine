@@ -238,7 +238,11 @@ bool Vis_Volume_And_Check_Slab(inout float4 vis_otf, inout float sample_v, float
 	//		}
 	//	}
 	//}
-	vis_otf = LoadOtfBufId(sample_v * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
+	//
+
+
+	vis_otf = LoadSlabOtfBufId_PreInt(sample_v * g_cbTmap.tmap_size_x, sample_prev * g_cbTmap.tmap_size_x, buf_preintotf, g_cbVobj.opacity_correction, mask_vint);
+	//vis_otf = LoadOtfBufId(sample_v * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
 
 	//if (g_cbTmap.tmap_size_x * fsample < g_cbTmap.first_nonzeroalpha_index
 	//	|| g_cbTmap.tmap_size_x * fsample_prev < g_cbTmap.first_nonzeroalpha_index) return false;
