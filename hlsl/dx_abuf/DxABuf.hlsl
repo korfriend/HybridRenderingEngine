@@ -101,7 +101,7 @@ void OIT_A_BUFFER_FILL(__VS_OUT input)
 
 	if (nor_len > 0)
 	{
-		float3 Ka = v_rgba.rgb * g_cbPobj.Ka * 1.5, Kd = v_rgba.rgb * g_cbPobj.Kd * 1.5, Ks = v_rgba.rgb * g_cbPobj.Ks * 1.5;
+		float3 Ka = v_rgba.rgb * g_cbPobj.Ka * 1.15, Kd = v_rgba.rgb * g_cbPobj.Kd * 1.15, Ks = v_rgba.rgb * g_cbPobj.Ks * 1.15;
 		Ka *= g_cbEnv.ltint_ambient.rgb;
 		Kd *= g_cbEnv.ltint_diffuse.rgb;
 		Ks *= g_cbEnv.ltint_spec.rgb;
