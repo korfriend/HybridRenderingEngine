@@ -1093,14 +1093,25 @@ bool grd_helper::UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, const bool isPre
 
 	MapTable* tmap_data = tobj->GetObjParamPtr<MapTable>("_TableMap_OTF");
 	string updateTimeName = string("_ullong_Latest") + string(isPreInt? "PreIntOtf" : "Otf") + string("GpuUpdateTime");
+
+	bool needRegen = true;
 	if (g_pCGpuManager->UpdateGpuResource(gres)) {
+
+		uint nemElementPrev = gres.res_values.GetParam("NUM_ELEMENTS", (uint)0);
+		uint typeBytesPrev = gres.res_values.GetParam("STRIDE_BYTES", (uint)0);
+
+		needRegen = (nemElementPrev * typeBytesPrev)
+			!= ((uint)(tmap_data->array_lengths.x * (tmap_data->array_lengths.y)) * (isPreInt ? (uint)16 : (uint)tmap_data->dtype.type_bytes));
 
 		ullong _tp_cpu = tobj->GetContentUpdateTime(); 
 		ullong _tp_gpu = tobj->GetObjParam(updateTimeName, (ullong)0);
-		if(_tp_gpu >= _tp_cpu)
+		if (_tp_gpu >= _tp_cpu) {
+			assert(!needRegen);
 			return true;
+		}
 	}
-	else {
+
+	if (needRegen) {
 		gres.rtype = RTYPE_BUFFER;
 		gres.options["USAGE"] = D3D11_USAGE_DYNAMIC;
 		gres.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
@@ -1110,6 +1121,7 @@ bool grd_helper::UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, const bool isPre
 		gres.res_values.SetParam("NUM_ELEMENTS", (uint)(tmap_data->array_lengths.x * (tmap_data->array_lengths.y)));
 		gres.res_values.SetParam("STRIDE_BYTES", isPreInt? (uint)16 : (uint)tmap_data->dtype.type_bytes);
 
+		// including safe-delete to avoid redundant gen
 		g_pCGpuManager->GenerateGpuResource(gres);
 	}
 
@@ -1690,14 +1702,23 @@ bool grd_helper::UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string
 
 	string updateName = "_ullong_Latest" + resName + "GpuUpdateTime";
 
+	bool needRegen = true;
 	if (g_pCGpuManager->UpdateGpuResource(gres)) {
+
+		uint nemElementPrev = gres.res_values.GetParam("NUM_ELEMENTS", (uint)0);
+		uint typeBytesPrev = gres.res_values.GetParam("STRIDE_BYTES", (uint)0);
+
+		needRegen = (nemElementPrev * typeBytesPrev) != ((uint)numElements * (uint)type_bytes);
 
 		ullong _tp_cpu = srcObj->GetContentUpdateTime();
 		ullong _tp_gpu = srcObj->GetObjParam(updateName, (ullong)0);
-		if (_tp_gpu >= _tp_cpu)
+		if (_tp_gpu >= _tp_cpu) {
+			assert(!needRegen);
 			return true;
+		}
 	}
-	else {
+
+	if (needRegen) {
 		gres.rtype = RTYPE_BUFFER;
 		gres.options["USAGE"] = D3D11_USAGE_DYNAMIC;
 		gres.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
@@ -1707,6 +1728,7 @@ bool grd_helper::UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string
 		gres.res_values.SetParam("NUM_ELEMENTS", (const uint)numElements);
 		gres.res_values.SetParam("STRIDE_BYTES", (const uint)type_bytes);
 
+		// including safe-delete to avoid redundant gen
 		g_pCGpuManager->GenerateGpuResource(gres);
 	}
 
