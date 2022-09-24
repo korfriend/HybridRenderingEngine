@@ -996,8 +996,11 @@ bool grd_helper::UpdateVolumeModel(GpuRes& gres, VmVObjectVolume* vobj, const bo
 		return false;
 	}
 
+	const double hueristic_size = 150.0;
+	const int hueristic_res = 256;
+
 	double half_criteria_KB = vobj->GetObjParam("_float_ForcedHalfCriterionKB", (double)(512.0 * 1024.0));
-	half_criteria_KB = min(max(16.0 * 1024.0, half_criteria_KB), 256.0 * 1024.0);
+	half_criteria_KB = min(max(16.0 * 1024.0, half_criteria_KB), hueristic_size * 1024.0);
 
 	//////////////////////////////
 	// GPU Volume Sample Policy //
@@ -1015,8 +1018,8 @@ bool grd_helper::UpdateVolumeModel(GpuRes& gres, VmVObjectVolume* vobj, const bo
 	if (dsize_vol_KB > half_criteria_KB)
 	{
 		double dRescaleSize = pow(dsize_vol_KB / half_criteria_KB, 1.0 / 3.0);
-		//sample_offset.x = sample_offset.y = sample_offset.z = (float)dRescaleSize;
-		sample_offset.x = sample_offset.y = sample_offset.z = ceil((float)dRescaleSize);
+		sample_offset.x = sample_offset.y = sample_offset.z = (float)dRescaleSize;
+		//sample_offset.x = sample_offset.y = sample_offset.z = ceil((float)dRescaleSize);
 	}
 
 	////////////////////////////////////
@@ -1034,19 +1037,19 @@ RETRY:
 
 	//cout << "***************>> " << vol_size_x << ", " << vol_size_y << ", " << vol_size_z << endl;
 
-	if (vol_size_x > 2048)
+	if (vol_size_x > hueristic_res)
 	{
-		sample_offset.x += 0.5f;
+		sample_offset.x += 0.2f;
 		goto RETRY;
 	}
-	if (vol_size_y > 2048)
+	if (vol_size_y > hueristic_res)
 	{
-		sample_offset.y += 0.5f;
+		sample_offset.y += 0.2f;
 		goto RETRY;
 	}
-	if (vol_size_z > 2048)
+	if (vol_size_z > hueristic_res)
 	{
-		sample_offset.z += 0.5f;
+		sample_offset.z += 0.2f;
 		goto RETRY;
 	}
 
@@ -1055,8 +1058,8 @@ RETRY:
 	sample_offset.z = (float)vol_data->vol_size.z / (float)vol_size_z;
 
 	printf("GPU Uploaded Volume Size : %d KB (%dx%dx%d) %d bytes\n",
-		vol_size_x * vol_size_y * vol_size_z / 1024 * type_size,
-		vol_size_x, vol_size_y, vol_size_z, type_size);
+		(int)(vol_size_x * vol_size_y * vol_size_z / 1024.0 * type_size),
+		vol_size_x, vol_size_y, vol_size_z, (int)type_size);
 
 	//cout << "************offset*>> " << sample_offset.x << ", " << sample_offset.y << ", " << sample_offset.z << endl;
 
