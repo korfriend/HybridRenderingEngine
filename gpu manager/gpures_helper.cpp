@@ -996,7 +996,7 @@ bool grd_helper::UpdateVolumeModel(GpuRes& gres, VmVObjectVolume* vobj, const bo
 		return false;
 	}
 
-	const double hueristic_size = 150.0;
+	const double hueristic_size = 200.0;
 	const int hueristic_res = 256;
 
 	double half_criteria_KB = vobj->GetObjParam("_float_ForcedHalfCriterionKB", (double)(512.0 * 1024.0));

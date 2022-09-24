@@ -41,6 +41,8 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	int ray_cast_type = _fncontainer->fnParams.GetParam("_int_VolumeRayCastType", (int)0);
 	float samplePrecisionLevel = _fncontainer->fnParams.GetParam("_float_SamplePrecisionLevel", 1.0f);
 
+	bool fastRender2x = _fncontainer->fnParams.GetParam("_bool_FastRender2X", false);
+
 	// TEST
 	int test_value = _fncontainer->fnParams.GetParam("_int_TestValue", (int)0);
 	int test_mode = _fncontainer->fnParams.GetParam("_int_TestMode", (int)0);
@@ -103,7 +105,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 
 		string prefix_path = hlslobj_path;
 
-#define CS_NUM 7
+#define CS_NUM 8
 #define SET_CS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::COMPUTE_SHADER, NAME), dx11CShader, true)
 
 		string strNames_CS[CS_NUM] = {
@@ -114,6 +116,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 			  ,"PanoVR_MODULATE_cs_5_0"
 			  ,"PanoVR_MULTIOTF_DEFAULT_cs_5_0"
 			  ,"PanoVR_MULTIOTF_MODULATE_cs_5_0"
+			  ,"FillDither_cs_5_0"
 		};
 
 		for (int i = 0; i < CS_NUM; i++)
@@ -308,6 +311,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	CB_CameraState cbCamState;
 	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, v_thickness <= 0 ? min_pitch : (float)v_thickness);
 	cbCamState.iSrCamDummy__0 = *(uint*)&merging_beta;
+	if (fastRender2x) cbCamState.cam_flag |= 0x1 << 8; // 9th bit set
 
 	D3D11_MAPPED_SUBRESOURCE mappedResCamState;
 	dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
@@ -634,6 +638,10 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 #ifdef __DX_DEBUG_QUERY
 		dx11CommonParams->debug_info_queue->PushEmptyStorageFilter();
 #endif
+		if (fastRender2x) {
+			dx11DeviceImmContext->CSSetShader(GETCS(FillDither_cs_5_0), NULL, 0);
+			dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+		}
 		count_call_render++;
 
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));

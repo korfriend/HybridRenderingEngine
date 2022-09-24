@@ -446,6 +446,22 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	uint vr_hit_enc = num_frags >> 24;
 	num_frags = num_frags & 0xFFF;
 
+	bool isDither = BitCheck(g_cbCamState.cam_flag, 8);
+	if (isDither) {
+#if RAYMODE == 0
+		if (vr_hit_enc != __VRHIT_OUTSIDE_VOLUME)
+#endif
+		{
+			if (tex2d_xy.x % 2 != 0 || tex2d_xy.y % 2 != 0) {
+				fragment_zdepth[tex2d_xy] = -777.0;
+				return;
+			}
+		}
+
+		//fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
+		//return;
+	}
+
     float4 vis_out = 0;
     float depth_out = FLT_MAX;
     // consider the deep-layers are sored in order
@@ -477,7 +493,6 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
         }
 		fs[i] = f;
     }
-
 
 	//return;
 	//if (num_frags == 0)
@@ -566,9 +581,10 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 	if (vr_hit_enc == __VRHIT_OUTSIDE_VOLUME)//depth_out > FLT_LARGE)
 	{
-		//fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
+		// fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
 		return;
 	}
+
 #endif
 	// Ray Intersection for Clipping Box //
     float2 hits_t = ComputeVBoxHits(vbos_hit_start_pos, dir_sample_unit_ws, g_cbVobj.mat_alignedvbox_tr_ws2bs, g_cbClipInfo);
@@ -902,11 +918,16 @@ void FillDither(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 	int2 tex2d_xy = int2(DTid.xy);
 
-	if (DTid.x % 2 == 0 && DTid.x % 2 == 0)
+	//fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
+	float depth = fragment_zdepth[tex2d_xy];
+	if ((DTid.x % 2 == 0 && DTid.y % 2 == 0) || depth != -777.0)
 		return;
 
-	//fragment_vis[tex2d_xy] = vis_out;
+	//fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
+	//return;
+
 	//fragment_zdepth[tex2d_xy] = depth_out;
+	//fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
 
 	float4 rgbaRendered[4];
 	int count = 0;
@@ -924,13 +945,16 @@ void FillDither(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		rgbaRendered[count++] = fragment_vis[tex2d_xy + int2(-1, 1)];
 		rgbaRendered[count++] = fragment_vis[tex2d_xy + int2(1, -1)];
 	}
-	else return;
+	else {
+		//fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
+		return;
+	}
 
 	float4 v_rgba = (float4)0;
 	for (int i = 0; i < count; i++) {
 		v_rgba += rgbaRendered[i];
 	}
-	v_rgba /= 4.f;
+	v_rgba /= count;
 	fragment_vis[tex2d_xy] = v_rgba;
 }
 
@@ -1005,6 +1029,18 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 
 	uint num_frags = fragment_counter[DTid.xy];
 	num_frags = num_frags & 0xFFF;
+
+
+	bool isDither = BitCheck(g_cbCamState.cam_flag, 8);
+	if (isDither) {
+		if (cip_xy.x % 2 != 0 || cip_xy.y % 2 != 0) {
+			fragment_zdepth[cip_xy] = -777.0;
+			return;
+		}
+
+		//fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
+		//return;
+	}
 
 	float4 vis_out = 0;
 	float depth_out = 0;

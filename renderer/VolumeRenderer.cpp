@@ -53,6 +53,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	int num_moments_old = iobj->GetObjParam("_int_NumQueueLayers", (int)8);
 	int num_moments = _fncontainer->fnParams.GetParam("_int_NumQueueLayers", num_moments_old);
 
+	bool fastRender2x = _fncontainer->fnParams.GetParam("_bool_FastRender2X", false);
+	//fastRender2x = true;
+
 	// TEST
 	int test_value = _fncontainer->fnParams.GetParam("_int_TestValue", (int)0);
 	int test_mode = _fncontainer->fnParams.GetParam("_int_TestMode", (int)0);
@@ -112,8 +115,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			exe_path.erase(0, pos + delimiter.length());
 		}
 		//hlslobj_path += "..\\..\\VmModuleProjects\\renderer_gpudx11\\shader_compiled_objs\\";
-		hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
-		//hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
+		//hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
+		hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
 		//cout << hlslobj_path << endl;
 
 		string prefix_path = hlslobj_path;
@@ -367,6 +370,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	CB_CameraState cbCamState;
 	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, v_thickness <= 0? min_pitch : (float)v_thickness);
 	cbCamState.iSrCamDummy__0 = *(uint*)&merging_beta;
+	if (fastRender2x) cbCamState.cam_flag |= 0x1 << 8; // 9th bit set
 	
 	D3D11_MAPPED_SUBRESOURCE mappedResCamState;
 	dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
@@ -750,8 +754,6 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 		if ((mode_OIT == MFR_MODE::DYNAMIC_FB && !apply_fragmerge) || mode_OIT == MFR_MODE::DYNAMIC_KB) // filling
 			dx11DeviceImmContext->CSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]); // search why this does not work
-		
-		const bool is_dither = true;
 
 		if(ray_cast_type != __RM_RAYMIN
 			&& ray_cast_type != __RM_RAYMAX
@@ -797,10 +799,10 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #ifdef __DX_DEBUG_QUERY
 		dx11CommonParams->debug_info_queue->PushEmptyStorageFilter();
 #endif
-		//if (is_dither) {
-		//	dx11DeviceImmContext->CSSetShader(GETCS(FillDither_cs_5_0), NULL, 0);
-		//	dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
-		//}
+		if (fastRender2x) {
+			dx11DeviceImmContext->CSSetShader(GETCS(FillDither_cs_5_0), NULL, 0);
+			dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+		}
 		count_call_render++;
 
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
