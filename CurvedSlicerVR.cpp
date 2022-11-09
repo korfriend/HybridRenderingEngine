@@ -354,7 +354,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	dx11DeviceImmContext->Unmap(cbuf_curvedslicer, 0);
 	dx11DeviceImmContext->CSSetConstantBuffers(10, 1, &cbuf_curvedslicer);
 
-	map<string, vmint2> profile_map;
+	map<string, vmint2>& profile_map = dx11CommonParams->profile_map;
 	if (gpu_profile)
 	{
 		int gpu_profilecount = (int)profile_map.size();

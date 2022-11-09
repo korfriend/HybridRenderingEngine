@@ -401,7 +401,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	}
 #pragma endregion // Light & Shadow Setting
 
-	map<string, vmint2> profile_map;
+	map<string, vmint2>& profile_map = dx11CommonParams->profile_map;
 	if (gpu_profile)
 	{
 		int gpu_profilecount = (int)profile_map.size();

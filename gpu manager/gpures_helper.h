@@ -72,6 +72,7 @@ namespace grd_helper
 #define MAXSTAMPS 50
 		ID3D11Query* dx11qr_disjoint;
 		ID3D11Query* dx11qr_timestamps[MAXSTAMPS];
+		map<string, vmint2> profile_map;
 
 		__ID3D11Device* dx11Device;
 		__ID3D11DeviceContext* dx11DeviceImmContext;
