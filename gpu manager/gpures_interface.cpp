@@ -408,6 +408,7 @@ bool __UpdateGpuResource(GpuRes& gres)
 		return false;
 	
 	//gres.alloc_res_ptrs = itrResDX11->second.alloc_res_ptrs;
+
 	gres = itrResDX11->second;
 
 	return true;

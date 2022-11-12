@@ -977,8 +977,12 @@ bool grd_helper::UpdateVolumeModel(GpuRes& gres, VmVObjectVolume* vobj, const bo
 	gres.vm_src_id = vobj->GetObjectID();
 	gres.res_name = string("VOLUME_MODEL_") + (is_nearest_max_vol ? string("NEAREST_MAX") : string("DEFAULT"));
 
-	if (g_pCGpuManager->UpdateGpuResource(gres))
-		return true;
+	if (g_pCGpuManager->UpdateGpuResource(gres)) {
+		unsigned long long _gpu_gen_timg = gres.res_values.GetParam("LAST_UPDATE_TIME", (ullong)0);
+		unsigned long long _cpu_gen_timg = vobj->GetContentUpdateTime();
+		if (_gpu_gen_timg > _cpu_gen_timg)
+			return true;
+	}
 
 	gres.rtype = RTYPE_TEXTURE3D;
 	gres.options["USAGE"] = D3D11_USAGE_DYNAMIC;
