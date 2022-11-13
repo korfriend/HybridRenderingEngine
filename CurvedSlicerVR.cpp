@@ -439,7 +439,6 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		blk_level = max(min(1, blk_level), 0);
 
 		bool use_mask_volume = actor->GetParam("_bool_ValidateMaskVolume", false);
-		bool update_volblk_sculptmask = actor->GetParam("_bool_BlockUpdateForSculptMask", false);
 		int sculpt_index = actor->GetParam("_int_SculptingIndex", (int)-1);
 
 		vmfloat4 material_phongCoeffs = actor->GetParam("_float4_PhongCoeffs", default_phong_lighting_coeff);

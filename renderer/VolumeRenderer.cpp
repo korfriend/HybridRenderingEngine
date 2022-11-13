@@ -115,13 +115,13 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			exe_path.erase(0, pos + delimiter.length());
 		}
 		//hlslobj_path += "..\\..\\VmModuleProjects\\renderer_gpudx11\\shader_compiled_objs\\";
-		//hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
-		hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
+		hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
+		//hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
 		//cout << hlslobj_path << endl;
 
 		string prefix_path = hlslobj_path;
 
-#define CS_NUM 22
+#define CS_NUM 23
 #define SET_CS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::COMPUTE_SHADER, NAME), dx11CShader, true)
 
 		string strNames_CS[CS_NUM] = {
@@ -139,6 +139,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			  ,"VR_MULTIOTF_FM_cs_5_0"
 			  ,"VR_MULTIOTF_CONTEXT_FM_cs_5_0"
 			  ,"VR_MASKVIS_FM_cs_5_0"
+			  ,"VR_SCULPTMASK_FM_cs_5_0"
 			  ,"VR_DEFAULT_DKBZ_cs_5_0"
 			  ,"VR_OPAQUE_DKBZ_cs_5_0"
 			  ,"VR_CONTEXT_DKBZ_cs_5_0"
@@ -486,7 +487,6 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		blk_level = max(min(1, blk_level), 0);
 
 		bool use_mask_volume = actor->GetParam("_bool_ValidateMaskVolume", false);
-		bool update_volblk_sculptmask = actor->GetParam("_bool_BlockUpdateForSculptMask", false);
 		int sculpt_index = actor->GetParam("_int_SculptingIndex", (int)-1);
 
 		vmfloat4 material_phongCoeffs = actor->GetParam("_float4_PhongCoeffs", default_phong_lighting_coeff);
@@ -584,7 +584,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		//	gres_vol.res_values.GetParam("DEPTH", (uint)0));
 		//if ( && samplePrecisionLevel > 0)
 		//high_samplerate ? 2.f : 1.f
-		grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, actor->matWS2OS, gres_vol, tmap_data->valid_min_idx.x, gres_volblk.options["FORMAT"] == DXGI_FORMAT_R16_UNORM ? 65535.f : 255.f, samplePrecisionLevel, is_xray_mode);
+		grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, actor->matWS2OS, gres_vol, tmap_data->valid_min_idx.x, gres_volblk.options["FORMAT"] == DXGI_FORMAT_R16_UNORM ? 65535.f : 255.f, samplePrecisionLevel, is_xray_mode, sculpt_index);
 		if (is_modulation_mode && ((uint)vol_data->vol_size.x * (uint)vol_data->vol_size.y * (uint)vol_data->vol_size.z > 1000000)) {
 			//cbVolumeObj.opacity_correction *= 2.f;
 			//cbVolumeObj.sample_dist *= 2.f;
@@ -728,8 +728,10 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		case __RM_VISVOLMASK:
 			cshader = apply_fragmerge ? GETCS(VR_MASKVIS_FM_cs_5_0) : GETCS(VR_MASKVIS_cs_5_0); break;
 			break;
+		case __RM_SCULPTMASK:
+			cshader = GETCS(VR_SCULPTMASK_FM_cs_5_0); break;
+			break;
 		case __RM_DEFAULT:
-		case __RM_SCULPTMASK: 
 		default:
 			switch (mode_OIT)
 			{
