@@ -624,7 +624,6 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	//return;
 	//////////
 
-
 	// note that the gradient normal direction faces to the inside
 	float3 light_dirinv = -g_cbEnv.dir_light_ws;
 	if (g_cbEnv.env_flag & 0x1)

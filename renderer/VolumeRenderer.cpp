@@ -121,7 +121,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 		string prefix_path = hlslobj_path;
 
-#define CS_NUM 23
+#define CS_NUM 24
 #define SET_CS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::COMPUTE_SHADER, NAME), dx11CShader, true)
 
 		string strNames_CS[CS_NUM] = {
@@ -140,6 +140,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			  ,"VR_MULTIOTF_CONTEXT_FM_cs_5_0"
 			  ,"VR_MASKVIS_FM_cs_5_0"
 			  ,"VR_SCULPTMASK_FM_cs_5_0"
+			  ,"VR_SCULPTMASK_CONTEXT_FM_cs_5_0"
 			  ,"VR_DEFAULT_DKBZ_cs_5_0"
 			  ,"VR_OPAQUE_DKBZ_cs_5_0"
 			  ,"VR_CONTEXT_DKBZ_cs_5_0"
@@ -451,6 +452,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #define __RM_CLIPOPAQUE 20
 #define __RM_OPAQUE 21
 #define __RM_SCULPTMASK 22
+#define __RM_SCULPTMASK_MODULATION 25
 #define __RM_MULTIOTF 23
 #define __RM_VISVOLMASK 24
 //#define __RM_TEST 6
@@ -473,12 +475,14 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			break;
 		case __RM_MODULATION:
 		case __RM_MULTIOTF_MODULATION:
+		case __RM_SCULPTMASK_MODULATION:
 			GradientMagnitudeAnalysis(grad_minmax, vobj);
 			is_modulation_mode = true;
 			break;
 		case __RM_DEFAULT:
 		case __RM_MULTIOTF:
 		case __RM_VISVOLMASK:
+		case __RM_SCULPTMASK:
 		default: break;
 		}
 
@@ -488,6 +492,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 		bool use_mask_volume = actor->GetParam("_bool_ValidateMaskVolume", false);
 		int sculpt_index = actor->GetParam("_int_SculptingIndex", (int)-1);
+		if (ray_cast_type != __RM_SCULPTMASK && ray_cast_type != __RM_SCULPTMASK_MODULATION)
+			sculpt_index = -1;
 
 		vmfloat4 material_phongCoeffs = actor->GetParam("_float4_PhongCoeffs", default_phong_lighting_coeff);
 		int outline_thickness = actor->GetParam("_int_SilhouetteThickness", (int)0);
@@ -730,6 +736,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			break;
 		case __RM_SCULPTMASK:
 			cshader = GETCS(VR_SCULPTMASK_FM_cs_5_0); break;
+			break;
+		case __RM_SCULPTMASK_MODULATION:
+			cshader = GETCS(VR_SCULPTMASK_CONTEXT_FM_cs_5_0); break;
 			break;
 		case __RM_DEFAULT:
 		default:
