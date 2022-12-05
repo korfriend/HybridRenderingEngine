@@ -28,8 +28,8 @@
 //#define __VERSION "1.01" // released at 22.02.15
 //#define __VERSION "1.10" // released at 22.04.02
 //#define __VERSION "1.11" // released at 22.05.17
-//#define __VERSION "1.12" // released at 22.10.27
-#define __VERSION "1.13" // released at 
+//#define __VERSION "1.12" // released at 22.08.08
+#define __VERSION "1.13" // released at 22.12.05
 
 #define _HAS_STD_BYTE 0
 
@@ -452,6 +452,11 @@ namespace vmobjects
 		/// constructor, 모두 0 (NULL or false)으로 초기화
 		AaBbMinMax() { }
 		/// 현재 좌표계의 AaBbMinMax 가 유효하게 정의되었는가 확인
+		AaBbMinMax(vmint3 volSize) {
+			pos_min = vmdouble3(-0.5, -0.5, -0.5);
+			vmint3 idx_max = volSize - vmint3(1, 1, 1);
+			pos_max = vmdouble3((double)idx_max.x, (double)idx_max.y, (double)idx_max.z) + vmdouble3(0.5, 0.5, 0.5);
+		}
 		bool IsAvailableBox() const {
 			if (pos_max.x <= pos_min.x || pos_max.y <= pos_min.y || pos_max.z <= pos_min.z)
 				return false;
@@ -1432,6 +1437,7 @@ namespace vmobjects
 		*/
 		static bool FillHistogram(VolumeData& vol_data, LocalProgress* progress = NULL);
 		static bool FillMinMaxStoreValues(VolumeData& vol_data, LocalProgress* progress = NULL);
+		static bool ComputeIntialAlignmentMatrixRS2OS(vmmat44& mat_rs2os, AxisInfoRS2OS& axis_info, const vmdouble3& vox_pitch, const AaBbMinMax& aabbMm_rs);
 	};
 
 	struct CObjectArchive;
