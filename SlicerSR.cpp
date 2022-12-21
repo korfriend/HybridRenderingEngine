@@ -1363,15 +1363,16 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			prim_data->ptype != PrimitiveTypeTRIANGLE)
 			continue;
 
-		if (is_picking_routine) {
-			if (prim_data->ptype == vmenums::PrimitiveTypeLINE || 
-				//grd_helper::CollisionCheck(actor->matWS2OS, prim_data->aabb_os, picking_ray_origin, picking_ray_dir) ||
-				curved_slicer)
-				slicer_actors.push_back(actor);
-			//std::cout << "###### obb ray intersection : " << actor->actorId << std::endl;
-			// NOTE THAT is_picking_routine allows only general_oit_routine_objs!!
-			continue;
-		}
+		//if (is_picking_routine) {
+		//	if (prim_data->ptype == vmenums::PrimitiveTypeLINE //|| 
+		//		//grd_helper::CollisionCheck(actor->matWS2OS, prim_data->aabb_os, picking_ray_origin, picking_ray_dir) ||
+		//		//curved_slicer
+		//		)
+		//		slicer_actors.push_back(actor);
+		//	//std::cout << "###### obb ray intersection : " << actor->actorId << std::endl;
+		//	// NOTE THAT is_picking_routine allows only general_oit_routine_objs!!
+		//	continue;
+		//}
 
 		//vmmat44f matOS2SS = actor->matOS2WS * matWS2SS;
 		//int w, h;
