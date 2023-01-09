@@ -2219,6 +2219,8 @@ void grd_helper::SetCb_CurvedSlicer(CB_CurvedSlicer& cb_curvedSlicer, VmFnContai
 	int iThicknessStep = (int)ceil(fPlaneThickness / sample_dist); /* Think "fPlaneThickness > fMinPitch"!! */\
 	sample_dist = fPlaneThickness / (float)iThicknessStep;
 
+	//cout << "TEST sample dvr : " << iThicknessStep << ", " << sample_dist << ", " << fPlanePitch << ", " << fPlaneThickness << endl;
+
 	{
 		cb_curvedSlicer.posTopLeftCOS = f3PosTopLeftCOS;
 		cb_curvedSlicer.posTopRightCOS = f3PosTopRightCOS;
