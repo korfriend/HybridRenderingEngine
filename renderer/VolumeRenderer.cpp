@@ -115,13 +115,13 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			exe_path.erase(0, pos + delimiter.length());
 		}
 		//hlslobj_path += "..\\..\\VmModuleProjects\\renderer_gpudx11\\shader_compiled_objs\\";
-		hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
-		//hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
+		//hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
+		hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
 		//cout << hlslobj_path << endl;
 
 		string prefix_path = hlslobj_path;
 
-#define CS_NUM 24
+#define CS_NUM 25
 #define SET_CS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::COMPUTE_SHADER, NAME), dx11CShader, true)
 
 		string strNames_CS[CS_NUM] = {
@@ -149,6 +149,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			  ,"VR_CONTEXT_DFB_cs_5_0"
 			  ,"VR_SURFACE_cs_5_0"
 			  ,"FillDither_cs_5_0"
+			  ,"SampleTest_cs_5_0"
 		};
 
 		for (int i = 0; i < CS_NUM; i++)
@@ -453,6 +454,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #define __RM_OPAQUE 21
 #define __RM_SCULPTMASK 22
 #define __RM_SCULPTMASK_MODULATION 25
+#define __RM_SAMPLETEST 99
 #define __RM_MULTIOTF 23
 #define __RM_VISVOLMASK 24
 //#define __RM_TEST 6
@@ -740,6 +742,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		case __RM_SCULPTMASK_MODULATION:
 			cshader = GETCS(VR_SCULPTMASK_CONTEXT_FM_cs_5_0); break;
 			break;
+		case __RM_SAMPLETEST:
+			cshader = GETCS(SampleTest_cs_5_0); break;
 		case __RM_DEFAULT:
 		default:
 			switch (mode_OIT)

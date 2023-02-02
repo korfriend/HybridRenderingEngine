@@ -149,5 +149,8 @@
     <FxCompile Include="hlsl\PathTracer.hlsl">
       <Filter>hlsl source code</Filter>
     </FxCompile>
+    <FxCompile Include="hlsl\dvr\DvrSampleTest.hlsl">
+      <Filter>hlsl source code\dvr</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

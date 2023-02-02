@@ -492,6 +492,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50001), "VR_RAYMIN_cs_5_0", "cs_5_0"), VR_RAYMIN_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50002), "VR_RAYSUM_cs_5_0", "cs_5_0"), VR_RAYSUM_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50006), "VR_SURFACE_cs_5_0", "cs_5_0"), VR_SURFACE_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90000), "SampleTest_cs_5_0", "cs_5_0"), SampleTest_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50100), "FillDither_cs_5_0", "cs_5_0"), FillDither_cs_5_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50003), "VR_DEFAULT_FM_cs_5_0", "cs_5_0"), VR_DEFAULT_FM_cs_5_0);
