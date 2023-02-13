@@ -1405,6 +1405,8 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 
 #else // RAYMODE != 0
 	float depth_begin = 0;
+
+
 #if RAYMODE==1 || RAYMODE==2
 	int luckyStep = (int)((float)(Random(pos_ray_start_ws.xy) + 1) * (float)num_ray_samples * 0.5f);
 	float depth_sample = depth_begin + g_cbVobj.sample_dist * (float)(luckyStep);
@@ -1424,6 +1426,7 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	float depth_sample = depth_begin + g_cbVobj.sample_dist * (float)(num_ray_samples);
 	int num_valid_samples = 0;
 	float4 vis_otf_sum = (float4)0;
+	float sampleSum = 0;
 #endif
 	float3 pos_ray_start_ts = TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts);
 	float3 dir_sample_ts = TransformVector(dir_sample_ws, g_cbVobj.mat_ws2ts);
@@ -1469,10 +1472,13 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 		int mask_vint = (int)(sample_mask_v + 0.5f);
 		float4 vis_otf = LoadOtfBufId(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
 #else	// OTF_MASK != 1
-		float4 vis_otf = LoadOtfBuf(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);// g_cbVobj.opacity_correction);
+		float4 vis_otf = LoadOtfBuf(sample_v_norm* g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
 #endif
-		if (vis_otf.a > 0)
+		// https://github.com/korfriend/OsstemCoreAPIs/discussions/185#discussion-4843169
+		//if (vis_otf.a > 0.0001)
+		//if (sample_v_norm > 0.001)
 		{
+			sampleSum += sample_v_norm;
 			vis_otf_sum += vis_otf;
 			num_valid_samples++;
 		}
@@ -1482,6 +1488,8 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 #if RAYMODE == 3
 	if (num_valid_samples == 0)
 		num_valid_samples = 1;
+
+	//float4 vis_otf = LoadOtfBuf(sampleSum / num_valid_samples * g_cbTmap.tmap_size_x, buf_otf, 1); //float4(pos_sample_ts, 1);
 	float4 vis_otf = vis_otf_sum / (float)num_valid_samples;
 #else // RAYMODE != 3
 
@@ -1490,7 +1498,7 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	int mask_vint = (int)(sample_mask_v + 0.5f);
 	float4 vis_otf = LoadOtfBufId(sample_v_prev * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
 #else
-	float4 vis_otf = LoadOtfBuf(sample_v_prev * g_cbTmap.tmap_size_x, buf_otf, 1);// g_cbVobj.opacity_correction);
+	float4 vis_otf = LoadOtfBuf(sample_v_prev * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
 #endif
 #endif
 
