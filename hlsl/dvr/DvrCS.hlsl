@@ -1449,7 +1449,7 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 			for (int k = 0; k <= blkSkip.num_skip_steps; k++)
 			{
 				float3 pos_sample_in_blk_ts = pos_ray_start_ts + dir_sample_ts * (float)(i + k);
-				float sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_in_blk_ts, 0).r;// *g_cbVobj.value_range;
+				float sample_v = tex3D_volume.SampleLevel(g_samplerLinear, pos_sample_in_blk_ts, 0).r;// *g_cbVobj.value_range;
 #if RAYMODE == 1
 				if (sample_v > sample_v_prev)
 #else	// ~RM_RAYMAX
@@ -1466,13 +1466,14 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 		}
 		i += blkSkip.num_skip_steps;
 #else	// ~(RAYMODE == 1 || RAYMODE == 2) , which means RAYSUM 
-		float sample_v_norm = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
+		// use g_samplerLinear instead of g_samplerLinear_clamp
+		float sample_v_norm = tex3D_volume.SampleLevel(g_samplerLinear, pos_sample_ts, 0).r;
 #if OTF_MASK == 1
 		float sample_mask_v = tex3D_volmask.SampleLevel(g_samplerPoint, pos_sample_ts, 0).r * g_cbVolObj.mask_value_range;
 		int mask_vint = (int)(sample_mask_v + 0.5f);
 		float4 vis_otf = LoadOtfBufId(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
 #else	// OTF_MASK != 1
-		float4 vis_otf = LoadOtfBuf(sample_v_norm* g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
+		float4 vis_otf = LoadOtfBuf(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
 #endif
 		// https://github.com/korfriend/OsstemCoreAPIs/discussions/185#discussion-4843169
 		//if (vis_otf.a > 0.0001)
@@ -1489,8 +1490,9 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	if (num_valid_samples == 0)
 		num_valid_samples = 1;
 
-	//float4 vis_otf = LoadOtfBuf(sampleSum / num_valid_samples * g_cbTmap.tmap_size_x, buf_otf, 1); //float4(pos_sample_ts, 1);
-	float4 vis_otf = vis_otf_sum / (float)num_valid_samples;
+	float4 vis_otf = LoadOtfBuf(sampleSum / num_valid_samples * g_cbTmap.tmap_size_x, buf_otf, 1); //float4(pos_sample_ts, 1);
+	//if (vis_otf.a > 0.199) vis_otf = float4(1, 0, 0, 1);
+	//float4 vis_otf = vis_otf_sum / (float)num_valid_samples;
 #else // RAYMODE != 3
 
 #if OTF_MASK == 1
