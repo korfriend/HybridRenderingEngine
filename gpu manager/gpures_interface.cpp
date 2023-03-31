@@ -103,8 +103,8 @@ bool __InitializeDevice()
 			D3D_FEATURE_LEVEL_12_0,
 			D3D_FEATURE_LEVEL_11_1,
 			D3D_FEATURE_LEVEL_11_0,
-			//D3D_FEATURE_LEVEL_10_1,
-			//D3D_FEATURE_LEVEL_10_0,
+			D3D_FEATURE_LEVEL_10_1,
+			D3D_FEATURE_LEVEL_10_0,
 			//D3D_FEATURE_LEVEL_9_3,
 			//D3D_FEATURE_LEVEL_9_1
 		};
@@ -112,14 +112,31 @@ bool __InitializeDevice()
 		D3D11CreateDevice(NULL, driverTypes, NULL, createDeviceFlags, featureLevels, ARRAYSIZE(featureLevels), D3D11_SDK_VERSION, 
 			&g_pdx11Device, &g_eFeatureLevel, &g_pdx11DeviceImmContext);
 
+		if (g_pdx11Device == NULL || g_pdx11DeviceImmContext == NULL) {
+			cout << "Not Supported GPUs : " << std::hex << g_eFeatureLevel << std::dec << endl;
+			return false;
+		}
+
+		if (g_eFeatureLevel < 0xb100) {
+			if (g_eFeatureLevel < 0xb000) {
+				cout << "WARNNING!! Direct3D Feature Level 10.x : " << std::hex << g_eFeatureLevel << std::dec << endl;
+				return false;
+			}
+			else {
+				cout << "WARNNING!! Direct3D Feature Level 11.0 : " << std::hex << g_eFeatureLevel << std::dec << endl;
+			}
+		}
+		//g_eFeatureLevel = (D3D_FEATURE_LEVEL)0xb000;
+
 #ifdef USE_DX11_3
 		D3D11_FEATURE_DATA_D3D11_OPTIONS3 FeatureData = {};
 		HRESULT hh = g_pdx11Device->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS3, &FeatureData, sizeof(D3D11_FEATURE_DATA_D3D11_OPTIONS3));
+		if (!SUCCEEDED(hh)) {
+		}
 		HRESULT hr = g_pdx11Device->QueryInterface(IID_PPV_ARGS(&g_pdx11Device3));
 		if (SUCCEEDED(hr) && g_pdx11Device3)
 		{
 			//GetDXUTState().SetD3D11Device3(pd3d11Device3);
-
 			hr = g_pdx11DeviceImmContext->QueryInterface(IID_PPV_ARGS(&g_pdx11DeviceImmContext3));
 			if (SUCCEEDED(hr) && g_pdx11DeviceImmContext3)
 			{
@@ -128,16 +145,17 @@ bool __InitializeDevice()
 		}
 		if (g_pdx11Device3 == NULL || g_pdx11DeviceImmContext3 == NULL)
 		{
-			cout << "dx11 feature 3 failed!" << endl;
+			cout << "Direct3D 11 Device Failed!" << endl;
 		}
 		else
-			cout << "dx11 feature 3 OK!!" << endl;
+			cout << "Direct3D 11 Device Creation!" << endl;
 #endif
 	}
 
 	catch (std::exception&)
 	{
-		//::MessageBox(NULL, ("VX3D requires DirectX Driver!!"), NULL, MB_OK);
+		cout << "vismtv_inbuilt_renderergpudx requires DirectX support!" << endl;
+		//::MessageBox(NULL, ("vismtv_inbuilt_renderergpudx requires DirectX Driver!!"), NULL, MB_OK);
 		//string str = e.what();
 		//std::string wstr(str.length(),L' ');
 		//copy(str.begin(),str.end(),wstr.begin());
@@ -148,6 +166,9 @@ bool __InitializeDevice()
 
 	if (g_pdx11Device == NULL || g_pdx11DeviceImmContext == NULL || g_eFeatureLevel < 0x9300)
 	{
+		cout << "g_pdx11Device : " << g_pdx11Device << endl;
+		cout << "g_pdx11DeviceImmContext : " << g_pdx11DeviceImmContext << endl;
+		cout << "g_eFeatureLevel : " << g_eFeatureLevel << endl;
 #ifdef USE_DX11_3
 		VMSAFE_RELEASE(g_pdx11DeviceImmContext3);
 		VMSAFE_RELEASE(g_pdx11Device3);

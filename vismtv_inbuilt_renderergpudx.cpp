@@ -66,6 +66,10 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		}
 	}
 
+	if (g_vmCommonParams.dx11_featureLevel < 0xb100) {
+		_fncontainer.fnParams.SetParam("_bool_UseSpinLock", true);
+	}
+
 	g_LocalProgress.start = 0;
 	g_LocalProgress.range = 100;
 	g_LocalProgress.progress_ptr = &g_dProgress;
