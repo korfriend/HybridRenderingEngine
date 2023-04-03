@@ -94,7 +94,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 
 	if (g_pvmCommonParams->dx11Device == NULL || g_pvmCommonParams->dx11DeviceImmContext == NULL)
 	{
-		cout << "error devices!" << endl;
+		vmlog::LogErr("error devices!");
 		gpu_params = g_pvmCommonParams;
 		return (int)__INVALID_GPU;
 	}
@@ -279,7 +279,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 	}
 	if (hr != S_OK)
 	{
-		cout << "error : basic dx11 resources!" << endl;
+		vmlog::LogErr("error : basic dx11 resources!");
 		goto ERROR_PRESETTING;
 	}
 
@@ -352,7 +352,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 			return S_OK;
 		};
 
-#define VRETURN(v, ERR) if(v != S_OK) { cout << #ERR << endl; goto ERROR_PRESETTING; }
+#define VRETURN(v, ERR) if(v != S_OK) { vmlog::LogErr(#ERR); goto ERROR_PRESETTING; }
 
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11001), "SR_OIT_P_vs_5_0", "P", lotypeInputPos, 1), SR_OIT_P_vs_5_0);
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11002), "SR_OIT_PN_vs_5_0", "PN", lotypeInputPosNor, 2), SR_OIT_PN_vs_5_0);
@@ -1072,9 +1072,9 @@ RETRY:
 	sample_offset.y = (float)vol_data->vol_size.y / (float)vol_size_y;
 	sample_offset.z = (float)vol_data->vol_size.z / (float)vol_size_z;
 
-	printf("GPU Uploaded Volume Size : %d KB (%dx%dx%d) %d bytes\n",
-		(int)(vol_size_x * vol_size_y * vol_size_z / 1024.0 * type_size),
-		vol_size_x, vol_size_y, vol_size_z, (int)type_size);
+	//printf("GPU Uploaded Volume Size : %d KB (%dx%dx%d) %d bytes\n",
+	//	(int)(vol_size_x * vol_size_y * vol_size_z / 1024.0 * type_size),
+	//	vol_size_x, vol_size_y, vol_size_z, (int)type_size);
 
 	//cout << "************offset*>> " << sample_offset.x << ", " << sample_offset.y << ", " << sample_offset.z << endl;
 
@@ -1242,8 +1242,9 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 
 		if (update_data)
 		{
-			if(is_test_out)
-				cout << "vertex update!! ---> " << gres_vtx.vm_src_id << endl;
+			if (is_test_out)
+				vmlog::LogInfo(string("vertex update!! ---> " + to_string(gres_vtx.vm_src_id)));
+
 			int num_vtx_defs = prim_data->GetNumVertexDefinitions();
 
 			vector<vmfloat3*> vtx_def_ptrs;
@@ -2281,7 +2282,7 @@ bool grd_helper::Compile_Hlsl(const string& str, const string& entry_point, cons
 	{
 		if (g_pvmCommonParams->dx11Device->CreatePixelShader(pShaderBlob->GetBufferPointer(), pShaderBlob->GetBufferSize(), NULL, (ID3D11PixelShader**)sm) != S_OK)
 		{
-			std::cout << "*** COMPILE ERROR : " << str << ", " << entry_point << ", " << shader_model << endl;
+			vmlog::LogErr(string("*** COMPILE ERROR : ") + str + ", " + entry_point + ", " + shader_model);
 			return false;
 		}
 	}
@@ -2289,7 +2290,7 @@ bool grd_helper::Compile_Hlsl(const string& str, const string& entry_point, cons
 	{
 		if (g_pvmCommonParams->dx11Device->CreateVertexShader(pShaderBlob->GetBufferPointer(), pShaderBlob->GetBufferSize(), NULL, (ID3D11VertexShader**)sm) != S_OK)
 		{
-			std::cout << "*** COMPILE ERROR : " << str << ", " << entry_point << ", " << shader_model << endl;
+			vmlog::LogErr(string("*** COMPILE ERROR : ") + str + ", " + entry_point + ", " + shader_model);
 			return false;
 		}
 	}
@@ -2297,7 +2298,7 @@ bool grd_helper::Compile_Hlsl(const string& str, const string& entry_point, cons
 	{
 		if (g_pvmCommonParams->dx11Device->CreateComputeShader(pShaderBlob->GetBufferPointer(), pShaderBlob->GetBufferSize(), NULL, (ID3D11ComputeShader**)sm) != S_OK)
 		{
-			std::cout << "*** COMPILE ERROR : " << str << ", " << entry_point << ", " << shader_model << endl;
+			vmlog::LogErr(string("*** COMPILE ERROR : ") + str + ", " + entry_point + ", " + shader_model);
 			return false;
 		}
 	}
@@ -2305,7 +2306,7 @@ bool grd_helper::Compile_Hlsl(const string& str, const string& entry_point, cons
 	{
 		if (g_pvmCommonParams->dx11Device->CreateGeometryShader(pShaderBlob->GetBufferPointer(), pShaderBlob->GetBufferSize(), NULL, (ID3D11GeometryShader**)sm) != S_OK)
 		{
-			std::cout << "*** COMPILE ERROR : " << str << ", " << entry_point << ", " << shader_model << endl;
+			vmlog::LogErr(string("*** COMPILE ERROR : ") + str + ", " + entry_point + ", " + shader_model);
 			return false;
 		}
 	}

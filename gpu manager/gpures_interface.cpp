@@ -85,7 +85,7 @@ bool __InitializeDevice()
 {
 	if (g_pdx11Device || g_pdx11DeviceImmContext)
 	{
-		printf("VmManager::CreateDevice - Already Created!");
+		vmlog::LogWarn("VmManager::CreateDevice - Already Created!");
 		return true;
 	}
 
@@ -112,18 +112,22 @@ bool __InitializeDevice()
 		D3D11CreateDevice(NULL, driverTypes, NULL, createDeviceFlags, featureLevels, ARRAYSIZE(featureLevels), D3D11_SDK_VERSION, 
 			&g_pdx11Device, &g_eFeatureLevel, &g_pdx11DeviceImmContext);
 
+		std::stringstream stream;
+		stream << std::hex << g_eFeatureLevel;
+		std::string hex_FeatureLevel(stream.str());
+
 		if (g_pdx11Device == NULL || g_pdx11DeviceImmContext == NULL) {
-			cout << "Not Supported GPUs : " << std::hex << g_eFeatureLevel << std::dec << endl;
+			vmlog::LogErr(string("Not Supported GPUs : ") + hex_FeatureLevel);
 			return false;
 		}
 
 		if (g_eFeatureLevel < 0xb100) {
 			if (g_eFeatureLevel < 0xb000) {
-				cout << "WARNNING!! Direct3D Feature Level 10.x : " << std::hex << g_eFeatureLevel << std::dec << endl;
+				vmlog::LogErr(string("(Not supported GPU) Direct3D Feature Level 10.x : ") + hex_FeatureLevel);
 				return false;
 			}
 			else {
-				cout << "WARNNING!! Direct3D Feature Level 11.0 : " << std::hex << g_eFeatureLevel << std::dec << endl;
+				vmlog::LogWarn(string("(Low Capacity GPU) Direct3D Feature Level 11.0 : ") + hex_FeatureLevel);
 			}
 		}
 		//g_eFeatureLevel = (D3D_FEATURE_LEVEL)0xb000;
@@ -145,16 +149,17 @@ bool __InitializeDevice()
 		}
 		if (g_pdx11Device3 == NULL || g_pdx11DeviceImmContext3 == NULL)
 		{
-			cout << "Direct3D 11 Device Failed!" << endl;
+			vmlog::LogErr("Direct3D 11 Device Failed!");
+			return false;
 		}
 		else
-			cout << "Direct3D 11 Device Creation!" << endl;
+			vmlog::LogInfo("Direct3D 11 Device Creation!");
 #endif
 	}
 
 	catch (std::exception&)
 	{
-		cout << "vismtv_inbuilt_renderergpudx requires DirectX support!" << endl;
+		vmlog::LogErr("vismtv_inbuilt_renderergpudx requires DirectX support!");
 		//::MessageBox(NULL, ("vismtv_inbuilt_renderergpudx requires DirectX Driver!!"), NULL, MB_OK);
 		//string str = e.what();
 		//std::string wstr(str.length(),L' ');
@@ -166,9 +171,12 @@ bool __InitializeDevice()
 
 	if (g_pdx11Device == NULL || g_pdx11DeviceImmContext == NULL || g_eFeatureLevel < 0x9300)
 	{
-		cout << "g_pdx11Device : " << g_pdx11Device << endl;
-		cout << "g_pdx11DeviceImmContext : " << g_pdx11DeviceImmContext << endl;
-		cout << "g_eFeatureLevel : " << g_eFeatureLevel << endl;
+		std::stringstream stream;
+		stream << std::hex << g_eFeatureLevel;
+		std::string hex_FeatureLevel(stream.str());
+		vmlog::LogErr(string("g_pdx11Device : ") + to_string((int)g_pdx11Device));
+		vmlog::LogErr(string("g_pdx11DeviceImmContext : ") + to_string((int)g_pdx11DeviceImmContext));
+		vmlog::LogErr(string("g_eFeatureLevel : ") + hex_FeatureLevel);
 #ifdef USE_DX11_3
 		VMSAFE_RELEASE(g_pdx11DeviceImmContext3);
 		VMSAFE_RELEASE(g_pdx11Device3);
@@ -178,7 +186,7 @@ bool __InitializeDevice()
 		return false;
 	}
 
-	printf("\nRenderer's DirectX Device Creation Success\n\n");
+	vmlog::LogInfo("Renderer's DirectX Device Creation Success");
 
 #if (defined(_DEBUG) || defined(DEBUG)) && !defined(SDK_REDISTRIBUTE)
 	// Debug //
@@ -517,7 +525,7 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		//	printf("LLLL\n");
 		if (g_pdx11Device->CreateBuffer(&desc_buf, NULL, &pdx11Buffer) != S_OK)
 		{
-			printf("GG %d, %d, \n", num_elements, stride_bytes);
+			vmlog::LogErr("GGg_pdx11Device->CreateBuffer(&desc_buf, NULL, &pdx11Buffer) failed!");
 			return false;
 		}
 
@@ -836,7 +844,7 @@ bool __SetGpuManagerParameters(const string& param_name, const data_type& dtype,
 	{
 		if (it->second.buffer_ptr == v_ptr)
 		{
-			printf("WARNNING!! ReplaceOrAddBufferPtr ==> Same buffer pointer is used!");
+			vmlog::LogErr("ReplaceOrAddBufferPtr ==> Same buffer pointer is used!");
 			return false;
 		}
 		else

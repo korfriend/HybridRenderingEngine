@@ -41,11 +41,11 @@ bool InitModule(fncontainer::VmFnContainer& _fncontainer)
 
 	if (grd_helper::InitializePresettings(g_pCGpuManager, &g_vmCommonParams) == -1)
 	{
-		std::cout << "failure new initializer!" << std::endl;
+		vmlog::LogErr("failure new initializer!");
 		DeInitModule(fncontainer::VmFnContainer());
 		return false;
 	}
-	std::cout << "Plugin: GPU DX11 Renderer using Core v(" << __VERSION << ")" << std::endl;
+	vmlog::LogInfo(string("Plugin: GPU DX11 Renderer using Core v(") + __VERSION + ")");
 
 	return true;
 }

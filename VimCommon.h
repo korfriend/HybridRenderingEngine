@@ -29,7 +29,8 @@
 //#define __VERSION "1.10" // released at 22.04.02
 //#define __VERSION "1.11" // released at 22.05.17
 //#define __VERSION "1.12" // released at 22.08.08
-#define __VERSION "1.13" // released at 22.12.05
+//#define __VERSION "1.13" // released at 22.12.05
+#define __VERSION "1.20" // released at 23.04.03
 
 #define _HAS_STD_BYTE 0
 
@@ -164,6 +165,13 @@
 #define __VMCVT3__(d, s, t3, tt) d=t3((tt)s.x, (tt)s.y, (tt)s.z)
 #define __OPS__(d, s, op) d=op(d, s)
 
+namespace vmlog {
+	__vmstatic void InitLog(const std::string& coreName, const std::string& logFileName);
+	__vmstatic void SetLogLevel(const bool displayLog);
+	__vmstatic void LogInfo(std::string str);
+	__vmstatic void LogWarn(std::string str);
+	__vmstatic void LogErr(std::string str);
+}
 //=====================================
 // Global Enumerations
 //=====================================
