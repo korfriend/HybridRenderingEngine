@@ -617,8 +617,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	bool is_ghost_mode = _fncontainer->fnParams.GetParam("_bool_GhostEffect", false);
 	bool is_rgba = _fncontainer->fnParams.GetParam("_bool_IsRGBA", false); // false means bgra
 
-	if (use_spinlock_pixsynch)
-		cout << "GGGGGGGGGGGG" << endl;
 	bool is_system_out = false;
 	if (is_final_renderer) is_system_out = true;
 

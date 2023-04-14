@@ -2,8 +2,12 @@
 #include "gpures_interface.h"
 
 //#include <d3dx9math.h>	// For Math and Structure
-//#include <d3d11_3.h>
+//
+#ifdef USE_DX11_3
+#include <d3d11_3.h>
+#else
 #include <d3d11.h>
+#endif
 //#define SDK_REDISTRIBUTE
 
 //#define _DEBUG

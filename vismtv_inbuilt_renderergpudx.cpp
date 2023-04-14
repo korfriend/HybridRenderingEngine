@@ -37,7 +37,7 @@ bool CheckModuleParameters(fncontainer::VmFnContainer& _fncontainer)
 bool InitModule(fncontainer::VmFnContainer& _fncontainer)
 {	
 	if(g_pCGpuManager == NULL)
-		g_pCGpuManager = new VmGpuManager(GpuSdkTypeDX11, "vismtv_inbuilt_renderergpudx.dll");
+		g_pCGpuManager = new VmGpuManager(GpuSdkTypeDX11, __DLLNAME);
 
 	if (grd_helper::InitializePresettings(g_pCGpuManager, &g_vmCommonParams) == -1)
 	{
@@ -66,9 +66,13 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		}
 	}
 
+#ifdef USE_DX11_3
 	if (g_vmCommonParams.dx11_featureLevel < 0xb100) {
 		_fncontainer.fnParams.SetParam("_bool_UseSpinLock", true);
 	}
+#else
+	_fncontainer.fnParams.SetParam("_bool_UseSpinLock", true);
+#endif
 
 	g_LocalProgress.start = 0;
 	g_LocalProgress.range = 100;
@@ -166,7 +170,7 @@ void GetModuleSpecification(std::vector<std::string>& requirements)
 void InteropCustomWork(fncontainer::VmFnContainer& _fncontainer)
 {
 	if (g_pCGpuManager == NULL) // for module initialization
-		g_pCGpuManager = new VmGpuManager(GpuSdkTypeDX11, "vismtv_inbuilt_renderergpudx.dll");
+		g_pCGpuManager = new VmGpuManager(GpuSdkTypeDX11, __DLLNAME);
 	_fncontainer.fnParams.SetParam("_string_CoreVersion", string(__VERSION));
 	_fncontainer.fnParams.SetParam("_VmGpuManager*_", g_pCGpuManager);
 }

@@ -128,8 +128,17 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		hr |= g_pvmCommonParams->dx11Device->CreateBlendState(&descBlend, &blender_state);
 		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::BLEND_STATE, "ADD"), blender_state);
 
+#ifdef USE_DX11_3
 		D3D11_RASTERIZER_DESC2 descRaster;
+		ZeroMemory(&descRaster, sizeof(D3D11_RASTERIZER_DESC2));
+		ID3D11RasterizerState2* raster_state;
+#define MyCreateRasterizerState CreateRasterizerState2
+#else
+		D3D11_RASTERIZER_DESC descRaster;
 		ZeroMemory(&descRaster, sizeof(D3D11_RASTERIZER_DESC));
+		ID3D11RasterizerState* raster_state;
+#define MyCreateRasterizerState CreateRasterizerState
+#endif
 		descRaster.FillMode = D3D11_FILL_SOLID;
 		descRaster.CullMode = D3D11_CULL_BACK;
 		descRaster.FrontCounterClockwise = FALSE;
@@ -140,53 +149,56 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		descRaster.ScissorEnable = FALSE;
 		descRaster.MultisampleEnable = FALSE;
 		descRaster.AntialiasedLineEnable = FALSE;
+#ifdef USE_DX11_3
 		descRaster.ForcedSampleCount = 0;
 		descRaster.ConservativeRaster = D3D11_CONSERVATIVE_RASTERIZATION_MODE_OFF;
-		ID3D11RasterizerState2* raster_state;
-		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
+#endif
+		hr |= g_pvmCommonParams->dx11Device->MyCreateRasterizerState(&descRaster, &raster_state);
 		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "SOLID_CW"), raster_state);
 		descRaster.AntialiasedLineEnable = true;
-		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
+		hr |= g_pvmCommonParams->dx11Device->MyCreateRasterizerState(&descRaster, &raster_state);
 		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "AA_SOLID_CW"), raster_state);
 		//descRaster.CullMode = D3D11_CULL_FRONT;
 		descRaster.CullMode = D3D11_CULL_BACK;
 		descRaster.FrontCounterClockwise = TRUE;
 		descRaster.AntialiasedLineEnable = false;
-		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
+		hr |= g_pvmCommonParams->dx11Device->MyCreateRasterizerState(&descRaster, &raster_state);
 		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "SOLID_CCW"), raster_state);
 		descRaster.AntialiasedLineEnable = true;
-		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
+		hr |= g_pvmCommonParams->dx11Device->MyCreateRasterizerState(&descRaster, &raster_state);
 		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "AA_SOLID_CCW"), raster_state);
 		descRaster.CullMode = D3D11_CULL_NONE;
 		descRaster.AntialiasedLineEnable = false;
-		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
+		hr |= g_pvmCommonParams->dx11Device->MyCreateRasterizerState(&descRaster, &raster_state);
 		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "SOLID_NONE"), raster_state);
 		descRaster.AntialiasedLineEnable = true;
-		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
+		hr |= g_pvmCommonParams->dx11Device->MyCreateRasterizerState(&descRaster, &raster_state);
 		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "AA_SOLID_NONE"), raster_state);
 
 		descRaster.FillMode = D3D11_FILL_WIREFRAME;
 		descRaster.CullMode = D3D11_CULL_BACK;
+#ifdef USE_DX11_3
 		descRaster.ConservativeRaster = D3D11_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+#endif
 		descRaster.AntialiasedLineEnable = false;
-		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
+		hr |= g_pvmCommonParams->dx11Device->MyCreateRasterizerState(&descRaster, &raster_state);
 		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "WIRE_CW"), raster_state);
 		descRaster.AntialiasedLineEnable = true;
-		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
+		hr |= g_pvmCommonParams->dx11Device->MyCreateRasterizerState(&descRaster, &raster_state);
 		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "AA_WIRE_CW"), raster_state);
 		descRaster.CullMode = D3D11_CULL_FRONT;
 		descRaster.AntialiasedLineEnable = false;
-		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
+		hr |= g_pvmCommonParams->dx11Device->MyCreateRasterizerState(&descRaster, &raster_state);
 		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "WIRE_CCW"), raster_state);
 		descRaster.AntialiasedLineEnable = true;
-		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
+		hr |= g_pvmCommonParams->dx11Device->MyCreateRasterizerState(&descRaster, &raster_state);
 		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "AA_WIRE_CCW"), raster_state);
 		descRaster.CullMode = D3D11_CULL_NONE;
 		descRaster.AntialiasedLineEnable = false;
-		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
+		hr |= g_pvmCommonParams->dx11Device->MyCreateRasterizerState(&descRaster, &raster_state);
 		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "WIRE_NONE"), raster_state);
 		descRaster.AntialiasedLineEnable = true;
-		hr |= g_pvmCommonParams->dx11Device->CreateRasterizerState2(&descRaster, &raster_state);
+		hr |= g_pvmCommonParams->dx11Device->MyCreateRasterizerState(&descRaster, &raster_state);
 		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "AA_WIRE_NONE"), raster_state);
 	}
 	{
@@ -316,7 +328,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 			{ "TEXCOORD", 2, DXGI_FORMAT_R32G32B32_FLOAT, 0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 		};
 
-		HMODULE hModule = GetModuleHandleA("vismtv_inbuilt_renderergpudx.dll");
+		HMODULE hModule = GetModuleHandleA(__DLLNAME);
 		auto register_vertex_shader = [&](const LPCWSTR pSrcResource, const string& name_shader, const string& name_layer, D3D11_INPUT_ELEMENT_DESC in_layout_desc[], uint num_elements)
 		{
 			ID3D11InputLayout* in_layout = NULL;
