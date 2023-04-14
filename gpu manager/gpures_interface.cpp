@@ -2,8 +2,8 @@
 #include "gpures_interface.h"
 
 //#include <d3dx9math.h>	// For Math and Structure
-#include <d3d11_3.h>
-//#include <d3dx11.h>
+//#include <d3d11_3.h>
+#include <d3d11.h>
 //#define SDK_REDISTRIBUTE
 
 //#define _DEBUG
@@ -105,8 +105,8 @@ bool __InitializeDevice()
 			D3D_FEATURE_LEVEL_11_0,
 			D3D_FEATURE_LEVEL_10_1,
 			D3D_FEATURE_LEVEL_10_0,
-			//D3D_FEATURE_LEVEL_9_3,
-			//D3D_FEATURE_LEVEL_9_1
+			D3D_FEATURE_LEVEL_9_3,
+			D3D_FEATURE_LEVEL_9_1
 		};
 
 		D3D11CreateDevice(NULL, driverTypes, NULL, createDeviceFlags, featureLevels, ARRAYSIZE(featureLevels), D3D11_SDK_VERSION, 
