@@ -756,10 +756,10 @@ PS_OUT Moment_ResolvePass(__VS_OUT input)
 		else
 		{
 			//float3 mat_shading = float3(g_cbEnv.ltint_ambient.w, g_cbEnv.ltint_diffuse.w, g_cbEnv.ltint_spec.w);
-			float3 Ka = clr_map.rgb * g_cbEnv.ltint_ambient.rgb;
-			float3 Kd = clr_map.rgb * g_cbEnv.ltint_diffuse.rgb;
-			float3 Ks = clr_map.rgb * g_cbEnv.ltint_spec.rgb;
-			float Ns = g_cbPobj.Ns;
+			float3 Ka = clr_map.rgb * g_cbEnv.ltint_ambient.rgb * g_cbPobj.Ka;
+			float3 Kd = clr_map.rgb * g_cbEnv.ltint_diffuse.rgb * g_cbPobj.Kd;
+			float3 Ks = clr_map.rgb * g_cbEnv.ltint_spec.rgb * g_cbPobj.Ks;
+			float Ns = g_cbPobj.Ns * g_cbPobj.Ns;
 			ComputeColor(v_rgba.rgb, Ka, Kd, Ks, Ns, 1.0, input.f3PosWS, view_dir, nor, nor_len);
 			v_rgba.a *= clr_map.a;
 		}
