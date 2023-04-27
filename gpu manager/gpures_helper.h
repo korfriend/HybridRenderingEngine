@@ -7,12 +7,15 @@ using namespace fncontainer;
 //#include <map>
 //#define __DX_DEBUG_QUERY
 
+
 #ifdef USE_DX11_3
 #define __ID3D11Device ID3D11Device3
 #define __ID3D11DeviceContext ID3D11DeviceContext3
+#define __DLLNAME "vismtv_inbuilt_renderergpudx.dll"
 #else
 #define __ID3D11Device ID3D11Device
 #define __ID3D11DeviceContext ID3D11DeviceContext
+#define __DLLNAME "vismtv_inbuilt_renderergpudx11_0.dll"
 #endif
 
 #define TRANSPOSE(A) glm::transpose(A)

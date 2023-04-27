@@ -65,6 +65,9 @@
     <None Include="hlsl\moment\TrigonometricMomentMath.hlsli">
       <Filter>hlsl source code\Moment</Filter>
     </None>
+    <None Include="ShaderCompileDirect3D11.bat">
+      <Filter>bat</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="resources">
