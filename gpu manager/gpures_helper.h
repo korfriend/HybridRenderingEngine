@@ -287,7 +287,7 @@ namespace grd_helper
 	bool UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, const bool isPreInt = false, LocalProgress* progress = NULL);
 
 	// primitive structure
-	bool UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<string, GpuRes>& map_gres_texs, VmVObjectPrimitive* pobj, LocalProgress* progress = NULL);
+	bool UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<string, GpuRes>& map_gres_texs, VmVObjectPrimitive* pobj, VmObject* imgObj = NULL, bool* hasTextureMap = NULL, LocalProgress* progress = NULL);
 
 #define UPFB_SYSOUT 0x1
 #define UPFB_RAWBYTE 0x2 // buffer only
