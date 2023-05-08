@@ -584,15 +584,15 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		// fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
 		return;
 	}
-
+	
 #endif
 	// Ray Intersection for Clipping Box //
     float2 hits_t = ComputeVBoxHits(vbos_hit_start_pos, dir_sample_unit_ws, g_cbVobj.mat_alignedvbox_tr_ws2bs, g_cbClipInfo);
 	// 1st Exit in the case that there is no ray-intersecting boundary in the volume box
 	hits_t.y = min(g_cbCamState.far_plane, hits_t.y); // only available in orthogonal view (thickness slicer)
     int num_ray_samples = ceil((hits_t.y - hits_t.x) / g_cbVobj.sample_dist);
-    if (num_ray_samples <= 0)
-        return;
+	if (num_ray_samples <= 0)
+		return;
 	// note hits_t.x >= 0
     float3 pos_ray_start_ws = vbos_hit_start_pos + dir_sample_unit_ws * hits_t.x;
     // recompute the vis result  
@@ -655,6 +655,8 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	
 	if (vr_hit_enc == __VRHIT_ON_CLIPPLANE) // on the clip plane
 	{
+		//fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
+		//return;
 		float4 vis_otf = (float4) 0;
 		start_idx++;
 
@@ -680,8 +682,8 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #if VR_MODE == 2
 			float grad_len = length(gradSlab) * 0.5f;
 			//float modulator = pow(min(grad_len * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(g_cbVobj.kappa_i, g_cbVobj.kappa_s));
-			float modulator = min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
-			vis_sample *= modulator;
+			//float modulator = min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
+			//vis_sample *= modulator; // https://github.com/korfriend/OsstemCoreAPIs/discussions/199#discussion-5114460
 #endif
 			//vis_sample *= mask_weight;
 #if FRAG_MERGING == 1

@@ -861,9 +861,9 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	float3 ray_orig_os = TransformPoint(pos_ip_ws, g_cbPobj.mat_ws2os);
 	float3 ray_dir_unit_os = normalize(TransformVector(ray_dir_unit_ws, g_cbPobj.mat_ws2os));
 
-	if (ray_orig_os.z == 0) ray_orig_os.z = 0.0000123f; // trick... for avoiding zero block skipping error
-	if (ray_orig_os.y == 0) ray_orig_os.y = 0.0000123f; // trick... for avoiding zero block skipping error
-	if (ray_orig_os.x == 0) ray_orig_os.x = 0.0000123f; // trick... for avoiding zero block skipping error
+	if (ray_orig_os.z == 0) ray_orig_os.z = 0.00001234f; // trick... for avoiding zero block skipping error
+	if (ray_orig_os.y == 0) ray_orig_os.y = 0.00001234f; // trick... for avoiding zero block skipping error
+	if (ray_orig_os.x == 0) ray_orig_os.x = 0.00001234f; // trick... for avoiding zero block skipping error
 
 	float4 rayorig = float4(ray_orig_os, ray_tmin);
 	float4 raydir = float4(ray_dir_unit_os, ray_tmax);
@@ -878,7 +878,10 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		return;
 
 //	if ((!isInside && hitTriIdx != -1 && hitDistance > planeThickness))
-//		fragment_vis[ss_xy] = float4(0, 1, 0, 1);
+	//if (!isInside) {
+	//	fragment_vis[ss_xy] = float4(0, 1, 0, 1);
+	//	return;
+	//}
 	
 	float3 posHitOS = ray_orig_os + hitDistance * ray_dir_unit_os;
 	float3 posHitWS = TransformPoint(posHitOS, g_cbPobj.mat_os2ws);

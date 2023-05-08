@@ -457,16 +457,16 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11105), "SR_OIT_ABUFFER_SORT2SENDER_SFM_cs_5_0", "cs_5_0"), SR_OIT_ABUFFER_SORT2SENDER_SFM_cs_5_0);
 
 		{
-			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11030), "SR_MOMENT_GEN_ps_5_0", "ps_5_0"), SR_MOMENT_GEN_ps_5_0);
-			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11037), "SR_MOMENT_GEN_TEXT_ps_5_0", "ps_5_0"), SR_MOMENT_GEN_TEXT_ps_5_0);
-			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11036), "SR_MOMENT_GEN_MTT_ps_5_0", "ps_5_0"), SR_MOMENT_GEN_MTT_ps_5_0);
-			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11031), "SR_MOMENT_OIT_PHONGBLINN_ps_5_0", "ps_5_0"), SR_MOMENT_OIT_PHONGBLINN_ps_5_0);
-			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11032), "SR_MOMENT_OIT_DASHEDLINE_ps_5_0", "ps_5_0"), SR_MOMENT_OIT_DASHEDLINE_ps_5_0);
-			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11033), "SR_MOMENT_OIT_MULTITEXTMAPPING_ps_5_0", "ps_5_0"), SR_MOMENT_OIT_MULTITEXTMAPPING_ps_5_0);
-			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11034), "SR_MOMENT_OIT_TEXTMAPPING_ps_5_0", "ps_5_0"), SR_MOMENT_OIT_TEXTMAPPING_ps_5_0);
-			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11035), "SR_MOMENT_OIT_TEXTUREIMGMAP_ps_5_0", "ps_5_0"), SR_MOMENT_OIT_TEXTUREIMGMAP_ps_5_0);
-
 			if (g_pvmCommonParams->dx11_featureLevel > (D3D_FEATURE_LEVEL)0xb100) {
+				VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11030), "SR_MOMENT_GEN_ps_5_0", "ps_5_0"), SR_MOMENT_GEN_ps_5_0);
+				VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11037), "SR_MOMENT_GEN_TEXT_ps_5_0", "ps_5_0"), SR_MOMENT_GEN_TEXT_ps_5_0);
+				VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11036), "SR_MOMENT_GEN_MTT_ps_5_0", "ps_5_0"), SR_MOMENT_GEN_MTT_ps_5_0);
+				VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11031), "SR_MOMENT_OIT_PHONGBLINN_ps_5_0", "ps_5_0"), SR_MOMENT_OIT_PHONGBLINN_ps_5_0);
+				VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11032), "SR_MOMENT_OIT_DASHEDLINE_ps_5_0", "ps_5_0"), SR_MOMENT_OIT_DASHEDLINE_ps_5_0);
+				VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11033), "SR_MOMENT_OIT_MULTITEXTMAPPING_ps_5_0", "ps_5_0"), SR_MOMENT_OIT_MULTITEXTMAPPING_ps_5_0);
+				VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11034), "SR_MOMENT_OIT_TEXTMAPPING_ps_5_0", "ps_5_0"), SR_MOMENT_OIT_TEXTMAPPING_ps_5_0);
+				VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11035), "SR_MOMENT_OIT_TEXTUREIMGMAP_ps_5_0", "ps_5_0"), SR_MOMENT_OIT_TEXTUREIMGMAP_ps_5_0);
+
 				VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11070), "SR_MOMENT_GEN_ROV_ps_5_0", "ps_5_0"), SR_MOMENT_GEN_ROV_ps_5_0);
 				VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11077), "SR_MOMENT_GEN_TEXT_ROV_ps_5_0", "ps_5_0"), SR_MOMENT_GEN_TEXT_ROV_ps_5_0);
 				VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11076), "SR_MOMENT_GEN_MTT_ROV_ps_5_0", "ps_5_0"), SR_MOMENT_GEN_MTT_ROV_ps_5_0);
@@ -1986,11 +1986,14 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 	float maxDistSample = (float)max(max(vol_data->vox_pitch.x * sampleOffset.x, vol_data->vox_pitch.y * sampleOffset.y),
 		vol_data->vox_pitch.z * sampleOffset.z);
 	//cout << "maxDistSample >>>> " << maxDistSample << endl;
+	float resampleDist = vobj->GetObjParam("RESAMPLEVOLUME_SAMPLEDIST", -1.f);
+	if (resampleDist > 0) maxDistSample = resampleDist;
 	float grad_offset_dist = maxDistSample;
 	fTransformVector((vmfloat3*)&cb_volume.vec_grad_x, &vmfloat3(grad_offset_dist, 0, 0), &mat_ws2ts);
 	fTransformVector((vmfloat3*)&cb_volume.vec_grad_y, &vmfloat3(0, grad_offset_dist, 0), &mat_ws2ts);
 	fTransformVector((vmfloat3*)&cb_volume.vec_grad_z, &vmfloat3(0, 0, grad_offset_dist), &mat_ws2ts);
 	
+
 	//const float sample_rate = 1.f;
 	float sample_rate = sample_precision;// actor->GetParam("_float_SamplePrecisionLevel", 1.0f);
 	cb_volume.opacity_correction = 1.f;
