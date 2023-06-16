@@ -701,6 +701,7 @@ int intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 
 							//trinormal = cross(float3(v22.x, v22.y, v22.z), float3(v11.x, v11.y, v11.z));  // works
 							trinormal = cross(float3(v11.x, v11.y, v11.z), float3(v22.x, v22.y, v22.z));
+							//trinormal = float3(100, 100, 100);
 						}
 					}
 				}
@@ -769,6 +770,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	if (g_cbCamState.cam_flag & 0x1)
 		ray_dir_unit_ws = pos_ip_ws - g_cbCamState.pos_cam_ws;
 	ray_dir_unit_ws = normalize(ray_dir_unit_ws);
+
 #else
 	int2 i2SizeBuffer = int2(g_cbCamState.rt_width, g_cbCamState.rt_height);
 	int iPlaneSizeX = g_cbCurvedSlicer.numCurvePoints;
@@ -851,6 +853,8 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	Refl_t refltype;
 	float ray_tmin = 0.00001f;
 	float ray_tmax = 1e20; // use thickness!!
+	float ray_tmin2 = 0.00001f;
+	float ray_tmax2 = 1e20; // use thickness!!
 
 	// intersect all triangles in the scene stored in BVH
 	int debugbingo = 0;
@@ -864,18 +868,42 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	if (ray_orig_os.z == 0) ray_orig_os.z = 0.00001234f; // trick... for avoiding zero block skipping error
 	if (ray_orig_os.y == 0) ray_orig_os.y = 0.00001234f; // trick... for avoiding zero block skipping error
 	if (ray_orig_os.x == 0) ray_orig_os.x = 0.00001234f; // trick... for avoiding zero block skipping error
+	if (ray_dir_unit_os.z == 0) ray_dir_unit_os.z = 0.00001234f; // trick... for avoiding zero block skipping error
+	if (ray_dir_unit_os.y == 0) ray_dir_unit_os.y = 0.00001234f; // trick... for avoiding zero block skipping error
+	if (ray_dir_unit_os.x == 0) ray_dir_unit_os.x = 0.00001234f; // trick... for avoiding zero block skipping error
 
 	float4 rayorig = float4(ray_orig_os, ray_tmin);
 	float4 raydir = float4(ray_dir_unit_os, ray_tmax);
 	//DEBUGintersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuDebugTris, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
 	intersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
 
-	bool isInside = dot(trinormal, ray_dir_unit_os) > 0;
-	if (hitTriIdx < 0 )
-		return;
+	//float4 rayorig2 = float4(ray_orig_os, ray_tmin2);
+	//float4 raydir2 = float4(-ray_dir_unit_os, ray_tmax2);
+	//float3 trinormal2 = float3(0, 0, 0);
+	//float hitDistance2 = 1e20;
+	//int hitTriIdx2 = -1;
+	//intersectBVHandTriangles(rayorig2, raydir2, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx2, hitDistance2, debugbingo, trinormal2, false);
 
+	//if (length(trinormal) > 1.00001) {
+	//	fragment_vis[ss_xy] = float4(1, 0, 0, 1);
+	//	fragment_zdepth[ss_xy] = 1.f;
+	//	return;
+	//}
+	//return;
+
+	//trinormal = normalize(trinormal);
+	//ray_dir_unit_os = normalize(ray_dir_unit_os);
+	bool isInside = dot(trinormal, ray_dir_unit_os) > 0;
+	if (hitTriIdx < 0)// || hitTriIdx2 < 0)
+		return;
+	
 	if (!isInside && hitDistance > planeThickness)
 		return;
+
+	//if (isInside) {
+	//	fragment_vis[ss_xy] = float4(1, 0, 0, 1);
+	//	fragment_zdepth[ss_xy] = 1.f;
+	//}
 
 //	if ((!isInside && hitTriIdx != -1 && hitDistance > planeThickness))
 	//if (!isInside) {
