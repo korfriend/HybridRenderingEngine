@@ -599,8 +599,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	bool blur_SSAO = _fncontainer->fnParams.GetParam("_bool_BlurSSAO", true);
 
 	bool apply_fragmerge = _fncontainer->fnParams.GetParam("_bool_ApplyFragMerge", true);
-	MFR_MODE mode_OIT = (MFR_MODE)_fncontainer->fnParams.GetParam("_int_OitMode", (int)1);
+	MFR_MODE mode_OIT = (MFR_MODE)_fncontainer->fnParams.GetParam("_int_OitMode", (int)MFR_MODE::DYNAMIC_FB);
 	mode_OIT = (MFR_MODE)min((int)mode_OIT, (int)MFR_MODE::MOMENT);
+
 	//if (mode_OIT == MFR_MODE::STATIC_KB_FM) apply_fragmerge = true;
 
 	int buf_ex_scale = _fncontainer->fnParams.GetParam("_int_BufExScale", (int)8); // scaling the capacity of the k-buffer for _bool_PixelTransmittance
@@ -697,10 +698,16 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			hlslobj_path += token + "\\";
 			exe_path.erase(0, pos + delimiter.length());
 		}
-		//hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
-		hlslobj_path += "..\\..\\VmModuleProjects\\renderer_gpudx11\\shader_compiled_objs\\";
-		//hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
+		//hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\";
+		//hlslobj_path += "..\\..\\VmModuleProjects\\renderer_gpudx11\\";
+		hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\";
 		//cout << hlslobj_path << endl;
+
+#ifdef DX10_0
+		hlslobj_path += "shader_compiled_objs_4_0\\";
+#else
+		hlslobj_path += "shader_compiled_objs\\";
+#endif
 
 		string prefix_path = hlslobj_path;
 		cout << "RECOMPILE HLSL _ OIT renderer!!" << endl;
@@ -710,15 +717,31 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		dx11CommonParams->dx11DeviceImmContext->PSSetShader(NULL, NULL, 0);
 		dx11CommonParams->dx11DeviceImmContext->CSSetShader(NULL, NULL, 0);
 
-#define VS_NUM 5
-#define GS_NUM 3
-#define PS_NUM 70
-#define CS_NUM 27
 #define SET_VS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, NAME), __S, true)
 #define SET_PS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::PIXEL_SHADER, NAME), __S, true)
 #define SET_CS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::COMPUTE_SHADER, NAME), __S, true)
 #define SET_GS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::GEOMETRY_SHADER, NAME), __S, true)
 
+#ifdef DX10_0
+#define VS_NUM 5
+#define GS_NUM 4
+#define PS_NUM 7
+#else
+#define VS_NUM 5
+#define GS_NUM 3
+#define PS_NUM 70
+#define CS_NUM 27
+#endif
+
+#ifdef DX10_0
+		string strNames_VS[VS_NUM] = {
+			   "SR_OIT_P_vs_4_0"
+			  ,"SR_OIT_PN_vs_4_0"
+			  ,"SR_OIT_PT_vs_4_0"
+			  ,"SR_OIT_PNT_vs_4_0"
+			  ,"SR_OIT_PTTT_vs_4_0"
+		};
+#else
 		string strNames_VS[VS_NUM] = {
 			   "SR_OIT_P_vs_5_0"
 			  ,"SR_OIT_PN_vs_5_0"
@@ -726,6 +749,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			  ,"SR_OIT_PNT_vs_5_0"
 			  ,"SR_OIT_PTTT_vs_5_0"
 		};
+#endif
 
 		for (int i = 0; i < VS_NUM; i++)
 		{
@@ -754,12 +778,20 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			}
 		}
 		/**/
-
+#ifdef DX10_0
+		string strNames_GS[GS_NUM] = {
+			   "GS_ThickPoints_gs_4_0"
+			  ,"GS_SurfelPoints_gs_4_0"
+			  ,"GS_ThickLines_gs_4_0"
+			  ,"GS_PickingBasic_gs_4_0"
+		};
+#else
 		string strNames_GS[GS_NUM] = {
 			   "GS_ThickPoints_gs_5_0"
 			  ,"GS_SurfelPoints_gs_5_0"
 			  ,"GS_ThickLines_gs_5_0"
 		};
+#endif
 
 		for (int i = 0; i < GS_NUM; i++)
 		{
@@ -788,6 +820,18 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			}
 		}
 
+#ifdef DX10_0
+		string strNames_PS[PS_NUM] = {
+			 "SR_SINGLE_LAYER_ps_4_0"
+
+			,"SR_BASIC_PHONGBLINN_ps_4_0"
+			,"SR_BASIC_DASHEDLINE_ps_4_0"
+			,"SR_BASIC_MULTITEXTMAPPING_ps_4_0"
+			,"SR_BASIC_TEXTMAPPING_ps_4_0"
+			,"SR_BASIC_TEXTUREIMGMAP_ps_4_0"
+			,"SR_BASIC_VOLUMEMAP_ps_4_0"
+		};
+#else
 		string strNames_PS[PS_NUM] = {
 			   "SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0"
 			  ,"SR_OIT_FILL_SKBTZ_DASHEDLINE_ps_5_0"
@@ -873,7 +917,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			,"PICKING_ABUFFER_TEXTMAPPING_ps_5_0"
 			,"PICKING_ABUFFER_TEXTUREIMGMAP_ps_5_0"
 		};
-
+#endif
 		for (int i = 0; i < PS_NUM; i++)
 		{
 			string strName = strNames_PS[i];
@@ -901,6 +945,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			}
 		}
 
+#ifdef DX10_0
+#else
 		string strNames_CS[CS_NUM] = {
 			   "OIT_SKBZ_RESOLVE_cs_5_0"
 			  ,"SR_SINGLE_LAYER_TO_SKBTZ_cs_5_0"
@@ -957,6 +1003,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				VMSAFE_DELETEARRAY(pyRead);
 			}
 		}
+#endif
 		/**/
 		dx11CommonParams->dx11DeviceImmContext->Flush();
 	}
@@ -967,12 +1014,19 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	ID3D11InputLayout* dx11LI_PNT = (ID3D11InputLayout*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "PNT"));
 	ID3D11InputLayout* dx11LI_PTTT = (ID3D11InputLayout*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "PTTT"));
 
+#ifdef DX10_0
+	ID3D11VertexShader* dx11VShader_P = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_P_vs_4_0"));
+	ID3D11VertexShader* dx11VShader_PN = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PN_vs_4_0"));
+	ID3D11VertexShader* dx11VShader_PT = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PT_vs_4_0"));
+	ID3D11VertexShader* dx11VShader_PNT = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PNT_vs_4_0"));
+	ID3D11VertexShader* dx11VShader_PTTT = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PTTT_vs_4_0"));
+#else
 	ID3D11VertexShader* dx11VShader_P = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_P_vs_5_0"));
 	ID3D11VertexShader* dx11VShader_PN = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PN_vs_5_0"));
 	ID3D11VertexShader* dx11VShader_PT = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PT_vs_5_0"));
 	ID3D11VertexShader* dx11VShader_PNT = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PNT_vs_5_0"));
 	ID3D11VertexShader* dx11VShader_PTTT = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PTTT_vs_5_0"));
-
+#endif
 	ID3D11Buffer* cbuf_cam_state = dx11CommonParams->get_cbuf("CB_CameraState");
 	ID3D11Buffer* cbuf_env_state = dx11CommonParams->get_cbuf("CB_EnvState");
 	ID3D11Buffer* cbuf_clip = dx11CommonParams->get_cbuf("CB_ClipInfo");
@@ -1018,16 +1072,21 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	}
 	ullong lastest_render_time = iobj->GetObjParam("_ullong_LatestSrTime", (ullong)0);
 
-	GpuRes gres_fb_rgba, gres_fb_depthcs, gres_fb_depthstencil, gres_fb_counter, gres_fb_spinlock;
+	GpuRes gres_fb_rgba, gres_fb_depthcs, gres_fb_depthstencil;
+	GpuRes gres_fb_sys_rgba, gres_fb_sys_depthcs;
+#ifdef DX10_0
+	GpuRes gres_fb_pickingId, gres_fb_pickingDepthcs, gres_fb_pickingDepthstencil;
+#else
+	GpuRes gres_fb_counter, gres_fb_spinlock;
 	GpuRes gres_fb_k_buffer, gres_fb_ubk_buffer;
 	//GpuRes gres_fb_mip_a_halftexs[2], gres_fb_mip_z_halftexs[2]; // deprecated
 	GpuRes gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex;
 	GpuRes gres_fb_ref_pidx;
-	GpuRes gres_fb_sys_rgba, gres_fb_sys_depthcs;
 	GpuRes gres_fb_moment_rgba;
 
 	// check_pixel_transmittance
 	GpuRes gres_fb_sys_deep_k, gres_fb_sys_ref_pidx, gres_fb_sys_counter;
+#endif
 	// Ghost effect mode
 	//GpuRes gres_fb_mask_hotspot;
 	grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D,
@@ -1036,6 +1095,12 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_FLOAT, 0);
 	grd_helper::UpdateFrameBuffer(gres_fb_depthstencil, iobj, "DEPTH_STENCIL", RTYPE_TEXTURE2D,
 		D3D11_BIND_DEPTH_STENCIL, DXGI_FORMAT_D32_FLOAT, false);
+	grd_helper::UpdateFrameBuffer(gres_fb_sys_rgba, iobj, "SYSTEM_OUT_RGBA", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_SYSOUT);
+	grd_helper::UpdateFrameBuffer(gres_fb_sys_depthcs, iobj, "SYSTEM_OUT_DEPTH", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R32_FLOAT, UPFB_SYSOUT);
+
+#ifdef DX10_0
+	// to do // ... picking...
+#else
 	grd_helper::UpdateFrameBuffer(gres_fb_counter, iobj, "RW_COUNTER", RTYPE_TEXTURE2D,
 		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
 	if(use_spinlock_pixsynch)// || mode_OIT == MFR_MODE::MOMENT) // when MFR_MODE::DXAB mode, this buffer used for another purpose?!
@@ -1085,8 +1150,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	// RS ¿¡¼­ ½ºÆä¼È·Î »©³»±â
 	// ...
 
-	grd_helper::UpdateFrameBuffer(gres_fb_sys_rgba, iobj, "SYSTEM_OUT_RGBA", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_SYSOUT);
-	grd_helper::UpdateFrameBuffer(gres_fb_sys_depthcs, iobj, "SYSTEM_OUT_DEPTH", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R32_FLOAT, UPFB_SYSOUT);
 
 	if(mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB)
 		grd_helper::UpdateFrameBuffer(gres_fb_ref_pidx, iobj, "BUFFER_RW_REF_PIDX_BUF", RTYPE_BUFFER, D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
@@ -1176,7 +1239,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	//	dx11DeviceImmContext->PSSetConstantBuffers(9, 1, &cbuf_hsmask);
 	//	dx11DeviceImmContext->CSSetConstantBuffers(9, 1, &cbuf_hsmask);
 	//}
-
+#endif
 #pragma endregion 
 
 	uint num_grid_x = __BLOCKSIZE == 1 ? fb_size_cur.x : (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
@@ -1456,6 +1519,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	uint clr_max_ufloat_4[4] = { flt_max_u, flt_max_u, flt_max_u, flt_max_u };
 	float clr_float_zero_4[4] = { 0, 0, 0, 0 };
 	float clr_float_fltmax_4[4] = { FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX };
+
+#ifdef DX10_0
+#else 
 	//float clr_float_minus_4[4] = { -1.f, -1.f, -1.f, -1.f };
 	dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], clr_unit4); 
 	if (use_spinlock_pixsynch)
@@ -1467,6 +1533,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	//	dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_deep_k_buffer_rov.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 	if(mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB)
 		dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV], clr_unit4); 
+#endif
 
 	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
 	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV], clr_float_fltmax_4);
@@ -1513,15 +1580,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 #define NUM_UAVs_1ST 4
 #define NUM_UAVs_2ND 5
-	auto RenderStage1 = [&dx11CommonParams, &dx11DeviceImmContext, &_fncontainer, &dx11LI_P, &dx11LI_PN, &dx11LI_PT, &dx11LI_PNT, &dx11LI_PTTT, &dx11VShader_P,
-		&dx11VShader_PN, &dx11VShader_PT, &dx11VShader_PNT, &dx11VShader_PTTT, &dx11DSV, 
-		&gres_fb_counter, &gres_fb_spinlock, &gres_fb_ubk_buffer, &gres_fb_ref_pidx, &gres_picking_buffer, &gres_fb_k_buffer, &gres_fb_rgba, &gres_fb_depthcs, &gres_fb_moment_rgba,
-		&cbuf_cam_state, &cbuf_env_state, &cbuf_clip, &cbuf_pobj, &cbuf_vobj, &cbuf_reffect, &cbuf_tmap, &cbuf_hsmask,
-		&num_grid_x, &num_grid_y, &matWS2PS, &matWS2SS, &matSS2WS,
-		&light_src, &default_phong_lighting_coeff, &default_point_thickness, &default_surfel_size, &default_line_thickness, &default_color_cmmobj, &use_spinlock_pixsynch, &use_blending_option_MomentOIT,
-		&count_call_render, &progress,
-		&clr_float_zero_4, &clr_float_fltmax_4, &dx11DSVNULL, &dx11RTVsNULL, &dx11UAVs_NULL, &dx11SRVs_NULL
-		](
+	auto RenderStage1 = [&](
 		vector<VmActor*>& actor_list,
 		const MFR_MODE mode_OIT, const RENDER_GEOPASS render_pass, const bool is_frag_counter_buffer,
 		const bool is_ghost_mode, const bool is_picking_routine, const bool apply_fragmerge,
@@ -1714,6 +1773,30 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					dx11VS_Target = dx11VShader_PN;
 				}
 
+#ifdef DX10_0
+				if (is_annotation_obj && dx11InputLayer_Target == dx11LI_PNT)
+					switch (mode_OIT)
+					{
+					case MFR_MODE::DYNAMIC_FB: dx11PS_Target = GETPS(SR_BASIC_TEXTMAPPING_ps_4_0); break;
+					default: assert(0);
+					}
+				else if (has_texture_img && dx11InputLayer_Target == dx11LI_PNT)
+					switch (mode_OIT)
+					{
+					case MFR_MODE::DYNAMIC_FB: dx11PS_Target = GETPS(SR_BASIC_TEXTUREIMGMAP_ps_4_0); break;
+					default: assert(0);
+					}
+				else if (vobj && tobj_maptable) {
+					assert(mode_OIT == MFR_MODE::DYNAMIC_FB);
+					dx11PS_Target = GETPS(SR_BASIC_VOLUMEMAP_ps_4_0);
+				}
+				else
+					switch (mode_OIT)
+					{
+					case MFR_MODE::DYNAMIC_FB: dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_4_0); break;
+					default: assert(0);
+					}
+#else
 				if (is_annotation_obj && dx11InputLayer_Target == dx11LI_PNT)
 					switch (mode_OIT)
 					{
@@ -1775,6 +1858,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ROV_ps_5_0);
 						break;
 					}
+#endif
 			}
 			else if (prim_data->GetVerticeDefinition("TEXCOORD0"))
 			{
@@ -1786,6 +1870,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					dx11InputLayer_Target = dx11LI_PTTT;
 					dx11VS_Target = dx11VShader_PTTT;
 
+#ifdef DX10_0
+					dx11PS_Target = GETPS(SR_BASIC_MULTITEXTMAPPING_ps_4_0); 
+#else
 					switch (mode_OIT)
 					{
 					case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_ABUFFER_MULTITEXTMAPPING_ps_5_0); break;
@@ -1804,14 +1891,23 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_MULTITEXTMAPPING_ROV_ps_5_0);
 						break;
 					}
+#endif
 				}
-				else
+				else // prim_data->GetVerticeDefinition("TEXCOORD2") is NULL
 				{
 					// if (render_obj_info.use_vertex_color)
 					// PT
 					dx11InputLayer_Target = dx11LI_PT;
 					dx11VS_Target = dx11VShader_PT;
 
+#ifdef DX10_0
+					if (is_annotation_obj)
+						dx11PS_Target = GETPS(SR_BASIC_TEXTMAPPING_ps_4_0);
+					else if ((cbPolygonObj.pobj_flag & (0x1 << 19)) && prim_data->ptype == PrimitiveTypeLINE)
+						dx11PS_Target = GETPS(SR_BASIC_DASHEDLINE_ps_4_0);
+					else
+						dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_4_0);
+#else
 					if (is_annotation_obj)
 						switch (mode_OIT)
 						{
@@ -1869,6 +1965,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ROV_ps_5_0);
 							break;
 						}
+#endif
 				}
 			}
 			else
@@ -1876,6 +1973,10 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				// P
 				dx11InputLayer_Target = dx11LI_P;
 				dx11VS_Target = dx11VShader_P;
+
+#ifdef DX10_0
+				dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_4_0);
+#else
 				switch (mode_OIT)
 				{
 				case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
@@ -1894,6 +1995,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ROV_ps_5_0);
 					break;
 				}
+#endif
 			}
 
 			if (render_pass == RENDER_GEOPASS::PASS_SINGLELAYERS || render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES)
@@ -1918,6 +2020,11 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_GEN_ps_5_0) : GETPS(SR_MOMENT_GEN_ROV_ps_5_0);
 				}
 			}
+
+			if (is_picking_routine) {
+				dx11PS_Target = NULL;
+			}
+
 
 			switch (prim_data->ptype)
 			{

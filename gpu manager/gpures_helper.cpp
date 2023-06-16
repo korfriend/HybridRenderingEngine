@@ -90,6 +90,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 #endif
 	g_pCGpuManager->GetDeviceInformation(&g_pvmCommonParams->dx11_adapter, "DEVICE_ADAPTER_DESC");
 	g_pCGpuManager->GetDeviceInformation(&g_pvmCommonParams->dx11_featureLevel, "FEATURE_LEVEL");
+
 	//return __SUPPORTED_GPU;
 
 	if (g_pvmCommonParams->dx11Device == NULL || g_pvmCommonParams->dx11DeviceImmContext == NULL)
@@ -329,11 +330,12 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		};
 
 		HMODULE hModule = GetModuleHandleA(__DLLNAME);
-		auto register_vertex_shader = [&](const LPCWSTR pSrcResource, const string& name_shader, const string& name_layer, D3D11_INPUT_ELEMENT_DESC in_layout_desc[], uint num_elements)
+		auto register_vertex_shader = [&](const LPCWSTR pSrcResource, const string& name_shader, const string& profile, const string& name_layer, D3D11_INPUT_ELEMENT_DESC in_layout_desc[], uint num_elements)
 		{
 			ID3D11InputLayout* in_layout = NULL;
 			ID3D11VertexShader* vshader = NULL;
-			if (PresetCompiledShader(g_pvmCommonParams->dx11Device, hModule, pSrcResource, "vs_5_0", (ID3D11DeviceChild**)&vshader
+
+			if (PresetCompiledShader(g_pvmCommonParams->dx11Device, hModule, pSrcResource, profile.c_str(), (ID3D11DeviceChild**)&vshader
 				, in_layout_desc, num_elements, &in_layout) != S_OK)
 			{
 				VMSAFE_RELEASE(in_layout);
@@ -366,11 +368,11 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 
 #define VRETURN(v, ERR) if(v != S_OK) { vmlog::LogErr(#ERR); goto ERROR_PRESETTING; }
 
-		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11001), "SR_OIT_P_vs_5_0", "P", lotypeInputPos, 1), SR_OIT_P_vs_5_0);
-		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11002), "SR_OIT_PN_vs_5_0", "PN", lotypeInputPosNor, 2), SR_OIT_PN_vs_5_0);
-		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11003), "SR_OIT_PT_vs_5_0", "PT", lotypeInputPosTex, 2), SR_OIT_PT_vs_5_0);
-		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11004), "SR_OIT_PNT_vs_5_0", "PNT", lotypeInputPosNorTex, 3), SR_OIT_PNT_vs_5_0);
-		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11005), "SR_OIT_PTTT_vs_5_0", "PTTT", lotypeInputPosTTTex, 4), SR_OIT_PTTT_vs_5_0);
+		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11001), "SR_OIT_P_vs_5_0", "vs_5_0", "P", lotypeInputPos, 1), SR_OIT_P_vs_5_0);
+		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11002), "SR_OIT_PN_vs_5_0", "vs_5_0", "PN", lotypeInputPosNor, 2), SR_OIT_PN_vs_5_0);
+		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11003), "SR_OIT_PT_vs_5_0", "vs_5_0", "PT", lotypeInputPosTex, 2), SR_OIT_PT_vs_5_0);
+		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11004), "SR_OIT_PNT_vs_5_0", "vs_5_0", "PNT", lotypeInputPosNorTex, 3), SR_OIT_PNT_vs_5_0);
+		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11005), "SR_OIT_PTTT_vs_5_0", "vs_5_0", "PTTT", lotypeInputPosTTTex, 4), SR_OIT_PTTT_vs_5_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11010), "SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0", "ps_5_0"), SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11011), "SR_OIT_FILL_SKBTZ_DASHEDLINE_ps_5_0", "ps_5_0"), SR_OIT_FILL_SKBTZ_DASHEDLINE_ps_5_0);
@@ -444,6 +446,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11025), "SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0", "ps_5_0"), SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11028), "SR_OIT_ABUFFER_VOLUMEMAP_ps_5_0", "ps_5_0"), SR_OIT_ABUFFER_VOLUMEMAP_ps_5_0);
 
+		// note : picking ps is same but the input is different according to the rendering mode
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11321), "PICKING_ABUFFER_PHONGBLINN_ps_5_0", "ps_5_0"), PICKING_ABUFFER_PHONGBLINN_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11322), "PICKING_ABUFFER_DASHEDLINE_ps_5_0", "ps_5_0"), PICKING_ABUFFER_DASHEDLINE_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11323), "PICKING_ABUFFER_MULTITEXTMAPPING_ps_5_0", "ps_5_0"), PICKING_ABUFFER_MULTITEXTMAPPING_ps_5_0);
@@ -560,7 +563,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 	if (hr != S_OK)
 		return __INVALID_GPU;
 
-	if (g_pvmCommonParams->dx11_featureLevel == 0x9300 || g_pvmCommonParams->dx11_featureLevel == 0xA000)
+	if (g_pvmCommonParams->dx11_featureLevel <= 0x9300)
 		return __LOW_SPEC_NOT_SUPPORT_CS_GPU;
 
 	return __SUPPORTED_GPU;
@@ -994,12 +997,12 @@ template <typename GPUTYPE, typename CPUTYPE> bool __FillVolumeValues(CPUTYPE* g
 }
 
 
-bool grd_helper::UpdateVolumeModel(GpuRes& gres, VmVObjectVolume* vobj, const bool use_nearest_max, LocalProgress* progress)
+bool grd_helper::UpdateVolumeModel(GpuRes& gres, VmVObjectVolume* vobj, const bool use_nearest_max, bool heuristicResize, LocalProgress* progress)
 {
 	bool is_nearest_max_vol = vobj->GetObjParam("_bool_UseNearestMax", use_nearest_max);
 
 	gres.vm_src_id = vobj->GetObjectID();
-	gres.res_name = string("VOLUME_MODEL_") + (is_nearest_max_vol ? string("NEAREST_MAX") : string("DEFAULT"));
+	gres.res_name = string("VOLUME_MODEL_") + (heuristicResize? "RESIZED_" : "ORIGINAL_") + (is_nearest_max_vol ? string("NEAREST_MAX") : string("DEFAULT"));
 
 	if (g_pCGpuManager->UpdateGpuResource(gres)) {
 		unsigned long long _gpu_gen_timg = gres.res_values.GetParam("LAST_UPDATE_TIME", (ullong)0);
@@ -1024,8 +1027,12 @@ bool grd_helper::UpdateVolumeModel(GpuRes& gres, VmVObjectVolume* vobj, const bo
 		return false;
 	}
 
-	const double hueristic_size = 200.0;
-	const int hueristic_res = 256;
+	double hueristic_size = 256.0;
+	int hueristic_res = 256;
+	if (!heuristicResize) {
+		hueristic_size = 100000.0;
+		hueristic_res = 100000;
+	}
 
 	double half_criteria_KB = vobj->GetObjParam("_float_ForcedHalfCriterionKB", (double)(512.0 * 1024.0));
 	half_criteria_KB = min(max(16.0 * 1024.0, half_criteria_KB), hueristic_size * 1024.0);

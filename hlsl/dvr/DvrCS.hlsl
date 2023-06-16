@@ -815,7 +815,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	float3 pos_mask_sample_ts = pos_lucky_sample_ts;
 #endif
 
-#else // ~(RAYMODE==1 || RAYMODE==2)
+#else // ~(RAYMODE==1 || RAYMODE==2) ... RAYMODE==3
 	float depth_sample = depth_begin + g_cbVobj.sample_dist * (float)(num_ray_samples);
 	int num_valid_samples = 0;
 	float4 vis_otf_sum = (float4)0;
@@ -866,7 +866,8 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #else	// OTF_MASK != 1
 		float4 vis_otf = LoadOtfBuf(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, 1);// g_cbVobj.opacity_correction);
 #endif
-		if (vis_otf.a > 0)
+		// otf sum is necessary for multi-otf case (tooth segmentation-out case)
+		//if (vis_otf.a > 0) // results in discontinuous visibility caused by aliasing problem
 		{
 			vis_otf_sum += vis_otf;
 			num_valid_samples++;
