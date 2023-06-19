@@ -167,7 +167,7 @@
 
 namespace vmlog {
 	__vmstatic void InitLog(const std::string& coreName, const std::string& logFileName);
-	__vmstatic void SetLogLevel(const bool displayLog);
+	__vmstatic void SetLogLevel(const int logLevel);
 	__vmstatic void LogInfo(std::string str);
 	__vmstatic void LogWarn(std::string str);
 	__vmstatic void LogErr(std::string str);
@@ -522,7 +522,7 @@ namespace vmobjects
 		/// 정의된 vec_axisx_ws와 vec_axisy_ws로부터 mat_os2ws 계산하여 등록
 		void ComputeInitalMatrix() {
 			vmdouble3 z_vec_rhs;
-			vmmath::CrossDotVector(&z_vec_rhs, &vec_axisy_os, &vec_axisx_os);	// this is for -z direction
+			vmmath::CrossDotVector(&z_vec_rhs, &vec_axisy_os, &vec_axisx_os); // note the z-dir in lookat
 			vmmat44 matT;
 			vmmath::MatrixWS2CS(&matT, &vmdouble3(0, 0, 0), &vec_axisy_os, &z_vec_rhs);
 			vmmath::MatrixInverse(&mat_rs2os, &matT);
