@@ -876,13 +876,17 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	float4 raydir = float4(ray_dir_unit_os, ray_tmax);
 	//DEBUGintersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuDebugTris, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
 	intersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
+	if (hitTriIdx < 0)
+		return;
 
-	//float4 rayorig2 = float4(ray_orig_os, ray_tmin2);
-	//float4 raydir2 = float4(-ray_dir_unit_os, ray_tmax2);
-	//float3 trinormal2 = float3(0, 0, 0);
-	//float hitDistance2 = 1e20;
-	//int hitTriIdx2 = -1;
-	//intersectBVHandTriangles(rayorig2, raydir2, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx2, hitDistance2, debugbingo, trinormal2, false);
+	float4 rayorig2 = float4(ray_orig_os, ray_tmin2);
+	float4 raydir2 = float4(-ray_dir_unit_os, ray_tmax2);
+	float3 trinormal2 = float3(0, 0, 0);
+	float hitDistance2 = 1e20;
+	int hitTriIdx2 = -1;
+	intersectBVHandTriangles(rayorig2, raydir2, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx2, hitDistance2, debugbingo, trinormal2, false);
+	if (hitTriIdx2 < 0)
+		return;
 
 	//if (length(trinormal) > 1.00001) {
 	//	fragment_vis[ss_xy] = float4(1, 0, 0, 1);
@@ -893,9 +897,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 
 	//trinormal = normalize(trinormal);
 	//ray_dir_unit_os = normalize(ray_dir_unit_os);
-	bool isInside = dot(trinormal, ray_dir_unit_os) > 0;
-	if (hitTriIdx < 0)// || hitTriIdx2 < 0)
-		return;
+	bool isInside = dot(trinormal, ray_dir_unit_os) > 0 || dot(trinormal2, -ray_dir_unit_os) > 0;
 	
 	if (!isInside && hitDistance > planeThickness)
 		return;
