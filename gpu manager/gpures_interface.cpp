@@ -103,9 +103,11 @@ bool __InitializeDevice()
 	{
 		D3D_FEATURE_LEVEL featureLevels[] =
 		{
+#ifdef USE_DX11_3
 			D3D_FEATURE_LEVEL_12_1,
 			D3D_FEATURE_LEVEL_12_0,
 			D3D_FEATURE_LEVEL_11_1,
+#endif
 			D3D_FEATURE_LEVEL_11_0,
 			D3D_FEATURE_LEVEL_10_1,
 			D3D_FEATURE_LEVEL_10_0,
@@ -115,6 +117,14 @@ bool __InitializeDevice()
 
 		D3D11CreateDevice(NULL, driverTypes, NULL, createDeviceFlags, featureLevels, ARRAYSIZE(featureLevels), D3D11_SDK_VERSION, 
 			&g_pdx11Device, &g_eFeatureLevel, &g_pdx11DeviceImmContext);
+
+		// for some unstable graphics HW e.g., intel HD, forced to set feature level by trial-and-error strategy
+#ifdef DX11_0
+		g_eFeatureLevel = D3D_FEATURE_LEVEL_11_0;
+#endif
+#ifdef DX10_0
+		g_eFeatureLevel = D3D_FEATURE_LEVEL_10_0;
+#endif
 
 		std::stringstream stream;
 		stream << std::hex << g_eFeatureLevel;
@@ -127,7 +137,7 @@ bool __InitializeDevice()
 
 		if (g_eFeatureLevel < 0xb100) {
 			if (g_eFeatureLevel < 0xb000) {
-				vmlog::LogErr(string("(Not supported GPU) Direct3D Feature Level 10.x : ") + hex_FeatureLevel);
+				vmlog::LogErr(string("(Low Capacity GPU) Direct3D Feature Level 10.x : ") + hex_FeatureLevel);
 				return false;
 			}
 			else {

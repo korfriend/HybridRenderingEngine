@@ -35,7 +35,7 @@ namespace moment_lib
 	{
 		return max(min(1.f, v), 0);
 	}
-	
+
 	/*! Given coefficients of a quadratic polynomial A*x^2+B*x+C, this function
 	outputs its two real roots.*/
 	vmfloat2 solveQuadratic(vmfloat3 coeffs)
@@ -76,11 +76,11 @@ namespace moment_lib
 			mad(-Coefficient.y, Coefficient.z, Coefficient.x),
 			dot(vmfloat2(Coefficient.z, -Coefficient.y), vmfloat2(Coefficient.x, Coefficient.y))
 		);
-		float Discriminant = dot(vmfloat2(4.0f*Delta.x, -Delta.y), vmfloat2(Delta.z, Delta.y));
+		float Discriminant = dot(vmfloat2(4.0f * Delta.x, -Delta.y), vmfloat2(Delta.z, Delta.y));
 		// Compute coefficients of the depressed cubic 
 		// (third is zero, fourth is one)
 		vmfloat2 Depressed = vmfloat2(
-			mad(-2.0f*Coefficient.z, Delta.x, Delta.y),
+			mad(-2.0f * Coefficient.z, Delta.x, Delta.y),
 			Delta.x
 		);
 		// Take the cubic root of a normalized complex number
@@ -92,10 +92,10 @@ namespace moment_lib
 		// revert the depression transform
 		vmfloat3 Root = vmfloat3(
 			CubicRoot.x,
-			dot(vmfloat2(-0.5f, -0.5f*sqrt(3.0f)), CubicRoot),
-			dot(vmfloat2(-0.5f, 0.5f*sqrt(3.0f)), CubicRoot)
+			dot(vmfloat2(-0.5f, -0.5f * sqrt(3.0f)), CubicRoot),
+			dot(vmfloat2(-0.5f, 0.5f * sqrt(3.0f)), CubicRoot)
 		);
-		Root = mad(2.0f*sqrt(-Depressed.y), Root, -Coefficient.z);
+		Root = mad(2.0f * sqrt(-Depressed.y), Root, -Coefficient.z);
 		return Root;
 	}
 
@@ -137,9 +137,9 @@ namespace moment_lib
 		float E = coeffs[0] / coeffs[4];
 
 		// Compute coefficients of the cubic resolvent
-		float P = -2.0f*C;
-		float Q = C * C + B * D - 4.0f*E;
-		float R = D * D + B * B*E - B * C*D;
+		float P = -2.0f * C;
+		float Q = C * C + B * D - 4.0f * E;
+		float R = D * D + B * B * E - B * C * D;
 
 		// Obtain the smallest cubic root
 		float y = solveCubicBlinnSmallest(vmfloat4(R, Q, P, 1.0));
@@ -162,7 +162,7 @@ namespace moment_lib
 			G = (B + tmp) * 0.5f;
 			g = (B - tmp) * 0.5f;
 
-			tmp = (B*Z - 2.0f*D) / (2.0f*tmp);
+			tmp = (B * Z - 2.0f * D) / (2.0f * tmp);
 			H = mad(Z, 0.5f, tmp);
 			h = mad(Z, 0.5f, -tmp);
 		}
@@ -171,7 +171,7 @@ namespace moment_lib
 			H = (Z + tmp) * 0.5f;
 			h = (Z - tmp) * 0.5f;
 
-			tmp = (B*Z - 2.0f*D) / (2.0f*tmp);
+			tmp = (B * Z - 2.0f * D) / (2.0f * tmp);
 			G = mad(B, 0.5f, tmp);
 			g = mad(B, 0.5f, -tmp);
 		}
@@ -420,7 +420,7 @@ namespace moment_lib
 		float InvC2 = 1.0f / c[2];
 		float p = c[1] * InvC2;
 		float q = c[0] * InvC2;
-		float D = (p*p*0.25f) - q;
+		float D = (p * p * 0.25f) - q;
 		float r = sqrt(D);
 		z[1] = -p * 0.5f - r;
 		z[2] = -p * 0.5f + r;
@@ -445,7 +445,7 @@ namespace moment_lib
 	}
 
 #define asfloat *(float*)&
-	
+
 	void resolveMoments(float& transmittance_at_depth, float& total_transmittance, const float depth, const vmint2 sv_pos,
 		const int rt_width, const int buf_stride, const uint* moment_container_buf,
 		const int num_moment, const bool is_trigonometric, const MomentOIT& mo)
@@ -474,7 +474,7 @@ namespace moment_lib
 			b_1234.y = asfloat(moment_container_buf[addr_base + 2]);
 			b_1234.z = asfloat(moment_container_buf[addr_base + 3]);
 			b_1234.w = asfloat(moment_container_buf[addr_base + 4]);
-				
+
 			vmfloat2 b_even = vmfloat2(b_1234.y, b_1234.w);
 			vmfloat2 b_odd = vmfloat2(b_1234.x, b_1234.z);
 
@@ -484,7 +484,7 @@ namespace moment_lib
 			const vmfloat4 bias_vector = vmfloat4(0, 0.375, 0, 0.375);
 			transmittance_at_depth = computeTransmittanceAtDepthFrom4PowerMoments(b_0, b_even, b_odd, depth, moment_bias, overestimation, bias_vector);
 		}
-		else if(num_moment == 6)
+		else if (num_moment == 6)
 		{
 			//int4 idx2 = idx0;
 			//idx2[2] = 2;
@@ -499,7 +499,7 @@ namespace moment_lib
 			b_34.y = asfloat(moment_container_buf[addr_base + 4]);
 			b_56.x = asfloat(moment_container_buf[addr_base + 5]);
 			b_56.y = asfloat(moment_container_buf[addr_base + 6]);
-		
+
 			vmfloat3 b_even = vmfloat3(b_12.y, b_34.y, b_56.y);
 			vmfloat3 b_odd = vmfloat3(b_12.x, b_34.x, b_56.x);
 
@@ -680,7 +680,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		lens_effect.dof_ray_num_samples = lens->dof_ray_num_samples;
 	}
 #pragma endregion
-	
+
 #pragma region // Shader Setting
 	// Shader Re-Compile Setting //
 	if (reload_hlsl_objs)
@@ -729,7 +729,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #else
 #define VS_NUM 5
 #define GS_NUM 3
-#define PS_NUM 70
+#define PS_NUM 76
 #define CS_NUM 27
 #endif
 
@@ -882,6 +882,13 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			  ,"SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ROV_ps_5_0"
 
 			  ,"SR_SINGLE_LAYER_ps_5_0"
+
+			,"SR_BASIC_PHONGBLINN_ps_5_0"
+			,"SR_BASIC_DASHEDLINE_ps_5_0"
+			,"SR_BASIC_MULTITEXTMAPPING_ps_5_0"
+			,"SR_BASIC_TEXTMAPPING_ps_5_0"
+			,"SR_BASIC_TEXTUREIMGMAP_ps_5_0"
+			,"SR_BASIC_VOLUMEMAP_ps_5_0"
 			//,"SR_OIT_KDEPTH_NPRGHOST_ps_5_0"
 
 			,"SR_OIT_ABUFFER_FRAGCOUNTER_ps_5_0"
@@ -1103,7 +1110,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #else
 	grd_helper::UpdateFrameBuffer(gres_fb_counter, iobj, "RW_COUNTER", RTYPE_TEXTURE2D,
 		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
-	if(use_spinlock_pixsynch)// || mode_OIT == MFR_MODE::MOMENT) // when MFR_MODE::DXAB mode, this buffer used for another purpose?!
+	if (use_spinlock_pixsynch)// || mode_OIT == MFR_MODE::MOMENT) // when MFR_MODE::DXAB mode, this buffer used for another purpose?!
 		grd_helper::UpdateFrameBuffer(gres_fb_spinlock, iobj, "RW_SPINLOCK", RTYPE_TEXTURE2D,
 			D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
 	if (mode_OIT == MFR_MODE::MOMENT)
@@ -1151,7 +1158,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	// ...
 
 
-	if(mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB)
+	if (mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB)
 		grd_helper::UpdateFrameBuffer(gres_fb_ref_pidx, iobj, "BUFFER_RW_REF_PIDX_BUF", RTYPE_BUFFER, D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
 
 	if (check_pixel_transmittance)
@@ -1407,7 +1414,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			continue;
 
 		if (is_picking_routine) {
-			if(prim_data->ptype == vmenums::PrimitiveTypeLINE || grd_helper::CollisionCheck(actor->matWS2OS, prim_data->aabb_os, picking_ray_origin, picking_ray_dir))
+			if (prim_data->ptype == vmenums::PrimitiveTypeLINE || grd_helper::CollisionCheck(actor->matWS2OS, prim_data->aabb_os, picking_ray_origin, picking_ray_dir))
 				general_oit_routine_objs.push_back(actor);
 			//std::cout << "###### obb ray intersection : " << actor->actorId << std::endl;
 			// NOTE THAT is_picking_routine allows only general_oit_routine_objs!!
@@ -1455,7 +1462,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	if (fb_size_cur.x > 200 && fb_size_cur.y > 200)
 	{
 		gpu_profile = _fncontainer->fnParams.GetParam("_bool_GpuProfile", false);
-		if(gpu_profile)
+		if (gpu_profile)
 		{
 			cout << "  ** general_oit_routine_objs    : " << general_oit_routine_objs.size() << endl;
 			cout << "  ** special_effect_routine_objs : " << single_layer_routine_objs.size() << endl;
@@ -1491,7 +1498,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				stamp_idx = gpu_profilecount;
 			}
 			else {
-				assert(it->second.y == -1 && is_closed == true);
+				//assert(it->second.y == -1 && is_closed == true);
 				it->second.y = it->second.x + 1;
 				stamp_idx = it->second.y;
 			}
@@ -1523,7 +1530,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #ifdef DX10_0
 #else 
 	//float clr_float_minus_4[4] = { -1.f, -1.f, -1.f, -1.f };
-	dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], clr_unit4); 
+	dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 	if (use_spinlock_pixsynch)
 		dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_spinlock.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 	if (mode_OIT == MFR_MODE::MOMENT)
@@ -1531,8 +1538,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	//dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_deep_k_buffer.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 	//if(is_rov_mode)
 	//	dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_deep_k_buffer_rov.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
-	if(mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB)
-		dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV], clr_unit4); 
+	if (mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB)
+		dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 #endif
 
 	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
@@ -1562,7 +1569,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	dx11DeviceImmContext->PSSetSamplers(3, 1, &sampler_PC);
 	dx11DeviceImmContext->PSSetSamplers(4, 1, &sampler_LW);
 	dx11DeviceImmContext->PSSetSamplers(5, 1, &sampler_PW);
-	
+
 	dx11DeviceImmContext->CSSetSamplers(0, 1, &sampler_LZ);
 	dx11DeviceImmContext->CSSetSamplers(1, 1, &sampler_PZ);
 	dx11DeviceImmContext->CSSetSamplers(2, 1, &sampler_LC);
@@ -1608,7 +1615,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			bool cull_off = actor->GetParam("_bool_IsForcedCullOff", false);
 			bool is_surfel = actor->GetParam("_bool_PointToSurfel", true);
 
-			bool force_to_pointsetrender = actor->GetParam("_bool_ForceToPointsetRender", false); 
+			bool force_to_pointsetrender = actor->GetParam("_bool_ForceToPointsetRender", false);
 			bool is_wireframe = actor->GetParam("_bool_IsWireframe", false);
 #pragma endregion
 
@@ -1635,7 +1642,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 				dx11DeviceImmContext->PSSetConstantBuffers(4, 1, &cbuf_vobj);
 			}
-			if (tobj_maptable){
+			if (tobj_maptable) {
 				GpuRes gres_tmap_maptble;
 				grd_helper::UpdateTMapBuffer(gres_tmap_maptble, tobj_maptable);
 				dx11DeviceImmContext->PSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_tmap_maptble.alloc_res_ptrs[DTYPE_SRV]);
@@ -1758,6 +1765,13 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			uint offset = 0;
 			D3D_PRIMITIVE_TOPOLOGY pobj_topology_type;
 
+#ifdef DX10_0
+			// ASSERT 
+			assert(render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES || render_pass == RENDER_GEOPASS::PASS_SINGLELAYERS);
+			assert(mode_OIT == MFR_MODE::DYNAMIC_FB);
+#endif
+
+			
 			if (prim_data->GetVerticeDefinition("NORMAL"))
 			{
 				if (prim_data->GetVerticeDefinition("TEXCOORD0"))
@@ -1773,142 +1787,15 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					dx11VS_Target = dx11VShader_PN;
 				}
 
+				if (is_annotation_obj && dx11InputLayer_Target == dx11LI_PNT) {
+					if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
 #ifdef DX10_0
-				if (is_annotation_obj && dx11InputLayer_Target == dx11LI_PNT)
-					switch (mode_OIT)
-					{
-					case MFR_MODE::DYNAMIC_FB: dx11PS_Target = GETPS(SR_BASIC_TEXTMAPPING_ps_4_0); break;
-					default: assert(0);
-					}
-				else if (has_texture_img && dx11InputLayer_Target == dx11LI_PNT)
-					switch (mode_OIT)
-					{
-					case MFR_MODE::DYNAMIC_FB: dx11PS_Target = GETPS(SR_BASIC_TEXTUREIMGMAP_ps_4_0); break;
-					default: assert(0);
-					}
-				else if (vobj && tobj_maptable) {
-					assert(mode_OIT == MFR_MODE::DYNAMIC_FB);
-					dx11PS_Target = GETPS(SR_BASIC_VOLUMEMAP_ps_4_0);
-				}
-				else
-					switch (mode_OIT)
-					{
-					case MFR_MODE::DYNAMIC_FB: dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_4_0); break;
-					default: assert(0);
-					}
-#else
-				if (is_annotation_obj && dx11InputLayer_Target == dx11LI_PNT)
-					switch (mode_OIT)
-					{
-					case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0); break;
-					case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_TEXTMAPPING_ps_5_0) : GETPS(SR_MOMENT_OIT_TEXTMAPPING_ROV_ps_5_0); break;
-					case MFR_MODE::DYNAMIC_KB:
-						if (apply_fragmerge)
-							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ROV_ps_5_0);
-						else
-							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ROV_ps_5_0);
-						break;
-					case MFR_MODE::STATIC_KB:
-					default:
-						if (apply_fragmerge)
-							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ROV_ps_5_0);
-						else
-							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_TEXTMAPPING_ROV_ps_5_0);
-						break;
-					}
-				else if (has_texture_img && dx11InputLayer_Target == dx11LI_PNT)
-					switch (mode_OIT)
-					{
-					case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0); break;
-					case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_MOMENT_OIT_TEXTUREIMGMAP_ROV_ps_5_0); break;
-					case MFR_MODE::DYNAMIC_KB:
-						if (apply_fragmerge)
-							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_TEXTUREIMGMAP_ROV_ps_5_0);
-						else
-							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ROV_ps_5_0);
-						break;
-					case MFR_MODE::STATIC_KB:
-					default:
-						if (apply_fragmerge)
-							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ROV_ps_5_0);
-						else
-							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_TEXTUREIMGMAP_ROV_ps_5_0);
-						break;
-					}
-				else if (vobj && tobj_maptable) {
-					assert(mode_OIT == MFR_MODE::DYNAMIC_FB);
-					dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_ABUFFER_VOLUMEMAP_ps_5_0);
-				}
-				else
-					switch (mode_OIT)
-					{
-					case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
-					case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0) : GETPS(SR_MOMENT_OIT_PHONGBLINN_ROV_ps_5_0); break;
-					case MFR_MODE::DYNAMIC_KB:
-						if (apply_fragmerge)
-							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ROV_ps_5_0);
-						else
-							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ROV_ps_5_0);
-						break;
-					case MFR_MODE::STATIC_KB:
-					default:
-						if (apply_fragmerge)
-							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ROV_ps_5_0);
-						else
-							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ROV_ps_5_0);
-						break;
-					}
-#endif
-			}
-			else if (prim_data->GetVerticeDefinition("TEXCOORD0"))
-			{
-				if (prim_data->GetVerticeDefinition("TEXCOORD2"))
-				{
-					assert(render_pass != RENDER_GEOPASS::PASS_SINGLELAYERS);
-					// only text case //
-					// PTTT
-					dx11InputLayer_Target = dx11LI_PTTT;
-					dx11VS_Target = dx11VShader_PTTT;
-
-#ifdef DX10_0
-					dx11PS_Target = GETPS(SR_BASIC_MULTITEXTMAPPING_ps_4_0); 
-#else
-					switch (mode_OIT)
-					{
-					case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_ABUFFER_MULTITEXTMAPPING_ps_5_0); break;
-					case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_MOMENT_OIT_MULTITEXTMAPPING_ROV_ps_5_0); break;
-					case MFR_MODE::DYNAMIC_KB:
-						if (apply_fragmerge)
-							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_MULTITEXTMAPPING_ROV_ps_5_0);
-						else
-							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ROV_ps_5_0);
-						break;
-					case MFR_MODE::STATIC_KB:
-					default:
-						if (apply_fragmerge)
-							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ROV_ps_5_0);
-						else
-							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_MULTITEXTMAPPING_ROV_ps_5_0);
-						break;
-					}
-#endif
-				}
-				else // prim_data->GetVerticeDefinition("TEXCOORD2") is NULL
-				{
-					// if (render_obj_info.use_vertex_color)
-					// PT
-					dx11InputLayer_Target = dx11LI_PT;
-					dx11VS_Target = dx11VShader_PT;
-
-#ifdef DX10_0
-					if (is_annotation_obj)
 						dx11PS_Target = GETPS(SR_BASIC_TEXTMAPPING_ps_4_0);
-					else if ((cbPolygonObj.pobj_flag & (0x1 << 19)) && prim_data->ptype == PrimitiveTypeLINE)
-						dx11PS_Target = GETPS(SR_BASIC_DASHEDLINE_ps_4_0);
-					else
-						dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_4_0);
 #else
-					if (is_annotation_obj)
+						dx11PS_Target = GETPS(SR_BASIC_TEXTMAPPING_ps_5_0);
+#endif
+					}
+					else {
 						switch (mode_OIT)
 						{
 						case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0); break;
@@ -1927,26 +1814,59 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_TEXTMAPPING_ROV_ps_5_0);
 							break;
 						}
-					else if ((cbPolygonObj.pobj_flag & (0x1 << 19)) && prim_data->ptype == PrimitiveTypeLINE)
+					}
+				}
+				else if (has_texture_img && dx11InputLayer_Target == dx11LI_PNT) {
+					if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
+#ifdef DX10_0
+						dx11PS_Target = GETPS(SR_BASIC_VOLUMEMAP_ps_4_0);
+#else
+						dx11PS_Target = GETPS(SR_BASIC_VOLUMEMAP_ps_5_0);
+#endif
+					}
+					else {
 						switch (mode_OIT)
 						{
-						case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_ABUFFER_DASHEDLINE_ps_5_0); break;
-						case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_DASHEDLINE_ps_5_0) : GETPS(SR_MOMENT_OIT_DASHEDLINE_ROV_ps_5_0); break;
+						case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0); break;
+						case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_MOMENT_OIT_TEXTUREIMGMAP_ROV_ps_5_0); break;
 						case MFR_MODE::DYNAMIC_KB:
 							if (apply_fragmerge)
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_DASHEDLINE_ROV_ps_5_0);
+								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_TEXTUREIMGMAP_ROV_ps_5_0);
 							else
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_DASHEDLINE_ROV_ps_5_0);
+								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ROV_ps_5_0);
 							break;
 						case MFR_MODE::STATIC_KB:
 						default:
 							if (apply_fragmerge)
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_DASHEDLINE_ROV_ps_5_0);
+								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ROV_ps_5_0);
 							else
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_DASHEDLINE_ROV_ps_5_0);
+								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_TEXTUREIMGMAP_ROV_ps_5_0);
 							break;
 						}
-					else
+					}
+				}
+				else if (vobj && tobj_maptable) {
+					if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
+#ifdef DX10_0
+						dx11PS_Target = GETPS(SR_BASIC_VOLUMEMAP_ps_4_0);
+#else
+						dx11PS_Target = GETPS(SR_BASIC_VOLUMEMAP_ps_5_0);
+#endif
+					}
+					else {
+						assert(mode_OIT == MFR_MODE::DYNAMIC_FB);
+						dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_ABUFFER_VOLUMEMAP_ps_5_0);
+					}
+				}
+				else {
+					if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
+#ifdef DX10_0
+						dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_4_0);
+#else
+						dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_5_0);
+#endif
+					}
+					else {
 						switch (mode_OIT)
 						{
 						case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
@@ -1965,7 +1885,131 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ROV_ps_5_0);
 							break;
 						}
+					}
+				}
+			}
+			else if (prim_data->GetVerticeDefinition("TEXCOORD0"))
+			{
+				if (prim_data->GetVerticeDefinition("TEXCOORD2"))
+				{
+					assert(render_pass != RENDER_GEOPASS::PASS_SINGLELAYERS);
+					// only text case //
+					// PTTT
+					dx11InputLayer_Target = dx11LI_PTTT;
+					dx11VS_Target = dx11VShader_PTTT;
+
+					if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
+#ifdef DX10_0
+						dx11PS_Target = GETPS(SR_BASIC_MULTITEXTMAPPING_ps_4_0);
+#else
+						dx11PS_Target = GETPS(SR_BASIC_MULTITEXTMAPPING_ps_5_0);
 #endif
+					}
+					else {
+						switch (mode_OIT)
+						{
+						case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_ABUFFER_MULTITEXTMAPPING_ps_5_0); break;
+						case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_MOMENT_OIT_MULTITEXTMAPPING_ROV_ps_5_0); break;
+						case MFR_MODE::DYNAMIC_KB:
+							if (apply_fragmerge)
+								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_MULTITEXTMAPPING_ROV_ps_5_0);
+							else
+								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ROV_ps_5_0);
+							break;
+						case MFR_MODE::STATIC_KB:
+						default:
+							if (apply_fragmerge)
+								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ROV_ps_5_0);
+							else
+								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_MULTITEXTMAPPING_ROV_ps_5_0);
+							break;
+						}
+					}
+				}
+				else // prim_data->GetVerticeDefinition("TEXCOORD2") is NULL
+				{
+					// if (render_obj_info.use_vertex_color)
+					// PT
+					dx11InputLayer_Target = dx11LI_PT;
+					dx11VS_Target = dx11VShader_PT;
+
+					if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
+#ifdef DX10_0
+						if (is_annotation_obj)
+							dx11PS_Target = GETPS(SR_BASIC_TEXTMAPPING_ps_4_0);
+						else if ((cbPolygonObj.pobj_flag & (0x1 << 19)) && prim_data->ptype == PrimitiveTypeLINE)
+							dx11PS_Target = GETPS(SR_BASIC_DASHEDLINE_ps_4_0);
+						else
+							dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_4_0);
+#else
+						if (is_annotation_obj)
+							dx11PS_Target = GETPS(SR_BASIC_TEXTMAPPING_ps_5_0);
+						else if ((cbPolygonObj.pobj_flag & (0x1 << 19)) && prim_data->ptype == PrimitiveTypeLINE)
+							dx11PS_Target = GETPS(SR_BASIC_DASHEDLINE_ps_5_0);
+						else
+							dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_5_0);
+#endif
+					}
+					else {
+
+						if (is_annotation_obj)
+							switch (mode_OIT)
+							{
+							case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0); break;
+							case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_TEXTMAPPING_ps_5_0) : GETPS(SR_MOMENT_OIT_TEXTMAPPING_ROV_ps_5_0); break;
+							case MFR_MODE::DYNAMIC_KB:
+								if (apply_fragmerge)
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ROV_ps_5_0);
+								else
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ROV_ps_5_0);
+								break;
+							case MFR_MODE::STATIC_KB:
+							default:
+								if (apply_fragmerge)
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ROV_ps_5_0);
+								else
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_TEXTMAPPING_ROV_ps_5_0);
+								break;
+							}
+						else if ((cbPolygonObj.pobj_flag & (0x1 << 19)) && prim_data->ptype == PrimitiveTypeLINE)
+							switch (mode_OIT)
+							{
+							case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_ABUFFER_DASHEDLINE_ps_5_0); break;
+							case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_DASHEDLINE_ps_5_0) : GETPS(SR_MOMENT_OIT_DASHEDLINE_ROV_ps_5_0); break;
+							case MFR_MODE::DYNAMIC_KB:
+								if (apply_fragmerge)
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_DASHEDLINE_ROV_ps_5_0);
+								else
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_DASHEDLINE_ROV_ps_5_0);
+								break;
+							case MFR_MODE::STATIC_KB:
+							default:
+								if (apply_fragmerge)
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_DASHEDLINE_ROV_ps_5_0);
+								else
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_DASHEDLINE_ROV_ps_5_0);
+								break;
+							}
+						else
+							switch (mode_OIT)
+							{
+							case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
+							case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0) : GETPS(SR_MOMENT_OIT_PHONGBLINN_ROV_ps_5_0); break;
+							case MFR_MODE::DYNAMIC_KB:
+								if (apply_fragmerge)
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ROV_ps_5_0);
+								else
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ROV_ps_5_0);
+								break;
+							case MFR_MODE::STATIC_KB:
+							default:
+								if (apply_fragmerge)
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ROV_ps_5_0);
+								else
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ROV_ps_5_0);
+								break;
+							}
+					}
 				}
 			}
 			else
@@ -1974,34 +2018,48 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				dx11InputLayer_Target = dx11LI_P;
 				dx11VS_Target = dx11VShader_P;
 
+				if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
 #ifdef DX10_0
-				dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_4_0);
+					dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_4_0);
 #else
-				switch (mode_OIT)
-				{
-				case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
-				case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0) : GETPS(SR_MOMENT_OIT_PHONGBLINN_ROV_ps_5_0); break;
-				case MFR_MODE::DYNAMIC_KB:
-					if (apply_fragmerge)
-						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ROV_ps_5_0);
-					else
-						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ROV_ps_5_0);
-					break;
-				case MFR_MODE::STATIC_KB:
-				default:
-					if (apply_fragmerge)
-						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ROV_ps_5_0);
-					else
-						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ROV_ps_5_0);
-					break;
-				}
+					dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_5_0);
 #endif
+				}
+				else {
+					switch (mode_OIT)
+					{
+					case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
+					case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0) : GETPS(SR_MOMENT_OIT_PHONGBLINN_ROV_ps_5_0); break;
+					case MFR_MODE::DYNAMIC_KB:
+						if (apply_fragmerge)
+							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ROV_ps_5_0);
+						else
+							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ROV_ps_5_0);
+						break;
+					case MFR_MODE::STATIC_KB:
+					default:
+						if (apply_fragmerge)
+							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ROV_ps_5_0);
+						else
+							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ROV_ps_5_0);
+						break;
+					}
+				}
 			}
 
-			if (render_pass == RENDER_GEOPASS::PASS_SINGLELAYERS || render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES)
+#ifdef DX10_0
+			// TO DO... 
+			// if (is_picking_routine) dx11PS_Target = NULL; ... process in GS
+#endif
+			
+			if (render_pass == RENDER_GEOPASS::PASS_SINGLELAYERS) {
+#ifdef DX10_0
+				dx11PS_Target = GETPS(SR_SINGLE_LAYER_ps_4_0); // ONLY K-BUFFER
+#else
 				dx11PS_Target = GETPS(SR_SINGLE_LAYER_ps_5_0); // ONLY K-BUFFER
-			else if (render_pass == RENDER_GEOPASS::PASS_OIT)
-			{
+#endif
+			}
+			else if (render_pass == RENDER_GEOPASS::PASS_OIT) {
 				if (is_frag_counter_buffer)
 				{
 					// Create a count of the number of fragments at each pixel location
@@ -2019,12 +2077,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					else
 						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_GEN_ps_5_0) : GETPS(SR_MOMENT_GEN_ROV_ps_5_0);
 				}
-			}
-
-			if (is_picking_routine) {
-				dx11PS_Target = NULL;
-			}
-
+				}
 
 			switch (prim_data->ptype)
 			{
@@ -2034,7 +2087,11 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				else
 					pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_LINELIST;
 				if (cbPolygonObj.pix_thickness > 0)
+#ifdef DX10_0
+					dx11GS_Target = GETGS(GS_ThickLines_gs_4_0);
+#else
 					dx11GS_Target = GETGS(GS_ThickLines_gs_5_0);
+#endif
 				break;
 			case PrimitiveTypeTRIANGLE:
 				if (prim_data->is_stripe)
@@ -2045,7 +2102,12 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			case PrimitiveTypePOINT:
 				pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_POINTLIST;
 				if (cbPolygonObj.pix_thickness > 0)
+#ifdef DX10_0
+					dx11GS_Target = is_surfel ? GETGS(GS_SurfelPoints_gs_4_0) : GETGS(GS_ThickPoints_gs_4_0);
+#else
 					dx11GS_Target = is_surfel ? GETGS(GS_SurfelPoints_gs_5_0) : GETGS(GS_ThickPoints_gs_5_0);
+#endif
+
 				break;
 			default:
 				continue;
@@ -2058,7 +2120,11 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				dx11RState_TargetObj = GETRASTER(SOLID_NONE);
 				pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_POINTLIST;
 				if (cbPolygonObj.pix_thickness > 0)
+#ifdef DX10_0
+					dx11GS_Target = is_surfel ? GETGS(GS_SurfelPoints_gs_4_0) : GETGS(GS_ThickPoints_gs_4_0);
+#else
 					dx11GS_Target = is_surfel ? GETGS(GS_SurfelPoints_gs_5_0) : GETGS(GS_ThickPoints_gs_5_0);
+#endif
 			}
 
 			if (pobj_topology_type == D3D11_PRIMITIVE_TOPOLOGY_POINTLIST || pobj_topology_type == D3D11_PRIMITIVE_TOPOLOGY_LINELIST)
@@ -2072,7 +2138,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			else
 				dx11RState_TargetObj = GETRASTER(SOLID_NONE);
 			//dx11RState_TargetObj = GETRASTER(SOLID_CCW);
-
 			//{
 			//	if (dx11InputLayer_Target == dx11LI_PNT && prim_data->num_vtx > 1000000)
 			//	{
@@ -2114,6 +2179,16 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 #define GETDEPTHSTENTIL(NAME) dx11CommonParams->get_depthstencil(#NAME)
 
+#ifdef DX10_0
+			ID3D11RenderTargetView* dx11RTVs[2] = {
+				(ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV],
+				(ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV] };
+
+			dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVs, dx11DSV, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
+			dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(LESSEQUAL), 0);
+
+
+#else
 			ID3D11UnorderedAccessView* dx11UAVs_1st_pass[NUM_UAVs_1ST] = {
 					(ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV]
 					, use_spinlock_pixsynch ? (ID3D11UnorderedAccessView*)gres_fb_spinlock.alloc_res_ptrs[DTYPE_UAV] : NULL
@@ -2134,7 +2209,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					// to do //
 					switch (render_pass)
 					{
-					case RENDER_GEOPASS::PASS_OIT :
+					case RENDER_GEOPASS::PASS_OIT:
 						dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(ALWAYS), 0);
 						if (use_blending_option_MomentOIT)
 						{
@@ -2197,7 +2272,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					break;
 				}
 			}
-
+#endif
 			//dx11DeviceImmContext->Flush();
 			if (prim_data->is_stripe || pobj_topology_type == D3D11_PRIMITIVE_TOPOLOGY_POINTLIST)
 				dx11DeviceImmContext->Draw(prim_data->num_vtx, 0);
@@ -2208,9 +2283,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
 
 			// note that if is_picking_routine == true, the following branch will not be allowed!
-			if (render_pass == RENDER_GEOPASS::PASS_SINGLELAYERS 
-				|| render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES)
+			if (render_pass == RENDER_GEOPASS::PASS_SINGLELAYERS)
 			{
+				assert(!is_picking_routine);
 				assert(mode_OIT == MFR_MODE::STATIC_KB || mode_OIT == MFR_MODE::DYNAMIC_KB);
 
 				// RT to K-Buffer
@@ -2423,7 +2498,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		for (int i = 0; i < max_picking_layers; i += 2) {
 			uint obj_id = picking_buf[i];
 			if (obj_id == 0) continue;
-			
+
 			float pick_depth = *(float*)&picking_buf[i + 1];
 
 			auto it = picking_layers_id_depth.find(obj_id);
@@ -2452,7 +2527,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		for (auto& it : picking_layers_depth_id) {
 			vmfloat3 pos_pick = picking_ray_origin + picking_ray_dir * it.first;
 			picking_pos_out.push_back(pos_pick);
-			picking_id_out.push_back(it.second); 
+			picking_id_out.push_back(it.second);
 			//std::cout << "PICKING ACTORS : " << it.second << std::endl;
 		}
 
@@ -2648,7 +2723,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			// used for the increment of the fragments (index)
 			dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 		}
-		
+
 		___GpuProfile("Geometry for OIT");
 		// buffer filling
 		RenderStage1(general_oit_routine_objs, mode_OIT, RENDER_GEOPASS::PASS_OIT
@@ -2685,10 +2760,14 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					, false /*is_frag_counter_buffer*/, is_ghost_mode, false /*is_picking_routine*/, apply_fragmerge, false);
 				___GpuProfile("Opaque Surface", true);
 
-				___GpuProfile("2nd-Resolve Pass (SKB)");
+				___GpuProfile("2nd-Resolve Pass (SKB, foremost_surfaces_routine_objs)");
 				// Dynamic FB layers into K-buffer if there is post-processing (SS algorithms) or single layer pass
 				ResolvePass(MFR_MODE::STATIC_KB, apply_fragmerge);
-				___GpuProfile("2nd-Resolve Pass (SKB)", true);
+				___GpuProfile("2nd-Resolve Pass (SKB, foremost_surfaces_routine_objs)", true);
+
+				dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+				dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV], clr_float_fltmax_4);
+				dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
 			}
 
 			if (single_layer_routine_objs.size() > 0) {
@@ -2707,10 +2786,10 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					, false /*is_frag_counter_buffer*/, is_ghost_mode, false /*is_picking_routine*/, apply_fragmerge, false);
 				___GpuProfile("Single Layer Pass", true);
 
-				___GpuProfile("2nd-Resolve Pass (SKB)");
+				___GpuProfile("2nd-Resolve Pass (SKB, single_layer_routine_objs)");
 				// Dynamic FB layers into K-buffer if there is post-processing (SS algorithms) or single layer pass
 				ResolvePass(MFR_MODE::STATIC_KB, apply_fragmerge);
-				___GpuProfile("2nd-Resolve Pass (SKB)", true);
+				___GpuProfile("2nd-Resolve Pass (SKB, single_layer_routine_objs)", true);
 			}
 
 			if (is_final_renderer) {
@@ -2865,152 +2944,152 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			}
 		}
 		else
-	{
-		uint pixel_offset = (pixel_pos.x + pixel_pos.y * fb_size_cur.x) * 8;
-		if (mode_OIT != MFR_MODE::STATIC_KB)
 		{
-			dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_fb_sys_ref_pidx.alloc_res_ptrs[DTYPE_RES],
-				(ID3D11Buffer*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_RES]);
-
-			D3D11_MAPPED_SUBRESOURCE mappedResSysRefPIdx;
-			hr |= dx11DeviceImmContext->Map((ID3D11Buffer*)gres_fb_sys_ref_pidx.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysRefPIdx);
-			pixel_offset = ((uint*)mappedResSysRefPIdx.pData)[pixel_pos.x + pixel_pos.y * fb_size_cur.x];
-			dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_fb_sys_ref_pidx.alloc_res_ptrs[DTYPE_RES], 0);
-		}
-
-		D3D11_MAPPED_SUBRESOURCE mappedResSysDeepK, mappedResSysCounter;
-		hr |= dx11DeviceImmContext->Map((ID3D11Buffer*)gres_fb_sys_deep_k.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysDeepK);
-		hr |= dx11DeviceImmContext->Map((ID3D11Texture2D*)gres_fb_sys_counter.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysCounter);
-
-		uint* deep_kbuffer = (uint*)mappedResSysDeepK.pData;
-		uint num_layers = ((uint*)mappedResSysCounter.pData)[pixel_pos.x + pixel_pos.y * buf_row_pitch];
-		cout << "num_layers : " << num_layers << " at (" << pixel_pos.x << ", " << pixel_pos.y << ")" << endl;
-
-		if (num_layers > 0)
-		{
-			struct Fragment
+			uint pixel_offset = (pixel_pos.x + pixel_pos.y * fb_size_cur.x) * 8;
+			if (mode_OIT != MFR_MODE::STATIC_KB)
 			{
-				float alpha;
-				float z;
-				float thick;
-			};
+				dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_fb_sys_ref_pidx.alloc_res_ptrs[DTYPE_RES],
+					(ID3D11Buffer*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_RES]);
 
-			uint element_size = apply_fragmerge ? 4 : 2;
-			Fragment* fs = new Fragment[num_layers];
-
-			for (uint i = 0; i < num_layers; i++)
-			{
-				fs[i].z = *(float*)&deep_kbuffer[element_size * (pixel_offset + i) + 1];
-				fs[i].alpha = (deep_kbuffer[element_size * (pixel_offset + i) + 0] >> 24) / 255.f;
-				if (mode_OIT == MFR_MODE::DYNAMIC_KB || mode_OIT == MFR_MODE::STATIC_KB)
-					fs[i].thick = *(float*)&deep_kbuffer[element_size * (pixel_offset + i) + 2];
-			}
-			dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_fb_sys_deep_k.alloc_res_ptrs[DTYPE_RES], 0);
-			dx11DeviceImmContext->Unmap((ID3D11Texture2D*)gres_fb_sys_counter.alloc_res_ptrs[DTYPE_RES], 0);
-
-			__SORT(num_layers, fs, Fragment);
-			/**/
-
-			string refdepthrangePath = ".\\data\\absorbance_depth_ref_range.txt";
-			if (mode_OIT == MFR_MODE::DYNAMIC_FB)
-			{
-				ofstream refwriteFile_depth_range(refdepthrangePath.data());
-				if (refwriteFile_depth_range.is_open())
-				{
-					refwriteFile_depth_range << to_string(fs[0].z - tr_startoffset) + "\n";
-					float d_range = fs[num_layers - 1].z - fs[0].z;
-					refwriteFile_depth_range << to_string(d_range + tr_startoffset * 2) + "\n";
-					refwriteFile_depth_range.close();
-				}
+				D3D11_MAPPED_SUBRESOURCE mappedResSysRefPIdx;
+				hr |= dx11DeviceImmContext->Map((ID3D11Buffer*)gres_fb_sys_ref_pidx.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysRefPIdx);
+				pixel_offset = ((uint*)mappedResSysRefPIdx.pData)[pixel_pos.x + pixel_pos.y * fb_size_cur.x];
+				dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_fb_sys_ref_pidx.alloc_res_ptrs[DTYPE_RES], 0);
 			}
 
-			ifstream openFile(refdepthrangePath.data());
-			if (openFile.is_open())
+			D3D11_MAPPED_SUBRESOURCE mappedResSysDeepK, mappedResSysCounter;
+			hr |= dx11DeviceImmContext->Map((ID3D11Buffer*)gres_fb_sys_deep_k.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysDeepK);
+			hr |= dx11DeviceImmContext->Map((ID3D11Texture2D*)gres_fb_sys_counter.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysCounter);
+
+			uint* deep_kbuffer = (uint*)mappedResSysDeepK.pData;
+			uint num_layers = ((uint*)mappedResSysCounter.pData)[pixel_pos.x + pixel_pos.y * buf_row_pitch];
+			cout << "num_layers : " << num_layers << " at (" << pixel_pos.x << ", " << pixel_pos.y << ")" << endl;
+
+			if (num_layers > 0)
 			{
-				vector<float> depth_range_info;
-				string line;
-				while (getline(openFile, line)) {
-					depth_range_info.push_back(stof(line));
-				}
-				openFile.close();
-
-				string depthPath = ".\\data\\absorbance_depth_" + __METHODS[(int)mode_OIT] + ".txt";
-				string alphaPath = ".\\data\\absorbance_alpha_" + __METHODS[(int)mode_OIT] + ".txt";
-
-				ofstream writeFile_depth(depthPath.data());
-				ofstream writeFile_absorb(alphaPath.data());
-
-				assert(writeFile_depth.is_open() && writeFile_absorb.is_open());
-
-				float d_s = depth_range_info[0];
-				float depth_range = depth_range_info[1];
-				int num_intervals = (int)(depth_range / tr_interval) + 2;
-
-				uint hit_count = 0;
-				float absorb = 0;
-				if (mode_OIT == MFR_MODE::DYNAMIC_FB && !apply_fragmerge)
+				struct Fragment
 				{
-					for (int i = 0; i < num_intervals; i++)
+					float alpha;
+					float z;
+					float thick;
+				};
+
+				uint element_size = apply_fragmerge ? 4 : 2;
+				Fragment* fs = new Fragment[num_layers];
+
+				for (uint i = 0; i < num_layers; i++)
+				{
+					fs[i].z = *(float*)&deep_kbuffer[element_size * (pixel_offset + i) + 1];
+					fs[i].alpha = (deep_kbuffer[element_size * (pixel_offset + i) + 0] >> 24) / 255.f;
+					if (mode_OIT == MFR_MODE::DYNAMIC_KB || mode_OIT == MFR_MODE::STATIC_KB)
+						fs[i].thick = *(float*)&deep_kbuffer[element_size * (pixel_offset + i) + 2];
+				}
+				dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_fb_sys_deep_k.alloc_res_ptrs[DTYPE_RES], 0);
+				dx11DeviceImmContext->Unmap((ID3D11Texture2D*)gres_fb_sys_counter.alloc_res_ptrs[DTYPE_RES], 0);
+
+				__SORT(num_layers, fs, Fragment);
+				/**/
+
+				string refdepthrangePath = ".\\data\\absorbance_depth_ref_range.txt";
+				if (mode_OIT == MFR_MODE::DYNAMIC_FB)
+				{
+					ofstream refwriteFile_depth_range(refdepthrangePath.data());
+					if (refwriteFile_depth_range.is_open())
 					{
-						float d_cur = d_s + (float)i * tr_interval;
-
-						if (hit_count < num_layers)
-						{
-							while (d_cur > fs[hit_count].z)
-							{
-								absorb += (1 - absorb) * fs[hit_count].alpha;
-								hit_count++;
-								if (hit_count >= num_layers) break;
-							}
-						}
-						writeFile_absorb << to_string(absorb) + "\n";
-						writeFile_depth << to_string(d_cur) + "\n";
+						refwriteFile_depth_range << to_string(fs[0].z - tr_startoffset) + "\n";
+						float d_range = fs[num_layers - 1].z - fs[0].z;
+						refwriteFile_depth_range << to_string(d_range + tr_startoffset * 2) + "\n";
+						refwriteFile_depth_range.close();
 					}
 				}
-				else if ((mode_OIT == MFR_MODE::DYNAMIC_KB && apply_fragmerge) || mode_OIT == MFR_MODE::STATIC_KB)
+
+				ifstream openFile(refdepthrangePath.data());
+				if (openFile.is_open())
 				{
-					for (int i = 0; i < num_intervals; i++)
+					vector<float> depth_range_info;
+					string line;
+					while (getline(openFile, line)) {
+						depth_range_info.push_back(stof(line));
+					}
+					openFile.close();
+
+					string depthPath = ".\\data\\absorbance_depth_" + __METHODS[(int)mode_OIT] + ".txt";
+					string alphaPath = ".\\data\\absorbance_alpha_" + __METHODS[(int)mode_OIT] + ".txt";
+
+					ofstream writeFile_depth(depthPath.data());
+					ofstream writeFile_absorb(alphaPath.data());
+
+					assert(writeFile_depth.is_open() && writeFile_absorb.is_open());
+
+					float d_s = depth_range_info[0];
+					float depth_range = depth_range_info[1];
+					int num_intervals = (int)(depth_range / tr_interval) + 2;
+
+					uint hit_count = 0;
+					float absorb = 0;
+					if (mode_OIT == MFR_MODE::DYNAMIC_FB && !apply_fragmerge)
 					{
-						float d_cur = d_s + (float)i * tr_interval;
-						if (hit_count < num_layers)
+						for (int i = 0; i < num_intervals; i++)
 						{
-							while (d_cur > fs[hit_count].z - fs[hit_count].thick)
+							float d_cur = d_s + (float)i * tr_interval;
+
+							if (hit_count < num_layers)
 							{
-								if (d_cur >= fs[hit_count].z)
+								while (d_cur > fs[hit_count].z)
 								{
 									absorb += (1 - absorb) * fs[hit_count].alpha;
 									hit_count++;
 									if (hit_count >= num_layers) break;
 								}
-								else
+							}
+							writeFile_absorb << to_string(absorb) + "\n";
+							writeFile_depth << to_string(d_cur) + "\n";
+						}
+					}
+					else if ((mode_OIT == MFR_MODE::DYNAMIC_KB && apply_fragmerge) || mode_OIT == MFR_MODE::STATIC_KB)
+					{
+						for (int i = 0; i < num_intervals; i++)
+						{
+							float d_cur = d_s + (float)i * tr_interval;
+							if (hit_count < num_layers)
+							{
+								while (d_cur > fs[hit_count].z - fs[hit_count].thick)
 								{
-									float sub_thick_f = d_cur - (fs[hit_count].z - fs[hit_count].thick);
-									float sub_alpha_f = fs[hit_count].alpha * sub_thick_f / fs[hit_count].thick;
-									absorb += (1 - absorb) * sub_alpha_f;
+									if (d_cur >= fs[hit_count].z)
+									{
+										absorb += (1 - absorb) * fs[hit_count].alpha;
+										hit_count++;
+										if (hit_count >= num_layers) break;
+									}
+									else
+									{
+										float sub_thick_f = d_cur - (fs[hit_count].z - fs[hit_count].thick);
+										float sub_alpha_f = fs[hit_count].alpha * sub_thick_f / fs[hit_count].thick;
+										absorb += (1 - absorb) * sub_alpha_f;
 
-									fs[hit_count].thick = fs[hit_count].thick - sub_thick_f;
-									fs[hit_count].alpha = (fs[hit_count].alpha - sub_alpha_f) / (1.f - sub_alpha_f);
+										fs[hit_count].thick = fs[hit_count].thick - sub_thick_f;
+										fs[hit_count].alpha = (fs[hit_count].alpha - sub_alpha_f) / (1.f - sub_alpha_f);
+									}
 								}
 							}
+							writeFile_absorb << to_string(absorb) + "\n";
+							writeFile_depth << to_string(d_cur) + "\n";
 						}
-						writeFile_absorb << to_string(absorb) + "\n";
-						writeFile_depth << to_string(d_cur) + "\n";
 					}
-				}
 
-				writeFile_depth.close();
-				writeFile_absorb.close();
+					writeFile_depth.close();
+					writeFile_absorb.close();
+				}
+				else
+				{
+					cout << "NO REF DEPTH!" << endl;
+				}
+				delete[] fs;
 			}
-			else
-			{
-				cout << "NO REF DEPTH!" << endl;
-			}
-			delete[] fs;
 		}
 	}
-	}
 
-	if(gpu_profile)
+	if (gpu_profile)
 	{
 		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_disjoint);
 
@@ -3060,7 +3139,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	VMSAFE_RELEASE(pdxDSVOld);
 
 	iobj->SetDescriptor("vismtv_inbuilt_renderergpudx module");
-	
+
 	iobj->SetObjParam("_ullong_LatestSrTime", vmhelpers::GetCurrentTimePack());
 	//((std::mutex*)HDx11GetMutexGpuCriticalPath())->unlock();
 

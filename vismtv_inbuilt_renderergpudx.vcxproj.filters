@@ -65,7 +65,7 @@
     <None Include="hlsl\moment\TrigonometricMomentMath.hlsli">
       <Filter>hlsl source code\Moment</Filter>
     </None>
-    <None Include="ShaderCompileDirect3D11.bat">
+    <None Include="ShaderCompile_4_0.bat">
       <Filter>bat</Filter>
     </None>
   </ItemGroup>
@@ -105,6 +105,9 @@
     </Filter>
     <Filter Include="hlsl source code\layered DOF">
       <UniqueIdentifier>{9fddb088-05c7-45cb-a253-5151f777f821}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="hlsl source code\shader4">
+      <UniqueIdentifier>{6b6fc4a1-b178-4cb2-a58b-bb96d48d7619}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -154,6 +157,12 @@
     </FxCompile>
     <FxCompile Include="hlsl\dvr\DvrSampleTest.hlsl">
       <Filter>hlsl source code\dvr</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\shader4\BasicShader.hlsl">
+      <Filter>hlsl source code\shader4</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\shader4\BasicShader2.hlsl">
+      <Filter>hlsl source code\shader4</Filter>
     </FxCompile>
   </ItemGroup>
 </Project>

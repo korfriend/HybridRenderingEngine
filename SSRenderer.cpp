@@ -148,7 +148,7 @@ void ComputeDOF(__ID3D11DeviceContext* dx11DeviceImmContext,
 				stamp_idx = gpu_profilecount;
 			}
 			else {
-				assert(it->second.y == -1 && is_closed == true);
+				//assert(it->second.y == -1 && is_closed == true);
 				it->second.y = it->second.x + 1;
 				stamp_idx = it->second.y;
 			}

@@ -26,6 +26,12 @@ void OIT_A_BUFFER_CNF_FRAGS(__VS_OUT input)
 
 void OIT_A_BUFFER_FILL(__VS_OUT input)
 {
+	float4 v_rgba = (float4)0;
+	float z_depth = FLT_MAX;
+
+	BasicShader(input, v_rgba, z_depth);
+
+	/*
 	POBJ_PRE_CONTEXT;
 
 	float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
@@ -158,8 +164,9 @@ void OIT_A_BUFFER_FILL(__VS_OUT input)
 			if (v_rgba.a <= 0.01) clip(-1);
 		}
 	}
-
+	/**/
 	// Atomically allocate space in the deep buffer
+	int2 tex2d_xy = int2(input.f4PosSS.xy);
 	uint fc = 0;
 	InterlockedAdd(fragment_counter[tex2d_xy], 1, fc);
 

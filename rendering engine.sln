@@ -10,6 +10,9 @@ Global
 		Debug|Any CPU = Debug|Any CPU
 		Debug|x64 = Debug|x64
 		Debug|x86 = Debug|x86
+		Release_DX10.0|Any CPU = Release_DX10.0|Any CPU
+		Release_DX10.0|x64 = Release_DX10.0|x64
+		Release_DX10.0|x86 = Release_DX10.0|x86
 		Release_DX11.0|Any CPU = Release_DX11.0|Any CPU
 		Release_DX11.0|x64 = Release_DX11.0|x64
 		Release_DX11.0|x86 = Release_DX11.0|x86
@@ -23,6 +26,12 @@ Global
 		{BD108E48-5831-4F89-8E39-5662EBDB276A}.Debug|x64.Build.0 = Debug|x64
 		{BD108E48-5831-4F89-8E39-5662EBDB276A}.Debug|x86.ActiveCfg = Debug|Win32
 		{BD108E48-5831-4F89-8E39-5662EBDB276A}.Debug|x86.Build.0 = Debug|Win32
+		{BD108E48-5831-4F89-8E39-5662EBDB276A}.Release_DX10.0|Any CPU.ActiveCfg = Release_DX10.0|Win32
+		{BD108E48-5831-4F89-8E39-5662EBDB276A}.Release_DX10.0|Any CPU.Build.0 = Release_DX10.0|Win32
+		{BD108E48-5831-4F89-8E39-5662EBDB276A}.Release_DX10.0|x64.ActiveCfg = Release_DX10.0|x64
+		{BD108E48-5831-4F89-8E39-5662EBDB276A}.Release_DX10.0|x64.Build.0 = Release_DX10.0|x64
+		{BD108E48-5831-4F89-8E39-5662EBDB276A}.Release_DX10.0|x86.ActiveCfg = Release_DX10.0|Win32
+		{BD108E48-5831-4F89-8E39-5662EBDB276A}.Release_DX10.0|x86.Build.0 = Release_DX10.0|Win32
 		{BD108E48-5831-4F89-8E39-5662EBDB276A}.Release_DX11.0|Any CPU.ActiveCfg = Release_DX11.0|Win32
 		{BD108E48-5831-4F89-8E39-5662EBDB276A}.Release_DX11.0|x64.ActiveCfg = Release_DX11.0|x64
 		{BD108E48-5831-4F89-8E39-5662EBDB276A}.Release_DX11.0|x64.Build.0 = Release_DX11.0|x64

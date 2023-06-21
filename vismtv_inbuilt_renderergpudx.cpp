@@ -46,6 +46,9 @@ bool InitModule(fncontainer::VmFnContainer& _fncontainer)
 		return false;
 	}
 	vmlog::LogInfo(string("Plugin: GPU DX11 Renderer using Core v(") + __VERSION + ")");
+	
+	// TEST //
+	//return false;
 
 	return true;
 }
@@ -72,6 +75,10 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	}
 #else
 	_fncontainer.fnParams.SetParam("_bool_UseSpinLock", true);
+#endif
+
+#ifdef DX10_0
+	_fncontainer.fnParams.SetParam("_int_OitMode", (int)MFR_MODE::DYNAMIC_FB);
 #endif
 
 	g_LocalProgress.start = 0;

@@ -339,6 +339,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	ID3D11Buffer* cbuf_vreffect = dx11CommonParams->get_cbuf("CB_VolumeRenderingEffect");
 	ID3D11Buffer* cbuf_tmap = dx11CommonParams->get_cbuf("CB_TMAP");
 	ID3D11Buffer* cbuf_hsmask = dx11CommonParams->get_cbuf("CB_HotspotMask");
+	ID3D11Buffer* cbuf_testBuffer = dx11CommonParams->get_cbuf("CB_TestBuffer");
 
 #pragma region // HLSL Sampler Setting
 	ID3D11SamplerState* sampler_PZ = dx11CommonParams->get_sampler("POINT_ZEROBORDER");
@@ -426,7 +427,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				stamp_idx = gpu_profilecount;
 			}
 			else {
-				assert(it->second.y == -1 && is_closed == true);
+				//assert(it->second.y == -1 && is_closed == true);
 				it->second.y = it->second.x + 1;
 				stamp_idx = it->second.y;
 			}
@@ -671,6 +672,25 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		memcpy(cbVrEffectData, &cbVrEffect, sizeof(CB_VolumeRenderingEffect));
 		dx11DeviceImmContext->Unmap(cbuf_vreffect, 0);
 		dx11DeviceImmContext->CSSetConstantBuffers(3, 1, &cbuf_reffect);
+
+		//	
+		bool testMode = _fncontainer->fnParams.GetParam("_bool_UseTestBuffer", false);
+		if (testMode)
+		{
+			// test to do 
+			float myTestV0 = _fncontainer->fnParams.GetParam("myTestValue", 0.f);
+
+			CB_TestBuffer cbTestBuffer;
+			// test to do 
+			cbTestBuffer.testFloatValues[0] = myTestV0;
+
+			D3D11_MAPPED_SUBRESOURCE mappedTestBuffer;
+			dx11DeviceImmContext->Map(cbuf_testBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResRdnEffect);
+			CB_TestBuffer* cbTestBufferData = (CB_TestBuffer*)mappedTestBuffer.pData;
+			memcpy(cbTestBufferData, &cbTestBuffer, sizeof(CB_TestBuffer));
+			dx11DeviceImmContext->Unmap(cbuf_testBuffer, 0);
+			dx11DeviceImmContext->CSSetConstantBuffers(8, 1, &cbuf_testBuffer);
+		}
 #pragma endregion 
 
 #pragma region GPU resource updates

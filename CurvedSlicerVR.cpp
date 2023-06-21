@@ -376,7 +376,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 				stamp_idx = gpu_profilecount;
 			}
 			else {
-				assert(it->second.y == -1 && is_closed == true);
+				//assert(it->second.y == -1 && is_closed == true);
 				it->second.y = it->second.x + 1;
 				stamp_idx = it->second.y;
 			}

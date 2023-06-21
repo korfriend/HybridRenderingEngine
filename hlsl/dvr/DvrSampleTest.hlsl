@@ -1,6 +1,17 @@
 #include "../CommonShader.hlsl"
 #include "../macros.hlsl"
 
+struct HxCB_TestBuffer
+{
+	uint testIntValues[16];
+	float testFloatValues[16];
+};
+
+cbuffer cbGlobalParams : register(b8)
+{
+	HxCB_TestBuffer g_cbTestBuffer;
+}
+
 Texture3D tex3D_volume : register(t0);
 Texture3D tex3D_volblk : register(t1);
 Texture3D tex3D_volmask : register(t2);
