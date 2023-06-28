@@ -37,20 +37,25 @@ struct HxCB_CameraState // Hlsl dX Contant Buffer
 
 	float cam_vz_thickness;
 	uint k_value;
-	// 1st bit : 0 (orthogonal), 1 : (perspective)
-	// 2nd bit : for RT to k-buffer : 0 (just RT), 1 : (after silhouette processing)
-	// 3rd bit : for DK+B // deprecated... (this will be treated as a separate shader
-	// 4th bit : for storing the final fragments to the k buffer, which is used for sequentially coming renderer (e.g., DVR) : 0 (skipping), 1 (storing)
-	// 5th bit : only for DFB without (S)FM. stores all fragments into the framebuffer (using offset table)
-	// 6th bit : 0 : (normal rendering), 1 : picking mode
-	// 7th bit : 0 : (stores the final RGBA and depth to RT), 1 : (does not store them) // will be deprecated
+	// 0- bit : 0 : (orthogonal), 1 : (perspective)
+	// 1- bit : for RT to k-buffer : 0 (just RT), 1 : (after silhouette processing)
+	// 2- bit : for dynamic K value // deprecated... (this will be treated as a separate shader
+	// 3- bit : for storing the final fragments to the k buffer, which is used for sequentially coming renderer (e.g., DVR) : 0 (skipping), 1 (storing)
+	// 4- bit : only for DFB without (S)FM. stores all fragments into the framebuffer (using offset table)
+	// 5- bit : 0 : (normal rendering), 1 : picking mode
+	// 6- bit : 0 : (stores the final RGBA and depth to RT), 1 : (does not store them) // will be deprecated
+	// 7- bit : 0 : full raycaster, 1 : half raycaster for 4x faster volume rendering (dither)
+	// 8- bit : 0 : only OIT fragments, 1 : foremostopaque or singlelayer effect ...
+	// 9- bit : 0 : outlint mode (solid), 1 : outlint mode (gradient alpha)
 	uint cam_flag;
 	// used for 1) A-Buffer prefix computations /*deprecated*/ or 2) beta (asfloat) for merging operation
 	uint iSrCamDummy__0; 
 
 	float near_plane;
 	float far_plane;
-	// used for 1) the level of MIPMAP generation (only for SSAO rendering), or 2) picking xy (16bit, 16bit)
+	// used for 
+	// 1) the level of MIPMAP generation (only for SSAO rendering), or 2) picking xy (16bit, 16bit)
+	// 3) outline's colorRGB and thicknessPix
 	uint iSrCamDummy__1; // used for the N-buffer index or SSAO setting for DOF
 	uint iSrCamDummy__2; // scale_z_res
 };
@@ -180,7 +185,7 @@ struct HxCB_VolumeObject
 	float mask_value_range;
 };
 
-struct HxCB_RenderingEffect // normally for each object
+struct HxCB_Material // normally for each object
 {
 	// 1st bit : AO or Not , 2nd bit : Anisotropic BRDF or Not , 3rd bit : Apply Shading Factor or Not
 	// NA ==> 4th bit : 0 : Normal Curvature Map (2D), 1 : Apply Concaveness
@@ -206,7 +211,7 @@ struct HxCB_RenderingEffect // normally for each object
 	uint rf_dummy_3;
 };
 
-struct HxCB_VolumeRenderingEffect // normally for each volume
+struct HxCB_VolumeMaterial // normally for each volume
 {
     float clip_plane_intensity;
     float attribute_voxel_sharpness;
@@ -304,7 +309,7 @@ cbuffer cbGlobalParams : register(b2)
 
 cbuffer cbGlobalParams : register(b3)
 {
-    HxCB_RenderingEffect g_cbRndEffect;
+	HxCB_Material g_cbMaterial;
 }
 
 cbuffer cbGlobalParams : register(b4)
@@ -319,7 +324,7 @@ cbuffer cbGlobalParams : register(b5)
 
 cbuffer cbGlobalParams : register(b6)
 {
-	HxCB_VolumeRenderingEffect g_cbVrEffect;
+	HxCB_Material g_cbVrEffect;
 }
 
 cbuffer cbGlobalParams : register(b7)

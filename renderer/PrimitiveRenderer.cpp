@@ -647,6 +647,11 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	}
 	vmint2 picking_pos_ss = _fncontainer->fnParams.GetParam("_int2_PickingPosSS", vmint2(-1, -1));
 
+	int outline_thickness = _fncontainer->fnParams.GetParam("_int_SilhouetteThickness", (int)0);
+	float outline_depthThres = _fncontainer->fnParams.GetParam("_float_SilhouetteDepthThres", 10000.f);
+	vmfloat3 outline_color = _fncontainer->fnParams.GetParam("_float3_SilhouetteColor", vmfloat3(1));
+	bool outline_fadeEffect = _fncontainer->fnParams.GetParam("_bool_SilhouetteFadeEffect", true); 
+
 	int i_test_shader = (int)_fncontainer->fnParams.GetParam("_int_ShaderTest", (int)0);
 
 	VmLight* light = _fncontainer->fnParams.GetParam("_VmLight*_LightSource", (VmLight*)NULL);
@@ -729,7 +734,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #else
 #define VS_NUM 5
 #define GS_NUM 3
-#define PS_NUM 76
+#define PS_NUM 77
 #define CS_NUM 27
 #endif
 
@@ -889,6 +894,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			,"SR_BASIC_TEXTMAPPING_ps_5_0"
 			,"SR_BASIC_TEXTUREIMGMAP_ps_5_0"
 			,"SR_BASIC_VOLUMEMAP_ps_5_0"
+
+			,"SR_QUAD_OUTLINE_ps_5_0"
 			//,"SR_OIT_KDEPTH_NPRGHOST_ps_5_0"
 
 			,"SR_OIT_ABUFFER_FRAGCOUNTER_ps_5_0"
@@ -1039,7 +1046,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	ID3D11Buffer* cbuf_clip = dx11CommonParams->get_cbuf("CB_ClipInfo");
 	ID3D11Buffer* cbuf_pobj = dx11CommonParams->get_cbuf("CB_PolygonObject");
 	ID3D11Buffer* cbuf_vobj = dx11CommonParams->get_cbuf("CB_VolumeObject");
-	ID3D11Buffer* cbuf_reffect = dx11CommonParams->get_cbuf("CB_RenderingEffect");
+	ID3D11Buffer* cbuf_reffect = dx11CommonParams->get_cbuf("CB_Material");
 	ID3D11Buffer* cbuf_tmap = dx11CommonParams->get_cbuf("CB_TMAP");
 	ID3D11Buffer* cbuf_hsmask = dx11CommonParams->get_cbuf("CB_HotspotMask");
 #pragma endregion 
@@ -1080,6 +1087,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	ullong lastest_render_time = iobj->GetObjParam("_ullong_LatestSrTime", (ullong)0);
 
 	GpuRes gres_fb_rgba, gres_fb_depthcs, gres_fb_depthstencil;
+	GpuRes gres_fb_singlelayer_rgba, gres_fb_singlelayer_depthcs, gres_fb_singlelayer_tempDepth;
 	GpuRes gres_fb_sys_rgba, gres_fb_sys_depthcs;
 #ifdef DX10_0
 	GpuRes gres_fb_pickingId, gres_fb_pickingDepthcs, gres_fb_pickingDepthstencil;
@@ -1100,6 +1108,12 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
 	grd_helper::UpdateFrameBuffer(gres_fb_depthcs, iobj, "RENDER_OUT_DEPTH_0", RTYPE_TEXTURE2D,
 		D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_FLOAT, 0);
+	grd_helper::UpdateFrameBuffer(gres_fb_singlelayer_rgba, iobj, "RENDER_OUT_RGBA_1", RTYPE_TEXTURE2D,
+		D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+	grd_helper::UpdateFrameBuffer(gres_fb_singlelayer_depthcs, iobj, "RENDER_OUT_DEPTH_1", RTYPE_TEXTURE2D,
+		D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_FLOAT, 0);
+	grd_helper::UpdateFrameBuffer(gres_fb_singlelayer_tempDepth, iobj, "RENDER_OUT_DEPTH_2", RTYPE_TEXTURE2D,
+		D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_FLOAT, 0);
 	grd_helper::UpdateFrameBuffer(gres_fb_depthstencil, iobj, "DEPTH_STENCIL", RTYPE_TEXTURE2D,
 		D3D11_BIND_DEPTH_STENCIL, DXGI_FORMAT_D32_FLOAT, false);
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_rgba, iobj, "SYSTEM_OUT_RGBA", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_SYSOUT);
@@ -1108,11 +1122,13 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #ifdef DX10_0
 	// to do // ... picking...
 #else
+	// also using singlelayer rt
 	grd_helper::UpdateFrameBuffer(gres_fb_counter, iobj, "RW_COUNTER", RTYPE_TEXTURE2D,
 		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
 	if (use_spinlock_pixsynch)// || mode_OIT == MFR_MODE::MOMENT) // when MFR_MODE::DXAB mode, this buffer used for another purpose?!
 		grd_helper::UpdateFrameBuffer(gres_fb_spinlock, iobj, "RW_SPINLOCK", RTYPE_TEXTURE2D,
 			D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
+
 	if (mode_OIT == MFR_MODE::MOMENT)
 		grd_helper::UpdateFrameBuffer(gres_fb_moment_rgba, iobj, "RENDER_MOMENT_RGBA", RTYPE_TEXTURE2D,
 			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32G32B32A32_FLOAT, 0);
@@ -1444,8 +1460,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		}
 		actor->SetParam("_bool_IsWireframe", false);
 
-		int outline_thickness = actor->GetParam("_int_SilhouetteThickness", (int)0);
-		if (outline_thickness > 0) {
+		bool showOutline = actor->GetParam("_bool_ShowOutline", false);
+		if (showOutline) {
 			single_layer_routine_objs.push_back(actor);
 		}
 
@@ -1518,7 +1534,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 	// Clear Depth Stencil //
 	ID3D11DepthStencilView* dx11DSV = (ID3D11DepthStencilView*)gres_fb_depthstencil.alloc_res_ptrs[DTYPE_DSV];
-	dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+	// dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0); // this code is located to the right ahead of rendering calls
 
 	float flt_max_ = FLT_MAX;
 	uint flt_max_u = *(uint*)&flt_max_;
@@ -1544,6 +1560,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
 	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV], clr_float_fltmax_4);
+	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
+	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_singlelayer_tempDepth.alloc_res_ptrs[DTYPE_RTV], clr_float_fltmax_4);
 
 	___GpuProfile("Clear for Render1 - SR", true);
 #pragma endregion 
@@ -1587,6 +1605,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 #define NUM_UAVs_1ST 4
 #define NUM_UAVs_2ND 5
+
 	auto RenderStage1 = [&](
 		vector<VmActor*>& actor_list,
 		const MFR_MODE mode_OIT, const RENDER_GEOPASS render_pass, const bool is_frag_counter_buffer,
@@ -1607,9 +1626,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			vmfloat4 material_phongCoeffs = actor->GetParam("_float4_PhongCoeffs", default_phong_lighting_coeff);
 			bool use_vertex_color = actor->GetParam("_bool_UseVertexColor", false) && prim_data->GetVerticeDefinition("TEXCOORD0") != NULL;
 
-			int outline_thickness = actor->GetParam("_int_SilhouetteThickness", (int)0);
-			float outline_depthThres = actor->GetParam("_float_SilhouetteDepthThres", 10000.f);
-			vmfloat3 outline_color = actor->GetParam("_float3_SilhouetteColor", vmfloat3(1));
+			//int outline_thickness = actor->GetParam("_int_SilhouetteThickness", (int)0);
+			//float outline_depthThres = actor->GetParam("_float_SilhouetteDepthThres", 10000.f);
+			//vmfloat3 outline_color = actor->GetParam("_float3_SilhouetteColor", vmfloat3(1));
 
 			// Object Unit Conditions
 			bool cull_off = actor->GetParam("_bool_IsForcedCullOff", false);
@@ -1658,13 +1677,12 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				dx11DeviceImmContext->PSSetConstantBuffers(5, 1, &cbuf_tmap);
 			}
 
-			CB_RenderingEffect cbRenderEffect;
+			CB_Material cbRenderEffect;
 			grd_helper::SetCb_RenderingEffect(cbRenderEffect, actor);
-			cbRenderEffect.outline_mode = outline_thickness > 0 ? 1 : 0; // DOJO TO DO , encoding
 			D3D11_MAPPED_SUBRESOURCE mappedResRenderEffect;
 			dx11DeviceImmContext->Map(cbuf_reffect, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResRenderEffect);
-			CB_RenderingEffect* cbRenderEffectData = (CB_RenderingEffect*)mappedResRenderEffect.pData;
-			memcpy(cbRenderEffectData, &cbRenderEffect, sizeof(CB_RenderingEffect));
+			CB_Material* cbRenderEffectData = (CB_Material*)mappedResRenderEffect.pData;
+			memcpy(cbRenderEffectData, &cbRenderEffect, sizeof(CB_Material));
 			dx11DeviceImmContext->Unmap(cbuf_reffect, 0);
 
 			GpuRes gres_vtx, gres_idx;
@@ -1716,15 +1734,14 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			cbPolygonObj.Ns *= material_phongCoeffs.w;
 			if (default_color_cmmobj.x >= 0 && default_color_cmmobj.y >= 0 && default_color_cmmobj.z >= 0)
 				cbPolygonObj.Ka = cbPolygonObj.Kd = cbPolygonObj.Ks = default_color_cmmobj;
-			if (render_pass == RENDER_GEOPASS::PASS_SINGLELAYERS && outline_thickness > 0)
-			{
-				//cbPolygonObj.depth_forward_bias = (float)v_discont_depth;
-				cbPolygonObj.pobj_flag |= 0x1;
-
-				cbPolygonObj.pix_thickness = (float)outline_thickness;
-				cbPolygonObj.depth_thres = outline_depthThres;
-				cbPolygonObj.pobj_dummy_0 = (int)(outline_color.r * 255.f) | (int)(outline_color.g * 255.f) << 8 | (int)(outline_color.b * 255.f) << 16;
-			}
+			//if (render_pass == RENDER_GEOPASS::PASS_SINGLELAYERS)
+			//{
+			//	//cbPolygonObj.depth_forward_bias = (float)v_discont_depth;
+			//	//cbPolygonObj.pobj_flag |= 0x1;
+			//	//cbPolygonObj.pix_thickness = (float)outline_thickness;
+			//	//cbPolygonObj.depth_thres = outline_depthThres;
+			//	//cbPolygonObj.pobj_dummy_0 = (int)(outline_color.r * 255.f) | (int)(outline_color.g * 255.f) << 8 | (int)(outline_color.b * 255.f) << 16;
+			//}
 			if (is_ghost_mode)// && !IS_SAFE_OBJ(pobj->GetObjectID()))
 			{
 				bool is_ghost_surface = actor->GetParam("_bool_IsGhostSurface", false);
@@ -1746,14 +1763,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			CB_ClipInfo* cbClipInfoData = (CB_ClipInfo*)mappedResClipInfo.pData;
 			memcpy(cbClipInfoData, &cbClipInfo, sizeof(CB_ClipInfo));
 			dx11DeviceImmContext->Unmap(cbuf_clip, 0);
-
-
-			dx11DeviceImmContext->VSSetConstantBuffers(1, 1, &cbuf_pobj);
-			dx11DeviceImmContext->PSSetConstantBuffers(1, 1, &cbuf_pobj);
-			dx11DeviceImmContext->CSSetConstantBuffers(1, 1, &cbuf_pobj); // for silhouette or A-buffer test
-			dx11DeviceImmContext->PSSetConstantBuffers(2, 1, &cbuf_clip);
-			dx11DeviceImmContext->PSSetConstantBuffers(3, 1, &cbuf_reffect);
-			dx11DeviceImmContext->CSSetConstantBuffers(3, 1, &cbuf_reffect);
 #pragma endregion
 
 #pragma region // Setting Rasterization Stages
@@ -2077,7 +2086,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					else
 						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_GEN_ps_5_0) : GETPS(SR_MOMENT_GEN_ROV_ps_5_0);
 				}
-				}
+			}
 
 			switch (prim_data->ptype)
 			{
@@ -2179,15 +2188,18 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 #define GETDEPTHSTENTIL(NAME) dx11CommonParams->get_depthstencil(#NAME)
 
-#ifdef DX10_0
 			ID3D11RenderTargetView* dx11RTVs[2] = {
 				(ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV],
 				(ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV] };
 
-			dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVs, dx11DSV, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
+#ifdef DX10_0
+			if (render_pass == RENDER_GEOPASS::PASS_SINGLELAYERS) {
+				dx11DeviceImmContext->OMSetRenderTargets(1, (ID3D11RenderTargetView**)&gres_fb_singlelayer_tempDepth.alloc_res_ptrs[DTYPE_RTV], dx11DSV);
+			}
+			else {
+				dx11DeviceImmContext->OMSetRenderTargets(2, dx11RTVs, dx11DSV);
+			}
 			dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(LESSEQUAL), 0);
-
-
 #else
 			ID3D11UnorderedAccessView* dx11UAVs_1st_pass[NUM_UAVs_1ST] = {
 					(ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV]
@@ -2241,28 +2253,24 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			}
 			else //if (mode_OIT != MFR_MODE::MOMENT)
 			{
-				if ((mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB) && !is_frag_counter_buffer) // storing fragments
-				{
-					// weird //mode_OIT == MFR_MODE::DXAB ? (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV] : NULL
-					//dx11UAVs_1st_pass[3] = (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV];
-					dx11DeviceImmContext->PSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]); // search why this does not work
-				}
-
-				ID3D11RenderTargetView* dx11RTVs[2] = {
-					(ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV],
-					(ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV] };
-
 				switch (render_pass)
 				{
 				case RENDER_GEOPASS::PASS_OIT:
-					dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(ALWAYS), 0);
+					if ((mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB) && !is_frag_counter_buffer) // storing fragments
+					{
+						// weird //mode_OIT == MFR_MODE::DXAB ? (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV] : NULL
+						//dx11UAVs_1st_pass[3] = (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV];
+						dx11DeviceImmContext->PSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]); // search why this does not work
+					}
 					dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(0, NULL, NULL, 2, NUM_UAVs_1ST, dx11UAVs_1st_pass, NULL);
+					dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(ALWAYS), 0);
 					break;
 				case RENDER_GEOPASS::PASS_SINGLELAYERS:
 					// clear //
 					//dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
-					//dx11DeviceImmContext->OMSetRenderTargets(2, dx11RTVs, dx11DSV);
-					dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVs, dx11DSV, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
+					//dx11DeviceImmContext->OMSetRenderTargets(1, (ID3D11RenderTargetView**)&gres_fb_singlelayer_tempDepth, dx11DSV);
+					//dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(1, (ID3D11RenderTargetView**)&gres_fb_singlelayer_tempDepth.alloc_res_ptrs[DTYPE_RTV], dx11DSV, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
+					dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(1, (ID3D11RenderTargetView**)&gres_fb_singlelayer_tempDepth.alloc_res_ptrs[DTYPE_RTV], dx11DSV, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
 					dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(LESSEQUAL), 0);
 					break;
 				case RENDER_GEOPASS::PASS_OPAQUESURFACES:
@@ -2282,41 +2290,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 			dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
 
-			// note that if is_picking_routine == true, the following branch will not be allowed!
-			if (render_pass == RENDER_GEOPASS::PASS_SINGLELAYERS)
-			{
-				assert(!is_picking_routine);
-				assert(mode_OIT == MFR_MODE::STATIC_KB || mode_OIT == MFR_MODE::DYNAMIC_KB);
-
-				// RT to K-Buffer
-				ID3D11ShaderResourceView* dx11SRVs_1st_pass[2] = {
-						(ID3D11ShaderResourceView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_SRV]
-					, (ID3D11ShaderResourceView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_SRV]
-				};
-				dx11DeviceImmContext->CSSetUnorderedAccessViews(2, NUM_UAVs_1ST, dx11UAVs_1st_pass, (UINT*)(&dx11UAVs_1st_pass));
-				dx11DeviceImmContext->CSSetShaderResources(10, 2, dx11SRVs_1st_pass);
-
-				UINT UAVInitialCounts = 0;
-				if (mode_OIT == MFR_MODE::STATIC_KB)
-					dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(SR_SINGLE_LAYER_TO_SKBTZ_cs_5_0) : GETCS(SR_SINGLE_LAYER_TO_SKBT_cs_5_0), NULL, 0);
-				else if (mode_OIT == MFR_MODE::DYNAMIC_KB)
-					dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(SR_SINGLE_LAYER_TO_DKBTZ_cs_5_0) : GETCS(SR_SINGLE_LAYER_TO_DKBT_cs_5_0), NULL, 0);
-				//else if (mode_OIT == MFR_MODE::DYNAMIC_FB)
-				//	dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_DFB_cs_5_0), NULL, 0);
-				else assert(0);
-
-				dx11DeviceImmContext->Flush();
-				dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
-				dx11DeviceImmContext->Flush();
-
-				dx11DeviceImmContext->CSSetUnorderedAccessViews(2, NUM_UAVs_1ST, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-				dx11DeviceImmContext->CSSetShaderResources(10, 2, dx11SRVs_NULL);
-
-				dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
-				dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV], clr_float_fltmax_4);
-				dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
-			}
-
 			dx11DeviceImmContext->PSSetShaderResources(50, 1, dx11SRVs_NULL); // note that t50 is assigned for offsettable used in DKB and DFB 
 #pragma endregion // GEO RENDERING PASS
 		}
@@ -2324,6 +2297,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 	auto ResolvePass = [&dx11CommonParams, &dx11DeviceImmContext, &dx11RTVsNULL, &dx11DSVNULL, &dx11UAVs_NULL, &dx11SRVs_NULL,
 		&gres_fb_k_buffer, &gres_fb_counter, &gres_fb_rgba, &gres_fb_depthcs, &gres_fb_ubk_buffer, &gres_fb_ref_pidx,
+		&gres_fb_singlelayer_rgba, &gres_fb_singlelayer_depthcs,
 		&num_grid_x, &num_grid_y]
 		(const MFR_MODE mode_OIT, const bool apply_fragmerge) {
 		assert(mode_OIT != MFR_MODE::MOMENT);
@@ -2341,6 +2315,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		};
 
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], 0); // trimming may occur 
+
+		dx11DeviceImmContext->CSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_SRV]);
+		dx11DeviceImmContext->CSSetShaderResources(2, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_depthcs.alloc_res_ptrs[DTYPE_SRV]);
 
 		switch (mode_OIT)
 		{
@@ -2455,8 +2432,17 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	dx11DeviceImmContext->GSSetConstantBuffers(0, 1, &cbuf_cam_state);
 	dx11DeviceImmContext->PSSetConstantBuffers(0, 1, &cbuf_cam_state);
 	dx11DeviceImmContext->CSSetConstantBuffers(0, 1, &cbuf_cam_state);
+
+	dx11DeviceImmContext->VSSetConstantBuffers(1, 1, &cbuf_pobj);
+	dx11DeviceImmContext->PSSetConstantBuffers(1, 1, &cbuf_pobj);
+	dx11DeviceImmContext->CSSetConstantBuffers(1, 1, &cbuf_pobj); // for silhouette or A-buffer test
+	dx11DeviceImmContext->PSSetConstantBuffers(2, 1, &cbuf_clip);
+	dx11DeviceImmContext->PSSetConstantBuffers(3, 1, &cbuf_reffect);
+	dx11DeviceImmContext->CSSetConstantBuffers(3, 1, &cbuf_reffect);
+
 	CB_CameraState cbCamState;
 	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, gi_v_thickness);
+
 	auto SetCamConstBuf = [&dx11DeviceImmContext, &cbuf_cam_state](const CB_CameraState& cbCamState) {
 		D3D11_MAPPED_SUBRESOURCE mappedResCamState;
 		dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
@@ -2536,284 +2522,365 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		// END of Render Process for picking
 	}
 	else if (mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB || mode_OIT == MFR_MODE::STATIC_KB) {
+		
 		cbCamState.iSrCamDummy__0 = *(uint*)&merging_beta;
+		int oulineiRGB = (int)(outline_color.r * 255.f) | (int)(outline_color.g * 255.f) << 8 | (int)(outline_color.b * 255.f) << 16;
+		outline_thickness = min(32, outline_thickness);
+		cbCamState.iSrCamDummy__1 = oulineiRGB | outline_thickness << 24;
 		cbCamState.iSrCamDummy__2 = *(uint*)&scale_z_res;
+		cbCamState.cam_flag |= ((int)outline_fadeEffect << 9); //
+		
 		SetCamConstBuf(cbCamState);
 
-		// in the future, this rendering can be used for enhancing rendering performance
-		//if (foremost_surfaces_routine_objs.size() > 0) { ////// CHECK LATER... TO DO
-		//
-		//	// DO NOT STORE the rendering result INTO the Render-out RTs
-		//	// Instead, STORE it into new RTs dedicated to foremost_surfaces_routine_objs rendering (better option for performance opt)
-		//
-		//	___GpuProfile("Opaque Surface");
-		//	// Opaque Foremost Rendering for 
-		//	RenderStage1(foremost_surfaces_routine_objs, mode_OIT, RENDER_GEOPASS::PASS_OPAQUESURFACES
-		//		, false /*is_frag_counter_buffer*/, is_ghost_mode, false /*is_picking_routine*/, apply_fragmerge, false);
-		//	___GpuProfile("Opaque Surface", true);
-		//}
+		/*
+		auto RenderTargetsToSKB = [&dx11DeviceImmContext, &dx11DSV, &dx11CommonParams,
+			&gres_fb_counter, gres_fb_spinlock, gres_fb_k_buffer,
+			&dx11UAVs_NULL, &dx11SRVs_NULL, &clr_float_fltmax_4, &clr_float_zero_4](
+				const bool is_picking_routine, const bool mode_OIT, const bool use_spinlock_pixsynch, const bool apply_fragmerge,
+				const int num_grid_x, const int num_grid_y,
+				GpuRes& gres_fb_rgba, GpuRes& gres_fb_depthcs, GpuRes& gres_fb_counter, GpuRes& gres_fb_spinlock, GpuRes& gres_fb_k_buffer) {
 
-		if (mode_OIT != MFR_MODE::STATIC_KB) {
-			assert(mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB);
-			___GpuProfile("Fragment Count");
-			RenderStage1(general_oit_routine_objs, mode_OIT, RENDER_GEOPASS::PASS_OIT
-				, true /*is_frag_counter_buffer*/, is_ghost_mode, false /*is_picking_routine*/, apply_fragmerge, false);
-			___GpuProfile("Fragment Count", true);
+					ID3D11UnorderedAccessView* dx11UAVs_1st_pass[NUM_UAVs_1ST] = {
+						(ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV]
+						, use_spinlock_pixsynch ? (ID3D11UnorderedAccessView*)gres_fb_spinlock.alloc_res_ptrs[DTYPE_UAV] : NULL
+						, (ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]
+						, NULL
+					};
 
-			dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
+					assert(!is_picking_routine);
+					assert(mode_OIT == MFR_MODE::STATIC_KB || mode_OIT == MFR_MODE::DYNAMIC_KB);
 
-			if (mode_OIT == MFR_MODE::DYNAMIC_FB) {
-				___GpuProfile("Offset Table Generation");
+					// RT to K-Buffer
+					ID3D11ShaderResourceView* dx11SRVs_1st_pass[2] = {
+							(ID3D11ShaderResourceView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_SRV]
+						, (ID3D11ShaderResourceView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_SRV]
+					};
+					dx11DeviceImmContext->CSSetUnorderedAccessViews(2, NUM_UAVs_1ST, dx11UAVs_1st_pass, (UINT*)(&dx11UAVs_1st_pass));
+					dx11DeviceImmContext->CSSetShaderResources(10, 2, dx11SRVs_1st_pass);
+
+					UINT UAVInitialCounts = 0;
+					if (mode_OIT == MFR_MODE::STATIC_KB)
+						dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(SR_SINGLE_LAYER_TO_SKBTZ_cs_5_0) : GETCS(SR_SINGLE_LAYER_TO_SKBT_cs_5_0), NULL, 0);
+					else if (mode_OIT == MFR_MODE::DYNAMIC_KB)
+						dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(SR_SINGLE_LAYER_TO_DKBTZ_cs_5_0) : GETCS(SR_SINGLE_LAYER_TO_DKBT_cs_5_0), NULL, 0);
+					//else if (mode_OIT == MFR_MODE::DYNAMIC_FB)
+					//	dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_DFB_cs_5_0), NULL, 0);
+					else assert(0);
+
+					dx11DeviceImmContext->Flush();
+					dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+					dx11DeviceImmContext->Flush();
+
+					dx11DeviceImmContext->CSSetUnorderedAccessViews(2, NUM_UAVs_1ST, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+					dx11DeviceImmContext->CSSetShaderResources(10, 2, dx11SRVs_NULL);
+
+					dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+					dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV], clr_float_fltmax_4);
+					dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
+		};
+		/**/
+		if (foremost_surfaces_routine_objs.size() > 0) 
+		{
+			dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+			___GpuProfile("Opaque Surface");
+			// Opaque Foremost Rendering ==> to Render Target Textures (gres_fb_rgba and gres_fb_depthcs)
+			RenderStage1(foremost_surfaces_routine_objs, MFR_MODE::NONE, RENDER_GEOPASS::PASS_OPAQUESURFACES
+				, false /*is_frag_counter_buffer*/, is_ghost_mode, false /*is_picking_routine*/, apply_fragmerge, false);
+			___GpuProfile("Opaque Surface", true);
+		}
+
+		if (single_layer_routine_objs.size() > 0) 
+		{
+			dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+			___GpuProfile("Single Layer Pass");
+			// Single Layer Effect (outline) Rendering 
+			// ==> to a Temporary Render Target Texture (gres_fb_singlelayer_depthcs)
+			RenderStage1(single_layer_routine_objs, MFR_MODE::NONE, RENDER_GEOPASS::PASS_SINGLELAYERS
+				, false /*is_frag_counter_buffer*/, is_ghost_mode, false /*is_picking_routine*/, apply_fragmerge, false);
+			___GpuProfile("Single Layer Pass", true);
+
+			GpuRes gres_quad;
+			gres_quad.vm_src_id = 1;
+			gres_quad.res_name = string("PROXY_QUAD");
+
+			if (gpu_manager->UpdateGpuResource(gres_quad)) 
+			{
+				D3D11_MAPPED_SUBRESOURCE mappedResPobjData;
+				dx11DeviceImmContext->Map(cbuf_pobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResPobjData);
+				CB_PolygonObject* cbPolygonObjData = (CB_PolygonObject*)mappedResPobjData.pData;
+
+				vmmat44f matQaudWS2CS;
+				vmmath::fMatrixWS2CS(&matQaudWS2CS, &vmfloat3(0, 0, 1), &vmfloat3(0, 1, 0), &vmfloat3(0, 0, -1));
+				vmmat44f matQaudCS2PS;
+				vmmath::fMatrixOrthogonalCS2PS(&matQaudCS2PS, 2.f, 2.f, 0, 2.f);
+				vmmat44f matQaudWS2PS = matQaudWS2CS * matQaudCS2PS;
+				cbPolygonObjData->mat_os2ps = TRANSPOSE(matQaudWS2PS);
+				dx11DeviceImmContext->Unmap(cbuf_pobj, 0);
+
+				ID3D11Buffer* dx11BufferTargetPrim = (ID3D11Buffer*)gres_quad.alloc_res_ptrs[DTYPE_RES];
+				ID3D11Buffer* dx11IndiceTargetPrim = NULL;
+				uint stride_inputlayer = sizeof(vmfloat3);
+				uint offset = 0;
+				dx11DeviceImmContext->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&dx11BufferTargetPrim, &stride_inputlayer, &offset);
+				dx11DeviceImmContext->IASetInputLayout(dx11LI_P);
+				dx11DeviceImmContext->VSSetShader(dx11VShader_P, NULL, 0);
+				dx11DeviceImmContext->GSSetShader(NULL, NULL, 0);
+				dx11DeviceImmContext->PSSetShader(GETPS(SR_QUAD_OUTLINE_ps_5_0), NULL, 0);
+				dx11DeviceImmContext->RSSetState(GETRASTER(SOLID_NONE));
+				dx11DeviceImmContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+				dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(ALWAYS), 0);
+
+				//dx11DeviceImmContext->PSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_fb_rgba.alloc_res_ptrs[DTYPE_SRV]);
+				dx11DeviceImmContext->PSSetShaderResources(11, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_tempDepth.alloc_res_ptrs[DTYPE_SRV]);
+				ID3D11RenderTargetView* dx11RTVs[2] = {
+					(ID3D11RenderTargetView*)gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_RTV],
+					(ID3D11RenderTargetView*)gres_fb_singlelayer_depthcs.alloc_res_ptrs[DTYPE_RTV] };
+				dx11DeviceImmContext->OMSetRenderTargets(2, dx11RTVs, dx11DSV);
+
+				dx11DeviceImmContext->Draw(4, 0);
+
+				dx11DeviceImmContext->PSSetShaderResources(11, 1, dx11SRVs_NULL);
+			}
+		}
+
+		if (general_oit_routine_objs.size() > 0) {
+#ifdef DX10_0
+			assert(0);
+#else
+			// pre-pass : Counting fragments
+			if (mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB) {
+
+				___GpuProfile("Fragment Count");
+				RenderStage1(general_oit_routine_objs, mode_OIT, RENDER_GEOPASS::PASS_OIT
+					, true /*is_frag_counter_buffer*/, is_ghost_mode, false /*is_picking_routine*/, apply_fragmerge, false);
+				___GpuProfile("Fragment Count", true);
+
+				dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
+
+				if (mode_OIT == MFR_MODE::DYNAMIC_FB) {
+					___GpuProfile("Offset Table Generation");
 #pragma region table offset
-				ID3D11UnorderedAccessView* dx11UAVs_2nd_pass[NUM_UAVs_2ND] = {
-						  (ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]
-						, (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
-						, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
-						, (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV]
-						, NULL // (ID3D11UnorderedAccessView*)gres_fb_ubk_buffer.alloc_res_ptrs[DTYPE_UAV]
-				};
-				UINT UAVInitialCounts = 0;
-				dx11DeviceImmContext->CSSetShader(GETCS(SR_OIT_ABUFFER_OffsetTable_cs_5_0), NULL, 0);
+					ID3D11UnorderedAccessView* dx11UAVs_2nd_pass[NUM_UAVs_2ND] = {
+							  (ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]
+							, (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
+							, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
+							, (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV]
+							, NULL // (ID3D11UnorderedAccessView*)gres_fb_ubk_buffer.alloc_res_ptrs[DTYPE_UAV]
+					};
+					UINT UAVInitialCounts = 0;
+					dx11DeviceImmContext->CSSetShader(GETCS(SR_OIT_ABUFFER_OffsetTable_cs_5_0), NULL, 0);
 
-				// for detailed description, refer to 
-				// "Memory-Efficient Order-Independent Transparency with Dynamic Fragment Buffer"
-				// here, we use more efficient implementation for constructing the index table by using 'atomic add' operation.
-				dx11DeviceImmContext->CSSetUnorderedAccessViews(1, NUM_UAVs_2ND, dx11UAVs_2nd_pass, (UINT*)(&dx11UAVs_2nd_pass));
-				dx11DeviceImmContext->CSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_SRV]);
-				//dx11DeviceImmContext->Flush();
+					// for detailed description, refer to 
+					// "Memory-Efficient Order-Independent Transparency with Dynamic Fragment Buffer"
+					// here, we use more efficient implementation for constructing the index table by using 'atomic add' operation.
+					dx11DeviceImmContext->CSSetUnorderedAccessViews(1, NUM_UAVs_2ND, dx11UAVs_2nd_pass, (UINT*)(&dx11UAVs_2nd_pass));
+					dx11DeviceImmContext->CSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_SRV]);
+					//dx11DeviceImmContext->Flush();
 
-				dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
-				//dx11DeviceImmContext->Dispatch(fb_size_cur.x, fb_size_cur.y, 1);
+					dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+					//dx11DeviceImmContext->Dispatch(fb_size_cur.x, fb_size_cur.y, 1);
 
-				dx11DeviceImmContext->CSSetUnorderedAccessViews(1, NUM_UAVs_2ND, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-				dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
+					dx11DeviceImmContext->CSSetUnorderedAccessViews(1, NUM_UAVs_2ND, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+					dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
 #pragma endregion table offset
-				___GpuProfile("Offset Table Generation", true);
-			}
-			else if (mode_OIT == MFR_MODE::DYNAMIC_KB) {
-				___GpuProfile("Offset Table Generation & K-Determination (Histogram-based)");
+					___GpuProfile("Offset Table Generation", true);
+				}
+				else if (mode_OIT == MFR_MODE::DYNAMIC_KB) {
+					___GpuProfile("Offset Table Generation & K-Determination (Histogram-based)");
 #pragma region table offset & K-determination
-				// histogram //
-				const int bins_frag_histo = 1024;
-				GpuRes histo_buf, histo_buf_sys;
-				histo_buf.res_name = "HISTO_FRAGS";
-				histo_buf.rtype = RTYPE_BUFFER;
-				histo_buf.options["USAGE"] = D3D11_USAGE_DEFAULT;
-				histo_buf.options["CPU_ACCESS_FLAG"] = NULL;
-				histo_buf.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-				histo_buf.options["FORMAT"] = DXGI_FORMAT_R32_UINT;
-				histo_buf.res_values.SetParam("NUM_ELEMENTS", (uint)bins_frag_histo);
-				histo_buf.res_values.SetParam("STRIDE_BYTES", (uint)sizeof(uint));
-				if (!gpu_manager->UpdateGpuResource(histo_buf))
-					gpu_manager->GenerateGpuResource(histo_buf);
+					// histogram //
+					const int bins_frag_histo = 1024;
+					GpuRes histo_buf, histo_buf_sys;
+					histo_buf.res_name = "HISTO_FRAGS";
+					histo_buf.rtype = RTYPE_BUFFER;
+					histo_buf.options["USAGE"] = D3D11_USAGE_DEFAULT;
+					histo_buf.options["CPU_ACCESS_FLAG"] = NULL;
+					histo_buf.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+					histo_buf.options["FORMAT"] = DXGI_FORMAT_R32_UINT;
+					histo_buf.res_values.SetParam("NUM_ELEMENTS", (uint)bins_frag_histo);
+					histo_buf.res_values.SetParam("STRIDE_BYTES", (uint)sizeof(uint));
+					if (!gpu_manager->UpdateGpuResource(histo_buf))
+						gpu_manager->GenerateGpuResource(histo_buf);
 
-				dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)histo_buf.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
+					dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)histo_buf.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 
-				dx11DeviceImmContext->CSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_SRV]);
-				dx11DeviceImmContext->CSSetUnorderedAccessViews(10, 1, (ID3D11UnorderedAccessView**)&histo_buf.alloc_res_ptrs[DTYPE_UAV], 0);
-				dx11DeviceImmContext->CSSetUnorderedAccessViews(11, 1, (ID3D11UnorderedAccessView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV], 0);
+					dx11DeviceImmContext->CSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_SRV]);
+					dx11DeviceImmContext->CSSetUnorderedAccessViews(10, 1, (ID3D11UnorderedAccessView**)&histo_buf.alloc_res_ptrs[DTYPE_UAV], 0);
+					dx11DeviceImmContext->CSSetUnorderedAccessViews(11, 1, (ID3D11UnorderedAccessView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV], 0);
 
-				dx11DeviceImmContext->CSSetShader(GETCS(SR_FillHistogram_cs_5_0), NULL, 0);
-				dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
-				//dx11DeviceImmContext->Dispatch(fb_size_cur.x, fb_size_cur.y, 1);
+					dx11DeviceImmContext->CSSetShader(GETCS(SR_FillHistogram_cs_5_0), NULL, 0);
+					dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+					//dx11DeviceImmContext->Dispatch(fb_size_cur.x, fb_size_cur.y, 1);
 
-				// read-back //
-				histo_buf_sys = histo_buf;
-				histo_buf_sys.res_name = "SYS_OUT_HISTO_FRAGS";
-				histo_buf_sys.options["USAGE"] = D3D11_USAGE_STAGING;
-				histo_buf_sys.options["BIND_FLAG"] = NULL;
-				histo_buf_sys.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_READ;
-				if (!gpu_manager->UpdateGpuResource(histo_buf_sys))
-					gpu_manager->GenerateGpuResource(histo_buf_sys);
+					// read-back //
+					histo_buf_sys = histo_buf;
+					histo_buf_sys.res_name = "SYS_OUT_HISTO_FRAGS";
+					histo_buf_sys.options["USAGE"] = D3D11_USAGE_STAGING;
+					histo_buf_sys.options["BIND_FLAG"] = NULL;
+					histo_buf_sys.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_READ;
+					if (!gpu_manager->UpdateGpuResource(histo_buf_sys))
+						gpu_manager->GenerateGpuResource(histo_buf_sys);
 
-				dx11DeviceImmContext->CopyResource((ID3D11Buffer*)histo_buf_sys.alloc_res_ptrs[DTYPE_RES], (ID3D11Buffer*)histo_buf.alloc_res_ptrs[DTYPE_RES]);
+					dx11DeviceImmContext->CopyResource((ID3D11Buffer*)histo_buf_sys.alloc_res_ptrs[DTYPE_RES], (ID3D11Buffer*)histo_buf.alloc_res_ptrs[DTYPE_RES]);
 
-				D3D11_MAPPED_SUBRESOURCE mappedResSysHisto;
-				HRESULT hr = dx11DeviceImmContext->Map((ID3D11Buffer*)histo_buf_sys.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysHisto);
-				uint* histogram_frags = (uint*)mappedResSysHisto.pData;
-				uint dyn_k_value = bins_frag_histo;
-				uint totol_num_frags = 0;
-				uint max_layers = 0;
-				for (uint i = 0; i < bins_frag_histo; i++)
-				{
-					uint h_v = histogram_frags[i];
-					if (h_v > 0) max_layers = i;
-					totol_num_frags += h_v * (i + 1);
-				}
-
-				const double Rh = _fncontainer->fnParams.GetParam("_float_RobustRatio", 0.75);
-				const bool is_ztmodel = _fncontainer->fnParams.GetParam("_bool_ApplyZTModel", false);
-				const uint bytes_per_f = is_ztmodel ? 4 * 4 : 4 * 2; // here, we assign this w.r.t. our z-thickness model (rgba, depth, thickness, opacity_sum)
-				// here, we assign this w.r.t. our z-thickness model (rgba, depth, thickness, opacity_sum), i.e., 16 bytes per fragment
-				const double size_k_buf_mb = (double)(16 * k_value * buffer_ex) * ((double)fb_size_cur.x * (double)fb_size_cur.y / (1024.0 * 1024.0));
-
-				double min_diff = 1.0;
-				uint miss_frags = 0;
-				for (; dyn_k_value >= 8; dyn_k_value--)
-				{
-					miss_frags = 0;
-					for (uint i = bins_frag_histo - 1; i >= dyn_k_value; i--)
+					D3D11_MAPPED_SUBRESOURCE mappedResSysHisto;
+					HRESULT hr = dx11DeviceImmContext->Map((ID3D11Buffer*)histo_buf_sys.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysHisto);
+					uint* histogram_frags = (uint*)mappedResSysHisto.pData;
+					uint dyn_k_value = bins_frag_histo;
+					uint totol_num_frags = 0;
+					uint max_layers = 0;
+					for (uint i = 0; i < bins_frag_histo; i++)
 					{
-						miss_frags += (i + 1 - dyn_k_value) * histogram_frags[i];
+						uint h_v = histogram_frags[i];
+						if (h_v > 0) max_layers = i;
+						totol_num_frags += h_v * (i + 1);
 					}
 
-					double diff = (1. - (double)miss_frags / (double)totol_num_frags) - Rh;
-					if ((double)bytes_per_f * (double)(totol_num_frags - miss_frags) / (1024.0 * 1024.0) < size_k_buf_mb)
+					const double Rh = _fncontainer->fnParams.GetParam("_float_RobustRatio", 0.75);
+					const bool is_ztmodel = _fncontainer->fnParams.GetParam("_bool_ApplyZTModel", false);
+					const uint bytes_per_f = is_ztmodel ? 4 * 4 : 4 * 2; // here, we assign this w.r.t. our z-thickness model (rgba, depth, thickness, opacity_sum)
+					// here, we assign this w.r.t. our z-thickness model (rgba, depth, thickness, opacity_sum), i.e., 16 bytes per fragment
+					const double size_k_buf_mb = (double)(16 * k_value * buffer_ex) * ((double)fb_size_cur.x * (double)fb_size_cur.y / (1024.0 * 1024.0));
+
+					double min_diff = 1.0;
+					uint miss_frags = 0;
+					for (; dyn_k_value >= 8; dyn_k_value--)
 					{
-						if (min_diff * min_diff >= diff * diff)
+						miss_frags = 0;
+						for (uint i = bins_frag_histo - 1; i >= dyn_k_value; i--)
 						{
-							min_diff = diff;
-							k_value = dyn_k_value;
+							miss_frags += (i + 1 - dyn_k_value) * histogram_frags[i];
 						}
-						else
-							break;
+
+						double diff = (1. - (double)miss_frags / (double)totol_num_frags) - Rh;
+						if ((double)bytes_per_f * (double)(totol_num_frags - miss_frags) / (1024.0 * 1024.0) < size_k_buf_mb)
+						{
+							if (min_diff * min_diff >= diff * diff)
+							{
+								min_diff = diff;
+								k_value = dyn_k_value;
+							}
+							else
+								break;
+						}
 					}
-				}
 
-				dx11DeviceImmContext->Unmap((ID3D11Buffer*)histo_buf_sys.alloc_res_ptrs[DTYPE_RES], 0);
+					dx11DeviceImmContext->Unmap((ID3D11Buffer*)histo_buf_sys.alloc_res_ptrs[DTYPE_RES], 0);
 
-				if (gpu_profile)
-				{
-					cout << "----> total frag    : " << totol_num_frags << endl;
-					cout << "----> miss frag     : " << miss_frags << endl;
-					cout << "----> max layers    : " << max_layers << endl;
-					cout << "----> Processing Rh : " << Rh - min_diff << " (" << Rh << ")" << endl;
-					cout << "----> dynamic k     : " << k_value << endl;
-				}
+					if (gpu_profile)
+					{
+						cout << "----> total frag    : " << totol_num_frags << endl;
+						cout << "----> miss frag     : " << miss_frags << endl;
+						cout << "----> max layers    : " << max_layers << endl;
+						cout << "----> Processing Rh : " << Rh - min_diff << " (" << Rh << ")" << endl;
+						cout << "----> dynamic k     : " << k_value << endl;
+					}
 
-				if (test_fps_profiling)
-				{
-					//...totol_num_frags
-					// k_value
-					ofstream file_totalfrags;
-					file_totalfrags.open(".\\data\\frames_profile_totalfrags.txt", std::ios_base::app);
-					file_totalfrags << totol_num_frags << endl;
-					file_totalfrags.close();
-					ofstream file_missfrags;
-					file_missfrags.open(".\\data\\frames_profile_missfrags.txt", std::ios_base::app);
-					file_missfrags << miss_frags << endl;
-					file_missfrags.close();
-					ofstream file_k;
-					file_k.open(".\\data\\frames_profile_k.txt", std::ios_base::app);
-					file_k << k_value << endl;
-					file_k.close();
-				}
+					if (test_fps_profiling)
+					{
+						//...totol_num_frags
+						// k_value
+						ofstream file_totalfrags;
+						file_totalfrags.open(".\\data\\frames_profile_totalfrags.txt", std::ios_base::app);
+						file_totalfrags << totol_num_frags << endl;
+						file_totalfrags.close();
+						ofstream file_missfrags;
+						file_missfrags.open(".\\data\\frames_profile_missfrags.txt", std::ios_base::app);
+						file_missfrags << miss_frags << endl;
+						file_missfrags.close();
+						ofstream file_k;
+						file_k.open(".\\data\\frames_profile_k.txt", std::ios_base::app);
+						file_k << k_value << endl;
+						file_k.close();
+					}
 
-				const int test_K = _fncontainer->fnParams.GetParam("_int_TestKvalue", -1);
-				if (test_K >= 8) k_value = test_K;
-				cbCamState.k_value = k_value;
+					const int test_K = _fncontainer->fnParams.GetParam("_int_TestKvalue", -1);
+					if (test_K >= 8) k_value = test_K;
+					cbCamState.k_value = k_value;
 
-				D3D11_MAPPED_SUBRESOURCE mappedResCamState;
-				dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
-				CB_CameraState* cbCamStateData = (CB_CameraState*)mappedResCamState.pData;
-				memcpy(cbCamStateData, &cbCamState, sizeof(CB_CameraState));
-				dx11DeviceImmContext->Unmap(cbuf_cam_state, 0);
-				dx11DeviceImmContext->PSSetConstantBuffers(0, 1, &cbuf_cam_state);
-				dx11DeviceImmContext->CSSetConstantBuffers(0, 1, &cbuf_cam_state);
+					D3D11_MAPPED_SUBRESOURCE mappedResCamState;
+					dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
+					CB_CameraState* cbCamStateData = (CB_CameraState*)mappedResCamState.pData;
+					memcpy(cbCamStateData, &cbCamState, sizeof(CB_CameraState));
+					dx11DeviceImmContext->Unmap(cbuf_cam_state, 0);
+					dx11DeviceImmContext->PSSetConstantBuffers(0, 1, &cbuf_cam_state);
+					dx11DeviceImmContext->CSSetConstantBuffers(0, 1, &cbuf_cam_state);
 
-				dx11DeviceImmContext->CSSetShader(GETCS(SR_CreateOffsetTableKpB_cs_5_0), NULL, 0);
-				dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
-				//dx11DeviceImmContext->Dispatch(fb_size_cur.x, fb_size_cur.y, 1);
+					dx11DeviceImmContext->CSSetShader(GETCS(SR_CreateOffsetTableKpB_cs_5_0), NULL, 0);
+					dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+					//dx11DeviceImmContext->Dispatch(fb_size_cur.x, fb_size_cur.y, 1);
 
-				dx11DeviceImmContext->CSSetUnorderedAccessViews(10, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-				dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
+					dx11DeviceImmContext->CSSetUnorderedAccessViews(10, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+					dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
 #pragma endregion table offset & K-determination
-				___GpuProfile("Offset Table Generation & K-Determination (Histogram-based)", true);
+					___GpuProfile("Offset Table Generation & K-Determination (Histogram-based)", true);
+				}
+				// used for the increment of the fragments (index)
+				dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
+				}
+
+			___GpuProfile("Geometry for OIT");
+			// buffer filling
+			RenderStage1(general_oit_routine_objs, mode_OIT, RENDER_GEOPASS::PASS_OIT
+				, false /*is_frag_counter_buffer*/, is_ghost_mode, false /*is_picking_routine*/, apply_fragmerge, false);
+			___GpuProfile("Geometry for OIT", true);
+#endif
 			}
-			// used for the increment of the fragments (index)
-			dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
-		}
 
-		___GpuProfile("Geometry for OIT");
-		// buffer filling
-		RenderStage1(general_oit_routine_objs, mode_OIT, RENDER_GEOPASS::PASS_OIT
-			, false /*is_frag_counter_buffer*/, is_ghost_mode, false /*is_picking_routine*/, apply_fragmerge, false);
-		___GpuProfile("Geometry for OIT", true);
 
-		if (!is_final_renderer || check_pixel_transmittance
-			|| single_layer_routine_objs.size() > 0
-			|| foremost_surfaces_routine_objs.size() > 0
+#ifdef DX10_0
+		///. TO DO //
+		not allocate gres_fb_spinlock, gres_fb_counter, gres_fb_k_buffer, gres_fb_ubk_buffer...
+
+#else
+		int additionalKLayerForMFB = (int)(foremost_surfaces_routine_objs.size() == 0 && single_layer_routine_objs.size() > 0);
+		cbCamState.cam_flag |= (additionalKLayerForMFB << 8);
+		int storeKBuf = (int)(!is_final_renderer || check_pixel_transmittance
 			|| cbEnvState.r_kernel_ao > 0
-			|| (cbEnvState.dof_lens_r > 0 && cam_obj->IsPerspective())) {
-			// which means the k-buffer will be used for the following renderer
-			// stores the fragments into the k-buffer and do not store the rendering result into RT
-			cbCamState.cam_flag |= (0x1 << 3);
-		}
+			|| (cbEnvState.dof_lens_r > 0 && cam_obj->IsPerspective()));
+		// which means the k-buffer will be used for the following renderer
+		// stores the fragments into the k-buffer and do not store the rendering result into RT
+		cbCamState.cam_flag |= (storeKBuf << 3);
 		SetCamConstBuf(cbCamState);
 
-		// Note that if K-buffer is preserved, then no RT-out is available
-		___GpuProfile("Resolve Pass");
-		// Dynamic FB layers into K-buffer if there is post-processing (SS algorithms) or single layer pass
-		ResolvePass(mode_OIT, apply_fragmerge);
-		___GpuProfile("Resolve Pass", true);
+		if (general_oit_routine_objs.size() + single_layer_routine_objs.size() > 0
+			|| storeKBuf) 
+		{
+			___GpuProfile("Resolve Pass");
+			// ResolvePass calls 
+			// 1. SR_OIT_ABUFFER_SORT2SENDER_SFM_cs_5_0 (to FB to SKB)
+			// 2. OIT_SKBZ_RESOLVE_cs_5_0 (unordered SKB to ordered SKB)
+			// 3. OIT_DKBZ_RESOLVE_cs_5_0 // deprecated..
+			// remember RENDER_GEOPASS::PASS_OPAQUESURFACES and RENDER_GEOPASS::PASS_SINGLELAYERS stores RTs
+			// RenderTargetsToSKB the stored RTs to SKB (unordered)
+			// Note that if K-buffer is preserved, then no RT-out is available
+			// Dynamic FB layers into K-buffer if there is post-processing (SS algorithms) or single layer pass
+			ResolvePass(mode_OIT, apply_fragmerge); // ==> SK-buffer ????
+			___GpuProfile("Resolve Pass", true);
+		}
 
-		// Note that the following rendering process allows only for SKB!
-		if (cbCamState.cam_flag && (0x1 << 3)) {
-
-			if (foremost_surfaces_routine_objs.size() > 0) { ////// CHECK LATER... TO DO
-				// DO NOT STORE the rendering result INTO the Render-out RTs
-				// Instead, STORE it into new RTs dedicated to foremost_surfaces_routine_objs rendering (better option for performance opt)
-
-				___GpuProfile("Opaque Surface");
-				// Opaque Foremost Rendering for 
-				RenderStage1(foremost_surfaces_routine_objs, MFR_MODE::STATIC_KB, RENDER_GEOPASS::PASS_OPAQUESURFACES
-					, false /*is_frag_counter_buffer*/, is_ghost_mode, false /*is_picking_routine*/, apply_fragmerge, false);
-				___GpuProfile("Opaque Surface", true);
-
-				___GpuProfile("2nd-Resolve Pass (SKB, foremost_surfaces_routine_objs)");
-				// Dynamic FB layers into K-buffer if there is post-processing (SS algorithms) or single layer pass
-				ResolvePass(MFR_MODE::STATIC_KB, apply_fragmerge);
-				___GpuProfile("2nd-Resolve Pass (SKB, foremost_surfaces_routine_objs)", true);
-
-				dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
-				dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV], clr_float_fltmax_4);
-				dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
+		if (is_final_renderer) {
+			// Note that these post-processing will be performed in volume rendering stage when there is volume rendering requirement
+			if (cbEnvState.r_kernel_ao > 0) {
+				___GpuProfile("SSAO");
+				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs_2ND, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+				ComputeSSAO(dx11DeviceImmContext, dx11CommonParams, iobj, num_grid_x, num_grid_y,
+					gres_fb_counter, gres_fb_k_buffer, gres_fb_rgba, blur_SSAO,
+					gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex, false, apply_fragmerge, profile_map, gpu_profile);
+				___GpuProfile("SSAO", true);
 			}
-
-			if (single_layer_routine_objs.size() > 0) {
-				// this is for CS to insert the single layer into the k-buffer
-				cbCamState.cam_flag |= (0x1 << 1); // 2nd bit : perform RT to k-buffer : 0 (just RT), 1 : (perform after silhouette processing)
-				SetCamConstBuf(cbCamState);
-
-				//dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV], clr_float_fltmax_4);
-				//dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
-
-				//ID3D11DepthStencilView* dx11DSV = (ID3D11DepthStencilView*)gres_fb_depthstencil.alloc_res_ptrs[DTYPE_DSV];
-				dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
-
-				___GpuProfile("Single Layer Pass");
-				RenderStage1(single_layer_routine_objs, MFR_MODE::STATIC_KB, RENDER_GEOPASS::PASS_SINGLELAYERS
-					, false /*is_frag_counter_buffer*/, is_ghost_mode, false /*is_picking_routine*/, apply_fragmerge, false);
-				___GpuProfile("Single Layer Pass", true);
-
-				___GpuProfile("2nd-Resolve Pass (SKB, single_layer_routine_objs)");
-				// Dynamic FB layers into K-buffer if there is post-processing (SS algorithms) or single layer pass
-				ResolvePass(MFR_MODE::STATIC_KB, apply_fragmerge);
-				___GpuProfile("2nd-Resolve Pass (SKB, single_layer_routine_objs)", true);
-			}
-
-			if (is_final_renderer) {
-				// Note that these post-processing will be performed in volume rendering stage when there is volume rendering requirement
-				if (cbEnvState.r_kernel_ao > 0) {
-					___GpuProfile("SSAO");
-					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs_2ND, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-					ComputeSSAO(dx11DeviceImmContext, dx11CommonParams, iobj, num_grid_x, num_grid_y,
-						gres_fb_counter, gres_fb_k_buffer, gres_fb_rgba, blur_SSAO,
-						gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex, false, apply_fragmerge, profile_map, gpu_profile);
-					___GpuProfile("SSAO", true);
-				}
-				if ((cbEnvState.dof_lens_r > 0 && cam_obj->IsPerspective())) {
-					___GpuProfile("SSDOF");
-					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs_2ND, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-					ComputeDOF(dx11DeviceImmContext, dx11CommonParams, iobj, num_grid_x, num_grid_y,
-						gres_fb_counter, gres_fb_k_buffer, gres_fb_rgba, cbEnvState.r_kernel_ao > 0, blur_SSAO, apply_fragmerge,
-						gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex,
-						cbCamState, cbuf_cam_state, __BLOCKSIZE,
-						false, profile_map, gpu_profile);
-					___GpuProfile("SSDOF", true);
-				}
+			if ((cbEnvState.dof_lens_r > 0 && cam_obj->IsPerspective())) {
+				___GpuProfile("SSDOF");
+				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs_2ND, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+				ComputeDOF(dx11DeviceImmContext, dx11CommonParams, iobj, num_grid_x, num_grid_y,
+					gres_fb_counter, gres_fb_k_buffer, gres_fb_rgba, cbEnvState.r_kernel_ao > 0, blur_SSAO, apply_fragmerge,
+					gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex,
+					cbCamState, cbuf_cam_state, __BLOCKSIZE,
+					false, profile_map, gpu_profile);
+				___GpuProfile("SSDOF", true);
 			}
 		}
+#endif
 
 		// Set NULL States //
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL)); // counter
@@ -2827,6 +2894,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		}
 	}
 	else if (mode_OIT == MFR_MODE::MOMENT) {
+#ifdef DX10_0
+		assert(0);
+#endif
 		SetCamConstBuf(cbCamState);
 
 		RenderStage1(general_oit_routine_objs, MFR_MODE::MOMENT, RENDER_GEOPASS::PASS_OIT // moment generation

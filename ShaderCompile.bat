@@ -11,9 +11,13 @@ fxc /E BasicShader4 /T ps_5_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compi
 fxc /E BasicShader4 /T ps_5_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs/SR_BASIC_TEXTUREIMGMAP_ps_5_0 /D __RENDERING_MODE=4 
 fxc /E BasicShader4 /T ps_5_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs/SR_BASIC_VOLUMEMAP_ps_5_0 /D __RENDERING_MODE=5 
 
+fxc /E BasicShader4 /T ps_5_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs/SR_QUAD_OUTLINE_ps_5_0 /D __RENDERING_MODE=6 
+
 fxc /E SINGLE_LAYER /T ps_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/SR_SINGLE_LAYER_ps_5_0
 
 fxc /E OIT_RESOLVE /T cs_5_0 ./hlsl/kbuf/KbufResolve.hlsl /Fo ./shader_compiled_objs/OIT_SKBZ_RESOLVE_cs_5_0 /D FRAG_MERGING=1 /D DYNAMIC_K_MODE=0 
+
+// deprecated //
 fxc /E OIT_PRESET /T cs_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/SR_SINGLE_LAYER_TO_SKBTZ_cs_5_0 /D FRAG_MERGING=1 /D TAIL_HANDLING=1 /D SILHOUETTE_EDGE=1 /D DO_NOT_USE_DISCARD=1 /D DYNAMIC_K_MODE=0 /D FURTHER_OVERLAPS=0 /D USE_ROV=1
 
 fxc /E OIT_KDEPTH /T ps_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0 /D __RENDERING_MODE=0 /D FRAG_MERGING=1 /D TAIL_HANDLING=1 /D PIXEL_SYNCH=1 /D USE_ROV=0 /D STRICT_LOCKED=1 /D DYNAMIC_K_MODE=0 /D FURTHER_OVERLAPS=0
@@ -29,6 +33,7 @@ fxc /E OIT_KDEPTH /T ps_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/
 fxc /E OIT_KDEPTH /T ps_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ROV_ps_5_0 /D __RENDERING_MODE=4 /D FRAG_MERGING=1 /D TAIL_HANDLING=1 /D PIXEL_SYNCH=1 /D USE_ROV=1 /D STRICT_LOCKED=1 /D DYNAMIC_K_MODE=0 /D FURTHER_OVERLAPS=0
 
 fxc /E OIT_RESOLVE /T cs_5_0 ./hlsl/kbuf/KbufResolve.hlsl /Fo ./shader_compiled_objs/OIT_SKB_RESOLVE_cs_5_0 /D FRAG_MERGING=0 /D DYNAMIC_K_MODE=0
+// deprecated //
 fxc /E OIT_PRESET /T cs_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/SR_SINGLE_LAYER_TO_SKBT_cs_5_0 /D FRAG_MERGING=0 /D TAIL_HANDLING=1 /D SILHOUETTE_EDGE=1 /D DO_NOT_USE_DISCARD=1 /D DYNAMIC_K_MODE=0 /D FURTHER_OVERLAPS=0
 
 fxc /E OIT_KDEPTH /T ps_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_FILL_SKBT_PHONGBLINN_ps_5_0 /D __RENDERING_MODE=0 /D FRAG_MERGING=0 /D TAIL_HANDLING=1 /D PIXEL_SYNCH=1 /D USE_ROV=0 /D STRICT_LOCKED=1 /D DYNAMIC_K_MODE=0 /D FURTHER_OVERLAPS=0
@@ -46,6 +51,7 @@ fxc /E OIT_KDEPTH /T ps_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/
 /////////////////////////////////
 // Dynamic KB (deprecated)
 fxc /E OIT_RESOLVE /T cs_5_0 ./hlsl/kbuf/KbufResolve.hlsl /Fo ./shader_compiled_objs/OIT_DKBZ_RESOLVE_cs_5_0 /D FRAG_MERGING=1 /D DYNAMIC_K_MODE=1 
+// deprecated //
 fxc /E OIT_PRESET /T cs_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/SR_SINGLE_LAYER_TO_DKBTZ_cs_5_0 /D FRAG_MERGING=1 /D TAIL_HANDLING=1 /D SILHOUETTE_EDGE=1 /D DO_NOT_USE_DISCARD=1 /D DYNAMIC_K_MODE=1 /D FURTHER_OVERLAPS=0
 
 fxc /E OIT_KDEPTH /T ps_5_0 ./hlsl/kbuf/Sr_Kbuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0 /D __RENDERING_MODE=0 /D FRAG_MERGING=1 /D TAIL_HANDLING=1 /D PIXEL_SYNCH=1 /D USE_ROV=0 /D STRICT_LOCKED=1 /D DYNAMIC_K_MODE=1 /D FURTHER_OVERLAPS=0

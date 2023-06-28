@@ -402,21 +402,26 @@ namespace grd_helper
 
 		float cam_vz_thickness;
 		uint k_value; // used for max k for DK+B algorithm
-		// 1st bit : 0 : (orthogonal), 1 : (perspective)
-		// 2nd bit : for RT to k-buffer : 0 (just RT), 1 : (after silhouette processing)
-		// 3rd bit : for dynamic K value // deprecated... (this will be treated as a separate shader
-		// 4th bit : for storing the final fragments to the k buffer, which is used for sequentially coming renderer (e.g., DVR) : 0 (skipping), 1 (storing)
-		// 5th bit : only for DFB without (S)FM. stores all fragments into the framebuffer (using offset table)
-		// 6th bit : 0 : (normal rendering), 1 : picking mode
-		// 7th bit : 0 : (stores the final RGBA and depth to RT), 1 : (does not store them) // will be deprecated
-		// 8th bit : 0 : full raycaster, 1 : half raycaster for 4x faster volume rendering (dither)
+		// 0- bit : 0 : (orthogonal), 1 : (perspective)
+		// 1- bit : for RT to k-buffer : 0 (just RT), 1 : (after silhouette processing)
+		// 2- bit : for dynamic K value // deprecated... (this will be treated as a separate shader
+		// 3- bit : for storing the final fragments to the k buffer, which is used for sequentially coming renderer (e.g., DVR) : 0 (skipping), 1 (storing)
+		// 4- bit : only for DFB without (S)FM. stores all fragments into the framebuffer (using offset table)
+		// 5- bit : 0 : (normal rendering), 1 : picking mode
+		// 6- bit : 0 : (stores the final RGBA and depth to RT), 1 : (does not store them) // will be deprecated
+		// 7- bit : 0 : full raycaster, 1 : half raycaster for 4x faster volume rendering (dither)
+		// 8- bit : 0 : only OIT fragments, 1 : foremostopaque or singlelayer effect ...
+		// 9- bit : 0 : outlint mode (solid), 1 : outlint mode (gradient alpha)
 		uint cam_flag;
-		// used for 1) A-Buffer prefix computations /*deprecated*/ or 2) beta (asfloat) for merging operation
+		// used for 
+		// 1) A-Buffer prefix computations /*deprecated*/ or 2) beta (asfloat) for merging operation
 		uint iSrCamDummy__0; 
 
 		float near_plane;
 		float far_plane;
-		// used for 1) the level of MIPMAP generation (only for SSAO rendering), or 2) picking xy (16bit, 16bit)
+		// used for 
+		// 1) the level of MIPMAP generation (only for SSAO rendering), or 2) picking xy (16bit, 16bit)
+		// 3) outline's colorRGB and thicknessPix
 		uint iSrCamDummy__1; 
 		uint iSrCamDummy__2; // scaling factor (asfloat) for the z-thickness value determined by the z-resolution
 
@@ -514,9 +519,9 @@ namespace grd_helper
 		float dash_interval;
 		float depth_thres;	// for outline!
 
-		float pix_thickness; // 1) for POINT and LINE TOPOLOGY, 2) outline thickness (in pixel)
+		float pix_thickness; // 1) for POINT and LINE TOPOLOGY,
 		float vz_thickness; 
-		uint pobj_dummy_0; // 1) actor_id used for picking, 2) outline color
+		uint pobj_dummy_0; // 1) actor_id used for picking, 
 		uint pobj_dummy_1;
 
 		ZERO_SET(CB_PolygonObject)
@@ -563,13 +568,14 @@ namespace grd_helper
 		ZERO_SET(CB_VolumeObject)
 	};
 
-	struct CB_RenderingEffect // normally for each object
+	// future.. change to material...
+	struct CB_Material // normally for each object
 	{
 		// 1st bit : AO or Not , 2nd bit : Anisotropic BRDF or Not , 3rd bit : Apply Shading Factor or Not
 		// NA ==> 4th bit : 0 : Normal Curvature Map (2D), 1 : Apply Concaveness
 		// NA ==> 5th bit : Concaveness Direction or Not
 		uint rf_flag;
-		uint outline_mode;
+		uint outline_mode; // deprecated
 		float curvature_kernel_radius;
 		uint rf_dummy_0;
 
@@ -588,10 +594,10 @@ namespace grd_helper
 		uint rf_dummy_2;
 		uint rf_dummy_3;
 
-		ZERO_SET(CB_RenderingEffect)
+		ZERO_SET(CB_Material)
 	};
 
-	struct CB_VolumeRenderingEffect // normally for each volume
+	struct CB_VolumeMaterial // normally for each volume
 	{
 		float clip_plane_intensity;
 		float attribute_voxel_sharpness;
@@ -603,7 +609,7 @@ namespace grd_helper
 		uint vrf_dummy_0;
 		uint vrf_dummy_1;
 
-		ZERO_SET(CB_VolumeRenderingEffect)
+		ZERO_SET(CB_VolumeMaterial)
 	};
 
 	struct CB_TMAP
@@ -696,8 +702,8 @@ namespace grd_helper
 	void SetCb_ClipInfo(CB_ClipInfo& cb_clip, VmVObject* obj, VmActor* actor);
 	void SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vobj, const vmmat44f& matWS2OS, GpuRes& gresVol, const int iso_value, const float volblk_valuerange, const float sample_precision, const bool is_xraymode, const int sculpt_index = -1);
 	void SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimitive* pobj, VmActor* actor, const vmmat44f& matWS2SS, const vmmat44f& matWS2PS, const bool is_annotation_obj, const bool use_vertex_color);
-	void SetCb_RenderingEffect(CB_RenderingEffect& cb_reffect, VmActor* actor);
-	void SetCb_VolumeRenderingEffect(CB_VolumeRenderingEffect& cb_vreffect, VmVObjectVolume* vobj, VmActor* actor);
+	void SetCb_RenderingEffect(CB_Material& cb_reffect, VmActor* actor);
+	void SetCb_VolumeRenderingEffect(CB_VolumeMaterial& cb_vreffect, VmVObjectVolume* vobj, VmActor* actor);
 	void SetCb_HotspotMask(CB_HotspotMask& cb_hsmask, VmFnContainer* _fncontainer, const vmmat44f& matWS2SS);
 	void SetCb_CurvedSlicer(CB_CurvedSlicer& cb_curvedSlicer, VmFnContainer* _fncontainer, VmIObject* iobj, float& sample_dist);
 

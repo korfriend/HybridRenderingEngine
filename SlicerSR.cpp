@@ -1039,7 +1039,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	ID3D11Buffer* cbuf_clip = dx11CommonParams->get_cbuf("CB_ClipInfo");
 	ID3D11Buffer* cbuf_pobj = dx11CommonParams->get_cbuf("CB_PolygonObject");
 	ID3D11Buffer* cbuf_vobj = dx11CommonParams->get_cbuf("CB_VolumeObject");
-	ID3D11Buffer* cbuf_reffect = dx11CommonParams->get_cbuf("CB_RenderingEffect");
+	ID3D11Buffer* cbuf_reffect = dx11CommonParams->get_cbuf("CB_Material");
 	ID3D11Buffer* cbuf_tmap = dx11CommonParams->get_cbuf("CB_TMAP");
 	ID3D11Buffer* cbuf_hsmask = dx11CommonParams->get_cbuf("CB_HotspotMask");
 	ID3D11Buffer* cbuf_curvedslicer = dx11CommonParams->get_cbuf("CB_CurvedSlicer");
@@ -1516,12 +1516,12 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			//VmObject* tobj_maptable = (VmObject*)actor->GetAssociateRes("MAPTABLE");
 			//VmVObjectVolume* vobj = (VmVObjectVolume*)actor->GetAssociateRes("VOLUME");
 
-			CB_RenderingEffect cbRenderEffect;
+			CB_Material cbRenderEffect;
 			grd_helper::SetCb_RenderingEffect(cbRenderEffect, actor);
 			D3D11_MAPPED_SUBRESOURCE mappedResRenderEffect;
 			dx11DeviceImmContext->Map(cbuf_reffect, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResRenderEffect);
-			CB_RenderingEffect* cbRenderEffectData = (CB_RenderingEffect*)mappedResRenderEffect.pData;
-			memcpy(cbRenderEffectData, &cbRenderEffect, sizeof(CB_RenderingEffect));
+			CB_Material* cbRenderEffectData = (CB_Material*)mappedResRenderEffect.pData;
+			memcpy(cbRenderEffectData, &cbRenderEffect, sizeof(CB_Material));
 			dx11DeviceImmContext->Unmap(cbuf_reffect, 0);
 
 			GpuRes gres_vtx, gres_idx;

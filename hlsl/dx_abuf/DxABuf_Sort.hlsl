@@ -1,13 +1,16 @@
 #include "../CommonShader.hlsl"
 
 RWByteAddressBuffer deep_k_buf : register(u1);
-RWTexture2D<float4> fragment_blendout : register(u2);
+RWTexture2D<unorm float4> fragment_blendout : register(u2);
 RWTexture2D<float> fragment_zdepth : register(u3);
 RWBuffer<uint> offsettable_buf : register(u4); // gres_fb_ref_pidx // only for the count pass
 RWByteAddressBuffer deep_ubk_buf : register(u5); // only for the resolve pass
 
 Texture2D<uint> sr_fragment_counter : register(t0);
 RWTexture2D<uint> fragment_counter : register(u0);
+
+Texture2D<unorm float4> fragment_rgba_singleLayer : register(t1);
+Texture2D<float> fragment_zdepth_singleLayer : register(t2);
 
 #define LOAD1_UBKB(ADDR) deep_ubk_buf.Load((ADDR) * 4)
 #define STORE1_KB(V, ADDR) deep_k_buf.Store((ADDR) * 4, V)
@@ -131,8 +134,12 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 	if (nThreadNum == 0) // we used 0th pixel for temporal synch //
 		return;
 
-	int N = (int)fragment_counter[nDTid.xy];
-	if (N == 0)
+	//fragment_blendout[nDTid.xy] = fragment_rgba_singleLayer[nDTid.xy];
+	//return;
+	
+	uint N = (uint)fragment_counter[nDTid.xy];
+	bool additionalLayers = BitCheck(g_cbCamState.cam_flag, 8);
+	if (N == 0 && !additionalLayers)
 		return;
 
 #if DX_11_STYLE==0
@@ -142,10 +149,10 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 	//	fragment_blendout[nDTid.xy] = float4(1, 0, 0, 1);
 	//	return;
 	//}
-
-	int num_valid_fs = 0; // for safe check
+	uint num_valid_fs = 0; // for safe check
 	FragmentVD fragments[MAX_ARRAY_SIZE];
-	for (int i = 0; i < N; i++)
+	[loop]
+	for (uint i = 0; i < N; i++)
 	{
 		FragmentVD f;
 		f.i_vis = LOAD1_UBKB(2 * (offset + i) + 0);
@@ -154,7 +161,31 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 			f.z = asfloat(LOAD1_UBKB(2 * (offset + i) + 1));
 			fragments[num_valid_fs++] = f;
 		}
+	};
+
+	if (additionalLayers)
+	{
+		FragmentVD f;
+		float4 colorRT = fragment_blendout[nDTid.xy];
+		if (colorRT.a > 0) {
+			f.i_vis = ConvertFloat4ToUInt(colorRT);
+			f.z = fragment_zdepth[nDTid.xy];
+			fragments[num_valid_fs++] = f;
+		}
+		colorRT = fragment_rgba_singleLayer[nDTid.xy];
+		if (colorRT.a > 0) {
+			f.i_vis = ConvertFloat4ToUInt(colorRT);
+			f.z = fragment_zdepth_singleLayer[nDTid.xy];
+			fragments[num_valid_fs++] = f;
+		}
 	}
+
+	//if (num_valid_fs == 0) fragment_blendout[nDTid.xy] = float4(1, 1, 1, 1);
+	//else if (num_valid_fs == 1) fragment_blendout[nDTid.xy] = float4(1, 0, 0, 1);
+	//else if (num_valid_fs == 2) fragment_blendout[nDTid.xy] = float4(0, 1, 0, 1);
+	//else if (num_valid_fs == 3) fragment_blendout[nDTid.xy] = float4(0, 0, 1, 1);
+	//return;
+
 	N = num_valid_fs;
 	if (N == 0)
 	{
@@ -172,6 +203,7 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 
 	bool store_to_kbuf = BitCheck(g_cbCamState.cam_flag, 3);
 	float4 vis_out = (float4) 0.0f;
+
 
 #define NUM_K 8
 	const uint k_value = g_cbCamState.k_value;
@@ -204,7 +236,7 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 	{
 		f_2 = (Fragment)0;
 		Fragment f_merge = (Fragment)0;
-		int inext = i + 1;
+		uint inext = i + 1;
 		if (inext < N)
 		{
 			f_2.i_vis = fragments[inext].i_vis;
@@ -286,7 +318,7 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 	//store_to_kbuf = true;
 	bool store_all_onto_dymbuf = BitCheck(g_cbCamState.cam_flag, 4);
 	//bool store_rgba_depth = !BitCheck(g_cbCamState.cam_flag, 6);
-	int storing_num_frags = store_all_onto_dymbuf? N : min(N, NUM_K);
+	uint storing_num_frags = store_all_onto_dymbuf? N : min(N, NUM_K);
 
 	[loop]
 	for (i = 0; i < storing_num_frags; i++)
@@ -330,7 +362,7 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 	//GET_FRAG(f, addr_base, 0);
 	//fragment_blendout[nDTid.xy] = float4((float3)f.z / 100, 1);
 
-#else // DX11 style
+#else // DX11 style (legacy... too slow)
 	nThreadNum += 1; // to reuse nThreadNum - 1
 
 #define blocksize 1

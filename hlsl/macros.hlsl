@@ -7,10 +7,10 @@
 // Instead, Do USE sort_insertOpt and sort_shellOpt
 #define sort_insert(num, fragments, FRAG) {					\
 	[loop]												\
-	for (int j = 1; j < num; ++j)						\
+	for (uint j = 1; j < num; ++j)						\
 	{													\
 		FRAG key = fragments[j];					\
-		int i = j - 1;									\
+		uint i = j - 1;									\
 														\
 		[loop]											\
 		while (i >= 0 && fragments[i].z > key.z)\
@@ -25,10 +25,10 @@
 
 #define sort_insertOpt(num, fragments, FRAG) {			\
 	[loop]												\
-	for (int j = 1; j < num; ++j)						\
+	for (uint j = 1; j < num; ++j)						\
 	{													\
 		FRAG key = fragments[j];						\
-		int i = j - 1;									\
+		uint i = j - 1;									\
 		FRAG df = fragments[i];							\
 		[loop]											\
 		while (i >= 0 && df.z > key.z)					\
@@ -43,16 +43,16 @@
 
 
 #define sort_shell(num, fragments, FRAG) {								\
-	int inc = num >> 1;												\
+	uint inc = num >> 1;												\
 	[loop]															\
 	while (inc > 0)													\
 	{																\
 		[loop]														\
-		for (int i = inc; i < num; ++i)								\
+		for (uint i = inc; i < num; ++i)								\
 		{															\
 			FRAG tmp = fragments[i];							\
 																	\
-			int j = i;												\
+			uint j = i;												\
 			[loop]													\
 			while (j >= inc && fragments[j - inc].z > tmp.z)		\
 			{														\
@@ -61,22 +61,22 @@
 			}														\
 			fragments[j] = tmp;										\
 		}															\
-		inc = int(inc / 2.2f + 0.5f);								\
+		inc = uint(inc / 2.2f + 0.5f);								\
 	}																\
 }
 
 
 #define sort_shellOpt(num, fragments, FRAG) {								\
-	int inc = num >> 1;												\
+	uint inc = num >> 1;												\
 	[loop]															\
 	while (inc > 0)													\
 	{																\
 		[loop]														\
-		for (int i = inc; i < num; ++i)								\
+		for (uint i = inc; i < num; ++i)								\
 		{															\
 			FRAG tmp = fragments[i];							\
 																	\
-			int j = i;												\
+			uint j = i;												\
 			FRAG dfrag = fragments[j - inc];						\
 			[loop]													\
 			while (j >= inc && dfrag.z > tmp.z)						\
@@ -87,20 +87,20 @@
 			}														\
 			fragments[j] = tmp;										\
 		}															\
-		inc = int(inc / 2.2f + 0.5f);								\
+		inc = uint(inc / 2.2f + 0.5f);								\
 	}																\
 }
 
 #define merge(steps, a, b, c) {														 \
-	int i;																			 \
+	uint i;																			 \
 	[loop]																			 \
 	for (i = 0; i < steps; ++i)														 \
 		leftArray[i] = fragments[a + i];											 \
 																					 \
 	i = 0;																			 \
-	int j = 0;																		 \
+	uint j = 0;																		 \
 	[loop]																			 \
-	for (int k = a; k < c; ++k)														 \
+	for (uint k = a; k < c; ++k)														 \
 	{																				 \
 		if (b + j >= c || (i < steps && leftArray[i].z < fragments[b + j].z))\
 			fragments[k] = leftArray[i++];											 \
@@ -111,13 +111,13 @@
 
 #define sort_merge(num, fragments, FRAG, SIZE_2D){								  \
 	FRAG leftArray[SIZE_2D];					  \
-	int n = num;												  \
-	int steps = 1;												  \
+	uint n = num;												  \
+	uint steps = 1;												  \
 																  \
 	[loop]														  \
 	while (steps <= n)											  \
 	{															  \
-		int i = 0;												  \
+		uint i = 0;												  \
 		[loop]													  \
 		while (i < n - steps)									  \
 		{														  \

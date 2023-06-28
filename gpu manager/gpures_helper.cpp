@@ -283,8 +283,8 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		CREATE_AND_SET(CB_ClipInfo);
 		CREATE_AND_SET(CB_PolygonObject);
 		CREATE_AND_SET(CB_VolumeObject);
-		CREATE_AND_SET(CB_RenderingEffect);
-		CREATE_AND_SET(CB_VolumeRenderingEffect);
+		CREATE_AND_SET(CB_Material);
+		CREATE_AND_SET(CB_VolumeMaterial);
 		CREATE_AND_SET(CB_TMAP);
 		CREATE_AND_SET(MomentOIT);
 		CREATE_AND_SET(CB_HotspotMask);
@@ -367,6 +367,33 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 			return S_OK;
 		};
 
+		GpuRes gres_quad;
+		{
+			gres_quad.vm_src_id = 1;
+			gres_quad.res_name = string("PROXY_QUAD");
+			gres_quad.rtype = RTYPE_BUFFER;
+			gres_quad.options["USAGE"] = D3D11_USAGE_DEFAULT;
+			gres_quad.options["CPU_ACCESS_FLAG"] = NULL; // D3D11_CPU_ACCESS_WRITE;// | D3D11_CPU_ACCESS_READ;
+			gres_quad.options["BIND_FLAG"] = D3D11_BIND_VERTEX_BUFFER;
+			gres_quad.options["FORMAT"] = DXGI_FORMAT_R32G32B32_FLOAT;
+			gres_quad.res_values.SetParam("NUM_ELEMENTS", (uint)4);
+			gres_quad.res_values.SetParam("STRIDE_BYTES", (uint)sizeof(vmfloat3));
+			g_pCGpuManager->GenerateGpuResource(gres_quad);
+
+			ID3D11Buffer* pdx11bufvtx = (ID3D11Buffer*)gres_quad.alloc_res_ptrs[DTYPE_RES];
+			D3D11_SUBRESOURCE_DATA subres;
+			subres.pSysMem = new vmfloat3[4];
+			subres.SysMemPitch = sizeof(vmfloat3) * 4;
+			subres.SysMemSlicePitch = 0; // only for 3D resource
+			vmfloat3* vtx_group = (vmfloat3*)subres.pSysMem;
+			vtx_group[0] = vmfloat3(-1, 1, 0);
+			vtx_group[1] = vmfloat3( 1, 1, 0);
+			vtx_group[2] = vmfloat3(-1,-1, 0);
+			vtx_group[3] = vmfloat3( 1,-1, 0);
+			g_pvmCommonParams->dx11DeviceImmContext->UpdateSubresource(pdx11bufvtx, 0, NULL, subres.pSysMem, subres.SysMemPitch, 0);
+			VMSAFE_DELETEARRAY(subres.pSysMem);
+		}
+
 #define VRETURN(v, ERR) if(v != S_OK) { vmlog::LogErr(#ERR); goto ERROR_PRESETTING; }
 
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11001), "SR_OIT_P_vs_5_0", "vs_5_0", "P", lotypeInputPos, 1), SR_OIT_P_vs_5_0);
@@ -381,6 +408,8 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10104), "SR_BASIC_TEXTMAPPING_ps_5_0", "ps_5_0"), SR_BASIC_TEXTMAPPING_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10105), "SR_BASIC_TEXTUREIMGMAP_ps_5_0", "ps_5_0"), SR_BASIC_TEXTUREIMGMAP_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10106), "SR_BASIC_VOLUMEMAP_ps_5_0", "ps_5_0"), SR_BASIC_VOLUMEMAP_ps_5_0);
+		
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10150), "SR_QUAD_OUTLINE_ps_5_0", "ps_5_0"), SR_QUAD_OUTLINE_ps_5_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11010), "SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0", "ps_5_0"), SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11011), "SR_OIT_FILL_SKBTZ_DASHEDLINE_ps_5_0", "ps_5_0"), SR_OIT_FILL_SKBTZ_DASHEDLINE_ps_5_0);
@@ -2190,7 +2219,7 @@ void grd_helper::SetCb_TMap(CB_TMAP& cb_tmap, VmObject* tobj)
 	cb_tmap.last_color = vmfloat4(y4ColorEnd.x / 255.f, y4ColorEnd.y / 255.f, y4ColorEnd.z / 255.f, y4ColorEnd.w / 255.f);
 }
 
-void grd_helper::SetCb_RenderingEffect(CB_RenderingEffect& cb_reffect, VmActor* actor)
+void grd_helper::SetCb_RenderingEffect(CB_Material& cb_reffect, VmActor* actor)
 {
 	bool apply_occ = actor->GetParam("_bool_ApplyAO", false);
 	bool apply_brdf = actor->GetParam("_bool_ApplyBRDF", false);
@@ -2214,7 +2243,7 @@ void grd_helper::SetCb_RenderingEffect(CB_RenderingEffect& cb_reffect, VmActor* 
 	// to do
 }
 
-void grd_helper::SetCb_VolumeRenderingEffect(CB_VolumeRenderingEffect& cb_vreffect, VmVObjectVolume* vobj, VmActor* actor)
+void grd_helper::SetCb_VolumeRenderingEffect(CB_VolumeMaterial& cb_vreffect, VmVObjectVolume* vobj, VmActor* actor)
 {
 	cb_vreffect.attribute_voxel_sharpness = actor->GetParam("_float_VoxelSharpnessForAttributeVolume", 0.25f);
 	cb_vreffect.clip_plane_intensity = actor->GetParam("_float_ClipPlaneIntensity", 1.f);

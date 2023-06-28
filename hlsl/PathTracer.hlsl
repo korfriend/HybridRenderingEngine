@@ -192,7 +192,7 @@ Texture2D g_tex2D_Mat_D : register(t16);
 RWTexture2D<uint> fragment_counter : register(u0);
 RWByteAddressBuffer deep_k_buf : register(u1);
 RWBuffer<uint> picking_buf : register(u2);
-RWTexture2D<float4> fragment_vis : register(u3);
+RWTexture2D<unorm float4> fragment_vis : register(u3);
 RWTexture2D<float> fragment_zdepth : register(u4);
 
 // modified intersection routine (uses regular instead of woopified triangles) for debugging purposes

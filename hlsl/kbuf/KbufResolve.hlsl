@@ -110,9 +110,9 @@ void OIT_RESOLVE_OLD(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, u
 		fs[k] = f;
 	}
 
-	sort((int)frag_cnt, fs, Fragment);
+	sort(frag_cnt, fs, Fragment);
 	
-	int valid_frag_cnt = frag_cnt;
+	uint valid_frag_cnt = frag_cnt;
 	//int mer_cnt = 0;
 #if FRAG_MERGING == 1
 	// extended merging for consistent visibility transition
@@ -312,7 +312,7 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 		fs[k] = f;
 	}
 
-	sort((int)frag_cnt, fs, Fragment);
+	sort(frag_cnt, fs, Fragment);
 
 	//fragment_blendout[DTid.xy] = ConvertUIntToFloat4(fs[0].i_vis);
 	//return;
@@ -331,7 +331,7 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 
 
 
-	int valid_frag_cnt = frag_cnt;
+	uint valid_frag_cnt = frag_cnt;
 	//int mer_cnt = 0;
 #if FRAG_MERGING == 1
 	// extended merging for consistent visibility transition
@@ -433,11 +433,11 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 	f_1.opacity_sum = ConvertUIntToFloat4(f_1.i_vis).a;
 	// use the SFM
 	[loop]
-	for (i = 0; i < valid_frag_cnt; i++)
+	for (i = 0; i < (uint)valid_frag_cnt; i++)
 	{
 		f_2 = (Fragment)0;
 		Fragment f_merge = (Fragment)0;
-		int inext = i + 1;
+		uint inext = i + 1;
 		if (inext < valid_frag_cnt)
 		{
 			f_2.i_vis = fragments[inext].i_vis;

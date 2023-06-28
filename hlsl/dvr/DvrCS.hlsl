@@ -12,7 +12,7 @@ Texture2D<float> vr_fragment_1sthit_read : register(t6);
 
 RWTexture2D<uint> fragment_counter : register(u0);
 RWByteAddressBuffer deep_k_buf : register(u1);
-RWTexture2D<float4> fragment_vis : register(u2);
+RWTexture2D<unorm float4> fragment_vis : register(u2);
 RWTexture2D<float> fragment_zdepth : register(u3);
 
 RWTexture2D<float> vr_fragment_1sthit_write : register(u4);
@@ -420,7 +420,7 @@ float PhongBlinnVr(const float3 cam_view, const in float4 shading_factors, const
 [numthreads(GRIDSIZE_VR, GRIDSIZE_VR, 1)]
 void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
 {
-    int2 tex2d_xy = int2(DTid.xy);
+    uint2 tex2d_xy = uint2(DTid.xy);
     if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
         return;
 
@@ -1017,7 +1017,7 @@ void VR_SURFACE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 [numthreads(GRIDSIZE_VR, GRIDSIZE_VR, 1)]
 void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
 {
-	int2 cip_xy = int2(DTid.xy);
+	uint2 cip_xy = uint2(DTid.xy);
 
 	// do not compute 1st hit surface separately
 	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)

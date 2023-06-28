@@ -69,14 +69,15 @@ void GradientMagnitudeAnalysis(vmfloat2& grad_minmax, VmVObjectVolume* vobj);
 
 enum MFR_MODE
 {
-	STATIC_KB = 0,
+	NONE = 0,
+	STATIC_KB,
 	DYNAMIC_FB,
 	MOMENT,
 	DYNAMIC_KB,	// deprecated
 };
 
 enum RENDER_GEOPASS {
-	PASS_OPAQUESURFACES = 0,
-	PASS_OIT = 1,
-	PASS_SINGLELAYERS = 2,
+	PASS_OPAQUESURFACES = 0, // no use MFR_MODE
+	PASS_OIT = 1, // use MFR_MODE
+	PASS_SINGLELAYERS = 2, // no use MFR_MODE
 };

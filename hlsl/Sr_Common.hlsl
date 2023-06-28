@@ -160,7 +160,7 @@ VS_OUTPUT_TTT CommonVS_PTTT(VS_INPUT_PTTT input)
 
 // POBJ_PRE_CONTEXT(EXIT_OUT)
 
-Texture2D<float4> sr_fragment_vis : register(t10);
+Texture2D<unorm float4> sr_fragment_vis : register(t10);
 Texture2D<float> sr_fragment_zdepth : register(t11);
 
 float4 OutlineTest2(const in int2 tex2d_xy, inout float depth_c, const in float discont_depth_criterion)
@@ -295,11 +295,15 @@ float4 OutlineTest(const in int2 tex2d_xy, inout float depth_c, const in float d
             }
         }
 
-        float w = 2 * thick + 1;
-        float alpha = min((floaT)count / (w * w / 2.f), 1.f);
-        //alpha *= alpha;
+        if (BitCheck(g_cbCamState.cam_flag, 9)) {
+            float w = 2 * thick + 1;
+            float alpha = min((floaT)count / (w * w / 2.f), 1.f);
+            //alpha *= alpha;
 
-        vout = float4(edge_color * alpha, alpha);
+            vout = float4(edge_color * alpha, alpha);
+        }
+        else vout = float4(edge_color, 1);
+
         depth_c = depth_min;
         //vout = float4(nor_c, 1);
         //vout = float4(depth_h0 / 40, depth_h0 / 40, depth_h0 / 40, 1);
@@ -494,6 +498,13 @@ struct PS_FILL_OUTPUT
     float ds_z : SV_Depth;
 };
 
+struct PS_FILL_DEPTHCS
+{
+    float depthcs : SV_TARGET0;
+
+    float ds_z : SV_Depth;
+};
+
 void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
 {
     POBJ_PRE_CONTEXT;
@@ -585,7 +596,8 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
         float Ns = g_cbPobj.Ns;
         ComputeColor(v_rgba.rgb, Ka, Kd, Ks, Ns, 1.0, input.f3PosWS, view_dir, nor, nor_len);
     }
-#else
+
+#else // __RENDERING_MODE == 0
     float3 Ka, Kd, Ks;
     float Ns = g_cbPobj.Ns;
     if ((g_cbPobj.pobj_flag & (0x1 << 3)) == 0)
@@ -641,87 +653,19 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
 }
 
 [earlydepthstencil]
-PS_FILL_OUTPUT SINGLE_LAYER(VS_OUTPUT input)
+PS_FILL_DEPTHCS SINGLE_LAYER(VS_OUTPUT input)
 {
-    PS_FILL_OUTPUT out_ps;
+    PS_FILL_DEPTHCS out_ps;
     out_ps.ds_z = 1.f;
-    out_ps.color = (float4)0;
+    //out_ps.color = (float4)0;
     out_ps.depthcs = FLT_MAX;
-	POBJ_PRE_CONTEXT;
 
-	float3 nor = (float3)0;
-	float nor_len = 0;
+    POBJ_PRE_CONTEXT;
 
-	float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
-	//if (g_cbPobj.alpha == 0) clip(-1);
-	if (!BitCheck(g_cbPobj.pobj_flag, 0))
-	{
-		float3 light_dirinv = -g_cbEnv.dir_light_ws;
-		if (g_cbEnv.env_flag & 0x1)
-			light_dirinv = -normalize(input.f3PosWS - g_cbEnv.pos_light_ws);
-		nor = input.f3VecNormalWS;
-		nor_len = length(nor);
-		float shade = 1.f;
-	
-		float3 Ka, Kd, Ks;
-		float Ns = g_cbPobj.Ns;
-		if ((g_cbPobj.pobj_flag & (0x1 << 3)) == 0)
-		{
-			Ka = input.f3Custom;
-			Kd = input.f3Custom;
-			Ks = input.f3Custom;
-		}
-		else
-		{
-			Ka = g_cbPobj.Ka, Kd = g_cbPobj.Kd, Ks = g_cbPobj.Ks;
-		}
-
-		if (nor_len > 0)
-		{
-			Ka *= g_cbEnv.ltint_ambient.rgb;
-			Kd *= g_cbEnv.ltint_diffuse.rgb;
-			Ks *= g_cbEnv.ltint_spec.rgb;
-			ComputeColor(v_rgba.rgb, Ka, Kd, Ks, Ns, 1.0, input.f3PosWS, view_dir, nor, nor_len);
-		}
-		else
-			v_rgba.rgb = Kd;
-	
-		// make it as an associated color.
-		// as a color component is stored into 8 bit channel, the alpha-multiplied precision must be determined in this stage.
-		// unless, noise dots appear.
-		v_rgba.rgb *= v_rgba.a;
-	}
-	else
-	{
-		nor = input.f3VecNormalWS;
-		nor_len = length(nor);
-		v_rgba = float4(nor / nor_len, g_cbPobj.alpha);
-		v_rgba.rgb = (v_rgba.rgb + (float3)1.f) / 2.f;
-	}
-
-	// dynamic opacity modulation
-	//if (BitCheck(g_cbPobj.pobj_flag, 22) || BitCheck(g_cbPobj.pobj_flag, 23))
-	//	GhostedEffect(v_rgba, input.f3PosWS, view_dir, nor, nor_len);
-	bool is_dynamic_transparency = BitCheck(g_cbPobj.pobj_flag, 22);
-	bool is_mask_transparency = BitCheck(g_cbPobj.pobj_flag, 23);
-	if (is_dynamic_transparency || is_mask_transparency)
-	{
-		float mask_weight = 1, dynamic_alpha_weight = 1;
-		int out_lined = GhostedEffect(mask_weight, dynamic_alpha_weight, input.f3PosWS, view_dir, nor, nor_len, is_dynamic_transparency);
-		if (out_lined > 0)
-			v_rgba = float4(1, 1, 0, 1);
-		else
-		{
-			if (is_dynamic_transparency)
-				v_rgba.rgba *= dynamic_alpha_weight;
-			if (is_mask_transparency)
-				v_rgba.rgba *= mask_weight;
-			if (v_rgba.a <= 0.01) clip(-1);
-		}
-	}
+	if (g_cbPobj.alpha == 0) clip(-1);
     
     out_ps.ds_z = input.f4PosSS.z;
-    out_ps.color = v_rgba;
+    //out_ps.color = v_rgba;
     out_ps.depthcs = z_depth;
     return out_ps;
 }

@@ -335,8 +335,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	ID3D11Buffer* cbuf_clip = dx11CommonParams->get_cbuf("CB_ClipInfo");
 	ID3D11Buffer* cbuf_pobj = dx11CommonParams->get_cbuf("CB_PolygonObject");
 	ID3D11Buffer* cbuf_vobj = dx11CommonParams->get_cbuf("CB_VolumeObject");
-	ID3D11Buffer* cbuf_reffect = dx11CommonParams->get_cbuf("CB_RenderingEffect");
-	ID3D11Buffer* cbuf_vreffect = dx11CommonParams->get_cbuf("CB_VolumeRenderingEffect");
+	ID3D11Buffer* cbuf_reffect = dx11CommonParams->get_cbuf("CB_Material");
+	ID3D11Buffer* cbuf_vreffect = dx11CommonParams->get_cbuf("CB_VolumeMaterial");
 	ID3D11Buffer* cbuf_tmap = dx11CommonParams->get_cbuf("CB_TMAP");
 	ID3D11Buffer* cbuf_hsmask = dx11CommonParams->get_cbuf("CB_HotspotMask");
 	ID3D11Buffer* cbuf_testBuffer = dx11CommonParams->get_cbuf("CB_TestBuffer");
@@ -655,21 +655,21 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->Unmap(cbuf_tmap, 0);
 		dx11DeviceImmContext->CSSetConstantBuffers(5, 1, &cbuf_tmap);
 
-		CB_RenderingEffect cbRndEffect;
+		CB_Material cbRndEffect;
 		grd_helper::SetCb_RenderingEffect(cbRndEffect, actor);
 		D3D11_MAPPED_SUBRESOURCE mappedResRdnEffect;
 		dx11DeviceImmContext->Map(cbuf_reffect, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResRdnEffect);
-		CB_RenderingEffect* cbRndEffectData = (CB_RenderingEffect*)mappedResRdnEffect.pData;
-		memcpy(cbRndEffectData, &cbRndEffect, sizeof(CB_RenderingEffect));
+		CB_Material* cbRndEffectData = (CB_Material*)mappedResRdnEffect.pData;
+		memcpy(cbRndEffectData, &cbRndEffect, sizeof(CB_Material));
 		dx11DeviceImmContext->Unmap(cbuf_reffect, 0);
 		dx11DeviceImmContext->CSSetConstantBuffers(6, 1, &cbuf_vreffect);
 
-		CB_VolumeRenderingEffect cbVrEffect;
+		CB_VolumeMaterial cbVrEffect;
 		grd_helper::SetCb_VolumeRenderingEffect(cbVrEffect, vobj, actor);
 		D3D11_MAPPED_SUBRESOURCE mappedVrEffect;
 		dx11DeviceImmContext->Map(cbuf_vreffect, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedVrEffect);
-		CB_VolumeRenderingEffect* cbVrEffectData = (CB_VolumeRenderingEffect*)mappedVrEffect.pData;
-		memcpy(cbVrEffectData, &cbVrEffect, sizeof(CB_VolumeRenderingEffect));
+		CB_VolumeMaterial* cbVrEffectData = (CB_VolumeMaterial*)mappedVrEffect.pData;
+		memcpy(cbVrEffectData, &cbVrEffect, sizeof(CB_VolumeMaterial));
 		dx11DeviceImmContext->Unmap(cbuf_vreffect, 0);
 		dx11DeviceImmContext->CSSetConstantBuffers(3, 1, &cbuf_reffect);
 
