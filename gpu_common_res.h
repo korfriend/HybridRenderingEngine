@@ -14,9 +14,8 @@ using namespace vmobjects;
 using namespace vmgpuinterface;
 using namespace DirectX;
 
-#define VMSAFE_RELEASE(p)			if(p) { (p)->Release(); (p)=NULL; }
-#define GMERRORMESSAGE(a) ::MessageBoxA(NULL, a, NULL, MB_OK)
-#define VMERRORMESSAGE(a) printf(a)
+#define VMSAFE_RELEASE(p) if(p) { (p)->Release(); (p)=NULL; }
+#define VMERRORMESSAGE(a) vmlog::LogErr(a)
 
 enum class GpuhelperResType {
 	VERTEX_SHADER = 0,
@@ -64,7 +63,7 @@ inline void __check_and_release(GpuhelperResType res_type, ID3D11DeviceChild* re
 	case GpuhelperResType::TEXTURE2D:
 	case GpuhelperResType::TEXTURE3D:
 	default:
-		GMERRORMESSAGE("UNEXPECTED RESTYPE : ~GpuDX11CommonParameters");
+		VMERRORMESSAGE("UNEXPECTED RESTYPE : ~GpuDX11CommonParameters");
 	}
 };
 

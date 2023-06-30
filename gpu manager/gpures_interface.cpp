@@ -174,11 +174,6 @@ bool __InitializeDevice()
 	catch (std::exception&)
 	{
 		vmlog::LogErr("vismtv_inbuilt_renderergpudx requires DirectX support!");
-		//::MessageBox(NULL, ("vismtv_inbuilt_renderergpudx requires DirectX Driver!!"), NULL, MB_OK);
-		//string str = e.what();
-		//std::string wstr(str.length(),L' ');
-		//copy(str.begin(),str.end(),wstr.begin());
-		//::MessageBox(NULL, wstr.c_str(), NULL, MB_OK);
 		//exit(0);
 		return false;
 	}
@@ -505,7 +500,7 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		case DXGI_FORMAT_R16_SINT: stride_bytes = sizeof(short); break;
 		case DXGI_FORMAT_UNKNOWN: stride_bytes = gres.res_values.GetParam("STRIDE_BYTES", (uint)0); break;
 		default:
-			::MessageBoxA(NULL, "NOT SUPPORTED FORMAT!!", NULL, MB_OK);
+			vmlog::LogErr("__GenerateGpuResource NOT SUPPORTED FORMAT!!");
 			return 0;
 		}
 		return stride_bytes;
@@ -574,7 +569,7 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		ID3D11Texture2D* pdx11TX2D = NULL;
 		g_pdx11Device->CreateTexture2D(&descTex2D, NULL, &pdx11TX2D);
 		if (pdx11TX2D == NULL)
-			::MessageBoxA(NULL, "CreateTexture2D ==> ERROR!!", NULL, S_OK);
+			vmlog::LogErr("CreateTexture2D ==> ERROR!!");
 
 		gres.alloc_res_ptrs[DTYPE_RES] = (void*)pdx11TX2D;
 		gres.res_values.SetParam("RES_SIZE_BYTES", (ullong)(descTex2D.Width* descTex2D.Height* GetSizeFormat(descTex2D.Format)));
@@ -608,25 +603,41 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 	uint bind_flag = GetOption("BIND_FLAG");
 	if (bind_flag & D3D11_BIND_RENDER_TARGET)
 	{
-		if (gres.rtype != RTYPE_TEXTURE2D)
+		if (gres.rtype == RTYPE_TEXTURE2D)
 		{
-			::MessageBoxA(NULL, "Error Res Type", NULL, MB_OK);
+			D3D11_RENDER_TARGET_VIEW_DESC descRTV;
+			ZeroMemory(&descRTV, sizeof(D3D11_RENDER_TARGET_VIEW_DESC));
+			descRTV.Format = (DXGI_FORMAT)GetOption("FORMAT");
+			descRTV.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+			descRTV.Texture2D.MipSlice = 0;
+			ID3D11View* pdx11View = NULL;
+			g_pdx11Device->CreateRenderTargetView((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], &descRTV, (ID3D11RenderTargetView**)&pdx11View);
+			gres.alloc_res_ptrs[DTYPE_RTV] = (void*)pdx11View;
+		}
+		else if (gres.rtype == RTYPE_BUFFER)
+		{
+			D3D11_RENDER_TARGET_VIEW_DESC descRTV;
+			ZeroMemory(&descRTV, sizeof(D3D11_RENDER_TARGET_VIEW_DESC));
+			descRTV.Format = (DXGI_FORMAT)GetOption("FORMAT");
+			descRTV.ViewDimension = D3D11_RTV_DIMENSION_BUFFER;
+			descRTV.Buffer.FirstElement = 0;
+			descRTV.Buffer.NumElements = gres.res_values.GetParam("NUM_ELEMENTS", (uint)0);
+
+			ID3D11View* pdx11View = NULL;
+			g_pdx11Device->CreateRenderTargetView((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], &descRTV, (ID3D11RenderTargetView**)&pdx11View);
+			gres.alloc_res_ptrs[DTYPE_RTV] = (void*)pdx11View;
+		}
+		else
+		{
+			vmlog::LogErr("__GenerateGpuResource (D3D11_BIND_RENDER_TARGET) ==> bind_flag & D3D11_BIND_RENDER_TARGET");
 			return false;
 		}
-		D3D11_RENDER_TARGET_VIEW_DESC descRTV;
-		ZeroMemory(&descRTV, sizeof(D3D11_RENDER_TARGET_VIEW_DESC));
-		descRTV.Format = (DXGI_FORMAT)GetOption("FORMAT");
-		descRTV.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-		descRTV.Texture2D.MipSlice = 0;
-		ID3D11View* pdx11View = NULL;
-		g_pdx11Device->CreateRenderTargetView((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], &descRTV, (ID3D11RenderTargetView**)&pdx11View);
-		gres.alloc_res_ptrs[DTYPE_RTV] = (void*)pdx11View;
 	}
 	if (bind_flag & D3D11_BIND_DEPTH_STENCIL)
 	{
 		if (gres.rtype != RTYPE_TEXTURE2D)
 		{
-			::MessageBoxA(NULL, "Error Res Type", NULL, MB_OK);
+			vmlog::LogErr("__GenerateGpuResource (D3D11_BIND_DEPTH_STENCIL) ==> bind_flag & D3D11_BIND_RENDER_TARGET");
 			return false;
 		}
 		D3D11_DEPTH_STENCIL_VIEW_DESC descDSV;
@@ -684,14 +695,14 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 			descSRV.Texture3D.MostDetailedMip = 0;
 			break;
 		default:
-			::MessageBoxA(NULL, "Error Res Type", NULL, MB_OK);
+			vmlog::LogErr("__GenerateGpuResource (D3D11_BIND_SHADER_RESOURCE) ==> not allowed gres.rtype");
 			return false;
 
 		}
 		ID3D11View* pdx11View = NULL;
 		g_pdx11Device->CreateShaderResourceView((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], &descSRV, (ID3D11ShaderResourceView**)&pdx11View);
 		if (pdx11View == NULL)
-			::MessageBoxA(NULL, "CreateShaderResourceView ==> ERROR!!", NULL, S_OK);
+			vmlog::LogErr("CreateShaderResourceView ==> ERROR!!");
 		//gres.alloc_res_ptrs.insert(pair<BindType, void*>(DTYPE_SRV, pdx11View));
 		gres.alloc_res_ptrs[DTYPE_SRV] = (void*)pdx11View;
 	}
@@ -728,7 +739,7 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 				break;
 			}
 		default:
-			::MessageBoxA(NULL, "Error Res Type", NULL, MB_OK);
+			vmlog::LogErr("__GenerateGpuResource (D3D11_BIND_UNORDERED_ACCESS) ==> not allowed gres.rtype");
 			return false;
 		}
 		ID3D11View* pdx11View = NULL;

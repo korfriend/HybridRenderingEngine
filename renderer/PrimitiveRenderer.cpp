@@ -706,6 +706,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		//hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\";
 		//hlslobj_path += "..\\..\\VmModuleProjects\\renderer_gpudx11\\";
 		hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\";
+		string hlslobj_path_4_0 = hlslobj_path + "shader_compiled_objs_4_0\\";
 		//cout << hlslobj_path << endl;
 
 #ifdef DX10_0
@@ -726,6 +727,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #define SET_PS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::PIXEL_SHADER, NAME), __S, true)
 #define SET_CS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::COMPUTE_SHADER, NAME), __S, true)
 #define SET_GS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::GEOMETRY_SHADER, NAME), __S, true)
+#define GETRASTER(NAME) dx11CommonParams->get_rasterizer(#NAME)
 
 #ifdef DX10_0
 #define VS_NUM 5
@@ -814,6 +816,43 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 				ID3D11GeometryShader* dx11GShader = NULL;
 				if (dx11CommonParams->dx11Device->CreateGeometryShader(pyRead, ullFileSize, NULL, &dx11GShader) != S_OK)
+				{
+					VMERRORMESSAGE("SHADER COMPILE FAILURE!");
+				}
+				else
+				{
+					SET_GS(strName, dx11GShader);
+				}
+				VMSAFE_DELETEARRAY(pyRead);
+			}
+		}
+
+		{
+			string strName = "GS_PickingBasic_gs_4_0";
+			FILE* pFile;
+			if (fopen_s(&pFile, (hlslobj_path_4_0 + strName).c_str(), "rb") == 0)
+			{
+				fseek(pFile, 0, SEEK_END);
+				ullong ullFileSize = ftell(pFile);
+				fseek(pFile, 0, SEEK_SET);
+				byte* pyRead = new byte[ullFileSize];
+				fread(pyRead, sizeof(byte), ullFileSize, pFile);
+				fclose(pFile);
+
+				// https://learn.microsoft.com/en-us/windows/win32/direct3d11/d3d10-graphics-programming-guide-output-stream-stage-getting-started
+				// https://strange-cpp.tistory.com/101
+				D3D11_SO_DECLARATION_ENTRY pDecl[] =
+				{
+					// semantic name, semantic index, start component, component count, output slot
+					{ 0, "TEXCOORD", 0, 0, 3, 0 },   // output 
+				};
+				int numEntries = sizeof(pDecl) / sizeof(D3D11_SO_DECLARATION_ENTRY);
+				uint bufferStrides[] = { sizeof(vmfloat3) };
+				int numStrides = sizeof(bufferStrides) / sizeof(uint);
+				ID3D11GeometryShader* dx11GShader = NULL;
+				if (dx11CommonParams->dx11Device->CreateGeometryShaderWithStreamOutput(
+					pyRead, ullFileSize, pDecl, numEntries, bufferStrides, numStrides, D3D11_SO_NO_RASTERIZED_STREAM, NULL,
+					(ID3D11GeometryShader**)dx11GShader) != S_OK)
 				{
 					VMERRORMESSAGE("SHADER COMPILE FAILURE!");
 				}
@@ -993,7 +1032,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 		for (int i = 0; i < CS_NUM; i++)
 		{
-			string strName = strNames_CS[i];
+			string strName = hlslobj_path_4_0 + strNames_CS[i];
 
 			FILE* pFile;
 			if (fopen_s(&pFile, (prefix_path + strName).c_str(), "rb") == 0)
@@ -1119,6 +1158,23 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_rgba, iobj, "SYSTEM_OUT_RGBA", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_SYSOUT);
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_depthcs, iobj, "SYSTEM_OUT_DEPTH", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R32_FLOAT, UPFB_SYSOUT);
 
+	const int max_picking_layers = 2048;
+	GpuRes gres_picking_buffer, gres_picking_system_buffer, gres_picking_GSO_buffer, gres_picking_system_GSO_buffer;
+	if (is_picking_routine) {
+		// those picking layers contain depth (4bytes) and id (4bytes) information
+		grd_helper::UpdateFrameBuffer(gres_picking_buffer, iobj, "BUFFER_RW_PICKING_BUF", RTYPE_BUFFER,
+			D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, UPFB_NFPP_BUFFERSIZE, max_picking_layers * 2);
+		grd_helper::UpdateFrameBuffer(gres_picking_system_buffer, iobj, "SYSTEM_OUT_RW_PICKING_BUF", RTYPE_BUFFER,
+			NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT | UPFB_NFPP_BUFFERSIZE, max_picking_layers * 2);
+
+		grd_helper::UpdateFrameBuffer(gres_picking_GSO_buffer, iobj, "BUFFER_RW_PICKING_GSO_BUF", RTYPE_BUFFER,
+			D3D11_BIND_RENDER_TARGET | D3D11_BIND_STREAM_OUTPUT, DXGI_FORMAT_R32G32B32A32_FLOAT, UPFB_NFPP_BUFFERSIZE, max_picking_layers);
+		grd_helper::UpdateFrameBuffer(gres_picking_system_GSO_buffer, iobj, "SYSTEM_OUT_RW_PICKING_GSO_BUF", RTYPE_BUFFER,
+			NULL, DXGI_FORMAT_R32G32B32A32_FLOAT, UPFB_SYSOUT | UPFB_NFPP_BUFFERSIZE, max_picking_layers);
+
+		float clr_float_zero_4[4] = { 0, 0, 0, 0 };
+		dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_picking_GSO_buffer.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
+	}
 #ifdef DX10_0
 	// to do // ... picking...
 #else
@@ -1138,19 +1194,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, num_frags_perpixel);
 	grd_helper::UpdateFrameBuffer(gres_fb_ubk_buffer, iobj, "BUFFER_RW_UBK_BUF", RTYPE_BUFFER, // here, ubk refers to UnBounded-K
 		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, k_value * 2 * 8);
-
-	const int max_picking_layers = 2048;
-	GpuRes gres_picking_buffer, gres_picking_system_buffer;
-	if (is_picking_routine) {
-		// those picking layers contain depth (4bytes) and id (4bytes) information
-		grd_helper::UpdateFrameBuffer(gres_picking_buffer, iobj, "BUFFER_RW_PICKING_BUF", RTYPE_BUFFER,
-			D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, UPFB_NFPP_BUFFERSIZE, max_picking_layers * 2);
-		grd_helper::UpdateFrameBuffer(gres_picking_system_buffer, iobj, "SYSTEM_OUT_RW_PICKING_BUF", RTYPE_BUFFER,
-			NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT | UPFB_NFPP_BUFFERSIZE, max_picking_layers * 2);
-
-		uint clr_unit4[4] = { 0, 0, 0, 0 };
-		dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_picking_buffer.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
-	}
 
 	// SSAO
 	{
@@ -1606,10 +1649,16 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #define NUM_UAVs_1ST 4
 #define NUM_UAVs_2ND 5
 
+	enum class PICKING_TYPE {
+		NONE,
+		PICK_ON_SCREEN,
+		PICK_ON_GS
+	};
+
 	auto RenderStage1 = [&](
 		vector<VmActor*>& actor_list,
 		const MFR_MODE mode_OIT, const RENDER_GEOPASS render_pass, const bool is_frag_counter_buffer,
-		const bool is_ghost_mode, const bool is_picking_routine, const bool apply_fragmerge,
+		const bool is_ghost_mode, const PICKING_TYPE pickType, const bool apply_fragmerge,
 		const bool is_MOMENT_gen_buffer)
 	{
 
@@ -1780,94 +1829,257 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			assert(mode_OIT == MFR_MODE::DYNAMIC_FB);
 #endif
 
-			
-			if (prim_data->GetVerticeDefinition("NORMAL"))
+			bool is_picking_routine = pickType != PICKING_TYPE::NONE;
+			switch (pickType) {
+			case PICKING_TYPE::NONE: 
+			case PICKING_TYPE::PICK_ON_SCREEN:
 			{
-				if (prim_data->GetVerticeDefinition("TEXCOORD0"))
+				if (prim_data->GetVerticeDefinition("NORMAL"))
 				{
-					// PNT (here, T is used as color)
-					dx11InputLayer_Target = dx11LI_PNT;
-					dx11VS_Target = dx11VShader_PNT;
+					if (prim_data->GetVerticeDefinition("TEXCOORD0"))
+					{
+						// PNT (here, T is used as color)
+						dx11InputLayer_Target = dx11LI_PNT;
+						dx11VS_Target = dx11VShader_PNT;
+					}
+					else
+					{
+						// PN
+						dx11InputLayer_Target = dx11LI_PN;
+						dx11VS_Target = dx11VShader_PN;
+					}
+
+					if (is_annotation_obj && dx11InputLayer_Target == dx11LI_PNT) {
+						if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
+#ifdef DX10_0
+							dx11PS_Target = GETPS(SR_BASIC_TEXTMAPPING_ps_4_0);
+#else
+							dx11PS_Target = GETPS(SR_BASIC_TEXTMAPPING_ps_5_0);
+#endif
+						}
+						else {
+							switch (mode_OIT)
+							{
+							case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0); break;
+							case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_TEXTMAPPING_ps_5_0) : GETPS(SR_MOMENT_OIT_TEXTMAPPING_ROV_ps_5_0); break;
+							case MFR_MODE::DYNAMIC_KB:
+								if (apply_fragmerge)
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ROV_ps_5_0);
+								else
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ROV_ps_5_0);
+								break;
+							case MFR_MODE::STATIC_KB:
+							default:
+								if (apply_fragmerge)
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ROV_ps_5_0);
+								else
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_TEXTMAPPING_ROV_ps_5_0);
+								break;
+							}
+						}
+					}
+					else if (has_texture_img && dx11InputLayer_Target == dx11LI_PNT) {
+						if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
+#ifdef DX10_0
+							dx11PS_Target = GETPS(SR_BASIC_VOLUMEMAP_ps_4_0);
+#else
+							dx11PS_Target = GETPS(SR_BASIC_VOLUMEMAP_ps_5_0);
+#endif
+						}
+						else {
+							switch (mode_OIT)
+							{
+							case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0); break;
+							case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_MOMENT_OIT_TEXTUREIMGMAP_ROV_ps_5_0); break;
+							case MFR_MODE::DYNAMIC_KB:
+								if (apply_fragmerge)
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_TEXTUREIMGMAP_ROV_ps_5_0);
+								else
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ROV_ps_5_0);
+								break;
+							case MFR_MODE::STATIC_KB:
+							default:
+								if (apply_fragmerge)
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ROV_ps_5_0);
+								else
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_TEXTUREIMGMAP_ROV_ps_5_0);
+								break;
+							}
+						}
+					}
+					else if (vobj && tobj_maptable) {
+						if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
+#ifdef DX10_0
+							dx11PS_Target = GETPS(SR_BASIC_VOLUMEMAP_ps_4_0);
+#else
+							dx11PS_Target = GETPS(SR_BASIC_VOLUMEMAP_ps_5_0);
+#endif
+						}
+						else {
+							assert(mode_OIT == MFR_MODE::DYNAMIC_FB);
+							dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_ABUFFER_VOLUMEMAP_ps_5_0);
+						}
+					}
+					else {
+						if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
+#ifdef DX10_0
+							dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_4_0);
+#else
+							dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_5_0);
+#endif
+						}
+						else {
+							switch (mode_OIT)
+							{
+							case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
+							case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0) : GETPS(SR_MOMENT_OIT_PHONGBLINN_ROV_ps_5_0); break;
+							case MFR_MODE::DYNAMIC_KB:
+								if (apply_fragmerge)
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ROV_ps_5_0);
+								else
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ROV_ps_5_0);
+								break;
+							case MFR_MODE::STATIC_KB:
+							default:
+								if (apply_fragmerge)
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ROV_ps_5_0);
+								else
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ROV_ps_5_0);
+								break;
+							}
+						}
+					}
+				}
+				else if (prim_data->GetVerticeDefinition("TEXCOORD0"))
+				{
+					if (prim_data->GetVerticeDefinition("TEXCOORD2"))
+					{
+						assert(render_pass != RENDER_GEOPASS::PASS_SINGLELAYERS);
+						// only text case //
+						// PTTT
+						dx11InputLayer_Target = dx11LI_PTTT;
+						dx11VS_Target = dx11VShader_PTTT;
+
+						if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
+#ifdef DX10_0
+							dx11PS_Target = GETPS(SR_BASIC_MULTITEXTMAPPING_ps_4_0);
+#else
+							dx11PS_Target = GETPS(SR_BASIC_MULTITEXTMAPPING_ps_5_0);
+#endif
+						}
+						else {
+							switch (mode_OIT)
+							{
+							case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_ABUFFER_MULTITEXTMAPPING_ps_5_0); break;
+							case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_MOMENT_OIT_MULTITEXTMAPPING_ROV_ps_5_0); break;
+							case MFR_MODE::DYNAMIC_KB:
+								if (apply_fragmerge)
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_MULTITEXTMAPPING_ROV_ps_5_0);
+								else
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ROV_ps_5_0);
+								break;
+							case MFR_MODE::STATIC_KB:
+							default:
+								if (apply_fragmerge)
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ROV_ps_5_0);
+								else
+									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_MULTITEXTMAPPING_ROV_ps_5_0);
+								break;
+							}
+						}
+					}
+					else // prim_data->GetVerticeDefinition("TEXCOORD2") is NULL
+					{
+						// if (render_obj_info.use_vertex_color)
+						// PT
+						dx11InputLayer_Target = dx11LI_PT;
+						dx11VS_Target = dx11VShader_PT;
+
+						if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
+#ifdef DX10_0
+							if (is_annotation_obj)
+								dx11PS_Target = GETPS(SR_BASIC_TEXTMAPPING_ps_4_0);
+							else if ((cbPolygonObj.pobj_flag & (0x1 << 19)) && prim_data->ptype == PrimitiveTypeLINE)
+								dx11PS_Target = GETPS(SR_BASIC_DASHEDLINE_ps_4_0);
+							else
+								dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_4_0);
+#else
+							if (is_annotation_obj)
+								dx11PS_Target = GETPS(SR_BASIC_TEXTMAPPING_ps_5_0);
+							else if ((cbPolygonObj.pobj_flag & (0x1 << 19)) && prim_data->ptype == PrimitiveTypeLINE)
+								dx11PS_Target = GETPS(SR_BASIC_DASHEDLINE_ps_5_0);
+							else
+								dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_5_0);
+#endif
+						}
+						else {
+
+							if (is_annotation_obj)
+								switch (mode_OIT)
+								{
+								case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0); break;
+								case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_TEXTMAPPING_ps_5_0) : GETPS(SR_MOMENT_OIT_TEXTMAPPING_ROV_ps_5_0); break;
+								case MFR_MODE::DYNAMIC_KB:
+									if (apply_fragmerge)
+										dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ROV_ps_5_0);
+									else
+										dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ROV_ps_5_0);
+									break;
+								case MFR_MODE::STATIC_KB:
+								default:
+									if (apply_fragmerge)
+										dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ROV_ps_5_0);
+									else
+										dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_TEXTMAPPING_ROV_ps_5_0);
+									break;
+								}
+							else if ((cbPolygonObj.pobj_flag & (0x1 << 19)) && prim_data->ptype == PrimitiveTypeLINE)
+								switch (mode_OIT)
+								{
+								case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_ABUFFER_DASHEDLINE_ps_5_0); break;
+								case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_DASHEDLINE_ps_5_0) : GETPS(SR_MOMENT_OIT_DASHEDLINE_ROV_ps_5_0); break;
+								case MFR_MODE::DYNAMIC_KB:
+									if (apply_fragmerge)
+										dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_DASHEDLINE_ROV_ps_5_0);
+									else
+										dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_DASHEDLINE_ROV_ps_5_0);
+									break;
+								case MFR_MODE::STATIC_KB:
+								default:
+									if (apply_fragmerge)
+										dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_DASHEDLINE_ROV_ps_5_0);
+									else
+										dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_DASHEDLINE_ROV_ps_5_0);
+									break;
+								}
+							else
+								switch (mode_OIT)
+								{
+								case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
+								case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0) : GETPS(SR_MOMENT_OIT_PHONGBLINN_ROV_ps_5_0); break;
+								case MFR_MODE::DYNAMIC_KB:
+									if (apply_fragmerge)
+										dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ROV_ps_5_0);
+									else
+										dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ROV_ps_5_0);
+									break;
+								case MFR_MODE::STATIC_KB:
+								default:
+									if (apply_fragmerge)
+										dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ROV_ps_5_0);
+									else
+										dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ROV_ps_5_0);
+									break;
+								}
+						}
+					}
 				}
 				else
 				{
-					// PN
-					dx11InputLayer_Target = dx11LI_PN;
-					dx11VS_Target = dx11VShader_PN;
-				}
+					// P
+					dx11InputLayer_Target = dx11LI_P;
+					dx11VS_Target = dx11VShader_P;
 
-				if (is_annotation_obj && dx11InputLayer_Target == dx11LI_PNT) {
-					if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
-#ifdef DX10_0
-						dx11PS_Target = GETPS(SR_BASIC_TEXTMAPPING_ps_4_0);
-#else
-						dx11PS_Target = GETPS(SR_BASIC_TEXTMAPPING_ps_5_0);
-#endif
-					}
-					else {
-						switch (mode_OIT)
-						{
-						case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0); break;
-						case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_TEXTMAPPING_ps_5_0) : GETPS(SR_MOMENT_OIT_TEXTMAPPING_ROV_ps_5_0); break;
-						case MFR_MODE::DYNAMIC_KB:
-							if (apply_fragmerge)
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ROV_ps_5_0);
-							else
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ROV_ps_5_0);
-							break;
-						case MFR_MODE::STATIC_KB:
-						default:
-							if (apply_fragmerge)
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ROV_ps_5_0);
-							else
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_TEXTMAPPING_ROV_ps_5_0);
-							break;
-						}
-					}
-				}
-				else if (has_texture_img && dx11InputLayer_Target == dx11LI_PNT) {
-					if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
-#ifdef DX10_0
-						dx11PS_Target = GETPS(SR_BASIC_VOLUMEMAP_ps_4_0);
-#else
-						dx11PS_Target = GETPS(SR_BASIC_VOLUMEMAP_ps_5_0);
-#endif
-					}
-					else {
-						switch (mode_OIT)
-						{
-						case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0); break;
-						case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_MOMENT_OIT_TEXTUREIMGMAP_ROV_ps_5_0); break;
-						case MFR_MODE::DYNAMIC_KB:
-							if (apply_fragmerge)
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_TEXTUREIMGMAP_ROV_ps_5_0);
-							else
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ROV_ps_5_0);
-							break;
-						case MFR_MODE::STATIC_KB:
-						default:
-							if (apply_fragmerge)
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ROV_ps_5_0);
-							else
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_TEXTUREIMGMAP_ROV_ps_5_0);
-							break;
-						}
-					}
-				}
-				else if (vobj && tobj_maptable) {
-					if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
-#ifdef DX10_0
-						dx11PS_Target = GETPS(SR_BASIC_VOLUMEMAP_ps_4_0);
-#else
-						dx11PS_Target = GETPS(SR_BASIC_VOLUMEMAP_ps_5_0);
-#endif
-					}
-					else {
-						assert(mode_OIT == MFR_MODE::DYNAMIC_FB);
-						dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_ABUFFER_VOLUMEMAP_ps_5_0);
-					}
-				}
-				else {
 					if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
 #ifdef DX10_0
 						dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_4_0);
@@ -1896,275 +2108,148 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 						}
 					}
 				}
-			}
-			else if (prim_data->GetVerticeDefinition("TEXCOORD0"))
-			{
-				if (prim_data->GetVerticeDefinition("TEXCOORD2"))
-				{
-					assert(render_pass != RENDER_GEOPASS::PASS_SINGLELAYERS);
-					// only text case //
-					// PTTT
-					dx11InputLayer_Target = dx11LI_PTTT;
-					dx11VS_Target = dx11VShader_PTTT;
 
-					if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
+				if (render_pass == RENDER_GEOPASS::PASS_SINGLELAYERS) {
 #ifdef DX10_0
-						dx11PS_Target = GETPS(SR_BASIC_MULTITEXTMAPPING_ps_4_0);
+					dx11PS_Target = GETPS(SR_SINGLE_LAYER_ps_4_0); // ONLY K-BUFFER
 #else
-						dx11PS_Target = GETPS(SR_BASIC_MULTITEXTMAPPING_ps_5_0);
-#endif
-					}
-					else {
-						switch (mode_OIT)
-						{
-						case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_ABUFFER_MULTITEXTMAPPING_ps_5_0); break;
-						case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_MOMENT_OIT_MULTITEXTMAPPING_ROV_ps_5_0); break;
-						case MFR_MODE::DYNAMIC_KB:
-							if (apply_fragmerge)
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_MULTITEXTMAPPING_ROV_ps_5_0);
-							else
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ROV_ps_5_0);
-							break;
-						case MFR_MODE::STATIC_KB:
-						default:
-							if (apply_fragmerge)
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ROV_ps_5_0);
-							else
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_MULTITEXTMAPPING_ROV_ps_5_0);
-							break;
-						}
-					}
-				}
-				else // prim_data->GetVerticeDefinition("TEXCOORD2") is NULL
-				{
-					// if (render_obj_info.use_vertex_color)
-					// PT
-					dx11InputLayer_Target = dx11LI_PT;
-					dx11VS_Target = dx11VShader_PT;
-
-					if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
-#ifdef DX10_0
-						if (is_annotation_obj)
-							dx11PS_Target = GETPS(SR_BASIC_TEXTMAPPING_ps_4_0);
-						else if ((cbPolygonObj.pobj_flag & (0x1 << 19)) && prim_data->ptype == PrimitiveTypeLINE)
-							dx11PS_Target = GETPS(SR_BASIC_DASHEDLINE_ps_4_0);
-						else
-							dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_4_0);
-#else
-						if (is_annotation_obj)
-							dx11PS_Target = GETPS(SR_BASIC_TEXTMAPPING_ps_5_0);
-						else if ((cbPolygonObj.pobj_flag & (0x1 << 19)) && prim_data->ptype == PrimitiveTypeLINE)
-							dx11PS_Target = GETPS(SR_BASIC_DASHEDLINE_ps_5_0);
-						else
-							dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_5_0);
-#endif
-					}
-					else {
-
-						if (is_annotation_obj)
-							switch (mode_OIT)
-							{
-							case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0); break;
-							case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_TEXTMAPPING_ps_5_0) : GETPS(SR_MOMENT_OIT_TEXTMAPPING_ROV_ps_5_0); break;
-							case MFR_MODE::DYNAMIC_KB:
-								if (apply_fragmerge)
-									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ROV_ps_5_0);
-								else
-									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ROV_ps_5_0);
-								break;
-							case MFR_MODE::STATIC_KB:
-							default:
-								if (apply_fragmerge)
-									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ROV_ps_5_0);
-								else
-									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_TEXTMAPPING_ROV_ps_5_0);
-								break;
-							}
-						else if ((cbPolygonObj.pobj_flag & (0x1 << 19)) && prim_data->ptype == PrimitiveTypeLINE)
-							switch (mode_OIT)
-							{
-							case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_ABUFFER_DASHEDLINE_ps_5_0); break;
-							case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_DASHEDLINE_ps_5_0) : GETPS(SR_MOMENT_OIT_DASHEDLINE_ROV_ps_5_0); break;
-							case MFR_MODE::DYNAMIC_KB:
-								if (apply_fragmerge)
-									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_DASHEDLINE_ROV_ps_5_0);
-								else
-									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_DASHEDLINE_ROV_ps_5_0);
-								break;
-							case MFR_MODE::STATIC_KB:
-							default:
-								if (apply_fragmerge)
-									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_DASHEDLINE_ROV_ps_5_0);
-								else
-									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_DASHEDLINE_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_DASHEDLINE_ROV_ps_5_0);
-								break;
-							}
-						else
-							switch (mode_OIT)
-							{
-							case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
-							case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0) : GETPS(SR_MOMENT_OIT_PHONGBLINN_ROV_ps_5_0); break;
-							case MFR_MODE::DYNAMIC_KB:
-								if (apply_fragmerge)
-									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ROV_ps_5_0);
-								else
-									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ROV_ps_5_0);
-								break;
-							case MFR_MODE::STATIC_KB:
-							default:
-								if (apply_fragmerge)
-									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ROV_ps_5_0);
-								else
-									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ROV_ps_5_0);
-								break;
-							}
-					}
-				}
-			}
-			else
-			{
-				// P
-				dx11InputLayer_Target = dx11LI_P;
-				dx11VS_Target = dx11VShader_P;
-
-				if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
-#ifdef DX10_0
-					dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_4_0);
-#else
-					dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_5_0);
+					dx11PS_Target = GETPS(SR_SINGLE_LAYER_ps_5_0); // ONLY K-BUFFER
 #endif
 				}
-				else {
-					switch (mode_OIT)
+				else if (render_pass == RENDER_GEOPASS::PASS_OIT) {
+					if (is_frag_counter_buffer)
 					{
-					case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
-					case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0) : GETPS(SR_MOMENT_OIT_PHONGBLINN_ROV_ps_5_0); break;
-					case MFR_MODE::DYNAMIC_KB:
-						if (apply_fragmerge)
-							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ROV_ps_5_0);
+						// Create a count of the number of fragments at each pixel location
+						if (dx11InputLayer_Target == dx11LI_PTTT)
+							dx11PS_Target = GETPS(SR_OIT_ABUFFER_FRAGCOUNTER_MTT_ps_5_0);
 						else
-							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ROV_ps_5_0);
-						break;
-					case MFR_MODE::STATIC_KB:
-					default:
-						if (apply_fragmerge)
-							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ROV_ps_5_0);
+							dx11PS_Target = GETPS(SR_OIT_ABUFFER_FRAGCOUNTER_ps_5_0);
+					}
+					else if (is_MOMENT_gen_buffer)
+					{
+						if (dx11InputLayer_Target == dx11LI_PTTT)
+							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_GEN_MTT_ps_5_0) : GETPS(SR_MOMENT_GEN_MTT_ROV_ps_5_0);
+						else if ((dx11InputLayer_Target == dx11LI_PT || dx11InputLayer_Target == dx11LI_PT) && is_annotation_obj)
+							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_GEN_TEXT_ps_5_0) : GETPS(SR_MOMENT_GEN_TEXT_ROV_ps_5_0);
 						else
-							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ROV_ps_5_0);
-						break;
+							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_GEN_ps_5_0) : GETPS(SR_MOMENT_GEN_ROV_ps_5_0);
 					}
 				}
-			}
 
+				switch (prim_data->ptype)
+				{
+				case PrimitiveTypeLINE:
+					if (prim_data->is_stripe)
+						pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP;
+					else
+						pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_LINELIST;
+					if (cbPolygonObj.pix_thickness > 0)
 #ifdef DX10_0
-			// TO DO... 
-			// if (is_picking_routine) dx11PS_Target = NULL; ... process in GS
-#endif
-			
-			if (render_pass == RENDER_GEOPASS::PASS_SINGLELAYERS) {
-#ifdef DX10_0
-				dx11PS_Target = GETPS(SR_SINGLE_LAYER_ps_4_0); // ONLY K-BUFFER
+						dx11GS_Target = GETGS(GS_ThickLines_gs_4_0);
 #else
-				dx11PS_Target = GETPS(SR_SINGLE_LAYER_ps_5_0); // ONLY K-BUFFER
+						dx11GS_Target = GETGS(GS_ThickLines_gs_5_0);
 #endif
-			}
-			else if (render_pass == RENDER_GEOPASS::PASS_OIT) {
-				if (is_frag_counter_buffer)
-				{
-					// Create a count of the number of fragments at each pixel location
-					if (dx11InputLayer_Target == dx11LI_PTTT)
-						dx11PS_Target = GETPS(SR_OIT_ABUFFER_FRAGCOUNTER_MTT_ps_5_0);
+					break;
+				case PrimitiveTypeTRIANGLE:
+					if (prim_data->is_stripe)
+						pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
 					else
-						dx11PS_Target = GETPS(SR_OIT_ABUFFER_FRAGCOUNTER_ps_5_0);
-				}
-				else if (is_MOMENT_gen_buffer)
-				{
-					if (dx11InputLayer_Target == dx11LI_PTTT)
-						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_GEN_MTT_ps_5_0) : GETPS(SR_MOMENT_GEN_MTT_ROV_ps_5_0);
-					else if ((dx11InputLayer_Target == dx11LI_PT || dx11InputLayer_Target == dx11LI_PT) && is_annotation_obj)
-						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_GEN_TEXT_ps_5_0) : GETPS(SR_MOMENT_GEN_TEXT_ROV_ps_5_0);
-					else
-						dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_GEN_ps_5_0) : GETPS(SR_MOMENT_GEN_ROV_ps_5_0);
-				}
-			}
+						pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+					break;
+				case PrimitiveTypePOINT:
+					pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_POINTLIST;
+					if (cbPolygonObj.pix_thickness > 0)
+#ifdef DX10_0
+						dx11GS_Target = is_surfel ? GETGS(GS_SurfelPoints_gs_4_0) : GETGS(GS_ThickPoints_gs_4_0);
+#else
+						dx11GS_Target = is_surfel ? GETGS(GS_SurfelPoints_gs_5_0) : GETGS(GS_ThickPoints_gs_5_0);
+#endif
 
-			switch (prim_data->ptype)
-			{
-			case PrimitiveTypeLINE:
-				if (prim_data->is_stripe)
-					pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP;
+					break;
+				default:
+					continue;
+				}
+
+				if (force_to_pointsetrender)
+				{
+					dx11RState_TargetObj = GETRASTER(SOLID_NONE);
+					pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_POINTLIST;
+					if (cbPolygonObj.pix_thickness > 0)
+#ifdef DX10_0
+						dx11GS_Target = is_surfel ? GETGS(GS_SurfelPoints_gs_4_0) : GETGS(GS_ThickPoints_gs_4_0);
+#else
+						dx11GS_Target = is_surfel ? GETGS(GS_SurfelPoints_gs_5_0) : GETGS(GS_ThickPoints_gs_5_0);
+#endif
+				}
+
+				if (pobj_topology_type == D3D11_PRIMITIVE_TOPOLOGY_POINTLIST || pobj_topology_type == D3D11_PRIMITIVE_TOPOLOGY_LINELIST)
+					dx11DeviceImmContext->GSSetConstantBuffers(1, 1, &cbuf_pobj);
+
+				if (is_wireframe)
+				{
+					dx11RState_TargetObj = GETRASTER(WIRE_NONE);
+					dx11GS_Target = NULL;
+				}
 				else
-					pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_LINELIST;
-				if (cbPolygonObj.pix_thickness > 0)
-#ifdef DX10_0
-					dx11GS_Target = GETGS(GS_ThickLines_gs_4_0);
-#else
-					dx11GS_Target = GETGS(GS_ThickLines_gs_5_0);
-#endif
-				break;
-			case PrimitiveTypeTRIANGLE:
+					dx11RState_TargetObj = GETRASTER(SOLID_NONE);
+			}break;
+			case PICKING_TYPE::PICK_ON_GS: 
+			{
+				assert(render_pass == RENDER_GEOPASS::PASS_OIT);
+				if (is_annotation_obj || force_to_pointsetrender || is_wireframe || prim_data->ptype != PrimitiveTypeTRIANGLE) continue;
+
+				if (prim_data->GetVerticeDefinition("NORMAL"))
+				{
+					if (prim_data->GetVerticeDefinition("TEXCOORD0"))
+					{
+						// PNT (here, T is used as color)
+						dx11InputLayer_Target = dx11LI_PNT;
+						dx11VS_Target = dx11VShader_PNT;
+					}
+					else
+					{
+						// PN
+						dx11InputLayer_Target = dx11LI_PN;
+						dx11VS_Target = dx11VShader_PN;
+					}
+				}
+				else if (prim_data->GetVerticeDefinition("TEXCOORD0"))
+				{
+					if (prim_data->GetVerticeDefinition("TEXCOORD2"))
+					{
+						dx11InputLayer_Target = dx11LI_PTTT;
+						dx11VS_Target = dx11VShader_PTTT;
+					}
+					else // prim_data->GetVerticeDefinition("TEXCOORD2") is NULL
+					{
+						// if (render_obj_info.use_vertex_color)
+						// PT
+						dx11InputLayer_Target = dx11LI_PT;
+						dx11VS_Target = dx11VShader_PT;
+					}
+				}
+				else
+				{
+					// P
+					dx11InputLayer_Target = dx11LI_P;
+					dx11VS_Target = dx11VShader_P;
+				}
+
+				// prim_data->ptype == PrimitiveTypeTRIANGLE
 				if (prim_data->is_stripe)
 					pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
 				else
 					pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-				break;
-			case PrimitiveTypePOINT:
-				pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_POINTLIST;
-				if (cbPolygonObj.pix_thickness > 0)
-#ifdef DX10_0
-					dx11GS_Target = is_surfel ? GETGS(GS_SurfelPoints_gs_4_0) : GETGS(GS_ThickPoints_gs_4_0);
-#else
-					dx11GS_Target = is_surfel ? GETGS(GS_SurfelPoints_gs_5_0) : GETGS(GS_ThickPoints_gs_5_0);
-#endif
 
-				break;
-			default:
-				continue;
-			}
-
-#define GETRASTER(NAME) dx11CommonParams->get_rasterizer(#NAME)
-
-			if (force_to_pointsetrender)
-			{
+				dx11GS_Target = GETGS(GS_PickingBasic_gs_4_0);
+				//dx11PS_Target = NULL;
 				dx11RState_TargetObj = GETRASTER(SOLID_NONE);
-				pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_POINTLIST;
-				if (cbPolygonObj.pix_thickness > 0)
-#ifdef DX10_0
-					dx11GS_Target = is_surfel ? GETGS(GS_SurfelPoints_gs_4_0) : GETGS(GS_ThickPoints_gs_4_0);
-#else
-					dx11GS_Target = is_surfel ? GETGS(GS_SurfelPoints_gs_5_0) : GETGS(GS_ThickPoints_gs_5_0);
-#endif
-			}
 
-			if (pobj_topology_type == D3D11_PRIMITIVE_TOPOLOGY_POINTLIST || pobj_topology_type == D3D11_PRIMITIVE_TOPOLOGY_LINELIST)
 				dx11DeviceImmContext->GSSetConstantBuffers(1, 1, &cbuf_pobj);
+				dx11DeviceImmContext->GSSetConstantBuffers(2, 1, &cbuf_clip);
 
-			if (is_wireframe)
-			{
-				dx11RState_TargetObj = GETRASTER(WIRE_NONE);
-				dx11GS_Target = NULL;
+			}break;
 			}
-			else
-				dx11RState_TargetObj = GETRASTER(SOLID_NONE);
-			//dx11RState_TargetObj = GETRASTER(SOLID_CCW);
-			//{
-			//	if (dx11InputLayer_Target == dx11LI_PNT && prim_data->num_vtx > 1000000)
-			//	{
-			//		cout << "# of vtx : " << prim_data->num_vtx << endl;
-			//
-			//		ID3D11Buffer* pdx11bufvtx = (ID3D11Buffer*)gres_vtx.alloc_res_ptrs[DTYPE_RES];
-			//		D3D11_MAPPED_SUBRESOURCE mappedRes;
-			//		dx11CommonParams->dx11DeviceImmContext->Map(pdx11bufvtx, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedRes);
-			//		vmfloat3* vtxbuf = (vmfloat3*)mappedRes.pData;
-			//		static int gg = 0;
-			//		gg++;
-			//		for (int i = 0; i < prim_data->num_vtx; i++)
-			//		{
-			//			vtxbuf[3 * i + 2] = gg % 3 == 0 ? vmfloat3(1, 0, 0) : gg % 3 == 1 ? vmfloat3(0, 1, 0) : vmfloat3(0, 0, 1);
-			//		}
-			//		dx11CommonParams->dx11DeviceImmContext->Unmap(pdx11bufvtx, NULL);
-			//	}
-			//}
 
 			ID3D11Buffer* dx11BufferTargetPrim = (ID3D11Buffer*)gres_vtx.alloc_res_ptrs[DTYPE_RES];
 			ID3D11Buffer* dx11IndiceTargetPrim = NULL;
@@ -2263,7 +2348,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 						dx11DeviceImmContext->PSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]); // search why this does not work
 					}
 					dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(0, NULL, NULL, 2, NUM_UAVs_1ST, dx11UAVs_1st_pass, NULL);
-					dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(ALWAYS), 0);
+					//dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(ALWAYS), 0);
+					dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(DISABLED), 0);
 					break;
 				case RENDER_GEOPASS::PASS_SINGLELAYERS:
 					// clear //
@@ -2293,60 +2379,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			dx11DeviceImmContext->PSSetShaderResources(50, 1, dx11SRVs_NULL); // note that t50 is assigned for offsettable used in DKB and DFB 
 #pragma endregion // GEO RENDERING PASS
 		}
-	};
-
-	auto ResolvePass = [&dx11CommonParams, &dx11DeviceImmContext, &dx11RTVsNULL, &dx11DSVNULL, &dx11UAVs_NULL, &dx11SRVs_NULL,
-		&gres_fb_k_buffer, &gres_fb_counter, &gres_fb_rgba, &gres_fb_depthcs, &gres_fb_ubk_buffer, &gres_fb_ref_pidx,
-		&gres_fb_singlelayer_rgba, &gres_fb_singlelayer_depthcs,
-		&num_grid_x, &num_grid_y]
-		(const MFR_MODE mode_OIT, const bool apply_fragmerge) {
-		assert(mode_OIT != MFR_MODE::MOMENT);
-
-		dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
-
-		UINT UAVInitialCounts = 0;
-
-		ID3D11UnorderedAccessView* dx11UAVs_2nd_pass[NUM_UAVs_2ND] = {
-				(ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]
-				, (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
-				, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
-				, NULL//mode_OIT == MFR_MODE::DXAB ? (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV] : NULL
-				, mode_OIT == MFR_MODE::DYNAMIC_FB ? (ID3D11UnorderedAccessView*)gres_fb_ubk_buffer.alloc_res_ptrs[DTYPE_UAV] : NULL
-		};
-
-		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], 0); // trimming may occur 
-
-		dx11DeviceImmContext->CSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_SRV]);
-		dx11DeviceImmContext->CSSetShaderResources(2, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_depthcs.alloc_res_ptrs[DTYPE_SRV]);
-
-		switch (mode_OIT)
-		{
-		case MFR_MODE::STATIC_KB:
-			dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(OIT_SKBZ_RESOLVE_cs_5_0) : GETCS(OIT_SKB_RESOLVE_cs_5_0), NULL, 0);
-			break;
-		case MFR_MODE::DYNAMIC_FB:
-			// sort and render the fragments.  Use the prefix sum to determine where the 
-			// fragments for each pixel reside.
-			dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(SR_OIT_ABUFFER_SORT2SENDER_SFM_cs_5_0) : GETCS(SR_OIT_ABUFFER_SORT2SENDER_cs_5_0), NULL, 0);
-			//dx11DeviceImmContext->CSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_SRV]);
-			dx11DeviceImmContext->CSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]);
-			break;
-		case MFR_MODE::DYNAMIC_KB:
-			dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(OIT_DKBZ_RESOLVE_cs_5_0) : GETCS(OIT_DKB_RESOLVE_cs_5_0), NULL, 0);
-			dx11DeviceImmContext->CSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]);
-			break;
-		default:
-			assert(0);
-		}
-
-		dx11DeviceImmContext->CSSetUnorderedAccessViews(1, NUM_UAVs_2ND, dx11UAVs_2nd_pass, (UINT*)(&dx11UAVs_2nd_pass));
-
-		dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
-
-		// Set NULL States //
-		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL)); // counter
-		dx11DeviceImmContext->CSSetUnorderedAccessViews(1, NUM_UAVs_2ND, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-		dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
 	};
 
 	auto RenderOut = [&iobj, &___GpuProfile, &fb_size_cur, &dx11DeviceImmContext, &is_final_renderer,
@@ -2460,44 +2492,94 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		assert(single_layer_routine_objs.size() + foremost_surfaces_routine_objs.size() == 0);
 		assert(mode_OIT == MFR_MODE::DYNAMIC_FB);
 
-		if (is_picking_routine) {
-			cbCamState.iSrCamDummy__1 = (picking_pos_ss.x & 0xFFFF | picking_pos_ss.y << 16);
-			cbCamState.cam_flag |= (0x1 << 5);
-		}
-		SetCamConstBuf(cbCamState);
-
-		___GpuProfile("Picking");
-
-		RenderStage1(general_oit_routine_objs, MFR_MODE::DYNAMIC_FB, RENDER_GEOPASS::PASS_OIT
-			, false /*is_frag_counter_buffer*/, false, true /*is_picking_routine*/, true, false);
-
-#pragma region copyback to sysmem
-		dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_picking_system_buffer.alloc_res_ptrs[DTYPE_RES],
-			(ID3D11Buffer*)gres_picking_buffer.alloc_res_ptrs[DTYPE_RES]);
-
 		map<int, float> picking_layers_id_depth;
 		map<float, int> picking_layers_depth_id;
-		D3D11_MAPPED_SUBRESOURCE mappedResSysPicking;
-		HRESULT hr = dx11DeviceImmContext->Map((ID3D11Buffer*)gres_picking_system_buffer.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysPicking);
-		uint* picking_buf = (uint*)mappedResSysPicking.pData;
-		int num_layers = 0;
-		for (int i = 0; i < max_picking_layers; i += 2) {
-			uint obj_id = picking_buf[i];
-			if (obj_id == 0) continue;
+		vector<vmfloat3> picking_pos_out;
+		vector<int> picking_id_out;
+		___GpuProfile("Picking");
+		bool pickPrimitive = _fncontainer->fnParams.GetParam("_bool_PickPrimitive", false);
+		pickPrimitive = true;
+		if (pickPrimitive) {
+			cbCamState.pos_cam_ws = picking_ray_origin;
+			cbCamState.dir_view_ws = picking_ray_dir;
+			SetCamConstBuf(cbCamState);
 
-			float pick_depth = *(float*)&picking_buf[i + 1];
+			UINT offset[1] = {0};
+			dx11DeviceImmContext->SOSetTargets(1, (ID3D11Buffer**)&gres_picking_GSO_buffer.alloc_res_ptrs[DTYPE_RES], offset);
+			// draw //
+			RenderStage1(general_oit_routine_objs, MFR_MODE::DYNAMIC_FB, RENDER_GEOPASS::PASS_OIT
+				, false // is_frag_counter_buffer
+				, false
+				, PICKING_TYPE::PICK_ON_GS
+				, true, false);
 
-			auto it = picking_layers_id_depth.find(obj_id);
-			if (it == picking_layers_id_depth.end()) {
-				picking_layers_id_depth.insert(pair<int, float>(obj_id, pick_depth));
+			ID3D11Buffer* bufNull = NULL;
+			dx11DeviceImmContext->SOSetTargets(1, (ID3D11Buffer**)&bufNull, offset);
+
+			dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_picking_system_GSO_buffer.alloc_res_ptrs[DTYPE_RES],
+				(ID3D11Buffer*)gres_picking_GSO_buffer.alloc_res_ptrs[DTYPE_RES]);
+
+#pragma region copyback to sysmem
+			D3D11_MAPPED_SUBRESOURCE mappedResSysPicking;
+			HRESULT hr = dx11DeviceImmContext->Map((ID3D11Buffer*)gres_picking_system_GSO_buffer.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysPicking);
+			float* picking_buf = (float*)mappedResSysPicking.pData;
+			int num_layers = 0;
+			for (int i = 0; i < max_picking_layers; i += 3) {
+				uint actorid = *(uint*)&picking_buf[i + 2];
+				if (actorid == 0) continue;
+				float pick_depth = picking_buf[i + 0];
+				uint pid = *(uint*)&picking_buf[i + 1];
+
+				auto it = picking_layers_id_depth.find(actorid);
+				if (it == picking_layers_id_depth.end()) {
+					picking_layers_id_depth.insert(pair<int, float>(actorid, pick_depth));
+				}
+				else {
+					if (pick_depth < it->second) it->second = pick_depth;
+				}
+				num_layers++;
 			}
-			else {
-				if (pick_depth < it->second) it->second = pick_depth;
-			}
-			num_layers++;
-		}
-		dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_picking_system_buffer.alloc_res_ptrs[DTYPE_RES], 0);
+			cout << "num_layers : " << num_layers << endl;
+			dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_picking_system_GSO_buffer.alloc_res_ptrs[DTYPE_RES], 0);
 #pragma endregion copyback to sysmem
+		}
+		else {
+			cbCamState.iSrCamDummy__1 = (picking_pos_ss.x & 0xFFFF | picking_pos_ss.y << 16);
+			cbCamState.cam_flag |= (0x1 << 5);
+			SetCamConstBuf(cbCamState);
+
+			RenderStage1(general_oit_routine_objs, MFR_MODE::DYNAMIC_FB, RENDER_GEOPASS::PASS_OIT
+				, false // is_frag_counter_buffer
+				, false
+				, PICKING_TYPE::PICK_ON_SCREEN
+				, false, false);
+
+			dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_picking_system_buffer.alloc_res_ptrs[DTYPE_RES],
+				(ID3D11Buffer*)gres_picking_buffer.alloc_res_ptrs[DTYPE_RES]);
+
+#pragma region copyback to sysmem
+			D3D11_MAPPED_SUBRESOURCE mappedResSysPicking;
+			HRESULT hr = dx11DeviceImmContext->Map((ID3D11Buffer*)gres_picking_system_buffer.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysPicking);
+			uint* picking_buf = (uint*)mappedResSysPicking.pData;
+			int num_layers = 0;
+			for (int i = 0; i < max_picking_layers; i += 2) {
+				uint obj_id = picking_buf[i];
+				if (obj_id == 0) continue;
+
+				float pick_depth = *(float*)&picking_buf[i + 1];
+
+				auto it = picking_layers_id_depth.find(obj_id);
+				if (it == picking_layers_id_depth.end()) {
+					picking_layers_id_depth.insert(pair<int, float>(obj_id, pick_depth));
+				}
+				else {
+					if (pick_depth < it->second) it->second = pick_depth;
+				}
+				num_layers++;
+			}
+			dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_picking_system_buffer.alloc_res_ptrs[DTYPE_RES], 0);
+#pragma endregion copyback to sysmem
+		}
 		___GpuProfile("Picking", true);
 
 		//if (gpu_profile) {
@@ -2508,8 +2590,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			picking_layers_depth_id[it.second] = it.first;
 		}
 
-		vector<vmfloat3> picking_pos_out;
-		vector<int> picking_id_out;
 		for (auto& it : picking_layers_depth_id) {
 			vmfloat3 pos_pick = picking_ray_origin + picking_ray_dir * it.first;
 			picking_pos_out.push_back(pos_pick);
@@ -2519,6 +2599,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 		_fncontainer->fnParams.SetParam("_vlist_float3_PickPos", picking_pos_out);
 		_fncontainer->fnParams.SetParam("_vlist_int_PickId", picking_id_out);
+		//_fncontainer->fnParams.SetParam("_vlist_int_PickPrimitiveId", picking_id_out);
 		// END of Render Process for picking
 	}
 	else if (mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB || mode_OIT == MFR_MODE::STATIC_KB) {
@@ -2532,60 +2613,13 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		
 		SetCamConstBuf(cbCamState);
 
-		/*
-		auto RenderTargetsToSKB = [&dx11DeviceImmContext, &dx11DSV, &dx11CommonParams,
-			&gres_fb_counter, gres_fb_spinlock, gres_fb_k_buffer,
-			&dx11UAVs_NULL, &dx11SRVs_NULL, &clr_float_fltmax_4, &clr_float_zero_4](
-				const bool is_picking_routine, const bool mode_OIT, const bool use_spinlock_pixsynch, const bool apply_fragmerge,
-				const int num_grid_x, const int num_grid_y,
-				GpuRes& gres_fb_rgba, GpuRes& gres_fb_depthcs, GpuRes& gres_fb_counter, GpuRes& gres_fb_spinlock, GpuRes& gres_fb_k_buffer) {
-
-					ID3D11UnorderedAccessView* dx11UAVs_1st_pass[NUM_UAVs_1ST] = {
-						(ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV]
-						, use_spinlock_pixsynch ? (ID3D11UnorderedAccessView*)gres_fb_spinlock.alloc_res_ptrs[DTYPE_UAV] : NULL
-						, (ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]
-						, NULL
-					};
-
-					assert(!is_picking_routine);
-					assert(mode_OIT == MFR_MODE::STATIC_KB || mode_OIT == MFR_MODE::DYNAMIC_KB);
-
-					// RT to K-Buffer
-					ID3D11ShaderResourceView* dx11SRVs_1st_pass[2] = {
-							(ID3D11ShaderResourceView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_SRV]
-						, (ID3D11ShaderResourceView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_SRV]
-					};
-					dx11DeviceImmContext->CSSetUnorderedAccessViews(2, NUM_UAVs_1ST, dx11UAVs_1st_pass, (UINT*)(&dx11UAVs_1st_pass));
-					dx11DeviceImmContext->CSSetShaderResources(10, 2, dx11SRVs_1st_pass);
-
-					UINT UAVInitialCounts = 0;
-					if (mode_OIT == MFR_MODE::STATIC_KB)
-						dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(SR_SINGLE_LAYER_TO_SKBTZ_cs_5_0) : GETCS(SR_SINGLE_LAYER_TO_SKBT_cs_5_0), NULL, 0);
-					else if (mode_OIT == MFR_MODE::DYNAMIC_KB)
-						dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(SR_SINGLE_LAYER_TO_DKBTZ_cs_5_0) : GETCS(SR_SINGLE_LAYER_TO_DKBT_cs_5_0), NULL, 0);
-					//else if (mode_OIT == MFR_MODE::DYNAMIC_FB)
-					//	dx11DeviceImmContext->CSSetShader(GETCS(SR_SINGLE_LAYER_TO_DFB_cs_5_0), NULL, 0);
-					else assert(0);
-
-					dx11DeviceImmContext->Flush();
-					dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
-					dx11DeviceImmContext->Flush();
-
-					dx11DeviceImmContext->CSSetUnorderedAccessViews(2, NUM_UAVs_1ST, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-					dx11DeviceImmContext->CSSetShaderResources(10, 2, dx11SRVs_NULL);
-
-					dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
-					dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV], clr_float_fltmax_4);
-					dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
-		};
-		/**/
 		if (foremost_surfaces_routine_objs.size() > 0) 
 		{
 			dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
 			___GpuProfile("Opaque Surface");
 			// Opaque Foremost Rendering ==> to Render Target Textures (gres_fb_rgba and gres_fb_depthcs)
 			RenderStage1(foremost_surfaces_routine_objs, MFR_MODE::NONE, RENDER_GEOPASS::PASS_OPAQUESURFACES
-				, false /*is_frag_counter_buffer*/, is_ghost_mode, false /*is_picking_routine*/, apply_fragmerge, false);
+				, false /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false);
 			___GpuProfile("Opaque Surface", true);
 		}
 
@@ -2596,7 +2630,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			// Single Layer Effect (outline) Rendering 
 			// ==> to a Temporary Render Target Texture (gres_fb_singlelayer_depthcs)
 			RenderStage1(single_layer_routine_objs, MFR_MODE::NONE, RENDER_GEOPASS::PASS_SINGLELAYERS
-				, false /*is_frag_counter_buffer*/, is_ghost_mode, false /*is_picking_routine*/, apply_fragmerge, false);
+				, false /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false);
 			___GpuProfile("Single Layer Pass", true);
 
 			GpuRes gres_quad;
@@ -2652,7 +2686,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 				___GpuProfile("Fragment Count");
 				RenderStage1(general_oit_routine_objs, mode_OIT, RENDER_GEOPASS::PASS_OIT
-					, true /*is_frag_counter_buffer*/, is_ghost_mode, false /*is_picking_routine*/, apply_fragmerge, false);
+					, true /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false);
 				___GpuProfile("Fragment Count", true);
 
 				dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
@@ -2822,17 +2856,72 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			___GpuProfile("Geometry for OIT");
 			// buffer filling
 			RenderStage1(general_oit_routine_objs, mode_OIT, RENDER_GEOPASS::PASS_OIT
-				, false /*is_frag_counter_buffer*/, is_ghost_mode, false /*is_picking_routine*/, apply_fragmerge, false);
+				, false /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false);
 			___GpuProfile("Geometry for OIT", true);
 #endif
-			}
+		}
 
 
 #ifdef DX10_0
 		///. TO DO //
-		not allocate gres_fb_spinlock, gres_fb_counter, gres_fb_k_buffer, gres_fb_ubk_buffer...
+		//not allocate gres_fb_spinlock, gres_fb_counter, gres_fb_k_buffer, gres_fb_ubk_buffer...
 
 #else
+
+		auto ResolvePass = [&dx11CommonParams, &dx11DeviceImmContext, &dx11RTVsNULL, &dx11DSVNULL, &dx11UAVs_NULL, &dx11SRVs_NULL,
+			&gres_fb_k_buffer, &gres_fb_counter, &gres_fb_rgba, &gres_fb_depthcs, &gres_fb_ubk_buffer, &gres_fb_ref_pidx,
+			&gres_fb_singlelayer_rgba, &gres_fb_singlelayer_depthcs,
+			&num_grid_x, &num_grid_y]
+			(const MFR_MODE mode_OIT, const bool apply_fragmerge) {
+			assert(mode_OIT != MFR_MODE::MOMENT);
+
+			dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
+
+			UINT UAVInitialCounts = 0;
+
+			ID3D11UnorderedAccessView* dx11UAVs_2nd_pass[NUM_UAVs_2ND] = {
+					(ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]
+					, (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
+					, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
+					, NULL//mode_OIT == MFR_MODE::DXAB ? (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV] : NULL
+					, mode_OIT == MFR_MODE::DYNAMIC_FB ? (ID3D11UnorderedAccessView*)gres_fb_ubk_buffer.alloc_res_ptrs[DTYPE_UAV] : NULL
+			};
+
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], 0); // trimming may occur 
+
+			dx11DeviceImmContext->CSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_SRV]);
+			dx11DeviceImmContext->CSSetShaderResources(2, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_depthcs.alloc_res_ptrs[DTYPE_SRV]);
+
+			switch (mode_OIT)
+			{
+			case MFR_MODE::STATIC_KB:
+				dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(OIT_SKBZ_RESOLVE_cs_5_0) : GETCS(OIT_SKB_RESOLVE_cs_5_0), NULL, 0);
+				break;
+			case MFR_MODE::DYNAMIC_FB:
+				// sort and render the fragments.  Use the prefix sum to determine where the 
+				// fragments for each pixel reside.
+				dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(SR_OIT_ABUFFER_SORT2SENDER_SFM_cs_5_0) : GETCS(SR_OIT_ABUFFER_SORT2SENDER_cs_5_0), NULL, 0);
+				//dx11DeviceImmContext->CSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_SRV]);
+				dx11DeviceImmContext->CSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]);
+				break;
+			case MFR_MODE::DYNAMIC_KB:
+				dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(OIT_DKBZ_RESOLVE_cs_5_0) : GETCS(OIT_DKB_RESOLVE_cs_5_0), NULL, 0);
+				dx11DeviceImmContext->CSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]);
+				break;
+			default:
+				assert(0);
+			}
+
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(1, NUM_UAVs_2ND, dx11UAVs_2nd_pass, (UINT*)(&dx11UAVs_2nd_pass));
+
+			dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+
+			// Set NULL States //
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL)); // counter
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(1, NUM_UAVs_2ND, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+			dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
+		};
+
 		int additionalKLayerForMFB = (int)(foremost_surfaces_routine_objs.size() == 0 && single_layer_routine_objs.size() > 0);
 		cbCamState.cam_flag |= (additionalKLayerForMFB << 8);
 		int storeKBuf = (int)(!is_final_renderer || check_pixel_transmittance
@@ -2900,13 +2989,13 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		SetCamConstBuf(cbCamState);
 
 		RenderStage1(general_oit_routine_objs, MFR_MODE::MOMENT, RENDER_GEOPASS::PASS_OIT // moment generation
-			, false /*is_frag_counter_buffer*/, is_ghost_mode, false /*is_picking_routine*/, apply_fragmerge, true /*is_MOMENT_gen_buffer*/);
+			, false /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, true /*is_MOMENT_gen_buffer*/);
 
 		dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
 		dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 
 		RenderStage1(general_oit_routine_objs, MFR_MODE::MOMENT, RENDER_GEOPASS::PASS_OIT // moment generation
-			, false /*is_frag_counter_buffer*/, is_ghost_mode, false /*is_picking_routine*/, apply_fragmerge, false /*is_MOMENT_gen_buffer*/);
+			, false /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false /*is_MOMENT_gen_buffer*/);
 	}
 
 	iobj->SetObjParam("_int_NumCallRenders", count_call_render);

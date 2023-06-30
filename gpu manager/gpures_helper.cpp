@@ -36,8 +36,26 @@ HRESULT PresetCompiledShader(__ID3D11Device* pdx11Device, HMODULE hModule, LPCWS
 	}
 	else if (_strShaderProfile.compare(0, 2, "gs") == 0)
 	{
-		if (pdx11Device->CreateGeometryShader(pdata, ullFileSize, NULL, (ID3D11GeometryShader**)ppdx11Shader) != S_OK)
-			goto ERROR_SHADER;
+		if (_strShaderProfile.find("SO") != string::npos) {
+			// https://learn.microsoft.com/en-us/windows/win32/direct3d11/d3d10-graphics-programming-guide-output-stream-stage-getting-started
+			// https://strange-cpp.tistory.com/101
+			D3D11_SO_DECLARATION_ENTRY pDecl[] =
+			{
+				// semantic name, semantic index, start component, component count, output slot
+				{ 0, "TEXCOORD", 0, 0, 3, 0 },   // output 
+			};
+			int numEntries = sizeof(pDecl) / sizeof(D3D11_SO_DECLARATION_ENTRY);
+			uint bufferStrides[] = { sizeof(vmfloat3) };
+			int numStrides = sizeof(bufferStrides) / sizeof(uint);
+			if (pdx11Device->CreateGeometryShaderWithStreamOutput(
+				pdata, ullFileSize, pDecl, numEntries, bufferStrides, numStrides, D3D11_SO_NO_RASTERIZED_STREAM, NULL,
+				(ID3D11GeometryShader**)ppdx11Shader) != S_OK)
+				goto ERROR_SHADER;
+		}
+		else {
+			if (pdx11Device->CreateGeometryShader(pdata, ullFileSize, NULL, (ID3D11GeometryShader**)ppdx11Shader) != S_OK)
+				goto ERROR_SHADER;
+		}
 	}
 	else if (_strShaderProfile.compare(0, 2, "vs") == 0)
 	{
@@ -221,6 +239,12 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		descDepthStencil.DepthFunc = D3D11_COMPARISON_LESS;
 		hr |= g_pvmCommonParams->dx11Device->CreateDepthStencilState(&descDepthStencil, &ds_state);
 		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::DEPTHSTENCIL_STATE, "LESS"), ds_state);
+
+		descDepthStencil.DepthEnable = FALSE;
+		descDepthStencil.StencilEnable = FALSE;
+		descDepthStencil.DepthFunc = D3D11_COMPARISON_ALWAYS;
+		hr |= g_pvmCommonParams->dx11Device->CreateDepthStencilState(&descDepthStencil, &ds_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::DEPTHSTENCIL_STATE, "DISABLED"), ds_state);
 	}
 	{
 		D3D11_SAMPLER_DESC descSampler;
@@ -361,7 +385,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 			else if (profile.compare(0, 2, "ps") == 0) _type = GpuhelperResType::PIXEL_SHADER;
 			else if (profile.compare(0, 2, "gs") == 0) _type = GpuhelperResType::GEOMETRY_SHADER;
 			else if (profile.compare(0, 2, "cs") == 0) _type = GpuhelperResType::COMPUTE_SHADER;
-			else GMERRORMESSAGE("UN DEFINED SHADER TYPE ! : grd_helper::InitializePresettings");
+			else VMERRORMESSAGE("UNDEFINED SHADER TYPE ! : grd_helper::InitializePresettings");
 
 			g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(_type, name_shader), shader);
 			return S_OK;
@@ -547,6 +571,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31010), "GS_ThickPoints_gs_5_0", "gs_5_0"), GS_ThickPoints_gs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31011), "GS_SurfelPoints_gs_5_0", "gs_5_0"), GS_SurfelPoints_gs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31020), "GS_ThickLines_gs_5_0", "gs_5_0"), GS_ThickLines_gs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31030), "GS_PickingBasic_gs_4_0", "gs_4_0_SO"), GS_PickingBasic_gs_4_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50000), "VR_RAYMAX_cs_5_0", "cs_5_0"), VR_RAYMAX_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50001), "VR_RAYMIN_cs_5_0", "cs_5_0"), VR_RAYMIN_cs_5_0);
@@ -2019,7 +2044,7 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 		cb_volume.value_range = 255.f;
 	else if (vol_data->store_dtype.type_bytes == data_type::dtype<ushort>().type_bytes) // short
 		cb_volume.value_range = 65535.f;
-	else GMERRORMESSAGE("UNSUPPORTED FORMAT : grd_helper::SetCb_VolumeObj");
+	else VMERRORMESSAGE("UNSUPPORTED FORMAT : grd_helper::SetCb_VolumeObj");
 
 	vmfloat3 sampleOffset = vmfloat3(gresVol.res_values.GetParam("SAMPLE_OFFSET_X", 1.f),
 		gresVol.res_values.GetParam("SAMPLE_OFFSET_Y", 1.f),
@@ -2444,10 +2469,31 @@ bool grd_helper::Compile_Hlsl(const string& str, const string& entry_point, cons
 	}
 	else if (shader_model.find("gs") != string::npos)
 	{
-		if (g_pvmCommonParams->dx11Device->CreateGeometryShader(pShaderBlob->GetBufferPointer(), pShaderBlob->GetBufferSize(), NULL, (ID3D11GeometryShader**)sm) != S_OK)
-		{
-			vmlog::LogErr(string("*** COMPILE ERROR : ") + str + ", " + entry_point + ", " + shader_model);
-			return false;
+		if (shader_model.find("SO") != string::npos) {
+			// https://learn.microsoft.com/en-us/windows/win32/direct3d11/d3d10-graphics-programming-guide-output-stream-stage-getting-started
+			// https://strange-cpp.tistory.com/101
+			D3D11_SO_DECLARATION_ENTRY pDecl[] =
+			{
+				// semantic name, semantic index, start component, component count, output slot
+				{ 0, "TEXCOORD", 0, 0, 3, 0 },   // output 
+			};
+			int numEntries = sizeof(pDecl) / sizeof(D3D11_SO_DECLARATION_ENTRY);
+			uint bufferStrides[] = { sizeof(vmfloat3) };
+			int numStrides = sizeof(bufferStrides) / sizeof(uint);
+			if (g_pvmCommonParams->dx11Device->CreateGeometryShaderWithStreamOutput(
+				pShaderBlob->GetBufferPointer(), pShaderBlob->GetBufferSize(), pDecl, numEntries, bufferStrides, numStrides, D3D11_SO_NO_RASTERIZED_STREAM, NULL,
+				(ID3D11GeometryShader**)sm) != S_OK)
+			{
+				vmlog::LogErr(string("*** COMPILE ERROR : ") + str + ", " + entry_point + ", " + shader_model);
+				return false;
+			}
+		}
+		else {
+			if (g_pvmCommonParams->dx11Device->CreateGeometryShader(pShaderBlob->GetBufferPointer(), pShaderBlob->GetBufferSize(), NULL, (ID3D11GeometryShader**)sm) != S_OK)
+			{
+				vmlog::LogErr(string("*** COMPILE ERROR : ") + str + ", " + entry_point + ", " + shader_model);
+				return false;
+			}
 		}
 	}
 	VMSAFE_RELEASE(pShaderBlob);

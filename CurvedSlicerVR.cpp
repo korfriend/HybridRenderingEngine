@@ -554,7 +554,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 				cbVolumeObj.mask_value_range = 255.f;
 			else if (mask_vol_data->store_dtype.type_bytes == data_type::dtype<ushort>().type_bytes) // short
 				cbVolumeObj.mask_value_range = 65535.f;
-			else GMERRORMESSAGE("UNSUPPORTED FORMAT : MASK VOLUME");
+			else VMERRORMESSAGE("UNSUPPORTED FORMAT : MASK VOLUME");
 		}
 		cbVolumeObj.sample_dist = sample_dist;
 		D3D11_MAPPED_SUBRESOURCE mappedResVolObj;

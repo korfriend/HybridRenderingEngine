@@ -147,6 +147,7 @@
 #define IDR_RCDATA31010                   31010
 #define IDR_RCDATA31011                   31011
 #define IDR_RCDATA31020                   31020
+#define IDR_RCDATA31030                   31030
 
 // new oit
 #define IDR_RCDATA11001					  11001

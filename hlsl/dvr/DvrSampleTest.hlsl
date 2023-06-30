@@ -1,10 +1,16 @@
+
 #include "../CommonShader.hlsl"
 #include "../macros.hlsl"
 
 struct HxCB_TestBuffer
 {
-	uint testIntValues[16];
-	float testFloatValues[16];
+	//uint testIntValues[16];
+	//float testFloatValues[16];
+
+	uint testA;
+	uint testB;
+	uint testC;
+	uint testD;
 };
 
 cbuffer cbGlobalParams : register(b8)
@@ -100,6 +106,12 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	int2 tex2d_xy = int2(DTid.xy);
 	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
 		return;
+
+
+	if (g_cbTestBuffer.testA == 777) {
+		fragment_vis[tex2d_xy] = float4(0, 0, 1, 1);
+		return;
+	}
 
 	const uint k_value = g_cbCamState.k_value;
 	uint bytes_per_frag = 4 * NUM_ELES_PER_FRAG;
@@ -326,7 +338,9 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 
 	fragment_vis[tex2d_xy] = vis_out;
-	fragment_vis[tex2d_xy] = float4(0, 1, 0, 1);
+	fragment_vis[tex2d_xy] = float4(0, 1, 1, 1);
+	if(g_cbTestBuffer.testA == 0)
+		fragment_vis[tex2d_xy] = float4(1, 1, 0, 1);
 	fragment_zdepth[tex2d_xy] = depth_out;
 }
 

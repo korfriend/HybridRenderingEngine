@@ -111,14 +111,14 @@ namespace grd_helper
 				if (enable_override)
 					safe_release_res(idc);
 				else
-					GMERRORMESSAGE("ALREADY SET 1 ! : GpuDX11CommonParameters::safe_set_res");
+					VMERRORMESSAGE("ALREADY SET 1 ! : GpuDX11CommonParameters::safe_set_res");
 			}
 			for (auto it = dx11_cres.begin(); it != dx11_cres.end(); it++)
 			{
 				if (it->second == NULL)
-					GMERRORMESSAGE("NULL RES DETECTED ! : GpuDX11CommonParameters::safe_set_res");
+					VMERRORMESSAGE("NULL RES DETECTED ! : GpuDX11CommonParameters::safe_set_res");
 				if(it->second == res)
-					GMERRORMESSAGE("ALREADY SET 2 ! : GpuDX11CommonParameters::safe_set_res");
+					VMERRORMESSAGE("ALREADY SET 2 ! : GpuDX11CommonParameters::safe_set_res");
 			}
 
 			//switch (idc.res_type)
@@ -135,7 +135,7 @@ namespace grd_helper
 			//case BLEND_STATE:			dx11_cres[idc] = (ID3D11BlendState*)res; break;
 			//case ETC:
 			//default:
-			//	GMERRORMESSAGE("UNEXPECTED RESTYPE : ~GpuDX11CommonParameters");
+			//	VMERRORMESSAGE("UNEXPECTED RESTYPE : ~GpuDX11CommonParameters");
 			//}
 
 			dx11_cres[idc.res_name] = res;
@@ -149,14 +149,14 @@ namespace grd_helper
 				if (enable_override)
 					safe_release_cbuf(name);
 				else
-					GMERRORMESSAGE("ALREADY SET 1 ! : GpuDX11CommonParameters::safe_set_cbuf");
+					VMERRORMESSAGE("ALREADY SET 1 ! : GpuDX11CommonParameters::safe_set_cbuf");
 			}
 			for (auto it = dx11_cres.begin(); it != dx11_cres.end(); it++)
 			{
 				if (it->second == NULL)
-					GMERRORMESSAGE("NULL RES DETECTED ! : GpuDX11CommonParameters::safe_set_cbuf");
+					VMERRORMESSAGE("NULL RES DETECTED ! : GpuDX11CommonParameters::safe_set_cbuf");
 				if (it->second == res)
-					GMERRORMESSAGE("ALREADY SET 2 ! : GpuDX11CommonParameters::safe_set_cbuf");
+					VMERRORMESSAGE("ALREADY SET 2 ! : GpuDX11CommonParameters::safe_set_cbuf");
 			}
 			
 			dx11_cbuf[name] = res;
@@ -166,7 +166,7 @@ namespace grd_helper
 		{
 			auto it = dx11_cres.find(idc.res_name);
 			if (it == dx11_cres.end())
-				GMERRORMESSAGE("NO RESOURCE ! : GpuDX11CommonParameters::safe_get_res");
+				VMERRORMESSAGE("NO RESOURCE ! : GpuDX11CommonParameters::safe_get_res");
 			return it->second;
 		}
 
@@ -174,7 +174,7 @@ namespace grd_helper
 		{
 			auto it = dx11_cbuf.find(name);
 			if (it == dx11_cbuf.end())
-				GMERRORMESSAGE("NO RESOURCE ! : GpuDX11CommonParameters::get_cbuf");
+				VMERRORMESSAGE("NO RESOURCE ! : GpuDX11CommonParameters::get_cbuf");
 			return (ID3D11Buffer*)it->second;
 		}
 
@@ -247,7 +247,7 @@ namespace grd_helper
 				//case BLEND_STATE:			((ID3D11BlendState*)it->second)->Release(); break;
 				//case ETC:
 				//default:
-				//	GMERRORMESSAGE("UNEXPECTED RESTYPE : ~GpuDX11CommonParameters");
+				//	VMERRORMESSAGE("UNEXPECTED RESTYPE : ~GpuDX11CommonParameters");
 				//}
 			}
 			dx11_cres.clear();
@@ -688,8 +688,13 @@ namespace grd_helper
 
 	struct CB_TestBuffer
 	{
-		uint testIntValues[16];
-		float testFloatValues[16];
+		//uint testIntValues[16];
+		//float testFloatValues[16];
+
+		uint testA;
+		uint testB;
+		uint testC;
+		uint testD;
 	};
 
 	// Compute Constant Buffers //

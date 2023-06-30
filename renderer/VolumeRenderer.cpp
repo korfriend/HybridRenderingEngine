@@ -405,6 +405,28 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->Unmap(cbuf_hsmask, 0);
 		dx11DeviceImmContext->CSSetConstantBuffers(9, 1, &cbuf_hsmask);
 	}
+
+	//	
+	bool testMode = _fncontainer->fnParams.GetParam("_bool_UseTestBuffer", false);
+	if (testMode)
+	{
+		// test to do 
+		float myTestV0 = _fncontainer->fnParams.GetParam("myTestValue", 0.f);
+
+		CB_TestBuffer cbTestBuffer = {};
+		// test to do 
+		//cbTestBuffer.testFloatValues[0] = myTestV0;
+		//cbTestBuffer.testFloatValues[1] = 678.9f;
+		cbTestBuffer.testA = 777;
+		cbTestBuffer.testB = 888;
+
+		D3D11_MAPPED_SUBRESOURCE mappedTestBuffer;
+		dx11DeviceImmContext->Map(cbuf_testBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedTestBuffer);
+		CB_TestBuffer* cbTestBufferData = (CB_TestBuffer*)mappedTestBuffer.pData;
+		memcpy(cbTestBufferData, &cbTestBuffer, sizeof(CB_TestBuffer));
+		dx11DeviceImmContext->Unmap(cbuf_testBuffer, 0);
+		dx11DeviceImmContext->CSSetConstantBuffers(8, 1, &cbuf_testBuffer);
+	}
 #pragma endregion // Light & Shadow Setting
 
 	map<string, vmint2>& profile_map = dx11CommonParams->profile_map;
@@ -628,7 +650,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				cbVolumeObj.mask_value_range = 255.f;
 			else if (mask_vol_data->store_dtype.type_bytes == data_type::dtype<ushort>().type_bytes) // short
 				cbVolumeObj.mask_value_range = 65535.f;
-			else GMERRORMESSAGE("UNSUPPORTED FORMAT : MASK VOLUME");
+			else VMERRORMESSAGE("UNSUPPORTED FORMAT : MASK VOLUME");
 		}
 		D3D11_MAPPED_SUBRESOURCE mappedResVolObj;
 		dx11DeviceImmContext->Map(cbuf_vobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResVolObj);
@@ -662,7 +684,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		CB_Material* cbRndEffectData = (CB_Material*)mappedResRdnEffect.pData;
 		memcpy(cbRndEffectData, &cbRndEffect, sizeof(CB_Material));
 		dx11DeviceImmContext->Unmap(cbuf_reffect, 0);
-		dx11DeviceImmContext->CSSetConstantBuffers(6, 1, &cbuf_vreffect);
+		dx11DeviceImmContext->CSSetConstantBuffers(3, 1, &cbuf_reffect);
 
 		CB_VolumeMaterial cbVrEffect;
 		grd_helper::SetCb_VolumeRenderingEffect(cbVrEffect, vobj, actor);
@@ -671,26 +693,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		CB_VolumeMaterial* cbVrEffectData = (CB_VolumeMaterial*)mappedVrEffect.pData;
 		memcpy(cbVrEffectData, &cbVrEffect, sizeof(CB_VolumeMaterial));
 		dx11DeviceImmContext->Unmap(cbuf_vreffect, 0);
-		dx11DeviceImmContext->CSSetConstantBuffers(3, 1, &cbuf_reffect);
-
-		//	
-		bool testMode = _fncontainer->fnParams.GetParam("_bool_UseTestBuffer", false);
-		if (testMode)
-		{
-			// test to do 
-			float myTestV0 = _fncontainer->fnParams.GetParam("myTestValue", 0.f);
-
-			CB_TestBuffer cbTestBuffer;
-			// test to do 
-			cbTestBuffer.testFloatValues[0] = myTestV0;
-
-			D3D11_MAPPED_SUBRESOURCE mappedTestBuffer;
-			dx11DeviceImmContext->Map(cbuf_testBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResRdnEffect);
-			CB_TestBuffer* cbTestBufferData = (CB_TestBuffer*)mappedTestBuffer.pData;
-			memcpy(cbTestBufferData, &cbTestBuffer, sizeof(CB_TestBuffer));
-			dx11DeviceImmContext->Unmap(cbuf_testBuffer, 0);
-			dx11DeviceImmContext->CSSetConstantBuffers(8, 1, &cbuf_testBuffer);
-		}
+		dx11DeviceImmContext->CSSetConstantBuffers(6, 1, &cbuf_vreffect);
 #pragma endregion 
 
 #pragma region GPU resource updates
