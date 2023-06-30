@@ -2492,13 +2492,12 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		assert(single_layer_routine_objs.size() + foremost_surfaces_routine_objs.size() == 0);
 		assert(mode_OIT == MFR_MODE::DYNAMIC_FB);
 
-		map<int, float> picking_layers_id_depth;
-		map<float, int> picking_layers_depth_id;
-		vector<vmfloat3> picking_pos_out;
-		vector<int> picking_id_out;
+		map<int, tuple<float, int>> picking_layers_id_depthPrimId;
+		map<float, vmint2> picking_layers_depth_actorid_primid;
 		___GpuProfile("Picking");
 		bool pickPrimitive = _fncontainer->fnParams.GetParam("_bool_PickPrimitive", false);
 		pickPrimitive = true;
+		ID3D11Buffer* pickSysBuf = NULL;
 		if (pickPrimitive) {
 			cbCamState.pos_cam_ws = picking_ray_origin;
 			cbCamState.dir_view_ws = picking_ray_dir;
@@ -2519,29 +2518,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_picking_system_GSO_buffer.alloc_res_ptrs[DTYPE_RES],
 				(ID3D11Buffer*)gres_picking_GSO_buffer.alloc_res_ptrs[DTYPE_RES]);
 
-#pragma region copyback to sysmem
-			D3D11_MAPPED_SUBRESOURCE mappedResSysPicking;
-			HRESULT hr = dx11DeviceImmContext->Map((ID3D11Buffer*)gres_picking_system_GSO_buffer.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysPicking);
-			float* picking_buf = (float*)mappedResSysPicking.pData;
-			int num_layers = 0;
-			for (int i = 0; i < max_picking_layers; i += 3) {
-				uint actorid = *(uint*)&picking_buf[i + 2];
-				if (actorid == 0) continue;
-				float pick_depth = picking_buf[i + 0];
-				uint pid = *(uint*)&picking_buf[i + 1];
-
-				auto it = picking_layers_id_depth.find(actorid);
-				if (it == picking_layers_id_depth.end()) {
-					picking_layers_id_depth.insert(pair<int, float>(actorid, pick_depth));
-				}
-				else {
-					if (pick_depth < it->second) it->second = pick_depth;
-				}
-				num_layers++;
-			}
-			cout << "num_layers : " << num_layers << endl;
-			dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_picking_system_GSO_buffer.alloc_res_ptrs[DTYPE_RES], 0);
-#pragma endregion copyback to sysmem
+			pickSysBuf = (ID3D11Buffer*)gres_picking_system_GSO_buffer.alloc_res_ptrs[DTYPE_RES];
 		}
 		else {
 			cbCamState.iSrCamDummy__1 = (picking_pos_ss.x & 0xFFFF | picking_pos_ss.y << 16);
@@ -2557,49 +2534,60 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_picking_system_buffer.alloc_res_ptrs[DTYPE_RES],
 				(ID3D11Buffer*)gres_picking_buffer.alloc_res_ptrs[DTYPE_RES]);
 
-#pragma region copyback to sysmem
-			D3D11_MAPPED_SUBRESOURCE mappedResSysPicking;
-			HRESULT hr = dx11DeviceImmContext->Map((ID3D11Buffer*)gres_picking_system_buffer.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysPicking);
-			uint* picking_buf = (uint*)mappedResSysPicking.pData;
-			int num_layers = 0;
-			for (int i = 0; i < max_picking_layers; i += 2) {
-				uint obj_id = picking_buf[i];
-				if (obj_id == 0) continue;
-
-				float pick_depth = *(float*)&picking_buf[i + 1];
-
-				auto it = picking_layers_id_depth.find(obj_id);
-				if (it == picking_layers_id_depth.end()) {
-					picking_layers_id_depth.insert(pair<int, float>(obj_id, pick_depth));
-				}
-				else {
-					if (pick_depth < it->second) it->second = pick_depth;
-				}
-				num_layers++;
-			}
-			dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_picking_system_buffer.alloc_res_ptrs[DTYPE_RES], 0);
-#pragma endregion copyback to sysmem
+			pickSysBuf = (ID3D11Buffer*)gres_picking_system_buffer.alloc_res_ptrs[DTYPE_RES];
 		}
+
+#pragma region copyback to sysmem
+		D3D11_MAPPED_SUBRESOURCE mappedResSysPicking;
+		HRESULT hr = dx11DeviceImmContext->Map(pickSysBuf, 0, D3D11_MAP_READ, NULL, &mappedResSysPicking);
+
+		float* picking_buf = (float*)mappedResSysPicking.pData;
+		int pick_stride = pickPrimitive ? 3 : 2;
+		int num_layers = 0;
+		for (int i = 0; i < max_picking_layers; i += pick_stride) {
+			uint actorid = *(uint*)&picking_buf[i + 2];
+			if (actorid == 0) continue;
+			float pick_depth = picking_buf[i + 0];
+			uint pid = pickPrimitive ? *(uint*)&picking_buf[i + 1] : -1;
+
+			auto it = picking_layers_id_depthPrimId.find(actorid);
+			if (it == picking_layers_id_depthPrimId.end()) {
+				picking_layers_id_depthPrimId.insert(pair<int, tuple<float, int>>(actorid, tuple<float, int>(pick_depth, pid)));
+			}
+			else {
+				float depthOnSampleActor = get<0>(it->second);
+				if (pick_depth < depthOnSampleActor) it->second = tuple<float, int>(pick_depth, pid);
+			}
+			num_layers++;
+		}
+		//cout << "num_layers : " << num_layers << endl;
+		dx11DeviceImmContext->Unmap(pickSysBuf, 0);
+#pragma endregion copyback to sysmem
 		___GpuProfile("Picking", true);
 
 		//if (gpu_profile) {
 		//	cout << "### NUM PICKING LAYERS : " << num_layers << endl;
 		//	cout << "### NUM PICKING UNIQUE ID LAYERS : " << picking_layers_id_depth.size() << endl;
 		//}
-		for (auto& it : picking_layers_id_depth) {
-			picking_layers_depth_id[it.second] = it.first;
+		for (auto& it : picking_layers_id_depthPrimId) {
+			picking_layers_depth_actorid_primid[get<0>(it.second)] = vmint2(it.first, get<1>(it.second));
 		}
 
-		for (auto& it : picking_layers_depth_id) {
+		vector<vmfloat3> picking_pos_out;
+		vector<int> picking_id_out;
+		vector<int> picking_prim_id_out;
+		for (auto& it : picking_layers_depth_actorid_primid) {
 			vmfloat3 pos_pick = picking_ray_origin + picking_ray_dir * it.first;
 			picking_pos_out.push_back(pos_pick);
-			picking_id_out.push_back(it.second);
+			picking_id_out.push_back(it.second.x);
+			picking_prim_id_out.push_back(it.second.y);
 			//std::cout << "PICKING ACTORS : " << it.second << std::endl;
 		}
 
 		_fncontainer->fnParams.SetParam("_vlist_float3_PickPos", picking_pos_out);
 		_fncontainer->fnParams.SetParam("_vlist_int_PickId", picking_id_out);
-		//_fncontainer->fnParams.SetParam("_vlist_int_PickPrimitiveId", picking_id_out);
+		if (pickPrimitive)
+			_fncontainer->fnParams.SetParam("_vlist_int_PickPrimitiveId", picking_prim_id_out);
 		// END of Render Process for picking
 	}
 	else if (mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB || mode_OIT == MFR_MODE::STATIC_KB) {
