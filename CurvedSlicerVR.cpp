@@ -151,13 +151,13 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 #pragma endregion 
 
 #pragma region // IOBJECT OUT
-	while (iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, 1) != NULL)
-		iobj->DeleteFrameBuffer(FrameBufferUsageRENDEROUT, 1);
+	//while (iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, 1) != NULL)
+	//	iobj->DeleteFrameBuffer(FrameBufferUsageRENDEROUT, 1);
 	if (!iobj->ReplaceFrameBuffer(FrameBufferUsageRENDEROUT, 0, data_type::dtype<vmbyte4>(), ("common render out frame buffer : defined in vismtv_inbuilt_renderergpudx module")))
 		iobj->InsertFrameBuffer(data_type::dtype<vmbyte4>(), FrameBufferUsageRENDEROUT, ("common render out frame buffer : defined in vismtv_inbuilt_renderergpudx module"));
 
-	while (iobj->GetFrameBuffer(FrameBufferUsageDEPTH, 1) != NULL)
-		iobj->DeleteFrameBuffer(FrameBufferUsageDEPTH, 1);
+	//while (iobj->GetFrameBuffer(FrameBufferUsageDEPTH, 1) != NULL)
+	//	iobj->DeleteFrameBuffer(FrameBufferUsageDEPTH, 1);
 	if (!iobj->ReplaceFrameBuffer(FrameBufferUsageDEPTH, 0, data_type::dtype<float>(), ("1st hit screen depth frame buffer : defined in vismtv_inbuilt_renderergpudx module")))
 		iobj->InsertFrameBuffer(data_type::dtype<float>(), FrameBufferUsageDEPTH, ("1st hit screen depth frame buffer : defined in vismtv_inbuilt_renderergpudx module"));
 #pragma endregion 
@@ -174,6 +174,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	{
 		gpu_manager->ReleaseGpuResourcesBySrcID(iobj->GetObjectID());	// System Out Æ÷ÇÔ //
 		iobj->SetObjParam("_int2_PreviousScreenSize", fb_size_cur);
+		iobj->SetObjParam("_int_PreviousBufferEx", (int)1);
 	}
 
 	bool gpu_profile = false;

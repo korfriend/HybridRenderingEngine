@@ -494,6 +494,12 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		fs[i] = f;
     }
 
+	//fragment_vis[tex2d_xy] = float4(1, 1, 0, 1);
+	//if(num_frags > 0)
+	//	//fragment_vis[tex2d_xy] = ConvertUIntToFloat4(fs[0].i_vis);
+	//	fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
+	//return;
+
 	//return;
 	//if (num_frags == 0)
 	//	fragment_vis[tex2d_xy] = float4(0, 0, 0, 1);

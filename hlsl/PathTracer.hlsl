@@ -859,7 +859,6 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	// intersect all triangles in the scene stored in BVH
 	int debugbingo = 0;
 	float planeThickness = g_cbCamState.far_plane;// g_cbCurvedSlicer.thicknessPlane;// g_cbCamState.far_plane;
-
 	//pos_ip_ws = float3(0, 0, 0);
 	//ray_dir_unit_ws = float3(0, 1, 0);
 	float3 ray_orig_os = TransformPoint(pos_ip_ws, g_cbPobj.mat_ws2os);
@@ -879,14 +878,16 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	if (hitTriIdx < 0)
 		return;
 
-	float4 rayorig2 = float4(ray_orig_os, ray_tmin2);
-	float4 raydir2 = float4(-ray_dir_unit_os, ray_tmax2);
-	float3 trinormal2 = float3(0, 0, 0);
-	float hitDistance2 = 1e20;
-	int hitTriIdx2 = -1;
-	intersectBVHandTriangles(rayorig2, raydir2, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx2, hitDistance2, debugbingo, trinormal2, false);
-	if (hitTriIdx2 < 0)
-		return;
+	if (planeThickness == 0) {
+		float4 rayorig2 = float4(ray_orig_os, ray_tmin2);
+		float4 raydir2 = float4(-ray_dir_unit_os, ray_tmax2);
+		float3 trinormal2 = float3(0, 0, 0);
+		float hitDistance2 = 1e20;
+		int hitTriIdx2 = -1;
+		intersectBVHandTriangles(rayorig2, raydir2, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx2, hitDistance2, debugbingo, trinormal2, false);
+		if (hitTriIdx2 < 0)
+			return;
+	}
 
 	//if (length(trinormal) > 1.00001) {
 	//	fragment_vis[ss_xy] = float4(1, 0, 0, 1);
@@ -897,7 +898,8 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 
 	//trinormal = normalize(trinormal);
 	//ray_dir_unit_os = normalize(ray_dir_unit_os);
-	bool isInside = dot(trinormal, ray_dir_unit_os) > 0 || dot(trinormal2, -ray_dir_unit_os) > 0;
+	//bool isInside = dot(trinormal, ray_dir_unit_os) > 0 || dot(trinormal2, -ray_dir_unit_os) > 0;
+	bool isInside = dot(trinormal, ray_dir_unit_os) > 0;
 	
 	if (!isInside && hitDistance > planeThickness)
 		return;

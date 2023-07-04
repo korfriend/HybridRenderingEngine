@@ -184,13 +184,13 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #pragma endregion 
 
 #pragma region // IOBJECT OUT
-	while (iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, 1) != NULL)
-		iobj->DeleteFrameBuffer(FrameBufferUsageRENDEROUT, 1);
+	//while (iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, 2) != NULL)
+	//	iobj->DeleteFrameBuffer(FrameBufferUsageRENDEROUT, 2);
 	if (!iobj->ReplaceFrameBuffer(FrameBufferUsageRENDEROUT, 0, data_type::dtype<vmbyte4>(), ("common render out frame buffer : defined in vismtv_inbuilt_renderergpudx module")))
 		iobj->InsertFrameBuffer(data_type::dtype<vmbyte4>(), FrameBufferUsageRENDEROUT, ("common render out frame buffer : defined in vismtv_inbuilt_renderergpudx module"));
 
-	while (iobj->GetFrameBuffer(FrameBufferUsageDEPTH, 1) != NULL)
-		iobj->DeleteFrameBuffer(FrameBufferUsageDEPTH, 1);
+	//while (iobj->GetFrameBuffer(FrameBufferUsageDEPTH, 1) != NULL)
+	//	iobj->DeleteFrameBuffer(FrameBufferUsageDEPTH, 1);
 	if (!iobj->ReplaceFrameBuffer(FrameBufferUsageDEPTH, 0, data_type::dtype<float>(), ("1st hit screen depth frame buffer : defined in vismtv_inbuilt_renderergpudx module")))
 		iobj->InsertFrameBuffer(data_type::dtype<float>(), FrameBufferUsageDEPTH, ("1st hit screen depth frame buffer : defined in vismtv_inbuilt_renderergpudx module"));
 #pragma endregion 
@@ -242,6 +242,31 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_FLOAT, 0);
 	grd_helper::UpdateFrameBuffer(gres_fb_counter, iobj, "RW_COUNTER", RTYPE_TEXTURE2D,
 		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
+
+//#define __COUNT_DEBUG
+#ifdef __COUNT_DEBUG
+	GpuRes gres_fb_counter_sys;
+	{
+		grd_helper::UpdateFrameBuffer(gres_fb_counter_sys, iobj, "SYSTEM_COUNTER", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT);
+
+		dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_fb_counter_sys.alloc_res_ptrs[DTYPE_RES],
+			(ID3D11Texture2D*)gres_fb_counter.alloc_res_ptrs[DTYPE_RES]);
+
+		D3D11_MAPPED_SUBRESOURCE mappedResSysTest;
+		HRESULT hr = dx11DeviceImmContext->Map((ID3D11Texture2D*)gres_fb_counter_sys.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysTest);
+		int buf_row_pitch = mappedResSysTest.RowPitch / 4;
+		uint* __count = (uint*)mappedResSysTest.pData;
+		for (int i = 0; i < fb_size_cur.y; i++)
+		{
+			for (int j = 0; j < fb_size_cur.x; j++)
+			{
+				if(__count[j + i * buf_row_pitch] > 0)
+					int gg = 0;
+			}
+		};
+		dx11DeviceImmContext->Unmap((ID3D11Texture2D*)gres_fb_counter_sys.alloc_res_ptrs[DTYPE_RES], 0);
+	}
+#endif
 
 	const int num_frags_perpixel = k_value * 4 * buffer_ex;
 	grd_helper::UpdateFrameBuffer(gres_fb_k_buffer, iobj, "BUFFER_RW_K_BUF", RTYPE_BUFFER,
@@ -571,7 +596,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		}
 
 		GpuRes gres_vol;
-		grd_helper::UpdateVolumeModel(gres_vol, vobj, ray_cast_type == __RM_VISVOLMASK, planeThickness <= 0, progress); // ray_cast_type == __RM_MAXMASK
+		grd_helper::UpdateVolumeModel(gres_vol, vobj, ray_cast_type == __RM_VISVOLMASK, planeThickness < 0, progress); // ray_cast_type == __RM_MAXMASK
+		//grd_helper::UpdateVolumeModel(gres_vol, vobj, ray_cast_type == __RM_VISVOLMASK, true, progress); // ray_cast_type == __RM_MAXMASK
 
 		dx11DeviceImmContext->CSSetShaderResources(0, 1, (__SRV_PTR*)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
 

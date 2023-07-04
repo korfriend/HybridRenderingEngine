@@ -1091,13 +1091,13 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #pragma endregion 
 
 #pragma region // IOBJECT CPU
-	while (iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, 1) != NULL)
-		iobj->DeleteFrameBuffer(FrameBufferUsageRENDEROUT, 1);
+	//while (iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, 1) != NULL)
+	//	iobj->DeleteFrameBuffer(FrameBufferUsageRENDEROUT, 1);
 	if (!iobj->ReplaceFrameBuffer(FrameBufferUsageRENDEROUT, 0, data_type::dtype<vmbyte4>(), ("common render out frame buffer : defined in vismtv_inbuilt_renderergpudx module")))
 		iobj->InsertFrameBuffer(data_type::dtype<vmbyte4>(), FrameBufferUsageRENDEROUT, ("common render out frame buffer : defined in vismtv_inbuilt_renderergpudx module"));
 
-	while (iobj->GetFrameBuffer(FrameBufferUsageDEPTH, 1) != NULL)
-		iobj->DeleteFrameBuffer(FrameBufferUsageDEPTH, 1);
+	//while (iobj->GetFrameBuffer(FrameBufferUsageDEPTH, 1) != NULL)
+	//	iobj->DeleteFrameBuffer(FrameBufferUsageDEPTH, 1);
 	if (!iobj->ReplaceFrameBuffer(FrameBufferUsageDEPTH, 0, data_type::dtype<float>(), ("1st hit screen depth frame buffer : defined in vismtv_inbuilt_renderergpudx module")))
 		iobj->InsertFrameBuffer(data_type::dtype<float>(), FrameBufferUsageDEPTH, ("1st hit screen depth frame buffer : defined in vismtv_inbuilt_renderergpudx module"));
 #pragma endregion 
@@ -1114,7 +1114,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	vmint2 fb_size_cur;
 	iobj->GetFrameBufferInfo(&fb_size_cur);
 	vmint2 fb_size_old = iobj->GetObjParam("_int2_PreviousScreenSize", vmint2(0, 0));
-	buffer_ex_old = iobj->GetObjParam("_int_PreviousBufferEx", buffer_ex_old);
+	buffer_ex_old = iobj->GetObjParam("_int_PreviousBufferEx", -1);
 	if (fb_size_cur.x != fb_size_old.x || fb_size_cur.y != fb_size_old.y
 		|| k_value != k_value_old || num_moments != num_moments_old
 		|| buffer_ex != buffer_ex_old)
