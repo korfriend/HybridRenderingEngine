@@ -823,6 +823,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	bool is_ghost_mode = _fncontainer->fnParams.GetParam("_bool_GhostEffect", false);
 	bool is_rgba = _fncontainer->fnParams.GetParam("_bool_IsRGBA", false); // false means bgra
 
+	// note planeThickness is defined in WS
 	float planeThickness = _fncontainer->fnParams.GetParam("_float_PlaneThickness", 0.f);
 
 	bool is_system_out = false;

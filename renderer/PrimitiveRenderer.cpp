@@ -852,7 +852,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				ID3D11GeometryShader* dx11GShader = NULL;
 				if (dx11CommonParams->dx11Device->CreateGeometryShaderWithStreamOutput(
 					pyRead, ullFileSize, pDecl, numEntries, bufferStrides, numStrides, D3D11_SO_NO_RASTERIZED_STREAM, NULL,
-					(ID3D11GeometryShader**)dx11GShader) != S_OK)
+					(ID3D11GeometryShader**)&dx11GShader) != S_OK)
 				{
 					VMERRORMESSAGE("SHADER COMPILE FAILURE!");
 				}
