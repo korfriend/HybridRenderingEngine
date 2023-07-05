@@ -315,14 +315,14 @@ float4 OutlineTest(const in int2 tex2d_xy, inout float depth_c, const in float d
 float3 PhongBlinn(const in float3 cam_view, const in float3 light_dirinv, float3 normal, const in bool is_max_shading,
     const in float3 Ka, const in float3 Kd, const in float3 Ks, const in float Ns)
 {
-    if (dot(cam_view, normal) > 0)
+    if (dot(cam_view, normal) < 0)
         normal *= -1.f;
     float diff = dot(light_dirinv, normal);
     if (is_max_shading)
         diff = max(diff, 0);
     else
         diff = abs(diff);
-    float3 H = normalize(cam_view - light_dirinv);
+    float3 H = normalize(cam_view + light_dirinv);
     //float specular_power = Ns > 0 ? Ns : shading_factors.w;
     float specular = pow(abs(dot(H, normal)), Ns);
 	//float3 factors = shading_factors.xyz; // Ns > 0 ? float3(0.3, 0.3, 0.3) : shading_factors.xyz;
@@ -338,7 +338,7 @@ void ComputeColor(inout float3 color_out, const in float3 Ka, const in float3 Kd
 		float3 light_dirinv = -g_cbEnv.dir_light_ws;
 		if (g_cbEnv.env_flag & 0x1)
 			light_dirinv = -normalize(pos_frag - g_cbEnv.pos_light_ws);
-		color_out = PhongBlinn(view_dir, light_dirinv, nrl / nrl_len * bump, g_cbPobj.pobj_flag & (0x1 << 5), Ka, Kd, Ks, Ns);
+		color_out = PhongBlinn(-view_dir, light_dirinv, nrl / nrl_len * bump, g_cbPobj.pobj_flag & (0x1 << 5), Ka, Kd, Ks, Ns);
 	}
 	else// if ((g_cbPobj.pobj_flag & (0x1 << 3)) == 0)
 	{
