@@ -699,8 +699,7 @@ int intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 							// compute normal vector by taking the cross product of two edge vectors
 							// because of Woop transformation, only one set of vectors works
 
-							//trinormal = cross(float3(v22.x, v22.y, v22.z), float3(v11.x, v11.y, v11.z));  // works
-							trinormal = cross(float3(v11.x, v11.y, v11.z), float3(v22.x, v22.y, v22.z));
+							trinormal = cross(float3(v22.x, v22.y, v22.z), float3(v11.x, v11.y, v11.z));  // works
 							//trinormal = float3(100, 100, 100);
 						}
 					}
@@ -871,149 +870,149 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	if (ray_dir_unit_os.y == 0) ray_dir_unit_os.y = 0.00001234f; // trick... for avoiding zero block skipping error
 	if (ray_dir_unit_os.x == 0) ray_dir_unit_os.x = 0.00001234f; // trick... for avoiding zero block skipping error
 
+	bool isInside = false;
+	// safe inside test //
+	{
+		float3 upPos0 = TransformVector(float3(ss_xy, 0), g_cbCamState.mat_ss2ws);
+		float3 upPos1 = TransformVector(float3(ss_xy + float2(0, -1), 0), g_cbCamState.mat_ss2ws);
+		float3 updir = normalize(TransformVector(upPos1 - upPos0, g_cbPobj.mat_ws2os));
+		float4 test_rayorig = float4(ray_orig_os, ray_tmin);
+		float4 test_raydir = float4(updir, ray_tmax);
+		intersectBVHandTriangles(test_rayorig, test_raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
+		if (hitTriIdx >= 0)
+			isInside = dot(trinormal, test_raydir.xyz) > 0;
+
+		test_raydir = float4(-updir, ray_tmax);
+		intersectBVHandTriangles(test_rayorig, test_raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
+	
+		if (hitTriIdx >= 0)
+			isInside = dot(trinormal, test_raydir.xyz) > 0 && isInside;
+	}
+
 	float4 rayorig = float4(ray_orig_os, ray_tmin);
 	float4 raydir = float4(ray_dir_unit_os, ray_tmax);
-	//DEBUGintersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuDebugTris, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
-	intersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
-	if (hitTriIdx < 0)
-		return;
+	int hitCount = 0;
+#define HITBUFFERSIZE 5
+	float hitDistsWS[HITBUFFERSIZE];
+	bool faceDirs[HITBUFFERSIZE];
+	[unroll]
+	for (int i = 0; i < HITBUFFERSIZE; i++) {
+		//DEBUGintersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuDebugTris, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
+		intersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
+		if (hitTriIdx < 0)
+			break;
 
-	bool isInside = dot(trinormal, ray_dir_unit_os) > 0;
+		//if (hitTriIdx >= 0) 
+		{
+			hitCount++;
 
-	if (planeThickness == 0 || isInside) {
-		float4 rayorig2 = float4(ray_orig_os, ray_tmin2);
-		float4 raydir2 = float4(-ray_dir_unit_os, ray_tmax2);
-		float3 trinormal2 = float3(0, 0, 0);
-		float hitDistance2 = 1e20;
-		int hitTriIdx2 = -1;
-		intersectBVHandTriangles(rayorig2, raydir2, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx2, hitDistance2, debugbingo, trinormal2, false);
-		if (hitTriIdx2 < 0 && planeThickness == 0)
-			return;
+			float3 posHitOS = rayorig.xyz + hitDistance * ray_dir_unit_os;
+			float3 posHitWS = TransformPoint(posHitOS, g_cbPobj.mat_os2ws);
+			float hitDistWS = length(posHitWS - pos_ip_ws);
+			hitDistsWS[i] = hitDistWS;
+			faceDirs[i] = dot(trinormal, ray_dir_unit_os) < 0; // 'true' refers to normal towards cam
 
-		isInside = dot(trinormal2, -ray_dir_unit_os) > 0 && isInside;
+			rayorig.xyz = posHitOS + 0.0001f * ray_dir_unit_os;
+		}
 	}
-
-	//if (length(trinormal) > 1.00001) {
+	if (hitCount == 0)
+		return;
+	//if (hitDistsWS[0] > 0) {
 	//	fragment_vis[ss_xy] = float4(1, 0, 0, 1);
-	//	fragment_zdepth[ss_xy] = 1.f;
-	//	return;
+	//	//return;
 	//}
+	//if (hitDistsWS[1] > 0) {
+	//	fragment_vis[ss_xy] = float4(1, 1, 0, 1);
+	//	//return;
+	//}
+	//if (hitDistsWS[2] > 0) {
+	//	fragment_vis[ss_xy] = float4(0, 1, 0, 1);
+	//	//return;
+	//}
+	//if (hitDistsWS[3] > 0) {
+	//	fragment_vis[ss_xy] = float4(0, 0, 1, 1);
+	//	//return;
+	//}
+	//if (hitDistsWS[4] > 0) {
+	//	fragment_vis[ss_xy] = float4(1, 0, 1, 1);
+	//	//return;
+	//}
+	//fragment_vis[ss_xy] = float4(1, 1, 1, 1);
 	//return;
 
-	//trinormal = normalize(trinormal);
-	//ray_dir_unit_os = normalize(ray_dir_unit_os);
-	//bool isInside = dot(trinormal, ray_dir_unit_os) > 0 || dot(trinormal2, -ray_dir_unit_os) > 0;
+	//float3 posFirstWS, posLastWS;
+	float zdepth0 = -1.f, zdepth1 = -1.f; // WS
+	if (isInside) {
+		if (planeThickness == 0) {
+			float4 rayorig2 = float4(ray_orig_os, ray_tmin2);
+			float4 raydir2 = float4(-ray_dir_unit_os, ray_tmax2);
+			float3 trinormal2 = float3(0, 0, 0);
+			float hitDistance2 = 1e20;
+			int hitTriIdx2 = -1;
+			intersectBVHandTriangles(rayorig2, raydir2, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx2, hitDistance2, debugbingo, trinormal2, false);
+			if (hitTriIdx2 < 0)
+				return;
 
-	float3 posHitOS = ray_orig_os + hitDistance * ray_dir_unit_os;
-	float3 posHitWS = TransformPoint(posHitOS, g_cbPobj.mat_os2ws);
-	float hitDistWS = length(posHitWS - pos_ip_ws);
-	
-	if (!isInside && hitDistWS > planeThickness) {
-
-		//fragment_vis[ss_xy] = float4(0, 1, 1, 1);
-
-		return;
+			zdepth0 = 0;
+			zdepth1 = 0;
+		}
+		else { // planeThickness > 0
+			//float3 posFirstWS, posLastWS;
+			//posFirstWS = pos_ip_ws;
+			zdepth0 = 0;
+			[loop]
+			for (i = 0; i < hitCount; i++) {
+				if (!faceDirs[i]) {
+					//posLastWS = pos_ip_ws + hitDistsWS[i] * ray_dir_unit_ws;
+					zdepth1 = hitDistsWS[i];
+					break;
+				}
+			}
+			if (zdepth1 < 0)
+				return;
+		}
 	}
+	else { // outside
+		//float3 posFirstWS, posLastWS;
+		[loop]
+		for (i = 0; i < hitCount; i++) {
+			if (faceDirs[i] && zdepth0 < 0) {
+				//posFirstWS = pos_ip_ws + hitDistsWS[i] * ray_dir_unit_ws;
+				zdepth0 = hitDistsWS[i];
+				//break;
+			}
+			else if (!faceDirs[i]) {
+				//posLastWS = pos_ip_ws + hitDistsWS[i] * ray_dir_unit_ws;
+				zdepth1 = hitDistsWS[i];
+				//break;
+			}
+		}
+		if (zdepth0 < 0 || zdepth1 < 0) {
+			return;
+		}
+
+		if (zdepth0 > planeThickness) {
+			return;
+		}
+
+		//posFirstWS = pos_ip_ws + zdepth0 * ray_dir_unit_ws;
+		//posLastWS = pos_ip_ws + zdepth1 * ray_dir_unit_ws;
+		zdepth1 = min(zdepth1, planeThickness);
+	}
+
+	float zThickness = zdepth1 - zdepth0;// max(zdepth1 - zdepth0, 0);
+	//if (zThickness < 0)
+	//{
+	//	fragment_vis[ss_xy] = float4(1, 1, 1, 1);
+	//	return;
+	//}
+	float zDepth = zdepth1;
 
 
 	float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
+	v_rgba.a = 1;
 	if (planeThickness == 0.f)
 		v_rgba.a = min(0.5, v_rgba.a);
-
-	//v_rgba.a = 0.1;
-
-	float zThickness = 0;
-	float zDepth = 0;// min(length(posHitWS - pos_ip_ws), planeThickness);
-	if (isInside) {
-		// inside the object
-		//v_rgba = float4(1, 1, 1, 1);
-		zThickness = zDepth = min(length(posHitWS - pos_ip_ws), planeThickness);
-	}
-	else if (planeThickness > 0) {
-		//float firstHitDist = hitDistance;
-		// find the other side one.
-		// this is valid only for thick plane mode
-		float lastHitDist = -1.f; // for inside-out side geometry
-
-		[unroll]
-		for (int i = 0; i < 5; i++) {
-			hitTriIdx = -1;
-			rayorig = float4(ray_orig_os + (hitDistance + 0.0001f) * ray_dir_unit_os, ray_tmin);
-			//DEBUGintersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuDebugTris, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
-			intersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
-
-			if (dot(trinormal, ray_dir_unit_os) > 0) {
-				lastHitDist = hitDistance;
-
-				if (lastHitDist >= planeThickness)
-					break;
-			}
-
-			if (hitTriIdx == -1) {
-				break;
-			}
-		}
-
-		if (lastHitDist < 0) {
-			fragment_vis[ss_xy] = float4(1, 1, 0, 1);
-			return;
-		}
-
-		float3 posLastHitOS = rayorig.xyz + lastHitDist * ray_dir_unit_os;
-		float3 posLastHitWS = TransformPoint(posLastHitOS, g_cbPobj.mat_os2ws);
-		float lastHitDistWS = length(posLastHitWS - pos_ip_ws);
-
-
-		lastHitDistWS = min(planeThickness, lastHitDistWS);
-
-		zThickness = lastHitDistWS;// length(posHitWS - posLastHitWS);
-		zDepth = length(posLastHitWS - pos_ip_ws);
-		//fragment_vis[ss_xy] = float4(1, 0, 0, 1);
-		//return;
-
-		//zThickness = lastHitDist - firstHitDist;
-		//zDepth = lastHitDist;
-		
-		/*
-		if (dot(trinormal, ray_dir_unit_os) < 0) 
-		{
-			// for self-overlapping geometry
-			rayorig = float4(ray_orig_os + (hitDistance + 0.0001f) * ray_dir_unit_os, ray_tmin);
-			//DEBUGintersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuDebugTris, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
-			intersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
-
-			if (hitTriIdx == -1) {
-				fragment_vis[ss_xy] = v_rgba = float4(0, 0, 1, 1);
-				return;
-			}
-			if (dot(trinormal, ray_dir_unit_os) < 0) {
-				// just for debug..
-				// not allowed in the closed object
-				fragment_vis[ss_xy] = v_rgba = float4(1, 0, 0, 1);
-				return;
-			}
-
-
-			fragment_vis[ss_xy] = v_rgba = float4(1, 1,	0, 1);
-			return;
-
-			//zThickness = planeThickness;
-			//zDepth = prevhitDistance;
-		}
-		else
-		{
-			fragment_vis[ss_xy] = v_rgba = float4(0, 1, 0, 1);
-			return;
-
-			float3 pos2ndHitOS = rayorig.xyz + hitDistance * ray_dir_unit_os;
-			float3 pos2ndHitWS = TransformPoint(pos2ndHitOS, g_cbPobj.mat_os2ws);
-
-			zThickness = length(posHitWS - pos2ndHitWS);
-			zDepth = length(pos2ndHitWS - pos_ip_ws);
-		}
-		/**/
-		//fragment_vis[ss_xy] = v_rgba = float4(1, 1, 1, 1);
-	}
 
 #if PICKING == 1
 	uint fc = 0;
@@ -1029,7 +1028,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 
 	if (planeThickness > 0 && v_rgba.a > 0) {
 		// effect for x-ray
-		v_rgba.a *= max((planeThickness - zDepth + zThickness) / planeThickness, 0.1f);
+		v_rgba.a *= min((planeThickness - zDepth + zThickness) / planeThickness + 0.1f, 1.0f);
 		v_rgba.rgb *= v_rgba.a;
 	}
 
