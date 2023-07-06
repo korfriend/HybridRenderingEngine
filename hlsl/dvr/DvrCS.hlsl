@@ -1011,6 +1011,14 @@ void VR_SURFACE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 	float depth_hit = length(pos_hit_ws - pos_ip_ws);
 
+	if (BitCheck(g_cbVolMaterial.flag, 0))
+	{
+		// additional feature : https://koreascience.kr/article/JAKO201324947256830.pdf
+		float rand = _random(float2(DTid.x + g_cbCamState.rt_width * DTid.y, depth_hit));
+		depth_hit -= rand * g_cbVobj.sample_dist;
+		//float3 random_samples = float3(_random(DTid.x + g_cbCamState.rt_width * DTid.y), _random(DTid.x + g_cbCamState.rt_width * DTid.y + g_cbCamState.rt_width * g_cbCamState.rt_height), _random(DTid.xy));
+	}
+
 	vr_fragment_1sthit_write[DTid.xy] = depth_hit;
 	uint fcnt = fragment_counter[DTid.xy];
 	uint dvr_hit_enc = length(pos_hit_ws - pos_start_ws) < g_cbVobj.sample_dist ? 2 : 1;

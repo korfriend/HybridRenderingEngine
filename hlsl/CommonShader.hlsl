@@ -220,7 +220,8 @@ struct HxCB_VolumeMaterial // normally for each volume
 
     float occ_sample_dist_scale; // for occlusion
     float sdm_sample_dist_scale; // for shadow
-    uint vrf_dummy_0;
+	// 0-bit : 0 - normal surface hit, 1 - jittering 
+    uint flag;
     uint vrf_dummy_1;
 };
 
@@ -324,7 +325,7 @@ cbuffer cbGlobalParams : register(b5)
 
 cbuffer cbGlobalParams : register(b6)
 {
-	HxCB_Material g_cbVrEffect;
+	HxCB_VolumeMaterial g_cbVolMaterial;
 }
 
 cbuffer cbGlobalParams : register(b7)

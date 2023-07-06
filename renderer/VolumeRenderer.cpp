@@ -712,12 +712,12 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->Unmap(cbuf_reffect, 0);
 		dx11DeviceImmContext->CSSetConstantBuffers(3, 1, &cbuf_reffect);
 
-		CB_VolumeMaterial cbVrEffect;
-		grd_helper::SetCb_VolumeRenderingEffect(cbVrEffect, vobj, actor);
+		CB_VolumeMaterial cbVrMaterial;
+		grd_helper::SetCb_VolumeRenderingEffect(cbVrMaterial, vobj, actor);
 		D3D11_MAPPED_SUBRESOURCE mappedVrEffect;
 		dx11DeviceImmContext->Map(cbuf_vreffect, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedVrEffect);
 		CB_VolumeMaterial* cbVrEffectData = (CB_VolumeMaterial*)mappedVrEffect.pData;
-		memcpy(cbVrEffectData, &cbVrEffect, sizeof(CB_VolumeMaterial));
+		memcpy(cbVrEffectData, &cbVrMaterial, sizeof(CB_VolumeMaterial));
 		dx11DeviceImmContext->Unmap(cbuf_vreffect, 0);
 		dx11DeviceImmContext->CSSetConstantBuffers(6, 1, &cbuf_vreffect);
 #pragma endregion 

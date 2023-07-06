@@ -2276,6 +2276,9 @@ void grd_helper::SetCb_VolumeRenderingEffect(CB_VolumeMaterial& cb_vreffect, VmV
 	vmdouble2 dGradientMagMinMax = vmdouble2(1, -1);
 	cb_vreffect.occ_sample_dist_scale = actor->GetParam("_float_OccSampleDistScale", 1.f);
 	cb_vreffect.sdm_sample_dist_scale = actor->GetParam("_float_SdmSampleDistScale", 1.f);
+
+	bool jitteringSample = actor->GetParam("_bool_JitteringSample", false);
+	cb_vreffect.flag = (int)jitteringSample;
 }
 
 void grd_helper::SetCb_ClipInfo(CB_ClipInfo& cb_clip, VmVObject* obj, VmActor* actor)

@@ -606,7 +606,8 @@ namespace grd_helper
 
 		float occ_sample_dist_scale; // for occlusion
 		float sdm_sample_dist_scale; // for shadow
-		uint vrf_dummy_0;
+		// 0-bit : 0 - normal surface hit, 1 - jittering 
+		uint flag;
 		uint vrf_dummy_1;
 
 		ZERO_SET(CB_VolumeMaterial)
