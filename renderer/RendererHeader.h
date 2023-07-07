@@ -50,8 +50,7 @@ void ComputeSSAO(__ID3D11DeviceContext* dx11DeviceImmContext,
 	grd_helper::GpuDX11CommonParameters* dx11CommonParams, VmIObject* iobj,
 	int num_grid_x, int num_grid_y,
 	GpuRes& gres_fb_counter, GpuRes& gres_fb_deep_k_buffer, GpuRes& gres_fb_rgba, bool blur_SSAO,
-	GpuRes& gres_fb_vr_depth, GpuRes& gres_fb_vr_ao, GpuRes& gres_fb_vr_ao_blf, bool involve_vr, bool apply_fragmerge,
-	map<string, vmint2>& profile_map, bool gpu_profile);
+	GpuRes& gres_fb_vr_depth, GpuRes& gres_fb_vr_ao, GpuRes& gres_fb_vr_ao_blf, bool involve_vr, bool apply_fragmerge);
 
 void ComputeDOF(__ID3D11DeviceContext* dx11DeviceImmContext,
 	grd_helper::GpuDX11CommonParameters* dx11CommonParams, VmIObject* iobj,
@@ -60,8 +59,7 @@ void ComputeDOF(__ID3D11DeviceContext* dx11DeviceImmContext,
 	bool apply_SSAO, bool is_blurred_SSAO, bool apply_fragmerge,
 	GpuRes& gres_fb_vr_depth, GpuRes& gres_fb_vr_ao, GpuRes& gres_fb_vr_ao_blf,
 	CB_CameraState& cbCamState, ID3D11Buffer* cbuf_cam_state, int __BLOCKSIZE,
-	bool involve_vr,
-	map<string, vmint2>& profile_map, bool gpu_profile);
+	bool involve_vr);
 
 void GradientMagnitudeAnalysis(vmfloat2& grad_minmax, VmVObjectVolume* vobj);
 

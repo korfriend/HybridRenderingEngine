@@ -1517,16 +1517,11 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	for (VmActor& __actor : temperal_actors)
 		foremost_surfaces_routine_objs.push_back(&__actor);
 
-	bool gpu_profile = false;
-	if (fb_size_cur.x > 200 && fb_size_cur.y > 200)
+	if (dx11CommonParams->gpu_profile)
 	{
-		gpu_profile = _fncontainer->fnParams.GetParam("_bool_GpuProfile", false);
-		if (gpu_profile)
-		{
-			cout << "  ** general_oit_routine_objs    : " << general_oit_routine_objs.size() << endl;
-			cout << "  ** special_effect_routine_objs : " << single_layer_routine_objs.size() << endl;
-			cout << "  ** foremost_sr_routine_objs : " << foremost_surfaces_routine_objs.size() << endl;
-		}
+		cout << "  ** general_oit_routine_objs    : " << general_oit_routine_objs.size() << endl;
+		cout << "  ** special_effect_routine_objs : " << single_layer_routine_objs.size() << endl;
+		cout << "  ** foremost_sr_routine_objs : " << foremost_surfaces_routine_objs.size() << endl;
 	}
 #pragma endregion 
 
@@ -1537,43 +1532,13 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	//	}
 	//}
 
-	map<string, vmint2>& profile_map = dx11CommonParams->profile_map;
-	if (gpu_profile)
-	{
-		int gpu_profilecount = (int)profile_map.size();
-		dx11DeviceImmContext->Begin(dx11CommonParams->dx11qr_disjoint);
-		//gpu_profilecount++;
-	}
-
-	auto ___GpuProfile = [&gpu_profile, &dx11DeviceImmContext, &profile_map, &dx11CommonParams](const string& profile_name, const bool is_closed = false) {
-		if (gpu_profile)
-		{
-			int stamp_idx = 0;
-			auto it = profile_map.find(profile_name);
-			if (it == profile_map.end()) {
-				assert(is_closed == false);
-				int gpu_profilecount = (int)profile_map.size() * 2;
-				profile_map[profile_name] = vmint2(gpu_profilecount, -1);
-				stamp_idx = gpu_profilecount;
-			}
-			else {
-				//assert(it->second.y == -1 && is_closed == true);
-				it->second.y = it->second.x + 1;
-				stamp_idx = it->second.y;
-			}
-
-			dx11DeviceImmContext->End(dx11CommonParams->dx11qr_timestamps[stamp_idx]);
-			//gpu_profilecount++;
-		}
-	};
-
 #pragma region // FrameBuffer Setting
 	// Backup Previous Render Target //
 	ID3D11RenderTargetView* pdxRTVOld = NULL;
 	ID3D11DepthStencilView* pdxDSVOld = NULL;
 	dx11DeviceImmContext->OMGetRenderTargets(1, &pdxRTVOld, &pdxDSVOld);
 
-	___GpuProfile("Clear for Render1 - SR");
+	dx11CommonParams->GpuProfile("Clear for Render1 - SR");
 
 	// Clear Depth Stencil //
 	ID3D11DepthStencilView* dx11DSV = (ID3D11DepthStencilView*)gres_fb_depthstencil.alloc_res_ptrs[DTYPE_DSV];
@@ -1606,7 +1571,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
 	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_singlelayer_tempDepth.alloc_res_ptrs[DTYPE_RTV], clr_float_fltmax_4);
 
-	___GpuProfile("Clear for Render1 - SR", true);
+	dx11CommonParams->GpuProfile("Clear for Render1 - SR", true);
 #pragma endregion 
 
 #pragma region // HLSL Sampler Setting
@@ -2381,85 +2346,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		}
 	};
 
-	auto RenderOut = [&iobj, &___GpuProfile, &fb_size_cur, &dx11DeviceImmContext, &is_final_renderer,
-		&gres_fb_rgba, &gres_fb_depthcs, &gres_fb_sys_rgba, &gres_fb_sys_depthcs, &gpu_manager, &is_rgba](const int count_call_render, const HWND hWnd) {
-
-		// APPLY HWND MODE
-		if (hWnd && is_final_renderer)
-		{
-			ID3D11Texture2D* pTex2dHwndRT = NULL;
-			ID3D11RenderTargetView* pHwndRTV = NULL;
-			gpu_manager->UpdateDXGI((void**)&pTex2dHwndRT, (void**)&pHwndRTV, hWnd, fb_size_cur.x, fb_size_cur.y);
-
-			dx11DeviceImmContext->CopyResource(pTex2dHwndRT, (ID3D11Texture2D*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RES]);
-			return;
-		}
-
-		FrameBuffer* fb_rout = (FrameBuffer*)iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, 0);
-		FrameBuffer* fb_dout = (FrameBuffer*)iobj->GetFrameBuffer(FrameBufferUsageDEPTH, 0);
-
-		if (count_call_render == 0)	// this means that there is no valid rendering pass
-		{
-			vmbyte4* rgba_buf = (vmbyte4*)fb_rout->fbuffer;
-			float* depth_buf = (float*)fb_dout->fbuffer;
-
-			memset(rgba_buf, 0, fb_size_cur.x * fb_size_cur.y * sizeof(vmbyte4));
-			memset(depth_buf, 0x77, fb_size_cur.x * fb_size_cur.y * sizeof(float));
-		}
-		else
-		{
-#pragma region // Copy GPU to CPU
-			dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_fb_sys_rgba.alloc_res_ptrs[DTYPE_RES],
-				(ID3D11Texture2D*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RES]);
-			dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_fb_sys_depthcs.alloc_res_ptrs[DTYPE_RES],
-				(ID3D11Texture2D*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RES]);
-
-			vmbyte4* rgba_sys_buf = (vmbyte4*)fb_rout->fbuffer;
-			float* depth_sys_buf = (float*)fb_dout->fbuffer;
-
-			D3D11_MAPPED_SUBRESOURCE mappedResSysRGBA;
-			D3D11_MAPPED_SUBRESOURCE mappedResSysDepth;
-			HRESULT hr = dx11DeviceImmContext->Map((ID3D11Texture2D*)gres_fb_sys_rgba.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysRGBA);
-			hr |= dx11DeviceImmContext->Map((ID3D11Texture2D*)gres_fb_sys_depthcs.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysDepth);
-
-			vmbyte4* rgba_gpu_buf = (vmbyte4*)mappedResSysRGBA.pData;
-			float* depth_gpu_buf = (float*)mappedResSysDepth.pData;
-			int buf_row_pitch = mappedResSysRGBA.RowPitch / 4;
-#ifdef PPL_USE
-			int count = fb_size_cur.y;
-			parallel_for(int(0), count, [&](int i) // is_rgba, fb_size_cur, rgba_sys_buf, depth_sys_buf, rgba_gpu_buf, depth_gpu_buf, buf_row_pitch
-#else
-#pragma omp parallel for 
-			for (int i = 0; i < fb_size_cur.y; i++)
-#endif
-			{
-				for (int j = 0; j < fb_size_cur.x; j++)
-				{
-					vmbyte4 rgba = rgba_gpu_buf[j + i * buf_row_pitch];
-					// __PS_MERGE_LAYERS_TO_RENDEROUT 에서 INT -> FLOAT4 로 되어 배열된 color 요소가 들어 옴. //
-
-					// BGRA
-					if (is_rgba)
-						rgba_sys_buf[i * fb_size_cur.x + j] = vmbyte4(rgba.x, rgba.y, rgba.z, rgba.w);
-					else
-						rgba_sys_buf[i * fb_size_cur.x + j] = vmbyte4(rgba.z, rgba.y, rgba.x, rgba.w);
-
-					int iAddr = i * fb_size_cur.x + j;
-					if (rgba.w > 0)
-						depth_sys_buf[iAddr] = depth_gpu_buf[j + i * buf_row_pitch];
-					else
-						depth_sys_buf[iAddr] = FLT_MAX;
-				}
-#ifdef PPL_USE
-			});
-#else
-			}
-#endif
-			dx11DeviceImmContext->Unmap((ID3D11Texture2D*)gres_fb_sys_rgba.alloc_res_ptrs[DTYPE_RES], 0);
-			dx11DeviceImmContext->Unmap((ID3D11Texture2D*)gres_fb_sys_depthcs.alloc_res_ptrs[DTYPE_RES], 0);
-		}
-	};
-
 	dx11DeviceImmContext->VSSetConstantBuffers(0, 1, &cbuf_cam_state);
 	dx11DeviceImmContext->GSSetConstantBuffers(0, 1, &cbuf_cam_state);
 	dx11DeviceImmContext->PSSetConstantBuffers(0, 1, &cbuf_cam_state);
@@ -2486,7 +2372,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	HWND hWnd = (HWND)_fncontainer->fnParams.GetParam("_hwnd_WindowHandle", (HWND)NULL);
 
 	// RENDER BEGIN
-	___GpuProfile("SR Render");
+	dx11CommonParams->GpuProfile("SR Render");
 
 	if (is_picking_routine) {
 		assert(single_layer_routine_objs.size() + foremost_surfaces_routine_objs.size() == 0);
@@ -2494,7 +2380,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 		map<int, tuple<float, int>> picking_layers_id_depthPrimId;
 		map<float, vmint2> picking_layers_depth_actorid_primid;
-		___GpuProfile("Picking");
+		dx11CommonParams->GpuProfile("Picking");
 		bool pickPrimitive = _fncontainer->fnParams.GetParam("_bool_PickPrimitive", false);
 		pickPrimitive = true;
 		ID3D11Buffer* pickSysBuf = NULL;
@@ -2563,7 +2449,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		//cout << "num_layers : " << num_layers << endl;
 		dx11DeviceImmContext->Unmap(pickSysBuf, 0);
 #pragma endregion copyback to sysmem
-		___GpuProfile("Picking", true);
+		dx11CommonParams->GpuProfile("Picking", true);
 
 		//if (gpu_profile) {
 		//	cout << "### NUM PICKING LAYERS : " << num_layers << endl;
@@ -2604,22 +2490,22 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		if (foremost_surfaces_routine_objs.size() > 0) 
 		{
 			dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
-			___GpuProfile("Opaque Surface");
+			dx11CommonParams->GpuProfile("Opaque Surface");
 			// Opaque Foremost Rendering ==> to Render Target Textures (gres_fb_rgba and gres_fb_depthcs)
 			RenderStage1(foremost_surfaces_routine_objs, MFR_MODE::NONE, RENDER_GEOPASS::PASS_OPAQUESURFACES
 				, false /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false);
-			___GpuProfile("Opaque Surface", true);
+			dx11CommonParams->GpuProfile("Opaque Surface", true);
 		}
 
 		if (single_layer_routine_objs.size() > 0) 
 		{
 			dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
-			___GpuProfile("Single Layer Pass");
+			dx11CommonParams->GpuProfile("Single Layer Pass");
 			// Single Layer Effect (outline) Rendering 
 			// ==> to a Temporary Render Target Texture (gres_fb_singlelayer_depthcs)
 			RenderStage1(single_layer_routine_objs, MFR_MODE::NONE, RENDER_GEOPASS::PASS_SINGLELAYERS
 				, false /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false);
-			___GpuProfile("Single Layer Pass", true);
+			dx11CommonParams->GpuProfile("Single Layer Pass", true);
 
 			GpuRes gres_quad;
 			gres_quad.vm_src_id = 1;
@@ -2672,15 +2558,15 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			// pre-pass : Counting fragments
 			if (mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB) {
 
-				___GpuProfile("Fragment Count");
+				dx11CommonParams->GpuProfile("Fragment Count");
 				RenderStage1(general_oit_routine_objs, mode_OIT, RENDER_GEOPASS::PASS_OIT
 					, true /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false);
-				___GpuProfile("Fragment Count", true);
+				dx11CommonParams->GpuProfile("Fragment Count", true);
 
 				dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
 
 				if (mode_OIT == MFR_MODE::DYNAMIC_FB) {
-					___GpuProfile("Offset Table Generation");
+					dx11CommonParams->GpuProfile("Offset Table Generation");
 #pragma region table offset
 					ID3D11UnorderedAccessView* dx11UAVs_2nd_pass[NUM_UAVs_2ND] = {
 							  (ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]
@@ -2705,10 +2591,10 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					dx11DeviceImmContext->CSSetUnorderedAccessViews(1, NUM_UAVs_2ND, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 					dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
 #pragma endregion table offset
-					___GpuProfile("Offset Table Generation", true);
+					dx11CommonParams->GpuProfile("Offset Table Generation", true);
 				}
 				else if (mode_OIT == MFR_MODE::DYNAMIC_KB) {
-					___GpuProfile("Offset Table Generation & K-Determination (Histogram-based)");
+					dx11CommonParams->GpuProfile("Offset Table Generation & K-Determination (Histogram-based)");
 #pragma region table offset & K-determination
 					// histogram //
 					const int bins_frag_histo = 1024;
@@ -2789,7 +2675,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 					dx11DeviceImmContext->Unmap((ID3D11Buffer*)histo_buf_sys.alloc_res_ptrs[DTYPE_RES], 0);
 
-					if (gpu_profile)
+					if (dx11CommonParams->gpu_profile)
 					{
 						cout << "----> total frag    : " << totol_num_frags << endl;
 						cout << "----> miss frag     : " << miss_frags << endl;
@@ -2835,17 +2721,17 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					dx11DeviceImmContext->CSSetUnorderedAccessViews(10, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 					dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
 #pragma endregion table offset & K-determination
-					___GpuProfile("Offset Table Generation & K-Determination (Histogram-based)", true);
+					dx11CommonParams->GpuProfile("Offset Table Generation & K-Determination (Histogram-based)", true);
 				}
 				// used for the increment of the fragments (index)
 				dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 				}
 
-			___GpuProfile("Geometry for OIT");
+			dx11CommonParams->GpuProfile("Geometry for OIT");
 			// buffer filling
 			RenderStage1(general_oit_routine_objs, mode_OIT, RENDER_GEOPASS::PASS_OIT
 				, false /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false);
-			___GpuProfile("Geometry for OIT", true);
+			dx11CommonParams->GpuProfile("Geometry for OIT", true);
 #endif
 		}
 
@@ -2923,7 +2809,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		if (general_oit_routine_objs.size() + single_layer_routine_objs.size() > 0
 			|| storeKBuf) 
 		{
-			___GpuProfile("Resolve Pass");
+			dx11CommonParams->GpuProfile("Resolve Pass");
 			// ResolvePass calls 
 			// 1. SR_OIT_ABUFFER_SORT2SENDER_SFM_cs_5_0 (to FB to SKB)
 			// 2. OIT_SKBZ_RESOLVE_cs_5_0 (unordered SKB to ordered SKB)
@@ -2933,28 +2819,27 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			// Note that if K-buffer is preserved, then no RT-out is available
 			// Dynamic FB layers into K-buffer if there is post-processing (SS algorithms) or single layer pass
 			ResolvePass(mode_OIT, apply_fragmerge); // ==> SK-buffer ????
-			___GpuProfile("Resolve Pass", true);
+			dx11CommonParams->GpuProfile("Resolve Pass", true);
 		}
 
 		if (is_final_renderer) {
 			// Note that these post-processing will be performed in volume rendering stage when there is volume rendering requirement
 			if (cbEnvState.r_kernel_ao > 0) {
-				___GpuProfile("SSAO");
+				dx11CommonParams->GpuProfile("SSAO");
 				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs_2ND, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 				ComputeSSAO(dx11DeviceImmContext, dx11CommonParams, iobj, num_grid_x, num_grid_y,
 					gres_fb_counter, gres_fb_k_buffer, gres_fb_rgba, blur_SSAO,
-					gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex, false, apply_fragmerge, profile_map, gpu_profile);
-				___GpuProfile("SSAO", true);
+					gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex, false, apply_fragmerge);
+				dx11CommonParams->GpuProfile("SSAO", true);
 			}
 			if ((cbEnvState.dof_lens_r > 0 && cam_obj->IsPerspective())) {
-				___GpuProfile("SSDOF");
+				dx11CommonParams->GpuProfile("SSDOF");
 				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs_2ND, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 				ComputeDOF(dx11DeviceImmContext, dx11CommonParams, iobj, num_grid_x, num_grid_y,
 					gres_fb_counter, gres_fb_k_buffer, gres_fb_rgba, cbEnvState.r_kernel_ao > 0, blur_SSAO, apply_fragmerge,
 					gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex,
-					cbCamState, cbuf_cam_state, __BLOCKSIZE,
-					false, profile_map, gpu_profile);
-				___GpuProfile("SSDOF", true);
+					cbCamState, cbuf_cam_state, __BLOCKSIZE, false);
+				dx11CommonParams->GpuProfile("SSDOF", true);
 			}
 		}
 #endif
@@ -2963,12 +2848,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL)); // counter
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(1, NUM_UAVs_2ND, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 		dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
-
-		if (is_final_renderer) {
-			___GpuProfile("Copyback");
-			RenderOut(count_call_render, hWnd);
-			___GpuProfile("Copyback", true);
-		}
 	}
 	else if (mode_OIT == MFR_MODE::MOMENT) {
 #ifdef DX10_0
@@ -2987,7 +2866,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	}
 
 	iobj->SetObjParam("_int_NumCallRenders", count_call_render);
-	___GpuProfile("SR Render", true);
+	dx11CommonParams->GpuProfile("SR Render", true);
 
 	// DF.. K 버퍼 저장 
 	// * RENDER 1/2 갈 때, 항상.. 
@@ -3232,49 +3111,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					cout << "NO REF DEPTH!" << endl;
 				}
 				delete[] fs;
-			}
-		}
-	}
-
-	if (gpu_profile)
-	{
-		dx11DeviceImmContext->End(dx11CommonParams->dx11qr_disjoint);
-
-		// Wait for data to be available
-		while (dx11DeviceImmContext->GetData(dx11CommonParams->dx11qr_disjoint, NULL, 0, 0) == S_FALSE)
-		{
-			Sleep(1);       // Wait a bit, but give other threads a chance to run
-		}
-
-		// Check whether timestamps were disjoint during the last frame
-		D3D10_QUERY_DATA_TIMESTAMP_DISJOINT tsDisjoint;
-		dx11DeviceImmContext->GetData(dx11CommonParams->dx11qr_disjoint, &tsDisjoint, sizeof(tsDisjoint), 0);
-		if (!tsDisjoint.Disjoint)
-		{
-			auto DisplayDuration = [&tsDisjoint](UINT64 tsS, UINT64 tsE, const string& _test)
-			{
-				if (tsS == 0 || tsE == 0) return;
-				cout << _test << " : " << float(tsE - tsS) / float(tsDisjoint.Frequency) * 1000.0f << " ms" << endl;
-			};
-
-			for (auto& it : profile_map) {
-				UINT64 ts, te;
-				dx11DeviceImmContext->GetData(dx11CommonParams->dx11qr_timestamps[it.second.x], &ts, sizeof(UINT64), 0);
-				dx11DeviceImmContext->GetData(dx11CommonParams->dx11qr_timestamps[it.second.y], &te, sizeof(UINT64), 0);
-
-				DisplayDuration(ts, te, it.first);
-			}
-
-			if (test_fps_profiling)
-			{
-				auto it = profile_map.find("SR Render");
-				UINT64 ts, te;
-				dx11DeviceImmContext->GetData(dx11CommonParams->dx11qr_timestamps[it->second.x], &ts, sizeof(UINT64), 0);
-				dx11DeviceImmContext->GetData(dx11CommonParams->dx11qr_timestamps[it->second.y], &te, sizeof(UINT64), 0);
-				ofstream file_rendertime;
-				file_rendertime.open(".\\data\\frames_profile_rendertime.txt", std::ios_base::app);
-				file_rendertime << float(te - ts) / float(tsDisjoint.Frequency) * 1000.0f << endl;
-				file_rendertime.close();
 			}
 		}
 	}
