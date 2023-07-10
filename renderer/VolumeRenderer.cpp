@@ -56,6 +56,11 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	bool fastRender2x = _fncontainer->fnParams.GetParam("_bool_FastRender2X", false);
 	//fastRender2x = true;
 
+	int outline_thickness = _fncontainer->fnParams.GetParam("_int_SilhouetteThickness", (int)0);
+	float outline_depthThres = _fncontainer->fnParams.GetParam("_float_SilhouetteDepthThres", 10000.f);
+	vmfloat3 outline_color = _fncontainer->fnParams.GetParam("_float3_SilhouetteColor", vmfloat3(1));
+	bool outline_fadeEffect = _fncontainer->fnParams.GetParam("_bool_SilhouetteFadeEffect", true);
+
 	// TEST
 	int test_value = _fncontainer->fnParams.GetParam("_int_TestValue", (int)0);
 	int test_mode = _fncontainer->fnParams.GetParam("_int_TestMode", (int)0);
@@ -394,6 +399,11 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, v_thickness <= 0? min_pitch : (float)v_thickness);
 	cbCamState.iSrCamDummy__0 = *(uint*)&merging_beta;
 	if (fastRender2x) cbCamState.cam_flag |= 0x1 << 8; // 9th bit set
+	int oulineiRGB = (int)(outline_color.r * 255.f) | (int)(outline_color.g * 255.f) << 8 | (int)(outline_color.b * 255.f) << 16;
+	outline_thickness = min(32, outline_thickness);
+	cbCamState.iSrCamDummy__1 = oulineiRGB | outline_thickness << 24;
+	//cbCamState.iSrCamDummy__2 = *(uint*)&scale_z_res;
+	cbCamState.cam_flag |= ((int)outline_fadeEffect << 9); //
 	
 	D3D11_MAPPED_SUBRESOURCE mappedResCamState;
 	dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
@@ -509,14 +519,15 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		if (ray_cast_type != __RM_SCULPTMASK && ray_cast_type != __RM_SCULPTMASK_MODULATION)
 			sculpt_index = -1;
 
+		bool showOutline = actor->GetParam("_bool_ShowOutline", false);
 		vmfloat4 material_phongCoeffs = actor->GetParam("_float4_PhongCoeffs", default_phong_lighting_coeff);
-		int outline_thickness = actor->GetParam("_int_SilhouetteThickness", (int)0);
-		float outline_depthThres = 10000.f;
-		vmfloat3 outline_color = vmfloat3(1.f);
-		if (outline_thickness > 0) {
-			outline_depthThres = actor->GetParam("_float_SilhouetteDepthThres", outline_depthThres);
-			outline_color = actor->GetParam("_float3_SilhouetteColor", outline_color);
-		}
+		//int outline_thickness = actor->GetParam("_int_SilhouetteThickness", (int)0);
+		//float outline_depthThres = 10000.f;
+		//vmfloat3 outline_color = vmfloat3(1.f);
+		//if (outline_thickness > 0) {
+		//	outline_depthThres = actor->GetParam("_float_SilhouetteDepthThres", outline_depthThres);
+		//	outline_color = actor->GetParam("_float3_SilhouetteColor", outline_color);
+		//}
 #pragma endregion
 
 #pragma region GPU resource updates
@@ -615,12 +626,12 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			//cbVolumeObj.vec_grad_z *= 2.f;
 		}
 		cbVolumeObj.pb_shading_factor = material_phongCoeffs;
-		cbVolumeObj.outline_color = (uint)(outline_color.r * 255.f) | ((uint)(outline_color.g * 255.f) << 8) | ((uint)(outline_color.b * 255.f) << 16) | (uint)(outline_thickness << 24);
+		cbVolumeObj.vobj_flag = (int)showOutline << 1;
 		if (is_ghost_mode) {
 			bool is_ghost_surface = actor->GetParam("_bool_IsGhostSurface", false);
 			bool is_only_hotspot_visible = actor->GetParam("_bool_IsOnlyHotSpotVisible", false);
-			if (is_ghost_surface) cbVolumeObj.vobj_flag |= 0x1 << 19;
-			if (is_only_hotspot_visible) cbVolumeObj.vobj_flag |= 0x1 << 20;
+			cbVolumeObj.vobj_flag |= (int)is_ghost_surface << 19;
+			cbVolumeObj.vobj_flag |= (int)is_only_hotspot_visible << 20;
 			//cout << "TEST : " << is_ghost_surface << ", " << is_only_hotspot_visible << endl;
 		}
 		else if (is_modulation_mode) {
