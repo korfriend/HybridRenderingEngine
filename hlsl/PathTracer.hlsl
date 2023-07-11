@@ -189,11 +189,17 @@ Texture2D g_tex2D_Mat_NS : register(t14);
 Texture2D g_tex2D_Mat_BUMP : register(t15);
 Texture2D g_tex2D_Mat_D : register(t16);
 
+#if DX10_0 == 1
+// USE PIXEL SHADER //
+// USE PS_FILL_OUTPUT
+Texture2D fragment_zdepth : register(t20);
+#else
 RWTexture2D<uint> fragment_counter : register(u0);
 RWByteAddressBuffer deep_k_buf : register(u1);
 RWBuffer<uint> picking_buf : register(u2);
 RWTexture2D<unorm float4> fragment_vis : register(u3);
 RWTexture2D<float> fragment_zdepth : register(u4);
+#endif
 
 // modified intersection routine (uses regular instead of woopified triangles) for debugging purposes
 
@@ -731,9 +737,16 @@ int intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 	return 0;
 }
 
+#if DX10_0 == 1
+PS_FILL_OUTPUT ThickSlicePathTracer(__VS_OUT input)
+#else
 [numthreads(GRIDSIZE, GRIDSIZE, 1)]
 void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
+#endif
 {
+#if DX10_0 == 1
+#else
+#endif
 	int2 ss_xy = int2(DTid.xy);
 
 #if PICKING == 1
@@ -747,9 +760,9 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height || g_cbPobj.alpha < 0.001f)
 		return;
 
-	float fvPrev = fragment_zdepth[ss_xy];// asfloat(ConvertFloat4ToUInt(v_rgba));
-	if (fvPrev == 2.f) 
-		return;
+	//float fvPrev = fragment_zdepth[ss_xy];// asfloat(ConvertFloat4ToUInt(v_rgba));
+	//if (fvPrev == 2.f) 
+	//	return;
 	fragment_zdepth[ss_xy] = 0;
 
 	const uint k_value = g_cbCamState.k_value;
