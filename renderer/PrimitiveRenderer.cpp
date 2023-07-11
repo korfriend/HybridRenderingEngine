@@ -641,8 +641,10 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	float scale_z_res = _fncontainer->fnParams.GetParam("_float_zResScale", 1.0f);
 
 	bool is_picking_routine = _fncontainer->fnParams.GetParam("_bool_IsPickingRoutine", false);
+	bool pickPrimitive = false; 
 	if (is_picking_routine) {
 		mode_OIT = DYNAMIC_FB;
+		pickPrimitive = _fncontainer->fnParams.GetParam("_bool_PickPrimitive", false);
 		//gi_v_thickness = v_thickness = 0.0000001f;
 	}
 	vmint2 picking_pos_ss = _fncontainer->fnParams.GetParam("_int2_PickingPosSS", vmint2(-1, -1));
@@ -1159,7 +1161,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_rgba, iobj, "SYSTEM_OUT_RGBA", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_SYSOUT);
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_depthcs, iobj, "SYSTEM_OUT_DEPTH", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R32_FLOAT, UPFB_SYSOUT);
 
-	const int max_picking_layers = 2048;
+	const int max_picking_layers = 100;
 	GpuRes gres_picking_buffer, gres_picking_system_buffer, gres_picking_GSO_buffer, gres_picking_system_GSO_buffer;
 	if (is_picking_routine) {
 		// those picking layers contain depth (4bytes) and id (4bytes) information
@@ -1169,12 +1171,14 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT | UPFB_NFPP_BUFFERSIZE, max_picking_layers * 2);
 
 		grd_helper::UpdateFrameBuffer(gres_picking_GSO_buffer, iobj, "BUFFER_RW_PICKING_GSO_BUF", RTYPE_BUFFER,
-			D3D11_BIND_RENDER_TARGET | D3D11_BIND_STREAM_OUTPUT, DXGI_FORMAT_R32G32B32A32_FLOAT, UPFB_NFPP_BUFFERSIZE, max_picking_layers);
+			D3D11_BIND_STREAM_OUTPUT, DXGI_FORMAT_R32G32B32A32_FLOAT, UPFB_NFPP_BUFFERSIZE, max_picking_layers);
 		grd_helper::UpdateFrameBuffer(gres_picking_system_GSO_buffer, iobj, "SYSTEM_OUT_RW_PICKING_GSO_BUF", RTYPE_BUFFER,
 			NULL, DXGI_FORMAT_R32G32B32A32_FLOAT, UPFB_SYSOUT | UPFB_NFPP_BUFFERSIZE, max_picking_layers);
 
-		float clr_float_zero_4[4] = { 0, 0, 0, 0 };
-		dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_picking_GSO_buffer.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
+		std::vector<uint> clearDataUnit(max_picking_layers * 3, 0);//make sure that this thing is aligned
+		dx11CommonParams->dx11DeviceImmContext->UpdateSubresource(
+			pickPrimitive? (ID3D11Buffer*)gres_picking_GSO_buffer.alloc_res_ptrs[DTYPE_RES] : (ID3D11Buffer*)gres_picking_buffer.alloc_res_ptrs[DTYPE_RES]
+			, 0, NULL, &clearDataUnit[0], sizeof(uint) * clearDataUnit.size(), sizeof(uint) * clearDataUnit.size());
 	}
 #ifdef DX10_0
 	// to do // ... picking...
@@ -2382,8 +2386,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		map<int, tuple<float, int>> picking_layers_id_depthPrimId;
 		map<float, vmint2> picking_layers_depth_actorid_primid;
 		dx11CommonParams->GpuProfile("Picking");
-		bool pickPrimitive = _fncontainer->fnParams.GetParam("_bool_PickPrimitive", false);
-		pickPrimitive = true;
+		//pickPrimitive = true;
 		ID3D11Buffer* pickSysBuf = NULL;
 		if (pickPrimitive) {
 			cbCamState.pos_cam_ws = picking_ray_origin;
@@ -2432,10 +2435,21 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		int pick_stride = pickPrimitive ? 3 : 2;
 		int num_layers = 0;
 		for (int i = 0; i < max_picking_layers; i += pick_stride) {
-			uint actorid = *(uint*)&picking_buf[i + 2];
-			if (actorid == 0) continue;
-			float pick_depth = picking_buf[i + 0];
-			uint pid = pickPrimitive ? *(uint*)&picking_buf[i + 1] : -1;
+			uint actorid = 0;
+			float pick_depth = -1.f;
+			int pid = -1;
+
+			if (pickPrimitive) {
+				actorid = *(uint*)&picking_buf[i + 2];
+				if (actorid == 0) break;
+				pick_depth = picking_buf[i + 0];
+				pid = (int)*(uint*)&picking_buf[i + 1];
+			}
+			else {
+				actorid = *(uint*)&picking_buf[i + 0];
+				if (actorid == 0) break;
+				pick_depth = picking_buf[i + 1];
+			}
 
 			auto it = picking_layers_id_depthPrimId.find(actorid);
 			if (it == picking_layers_id_depthPrimId.end()) {

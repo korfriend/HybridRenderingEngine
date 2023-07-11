@@ -1139,7 +1139,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	grd_helper::UpdateFrameBuffer(gres_fb_k_buffer, iobj, "BUFFER_RW_K_BUF", RTYPE_BUFFER,
 		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, num_frags_perpixel);
 
-	const int max_picking_layers = 2048;
+	const int max_picking_layers = 100;
 	GpuRes gres_picking_buffer, gres_picking_system_buffer;
 	if (is_picking_routine) {
 		// those picking layers contain depth (4bytes) and id (4bytes) information
@@ -1148,8 +1148,9 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		grd_helper::UpdateFrameBuffer(gres_picking_system_buffer, iobj, "SYSTEM_OUT_RW_PICKING_BUF", RTYPE_BUFFER,
 			NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT | UPFB_NFPP_BUFFERSIZE, max_picking_layers * 2);
 
-		uint clr_unit4[4] = { 0, 0, 0, 0 };
-		dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_picking_buffer.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
+		std::vector<uint> clearDataUnit(max_picking_layers * 3, 0);//make sure that this thing is aligned
+		dx11CommonParams->dx11DeviceImmContext->UpdateSubresource((ID3D11Buffer*)gres_picking_buffer.alloc_res_ptrs[DTYPE_RES]
+			, 0, NULL, &clearDataUnit[0], sizeof(uint) * clearDataUnit.size(), sizeof(uint) * clearDataUnit.size());
 	}
 
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_rgba, iobj, "SYSTEM_OUT_RGBA", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_SYSOUT);
