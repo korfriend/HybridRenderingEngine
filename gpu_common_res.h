@@ -8,8 +8,6 @@
 #include <d3d12.h>
 //#include <d3dx11.h>
 
-#include <d2d1.h>
-
 using namespace std;
 using namespace vmmath;
 using namespace vmobjects;

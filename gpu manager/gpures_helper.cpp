@@ -572,6 +572,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31011), "GS_SurfelPoints_gs_5_0", "gs_5_0"), GS_SurfelPoints_gs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31020), "GS_ThickLines_gs_5_0", "gs_5_0"), GS_ThickLines_gs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31030), "GS_PickingBasic_gs_4_0", "gs_4_0_SO"), GS_PickingBasic_gs_4_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31031), "GS_MeshCutLines_gs_4_0", "gs_4_0_SO"), GS_MeshCutLines_gs_4_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50000), "VR_RAYMAX_cs_5_0", "cs_5_0"), VR_RAYMAX_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50001), "VR_RAYMIN_cs_5_0", "cs_5_0"), VR_RAYMIN_cs_5_0);
@@ -1271,16 +1272,16 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 {
 	PrimitiveData* prim_data = ((VmVObjectPrimitive*)pobj)->GetPrimitiveData();
 
-	auto CheckReusability = [&pobj](GpuRes& gres, bool& update_data, bool& regen_data,
+	auto CheckReusability = [](GpuRes& gres, VmObject* resObj, bool& update_data, bool& regen_data,
 		const vmobjects::VmParamMap<std::string, std::any>& res_new_values)
 	{
 		unsigned long long _gpu_gen_timg = gres.res_values.GetParam("LAST_UPDATE_TIME", (ullong)0);
-		unsigned long long _cpu_gen_timg = pobj->GetContentUpdateTime();
+		unsigned long long _cpu_gen_timg = resObj->GetContentUpdateTime();
 		if (_gpu_gen_timg < _cpu_gen_timg)
 		{
 			// now, at least update
 			update_data = true;
-			bool is_reuse_memory = pobj->GetObjParam("_bool_ReuseGpuMemory", false);
+			bool is_reuse_memory = resObj->GetObjParam("_bool_ReuseGpuMemory", false);
 			if (!is_reuse_memory)
 			{
 				regen_data = true;
@@ -1317,7 +1318,7 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 			vmobjects::VmParamMap<std::string, std::any> res_new_values;
 			res_new_values.SetParam("NUM_ELEMENTS", (uint)prim_data->num_vtx);
 			bool regen_data = false;
-			CheckReusability(gres_vtx, update_data, regen_data, res_new_values);
+			CheckReusability(gres_vtx, pobj, update_data, regen_data, res_new_values);
 			if(regen_data)
 				g_pCGpuManager->GenerateGpuResource(gres_vtx);
 		}
@@ -1409,7 +1410,7 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 			vmobjects::VmParamMap<std::string, std::any> res_new_values;
 			res_new_values.SetParam("NUM_ELEMENTS", (uint)prim_data->num_vidx);
 			bool regen_data = false;
-			CheckReusability(gres_idx, update_data, regen_data, res_new_values);
+			CheckReusability(gres_idx, pobj, update_data, regen_data, res_new_values);
 			if(regen_data)
 				g_pCGpuManager->GenerateGpuResource(gres_idx);
 		}
@@ -1432,375 +1433,382 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 	//vmint3 tex_res_size;
 	//((VmVObjectPrimitive*)pobj)->GetCustomParameter("_int3_TextureWHN", data_type::dtype<vmint3>(), &tex_res_size);
 	bool has_texture_img = false;// pobj->GetObjParam("_bool_HasTextureMap", true);
-	if (prim_data->texture_res_info.size() == 0 && imgObj && (prim_data->GetVerticeDefinition("TEXCOORD0") || prim_data->GetVerticeDefinition("TEXCOORD1"))) {
-		MapTable* imgBuffer = imgObj->GetObjParamPtr<MapTable>("_TableMap_ImageBuffer");
-		has_texture_img = true;
+	
+	if (prim_data->GetVerticeDefinition("TEXCOORD0") || prim_data->GetVerticeDefinition("TEXCOORD1")) {
+		if (imgObj) {
+			MapTable* imgBuffer = imgObj->GetObjParamPtr<MapTable>("_TableMap_ImageBuffer");
+			has_texture_img = true;
 
-		vmfloat3* pp = prim_data->GetVerticeDefinition("TEXCOORD0");
+			vmfloat3* pp = prim_data->GetVerticeDefinition("TEXCOORD0");
 
-		GpuRes gres_tex;
-		gres_tex.vm_src_id = imgObj->GetObjectID();
-		gres_tex.res_name = string("PRIMITIVE_MODEL_TEX_COLOR4");
-
-		int imgWidth = imgObj->GetObjParam("IMG_WIDTH", (int)0);
-		int imgHeight = imgObj->GetObjParam("IMG_HEIGHT", (int)0);
-		int imgStride = imgObj->GetObjParam("IMG_STRIDE", (int)0);
-
-		if (!g_pCGpuManager->UpdateGpuResource(gres_tex))
-		{
-			gres_tex.rtype = RTYPE_TEXTURE2D;
-			gres_tex.options["USAGE"] = D3D11_USAGE_DEFAULT;
-			gres_tex.options["CPU_ACCESS_FLAG"] = NULL;// D3D11_CPU_ACCESS_WRITE;
-			gres_tex.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
-			gres_tex.options["FORMAT"] = DXGI_FORMAT_R8G8B8A8_UNORM;
-			gres_tex.res_values.SetParam("WIDTH", (uint)imgWidth);
-			gres_tex.res_values.SetParam("HEIGHT", (uint)imgHeight);
-			gres_tex.res_values.SetParam("DEPTH", (uint)1);
-
-			g_pCGpuManager->GenerateGpuResource(gres_tex);
-		}
-		else
-		{
-			vmobjects::VmParamMap<std::string, std::any> res_new_values;
-			res_new_values.SetParam("WIDTH", (uint)imgWidth);
-			res_new_values.SetParam("HEIGHT", (uint)imgHeight);
-			res_new_values.SetParam("DEPTH", (uint)1);
-			bool regen_data = false;
-			CheckReusability(gres_tex, update_data, regen_data, res_new_values);
-			if (regen_data)
-				g_pCGpuManager->GenerateGpuResource(gres_tex);
-		}
-
-		if (update_data) {
-			//upload_teximg(gres_tex, vmint2(imgWidth, imgHeight), imgStride);
-			ID3D11Texture2D* pdx11tx2dres = (ID3D11Texture2D*)gres_tex.alloc_res_ptrs[DTYPE_RES];
-
-			D3D11_SUBRESOURCE_DATA subres;
-			int byte_stride_gpu = imgStride == 1 ? 1 : 4;
-			subres.pSysMem = new byte[imgWidth * imgHeight * byte_stride_gpu];
-			subres.SysMemPitch = imgWidth * byte_stride_gpu;
-			subres.SysMemSlicePitch = imgWidth * imgHeight * byte_stride_gpu; // only for 3D resource
-
-			byte* tx_subres = (byte*)subres.pSysMem;
-
-			byte* texture_res = (byte * )imgBuffer->tmap_buffers[0];
-			vmint2 tex_res_size = vmint2(imgWidth, imgHeight);
-
-			for (int h = 0; h < tex_res_size.y; h++)
-				for (int x = 0; x < tex_res_size.x; x++)
-				{
-					//for (int i = 0; i < byte_stride; i++)
-					//	tx_subres[byte_stride_gpu * x + h * subres.SysMemPitch + i + index * subres.SysMemSlicePitch] = texture_res[byte_stride * (x + h * tex_res_size.x) + i];
-					//for (int i = byte_stride; i < byte_stride_gpu; i++)
-					//	tx_subres[byte_stride_gpu * x + h * subres.SysMemPitch + i + index * subres.SysMemSlicePitch] = 255;
-
-					for (int i = 0; i < imgStride; i++)
-						tx_subres[byte_stride_gpu * (x + h * tex_res_size.x) + i] = texture_res[imgStride * (x + h * tex_res_size.x) + i];
-					for (int i = imgStride; i < byte_stride_gpu; i++)
-						tx_subres[byte_stride_gpu * (x + h * tex_res_size.x) + i] = 255;
-				}
-
-			// ??
-			g_pvmCommonParams->dx11DeviceImmContext->UpdateSubresource(pdx11tx2dres, 0, NULL, subres.pSysMem, subres.SysMemPitch, subres.SysMemSlicePitch);
-			VMSAFE_DELETEARRAY(subres.pSysMem);
-		}
-
-		map_gres_texs["MAP_COLOR4"] = gres_tex;
-	}
-
-	if (prim_data->texture_res_info.size() > 0)
-	{
-		has_texture_img = true;
-
-		vmint2 tex_res_size;
-		int byte_stride;
-		byte* texture_res;
-
-		auto upload_teximg = [&prim_data](GpuRes& gres_tex, const vmint2& tex_res_size, int byte_stride)
-		{
-			ID3D11Texture2D* pdx11tx2dres = (ID3D11Texture2D*)gres_tex.alloc_res_ptrs[DTYPE_RES];
-
-			D3D11_SUBRESOURCE_DATA subres;
-			int byte_stride_gpu = byte_stride == 1 ? 1 : 4;
-			subres.pSysMem = new byte[tex_res_size.x * tex_res_size.y * byte_stride_gpu * prim_data->texture_res_info.size()];
-			subres.SysMemPitch = tex_res_size.x * byte_stride_gpu;
-			subres.SysMemSlicePitch = tex_res_size.x * tex_res_size.y * byte_stride_gpu; // only for 3D resource
-
-			byte* tx_subres = (byte*)subres.pSysMem;
-			int index = 0;
-			for (auto it = prim_data->texture_res_info.begin(); it != prim_data->texture_res_info.end(); it++, index++)
-			{
-				byte* texture_res = get<3>(it->second);
-				vmint2 tex_res_size = vmint2(get<0>(it->second), get<1>(it->second));
-				assert(byte_stride == get<2>(it->second));
-				assert(byte_stride != 2);
-
-				for (int h = 0; h < tex_res_size.y; h++)
-					for (int x = 0; x < tex_res_size.x; x++)
-					{
-						//for (int i = 0; i < byte_stride; i++)
-						//	tx_subres[byte_stride_gpu * x + h * subres.SysMemPitch + i + index * subres.SysMemSlicePitch] = texture_res[byte_stride * (x + h * tex_res_size.x) + i];
-						//for (int i = byte_stride; i < byte_stride_gpu; i++)
-						//	tx_subres[byte_stride_gpu * x + h * subres.SysMemPitch + i + index * subres.SysMemSlicePitch] = 255;
-
-						for (int i = 0; i < byte_stride; i++)
-							tx_subres[byte_stride_gpu * (x + h * tex_res_size.x) + index * byte_stride_gpu * tex_res_size.x * tex_res_size.y + i] = texture_res[byte_stride * (x + h * tex_res_size.x) + i];
-						for (int i = byte_stride; i < byte_stride_gpu; i++)
-							tx_subres[byte_stride_gpu * (x + h * tex_res_size.x) + index * byte_stride_gpu * tex_res_size.x * tex_res_size.y + i] = 255;
-					}
-			}
-
-			// ??
-			g_pvmCommonParams->dx11DeviceImmContext->UpdateSubresource(pdx11tx2dres, 0, NULL, subres.pSysMem, subres.SysMemPitch, subres.SysMemSlicePitch);
-			VMSAFE_DELETEARRAY(subres.pSysMem);
-		};
-
-		if (prim_data->GetTexureInfo("MAP_COLOR4", tex_res_size.x, tex_res_size.y, byte_stride, &texture_res) || prim_data->GetTexureInfo("PLY_TEX_MAP_0", tex_res_size.x, tex_res_size.y, byte_stride, &texture_res))
-		{
-			// cmm case
 			GpuRes gres_tex;
-			gres_tex.vm_src_id = pobj->GetObjectID();
+			gres_tex.vm_src_id = imgObj->GetObjectID();
 			gres_tex.res_name = string("PRIMITIVE_MODEL_TEX_COLOR4");
 
-			if (!g_pCGpuManager->UpdateGpuResource(gres_tex))
+			int imgWidth = imgObj->GetObjParam("IMG_WIDTH", (int)0);
+			int imgHeight = imgObj->GetObjParam("IMG_HEIGHT", (int)0);
+			int imgStride = imgObj->GetObjParam("IMG_STRIDE", (int)0);
+
+			bool regen = !g_pCGpuManager->UpdateGpuResource(gres_tex);
+			if (!regen) {
+				uint prevW = gres_tex.res_values.GetParam("WIDTH", (uint)0);
+				uint prevH = gres_tex.res_values.GetParam("HEIGHT", (uint)0);
+				if (prevW != imgWidth || prevH != imgHeight) {
+					g_pCGpuManager->ReleaseGpuResource(gres_tex, false);
+					regen = true;
+				}
+			}
+
+			if (regen)
 			{
 				gres_tex.rtype = RTYPE_TEXTURE2D;
 				gres_tex.options["USAGE"] = D3D11_USAGE_DEFAULT;
 				gres_tex.options["CPU_ACCESS_FLAG"] = NULL;// D3D11_CPU_ACCESS_WRITE;
 				gres_tex.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
 				gres_tex.options["FORMAT"] = DXGI_FORMAT_R8G8B8A8_UNORM;
-				gres_tex.res_values.SetParam("WIDTH", (uint)tex_res_size.x);
-				gres_tex.res_values.SetParam("HEIGHT", (uint)tex_res_size.y);
-				gres_tex.res_values.SetParam("DEPTH", (uint)prim_data->texture_res_info.size());
-				
-				//auto upload_teximg = [&prim_data](GpuRes& gres_tex, D3D11_MAP maptype)
-				//{
-				//	ID3D11Texture2D* pdx11tx2dres = (ID3D11Texture2D*)gres_tex.alloc_res_ptrs[DTYPE_RES];
-				//	D3D11_MAPPED_SUBRESOURCE mappedRes;
-				//	g_VmCommonParams.dx11DeviceImmContext->Map(pdx11tx2dres, 0, maptype, 0, &mappedRes);
-				//	vmbyte4* tx_res = (vmbyte4*)mappedRes.pData;
-				//	int index = 0;
-				//	for (auto it = prim_data->texture_res_info.begin(); it != prim_data->texture_res_info.end(); it++, index++)
-				//	{
-				//		byte* texture_res = get<3>(it->second);
-				//		vmint2 tex_res_size = vmint2(get<0>(it->second), get<1>(it->second));
-				//		int byte_stride = get<2>(it->second);
-				//
-				//		if (byte_stride == 4)
-				//		{
-				//			vmbyte4* tx_res_cpu = (vmbyte4*)texture_res;
-				//			for (int h = 0; h < tex_res_size.y; h++)
-				//				memcpy(&tx_res[h * (mappedRes.RowPitch / 4) + index * (mappedRes.DepthPitch / 4)], &tx_res_cpu[h * tex_res_size.x], tex_res_size.x * sizeof(vmbyte4));
-				//		}
-				//		else
-				//		{
-				//			assert(byte_stride == 3);
-				//			for (int h = 0; h < tex_res_size.y; h++)
-				//				for (int x = 0; x < tex_res_size.x; x++)
-				//				{
-				//					vmbyte4 rgba;
-				//					rgba.r = texture_res[(x + h * tex_res_size.x) * byte_stride + 0];
-				//					rgba.g = texture_res[(x + h * tex_res_size.x) * byte_stride + 1];
-				//					rgba.b = texture_res[(x + h * tex_res_size.x) * byte_stride + 2];
-				//					rgba.a = 255;
-				//					tx_res[x + h * (mappedRes.RowPitch / 4) + index * (mappedRes.DepthPitch / 4)] = rgba;
-				//				}
-				//		}
-				//	}
-				//	g_VmCommonParams.dx11DeviceImmContext->Unmap(pdx11tx2dres, NULL);
-				//};
-				
-				g_pCGpuManager->GenerateGpuResource(gres_tex);
+				gres_tex.res_values.SetParam("WIDTH", (uint)imgWidth);
+				gres_tex.res_values.SetParam("HEIGHT", (uint)imgHeight);
+				gres_tex.res_values.SetParam("DEPTH", (uint)1);
 
-				//if (prim_data->texture_res_info.size() == 1)
-				//{
-				//	g_pCGpuManager->GenerateGpuResource(gres_tex);
-				//	upload_teximg(gres_tex, D3D11_MAP_WRITE_DISCARD);
-				//}
-				//else
-				//{
-				//	gres_tex.options["USAGE"] = D3D11_USAGE_DEFAULT;
-				//	gres_tex.options["CPU_ACCESS_FLAG"] = NULL;
-				//	g_pCGpuManager->GenerateGpuResource(gres_tex);
-				//
-				//	// if the texture is array, direct mapping is impossible, so use this tricky copyresource way.
-				//	GpuRes tmp_gres;
-				//	tmp_gres.vm_src_id = pobj->GetObjectID();
-				//	tmp_gres.res_name = string("PRIMITIVE_MODEL_TEX_TEMP");
-				//	tmp_gres.rtype = RTYPE_TEXTURE2D;
-				//	tmp_gres.options["USAGE"] = D3D11_USAGE_STAGING;
-				//	tmp_gres.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
-				//	tmp_gres.options["BIND_FLAG"] = NULL;
-				//	tmp_gres.options["FORMAT"] = DXGI_FORMAT_R8G8B8A8_UNORM;
-				//	tmp_gres.res_dvalues["WIDTH"] = tex_res_size.x;
-				//	tmp_gres.res_dvalues["HEIGHT"] = tex_res_size.y;
-				//	tmp_gres.res_dvalues["DEPTH"] = (double)prim_data->texture_res_info.size();
-				//	g_pCGpuManager->GenerateGpuResource(tmp_gres);
-				//	upload_teximg(tmp_gres, D3D11_MAP_WRITE);
-				//	g_VmCommonParams.dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_tex.alloc_res_ptrs[DTYPE_RES], (ID3D11Texture2D*)tmp_gres.alloc_res_ptrs[DTYPE_RES]);
-				//	g_pCGpuManager->ReleaseGpuResource(tmp_gres, false);
-				//}
+				update_data = true;
+				g_pCGpuManager->GenerateGpuResource(gres_tex);
 			}
 			else
 			{
 				vmobjects::VmParamMap<std::string, std::any> res_new_values;
-				res_new_values.SetParam("WIDTH", (uint)tex_res_size.x);
-				res_new_values.SetParam("HEIGHT", (uint)tex_res_size.y);
-				res_new_values.SetParam("DEPTH", (uint)prim_data->texture_res_info.size());
+				res_new_values.SetParam("WIDTH", (uint)imgWidth);
+				res_new_values.SetParam("HEIGHT", (uint)imgHeight);
+				res_new_values.SetParam("DEPTH", (uint)1);
 				bool regen_data = false;
-				CheckReusability(gres_tex, update_data, regen_data, res_new_values);
-				if(regen_data)
+				CheckReusability(gres_tex, imgObj, update_data, regen_data, res_new_values);
+				if (regen_data)
 					g_pCGpuManager->GenerateGpuResource(gres_tex);
 			}
 
-			if (update_data)
-				upload_teximg(gres_tex, tex_res_size, byte_stride);
+			if (update_data) {
+				//upload_teximg(gres_tex, vmint2(imgWidth, imgHeight), imgStride);
+				ID3D11Texture2D* pdx11tx2dres = (ID3D11Texture2D*)gres_tex.alloc_res_ptrs[DTYPE_RES];
+
+				D3D11_SUBRESOURCE_DATA subres;
+				int byte_stride_gpu = imgStride == 1 ? 1 : 4;
+				subres.pSysMem = new byte[imgWidth * imgHeight * byte_stride_gpu];
+				subres.SysMemPitch = (imgWidth * byte_stride_gpu); 
+				subres.SysMemSlicePitch = imgWidth * imgHeight * byte_stride_gpu; // only for 3D resource
+
+				byte* tx_subres = (byte*)subres.pSysMem;
+
+				byte* texture_res = (byte*)imgBuffer->tmap_buffers[0];
+				vmint2 tex_res_size = vmint2(imgWidth, imgHeight);
+
+				for (int h = 0; h < tex_res_size.y; h++)
+					for (int x = 0; x < tex_res_size.x; x++)
+					{
+						for (int i = 0; i < imgStride; i++)
+							tx_subres[byte_stride_gpu * (x + h * tex_res_size.x) + i] = texture_res[imgStride * (x + h * tex_res_size.x) + i];
+						for (int i = imgStride; i < byte_stride_gpu; i++)
+							tx_subres[byte_stride_gpu * (x + h * tex_res_size.x) + i] = 255;
+					}
+				g_pvmCommonParams->dx11DeviceImmContext->UpdateSubresource(pdx11tx2dres, 0, NULL, subres.pSysMem, subres.SysMemPitch, subres.SysMemSlicePitch);
+				VMSAFE_DELETEARRAY(subres.pSysMem);
+			}
 
 			map_gres_texs["MAP_COLOR4"] = gres_tex;
 		}
-		else
+		else if (prim_data->texture_res_info.size() > 0)
 		{
-			double Ns = pobj->GetObjParam("_float_Ns", (double)0);
+			imgObj = NULL;
+			has_texture_img = true;
 
-			auto update_tex_res = [&Ns, &CheckReusability, &update_data](GpuRes& gres_tex, const string& mat_name, const vmint2& tex_res_size, const int byte_stride, const byte* texture_res)
+			vmint2 tex_res_size;
+			int byte_stride;
+			byte* texture_res;
+
+			auto upload_teximg = [&prim_data](GpuRes& gres_tex, const vmint2& tex_res_size, int byte_stride)
 			{
-				auto upload_single_teximg = [&tex_res_size, &byte_stride, &texture_res](GpuRes& gres_tex)
+				ID3D11Texture2D* pdx11tx2dres = (ID3D11Texture2D*)gres_tex.alloc_res_ptrs[DTYPE_RES];
+
+				D3D11_SUBRESOURCE_DATA subres;
+				int byte_stride_gpu = byte_stride == 1 ? 1 : 4;
+				subres.pSysMem = new byte[tex_res_size.x * tex_res_size.y * byte_stride_gpu * prim_data->texture_res_info.size()];
+				subres.SysMemPitch = tex_res_size.x * byte_stride_gpu;
+				subres.SysMemSlicePitch = tex_res_size.x * tex_res_size.y * byte_stride_gpu; // only for 3D resource
+
+				byte* tx_subres = (byte*)subres.pSysMem;
+				int index = 0;
+				for (auto it = prim_data->texture_res_info.begin(); it != prim_data->texture_res_info.end(); it++, index++)
 				{
-					ID3D11Texture2D* pdx11tx2dres = (ID3D11Texture2D*)gres_tex.alloc_res_ptrs[DTYPE_RES];
+					byte* texture_res = get<3>(it->second);
+					vmint2 tex_res_size = vmint2(get<0>(it->second), get<1>(it->second));
+					assert(byte_stride == get<2>(it->second));
+					assert(byte_stride != 2);
 
-					D3D11_SUBRESOURCE_DATA subres;
-					int byte_stride_gpu = byte_stride == 1 ? 1 : 4;
-					subres.pSysMem = new byte[tex_res_size.x * tex_res_size.y * byte_stride_gpu];
-					subres.SysMemPitch = tex_res_size.x * byte_stride_gpu;
-					subres.SysMemSlicePitch = 0; // only for 3D resource
-
-					byte* tx_res_gpu = (byte*)subres.pSysMem;
 					for (int h = 0; h < tex_res_size.y; h++)
 						for (int x = 0; x < tex_res_size.x; x++)
 						{
-							for (int i = 0; i < byte_stride; i++)
-								tx_res_gpu[byte_stride_gpu * x + h * subres.SysMemPitch + i] = texture_res[byte_stride * (x + h * tex_res_size.x) + i];
-							for (int i = byte_stride; i < byte_stride_gpu; i++)
-								tx_res_gpu[byte_stride_gpu * x + h * subres.SysMemPitch + i] = 255;
-						}
-					g_pvmCommonParams->dx11DeviceImmContext->UpdateSubresource(pdx11tx2dres, 0, NULL, subres.pSysMem, subres.SysMemPitch, subres.SysMemSlicePitch);
-					VMSAFE_DELETEARRAY(subres.pSysMem);
-					//D3D11_MAPPED_SUBRESOURCE mappedRes;
-					//g_VmCommonParams.dx11DeviceImmContext->Map(pdx11tx2dres, 0, maptype, 0, &mappedRes);
-					//byte* tx_res_gpu = (byte*)mappedRes.pData;
-					//int byte_stride_gpu = byte_stride == 1 ? 1 : 4;
-					//for (int h = 0; h < tex_res_size.y; h++)
-					//	for (int x = 0; x < tex_res_size.x; x++)
-					//	{
-					//		for (int i = 0; i < byte_stride; i++)
-					//			tx_res_gpu[byte_stride_gpu * x + h * mappedRes.RowPitch + i] = texture_res[byte_stride * (x + h * tex_res_size.x) + i];
-					//		for (int i = byte_stride; i < byte_stride_gpu; i++)
-					//			tx_res_gpu[byte_stride_gpu * x + h * mappedRes.RowPitch + i] = 255;
-					//	}
-					//g_VmCommonParams.dx11DeviceImmContext->Unmap(pdx11tx2dres, NULL);
-				};
+							//for (int i = 0; i < byte_stride; i++)
+							//	tx_subres[byte_stride_gpu * x + h * subres.SysMemPitch + i + index * subres.SysMemSlicePitch] = texture_res[byte_stride * (x + h * tex_res_size.x) + i];
+							//for (int i = byte_stride; i < byte_stride_gpu; i++)
+							//	tx_subres[byte_stride_gpu * x + h * subres.SysMemPitch + i + index * subres.SysMemSlicePitch] = 255;
 
-				gres_tex.res_name = string("PRIMITIVE_MODEL_") + mat_name;
+							for (int i = 0; i < byte_stride; i++)
+								tx_subres[byte_stride_gpu * (x + h * tex_res_size.x) + index * byte_stride_gpu * tex_res_size.x * tex_res_size.y + i] = texture_res[byte_stride * (x + h * tex_res_size.x) + i];
+							for (int i = byte_stride; i < byte_stride_gpu; i++)
+								tx_subres[byte_stride_gpu * (x + h * tex_res_size.x) + index * byte_stride_gpu * tex_res_size.x * tex_res_size.y + i] = 255;
+						}
+				}
+
+				// ??
+				g_pvmCommonParams->dx11DeviceImmContext->UpdateSubresource(pdx11tx2dres, 0, NULL, subres.pSysMem, subres.SysMemPitch, subres.SysMemSlicePitch);
+				VMSAFE_DELETEARRAY(subres.pSysMem);
+			};
+
+			if (prim_data->GetTexureInfo("MAP_COLOR4", tex_res_size.x, tex_res_size.y, byte_stride, &texture_res) || prim_data->GetTexureInfo("PLY_TEX_MAP_0", tex_res_size.x, tex_res_size.y, byte_stride, &texture_res))
+			{
+				// cmm case
+				GpuRes gres_tex;
+				gres_tex.vm_src_id = pobj->GetObjectID();
+				gres_tex.res_name = string("PRIMITIVE_MODEL_TEX_COLOR4");
+
 				if (!g_pCGpuManager->UpdateGpuResource(gres_tex))
 				{
 					gres_tex.rtype = RTYPE_TEXTURE2D;
 					gres_tex.options["USAGE"] = D3D11_USAGE_DEFAULT;
-					gres_tex.options["CPU_ACCESS_FLAG"] = NULL;
+					gres_tex.options["CPU_ACCESS_FLAG"] = NULL;// D3D11_CPU_ACCESS_WRITE;
 					gres_tex.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
-					assert(byte_stride != 2);
-					gres_tex.options["FORMAT"] = byte_stride == 1 ? DXGI_FORMAT_R8_UNORM : DXGI_FORMAT_R8G8B8A8_UNORM;
+					gres_tex.options["FORMAT"] = DXGI_FORMAT_R8G8B8A8_UNORM;
 					gres_tex.res_values.SetParam("WIDTH", (uint)tex_res_size.x);
 					gres_tex.res_values.SetParam("HEIGHT", (uint)tex_res_size.y);
+					gres_tex.res_values.SetParam("DEPTH", (uint)prim_data->texture_res_info.size());
+
+					//auto upload_teximg = [&prim_data](GpuRes& gres_tex, D3D11_MAP maptype)
+					//{
+					//	ID3D11Texture2D* pdx11tx2dres = (ID3D11Texture2D*)gres_tex.alloc_res_ptrs[DTYPE_RES];
+					//	D3D11_MAPPED_SUBRESOURCE mappedRes;
+					//	g_VmCommonParams.dx11DeviceImmContext->Map(pdx11tx2dres, 0, maptype, 0, &mappedRes);
+					//	vmbyte4* tx_res = (vmbyte4*)mappedRes.pData;
+					//	int index = 0;
+					//	for (auto it = prim_data->texture_res_info.begin(); it != prim_data->texture_res_info.end(); it++, index++)
+					//	{
+					//		byte* texture_res = get<3>(it->second);
+					//		vmint2 tex_res_size = vmint2(get<0>(it->second), get<1>(it->second));
+					//		int byte_stride = get<2>(it->second);
+					//
+					//		if (byte_stride == 4)
+					//		{
+					//			vmbyte4* tx_res_cpu = (vmbyte4*)texture_res;
+					//			for (int h = 0; h < tex_res_size.y; h++)
+					//				memcpy(&tx_res[h * (mappedRes.RowPitch / 4) + index * (mappedRes.DepthPitch / 4)], &tx_res_cpu[h * tex_res_size.x], tex_res_size.x * sizeof(vmbyte4));
+					//		}
+					//		else
+					//		{
+					//			assert(byte_stride == 3);
+					//			for (int h = 0; h < tex_res_size.y; h++)
+					//				for (int x = 0; x < tex_res_size.x; x++)
+					//				{
+					//					vmbyte4 rgba;
+					//					rgba.r = texture_res[(x + h * tex_res_size.x) * byte_stride + 0];
+					//					rgba.g = texture_res[(x + h * tex_res_size.x) * byte_stride + 1];
+					//					rgba.b = texture_res[(x + h * tex_res_size.x) * byte_stride + 2];
+					//					rgba.a = 255;
+					//					tx_res[x + h * (mappedRes.RowPitch / 4) + index * (mappedRes.DepthPitch / 4)] = rgba;
+					//				}
+					//		}
+					//	}
+					//	g_VmCommonParams.dx11DeviceImmContext->Unmap(pdx11tx2dres, NULL);
+					//};
 
 					g_pCGpuManager->GenerateGpuResource(gres_tex);
+
+					//if (prim_data->texture_res_info.size() == 1)
+					//{
+					//	g_pCGpuManager->GenerateGpuResource(gres_tex);
+					//	upload_teximg(gres_tex, D3D11_MAP_WRITE_DISCARD);
+					//}
+					//else
+					//{
+					//	gres_tex.options["USAGE"] = D3D11_USAGE_DEFAULT;
+					//	gres_tex.options["CPU_ACCESS_FLAG"] = NULL;
+					//	g_pCGpuManager->GenerateGpuResource(gres_tex);
+					//
+					//	// if the texture is array, direct mapping is impossible, so use this tricky copyresource way.
+					//	GpuRes tmp_gres;
+					//	tmp_gres.vm_src_id = pobj->GetObjectID();
+					//	tmp_gres.res_name = string("PRIMITIVE_MODEL_TEX_TEMP");
+					//	tmp_gres.rtype = RTYPE_TEXTURE2D;
+					//	tmp_gres.options["USAGE"] = D3D11_USAGE_STAGING;
+					//	tmp_gres.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
+					//	tmp_gres.options["BIND_FLAG"] = NULL;
+					//	tmp_gres.options["FORMAT"] = DXGI_FORMAT_R8G8B8A8_UNORM;
+					//	tmp_gres.res_dvalues["WIDTH"] = tex_res_size.x;
+					//	tmp_gres.res_dvalues["HEIGHT"] = tex_res_size.y;
+					//	tmp_gres.res_dvalues["DEPTH"] = (double)prim_data->texture_res_info.size();
+					//	g_pCGpuManager->GenerateGpuResource(tmp_gres);
+					//	upload_teximg(tmp_gres, D3D11_MAP_WRITE);
+					//	g_VmCommonParams.dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_tex.alloc_res_ptrs[DTYPE_RES], (ID3D11Texture2D*)tmp_gres.alloc_res_ptrs[DTYPE_RES]);
+					//	g_pCGpuManager->ReleaseGpuResource(tmp_gres, false);
+					//}
 				}
 				else
 				{
 					vmobjects::VmParamMap<std::string, std::any> res_new_values;
 					res_new_values.SetParam("WIDTH", (uint)tex_res_size.x);
 					res_new_values.SetParam("HEIGHT", (uint)tex_res_size.y);
+					res_new_values.SetParam("DEPTH", (uint)prim_data->texture_res_info.size());
 					bool regen_data = false;
-					CheckReusability(gres_tex, update_data, regen_data, res_new_values);
-					if(regen_data)
+					CheckReusability(gres_tex, pobj, update_data, regen_data, res_new_values);
+					if (regen_data)
 						g_pCGpuManager->GenerateGpuResource(gres_tex);
 				}
 
 				if (update_data)
-					upload_single_teximg(gres_tex);
-			};
+					upload_teximg(gres_tex, tex_res_size, byte_stride);
 
-
-			for (int i = 0; i < NUM_MATERIALS; i++)
+				map_gres_texs["MAP_COLOR4"] = gres_tex;
+			}
+			else
 			{
-				if (prim_data->GetTexureInfo(g_materials[i], tex_res_size.x, tex_res_size.y, byte_stride, &texture_res))
+				double Ns = pobj->GetObjParam("_float_Ns", (double)0);
+
+				auto update_tex_res = [&Ns, &CheckReusability, &update_data, &pobj](GpuRes& gres_tex, const string& mat_name, const vmint2& tex_res_size, const int byte_stride, const byte* texture_res)
 				{
-					GpuRes gres_tex;
-					gres_tex.vm_src_id = pobj->GetObjectID();
-					update_tex_res(gres_tex, g_materials[i], tex_res_size, byte_stride, texture_res);
-					map_gres_texs[g_materials[i]] = gres_tex;
+					auto upload_single_teximg = [&tex_res_size, &byte_stride, &texture_res](GpuRes& gres_tex)
+					{
+						ID3D11Texture2D* pdx11tx2dres = (ID3D11Texture2D*)gres_tex.alloc_res_ptrs[DTYPE_RES];
+
+						D3D11_SUBRESOURCE_DATA subres;
+						int byte_stride_gpu = byte_stride == 1 ? 1 : 4;
+						subres.pSysMem = new byte[tex_res_size.x * tex_res_size.y * byte_stride_gpu];
+						subres.SysMemPitch = tex_res_size.x * byte_stride_gpu;
+						subres.SysMemSlicePitch = 0; // only for 3D resource
+
+						byte* tx_res_gpu = (byte*)subres.pSysMem;
+						for (int h = 0; h < tex_res_size.y; h++)
+							for (int x = 0; x < tex_res_size.x; x++)
+							{
+								for (int i = 0; i < byte_stride; i++)
+									tx_res_gpu[byte_stride_gpu * x + h * subres.SysMemPitch + i] = texture_res[byte_stride * (x + h * tex_res_size.x) + i];
+								for (int i = byte_stride; i < byte_stride_gpu; i++)
+									tx_res_gpu[byte_stride_gpu * x + h * subres.SysMemPitch + i] = 255;
+							}
+						g_pvmCommonParams->dx11DeviceImmContext->UpdateSubresource(pdx11tx2dres, 0, NULL, subres.pSysMem, subres.SysMemPitch, subres.SysMemSlicePitch);
+						VMSAFE_DELETEARRAY(subres.pSysMem);
+						//D3D11_MAPPED_SUBRESOURCE mappedRes;
+						//g_VmCommonParams.dx11DeviceImmContext->Map(pdx11tx2dres, 0, maptype, 0, &mappedRes);
+						//byte* tx_res_gpu = (byte*)mappedRes.pData;
+						//int byte_stride_gpu = byte_stride == 1 ? 1 : 4;
+						//for (int h = 0; h < tex_res_size.y; h++)
+						//	for (int x = 0; x < tex_res_size.x; x++)
+						//	{
+						//		for (int i = 0; i < byte_stride; i++)
+						//			tx_res_gpu[byte_stride_gpu * x + h * mappedRes.RowPitch + i] = texture_res[byte_stride * (x + h * tex_res_size.x) + i];
+						//		for (int i = byte_stride; i < byte_stride_gpu; i++)
+						//			tx_res_gpu[byte_stride_gpu * x + h * mappedRes.RowPitch + i] = 255;
+						//	}
+						//g_VmCommonParams.dx11DeviceImmContext->Unmap(pdx11tx2dres, NULL);
+					};
+
+					gres_tex.res_name = string("PRIMITIVE_MODEL_") + mat_name;
+					if (!g_pCGpuManager->UpdateGpuResource(gres_tex))
+					{
+						gres_tex.rtype = RTYPE_TEXTURE2D;
+						gres_tex.options["USAGE"] = D3D11_USAGE_DEFAULT;
+						gres_tex.options["CPU_ACCESS_FLAG"] = NULL;
+						gres_tex.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
+						assert(byte_stride != 2);
+						gres_tex.options["FORMAT"] = byte_stride == 1 ? DXGI_FORMAT_R8_UNORM : DXGI_FORMAT_R8G8B8A8_UNORM;
+						gres_tex.res_values.SetParam("WIDTH", (uint)tex_res_size.x);
+						gres_tex.res_values.SetParam("HEIGHT", (uint)tex_res_size.y);
+
+						g_pCGpuManager->GenerateGpuResource(gres_tex);
+					}
+					else
+					{
+						vmobjects::VmParamMap<std::string, std::any> res_new_values;
+						res_new_values.SetParam("WIDTH", (uint)tex_res_size.x);
+						res_new_values.SetParam("HEIGHT", (uint)tex_res_size.y);
+						bool regen_data = false;
+						CheckReusability(gres_tex, pobj, update_data, regen_data, res_new_values);
+						if (regen_data)
+							g_pCGpuManager->GenerateGpuResource(gres_tex);
+					}
+
+					if (update_data)
+						upload_single_teximg(gres_tex);
+				};
+
+
+				for (int i = 0; i < NUM_MATERIALS; i++)
+				{
+					if (prim_data->GetTexureInfo(g_materials[i], tex_res_size.x, tex_res_size.y, byte_stride, &texture_res))
+					{
+						GpuRes gres_tex;
+						gres_tex.vm_src_id = pobj->GetObjectID();
+						update_tex_res(gres_tex, g_materials[i], tex_res_size, byte_stride, texture_res);
+						map_gres_texs[g_materials[i]] = gres_tex;
+					}
 				}
 			}
-		}
 
-		//if (!g_pCGpuManager->UpdateGpuResource(gres_tex))
-		//{
-		//	gres_tex.rtype = RTYPE_TEXTURE2D;
-		//	gres_tex.options["USAGE"] = D3D11_USAGE_DYNAMIC;
-		//	gres_tex.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
-		//	gres_tex.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
-		//	gres_tex.options["FORMAT"] = DXGI_FORMAT_R8G8B8A8_UNORM;
-		//	gres_tex.res_dvalues["WIDTH"] = tex_res_size.x;
-		//	gres_tex.res_dvalues["HEIGHT"] = tex_res_size.y;
-		//	gres_tex.res_dvalues["DEPTH"] = (double)prim_data->texture_res_info.size();
-		//
-		//	auto upload_teximg = [&prim_data](GpuRes& gres_tex, D3D11_MAP maptype)
-		//	{
-		//		ID3D11Texture2D* pdx11tx2dres = (ID3D11Texture2D*)gres_tex.alloc_res_ptrs[DTYPE_RES];
-		//		D3D11_MAPPED_SUBRESOURCE mappedRes;
-		//		g_VmCommonParams.dx11DeviceImmContext->Map(pdx11tx2dres, 0, maptype, 0, &mappedRes);
-		//		vmbyte4* tx_res = (vmbyte4*)mappedRes.pData;
-		//		for (int i = 0; i < prim_data->texture_res_info.size(); i++)
-		//		{
-		//			void* texture_res;
-		//			vmint3 tex_res_size;
-		//			prim_data->GetTexureInfo(i, tex_res_size.x, tex_res_size.y, tex_res_size.z, &texture_res);
-		//			vmbyte4* tx_res_cpu = (vmbyte4*)texture_res;
-		//
-		//			for (int h = 0; h < tex_res_size.y; h++)
-		//				memcpy(&tx_res[h * (mappedRes.RowPitch / 4) + i * (mappedRes.DepthPitch / 4)], &tx_res_cpu[h * tex_res_size.x], tex_res_size.x * sizeof(vmbyte4));
-		//		}
-		//		g_VmCommonParams.dx11DeviceImmContext->Unmap(pdx11tx2dres, NULL);
-		//	};
-		//
-		//	if (prim_data->texture_res_info.size() == 1)
-		//	{
-		//		g_pCGpuManager->GenerateGpuResource(gres_tex);
-		//		upload_teximg(gres_tex, D3D11_MAP_WRITE_DISCARD);
-		//	}
-		//	else
-		//	{
-		//		gres_tex.options["USAGE"] = D3D11_USAGE_DEFAULT;
-		//		gres_tex.options["CPU_ACCESS_FLAG"] = NULL;
-		//		g_pCGpuManager->GenerateGpuResource(gres_tex);
-		//
-		//		GpuRes tmp_gres;
-		//		tmp_gres.vm_src_id = pobj->GetObjectID();
-		//		tmp_gres.res_name = string("PRIMITIVE_MODEL_TEX_TEMP");
-		//		tmp_gres.rtype = RTYPE_TEXTURE2D;
-		//		tmp_gres.options["USAGE"] = D3D11_USAGE_STAGING;
-		//		tmp_gres.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
-		//		tmp_gres.options["BIND_FLAG"] = NULL;
-		//		tmp_gres.options["FORMAT"] = DXGI_FORMAT_R8G8B8A8_UNORM;
-		//		tmp_gres.res_dvalues["WIDTH"] = tex_res_size.x;
-		//		tmp_gres.res_dvalues["HEIGHT"] = tex_res_size.y;
-		//		tmp_gres.res_dvalues["DEPTH"] = (double)prim_data->texture_res_info.size();
-		//		g_pCGpuManager->GenerateGpuResource(tmp_gres);
-		//		upload_teximg(tmp_gres, D3D11_MAP_WRITE);
-		//		g_VmCommonParams.dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_tex.alloc_res_ptrs[DTYPE_RES], (ID3D11Texture2D*)tmp_gres.alloc_res_ptrs[DTYPE_RES]);
-		//		g_pCGpuManager->ReleaseGpuResource(tmp_gres, false);
-		//	}
-		//	//g_VmCommonParams.dx11DeviceImmContext->Cop
-		//}
+			//if (!g_pCGpuManager->UpdateGpuResource(gres_tex))
+			//{
+			//	gres_tex.rtype = RTYPE_TEXTURE2D;
+			//	gres_tex.options["USAGE"] = D3D11_USAGE_DYNAMIC;
+			//	gres_tex.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
+			//	gres_tex.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
+			//	gres_tex.options["FORMAT"] = DXGI_FORMAT_R8G8B8A8_UNORM;
+			//	gres_tex.res_dvalues["WIDTH"] = tex_res_size.x;
+			//	gres_tex.res_dvalues["HEIGHT"] = tex_res_size.y;
+			//	gres_tex.res_dvalues["DEPTH"] = (double)prim_data->texture_res_info.size();
+			//
+			//	auto upload_teximg = [&prim_data](GpuRes& gres_tex, D3D11_MAP maptype)
+			//	{
+			//		ID3D11Texture2D* pdx11tx2dres = (ID3D11Texture2D*)gres_tex.alloc_res_ptrs[DTYPE_RES];
+			//		D3D11_MAPPED_SUBRESOURCE mappedRes;
+			//		g_VmCommonParams.dx11DeviceImmContext->Map(pdx11tx2dres, 0, maptype, 0, &mappedRes);
+			//		vmbyte4* tx_res = (vmbyte4*)mappedRes.pData;
+			//		for (int i = 0; i < prim_data->texture_res_info.size(); i++)
+			//		{
+			//			void* texture_res;
+			//			vmint3 tex_res_size;
+			//			prim_data->GetTexureInfo(i, tex_res_size.x, tex_res_size.y, tex_res_size.z, &texture_res);
+			//			vmbyte4* tx_res_cpu = (vmbyte4*)texture_res;
+			//
+			//			for (int h = 0; h < tex_res_size.y; h++)
+			//				memcpy(&tx_res[h * (mappedRes.RowPitch / 4) + i * (mappedRes.DepthPitch / 4)], &tx_res_cpu[h * tex_res_size.x], tex_res_size.x * sizeof(vmbyte4));
+			//		}
+			//		g_VmCommonParams.dx11DeviceImmContext->Unmap(pdx11tx2dres, NULL);
+			//	};
+			//
+			//	if (prim_data->texture_res_info.size() == 1)
+			//	{
+			//		g_pCGpuManager->GenerateGpuResource(gres_tex);
+			//		upload_teximg(gres_tex, D3D11_MAP_WRITE_DISCARD);
+			//	}
+			//	else
+			//	{
+			//		gres_tex.options["USAGE"] = D3D11_USAGE_DEFAULT;
+			//		gres_tex.options["CPU_ACCESS_FLAG"] = NULL;
+			//		g_pCGpuManager->GenerateGpuResource(gres_tex);
+			//
+			//		GpuRes tmp_gres;
+			//		tmp_gres.vm_src_id = pobj->GetObjectID();
+			//		tmp_gres.res_name = string("PRIMITIVE_MODEL_TEX_TEMP");
+			//		tmp_gres.rtype = RTYPE_TEXTURE2D;
+			//		tmp_gres.options["USAGE"] = D3D11_USAGE_STAGING;
+			//		tmp_gres.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
+			//		tmp_gres.options["BIND_FLAG"] = NULL;
+			//		tmp_gres.options["FORMAT"] = DXGI_FORMAT_R8G8B8A8_UNORM;
+			//		tmp_gres.res_dvalues["WIDTH"] = tex_res_size.x;
+			//		tmp_gres.res_dvalues["HEIGHT"] = tex_res_size.y;
+			//		tmp_gres.res_dvalues["DEPTH"] = (double)prim_data->texture_res_info.size();
+			//		g_pCGpuManager->GenerateGpuResource(tmp_gres);
+			//		upload_teximg(tmp_gres, D3D11_MAP_WRITE);
+			//		g_VmCommonParams.dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_tex.alloc_res_ptrs[DTYPE_RES], (ID3D11Texture2D*)tmp_gres.alloc_res_ptrs[DTYPE_RES]);
+			//		g_pCGpuManager->ReleaseGpuResource(tmp_gres, false);
+			//	}
+			//	//g_VmCommonParams.dx11DeviceImmContext->Cop
+			//}
+		}
 	}
 
 	if (hasTextureMap) *hasTextureMap = has_texture_img;

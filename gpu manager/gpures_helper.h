@@ -575,12 +575,15 @@ namespace grd_helper
 		vmfloat3 volblk_size_ts;
 		float volblk_value_range;
 
-		// 1st bit : 0 (use the input normal) 1 (invert the input normal) ==> will be deprecated! (always faces to camera)
+		// 0 bit : 0 (use the input normal) 1 (invert the input normal) ==> will be deprecated! (always faces to camera)
+		// 1 bit : outline vr (1) or not (0)
+		// 19 bit : ghost surface (1) or not (0)
+		// 20 bit : hotspot visible (1) or not (0)
 		// 24~31bit : Sculpt Mask Value (1 byte)
 		uint vobj_flag;
 		uint iso_value;
-		uint outline_color; // 
-		uint v_dummy0;
+		uint v_dummy0; 
+		uint v_dummy1;
 
 		// light properties
 		vmfloat4 pb_shading_factor;	// x : Ambient, y : Diffuse, z : Specular, w : Specular power

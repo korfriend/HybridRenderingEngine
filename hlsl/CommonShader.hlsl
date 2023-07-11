@@ -172,12 +172,14 @@ struct HxCB_VolumeObject
     float3 volblk_size_ts;
     float volblk_value_range;
 
-	// 1st bit : 0 (use the input normal) 1 (invert the input normal) ==> will be deprecated! (always faces to camera)
+	// 0 bit : 0 (use the input normal) 1 (invert the input normal) ==> will be deprecated! (always faces to camera)
+	// 19 bit : 0 : 1 (ghost surface)
+	// 20 bit : 0 : 1 (hotspot visible)
 	// 24~31bit : Sculpt Mask Value (1 byte)
 	uint vobj_flag;
 	uint iso_value;
-	uint outline_color; // 
-	uint v_dummy0;
+	uint v_dummy0;	
+	uint v_dummy1;
 
 	float4 pb_shading_factor; // x : Ambient, y : Diffuse, z : Specular, w : specular
 

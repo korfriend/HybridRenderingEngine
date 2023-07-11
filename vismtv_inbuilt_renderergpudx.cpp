@@ -1,5 +1,7 @@
 #include "vismtv_inbuilt_renderergpudx.h"
 //#include "VXDX11Helper.h"
+
+#include <d2d1_1.h>
 #include "RendererHeader.h"
 
 #include <iostream>
@@ -15,10 +17,11 @@ LocalProgress g_LocalProgress;
 
 VmGpuManager* g_pCGpuManager = NULL;
 
-ID2D1Factory* g_pDirect2dFactory = NULL;
+ID2D1Factory1* g_pDirect2dFactory = NULL;
+
 struct D2DRes {
 	IDXGISurface* pDxgiSurface = NULL;
-	ID2D1RenderTarget* pRenderTarget = NULL; 
+	ID2D1RenderTarget* pRenderTarget = NULL;
 	ID2D1SolidColorBrush* pSolidBrush = NULL;
 
 	ID3D11Texture2D* pTex2DRT = NULL; // do not release this!
@@ -87,8 +90,10 @@ bool InitModule(fncontainer::VmFnContainer& _fncontainer)
 			0,
 			&pStrokeStyle
 		);
-
 		g_d2dStrokeStyleMap["DEFAULT"] = pStrokeStyle;
+
+		if (hr != S_OK)
+			vmlog::LogErr("D2D Device Setting Error!");
 	}
 	return true;
 }
@@ -337,7 +342,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		g_vmCommonParams.GpuProfile("Copyback", true);
 	};
 
-	if(0)
+	if(0)//is_system_out)
 	{
 		GpuRes gres_fb_rgba;
 		grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D,
@@ -368,12 +373,22 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 			HRESULT hr = rtTex2D->QueryInterface(&pDxgiSurface);
 
 			D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT,
-					D2D1::PixelFormat(DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_PREMULTIPLIED), 0, 0);
-
+					D2D1::PixelFormat(DXGI_FORMAT_R8G8B8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 0, 0);
 			ID2D1RenderTarget* pRenderTarget = NULL;
 			hr = g_pDirect2dFactory->CreateDxgiSurfaceRenderTarget(pDxgiSurface, &props, &pRenderTarget);
 
-			ID2D1SolidColorBrush* pSolidBrush;
+			//D2D1_BITMAP_PROPERTIES1 bitmapProperties =
+			//	D2D1::BitmapProperties1(
+			//		D2D1_BITMAP_OPTIONS_TARGET,
+			//		D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE),
+			//		0,
+			//		0
+			//	);
+			//ID2D1Bitmap1* pRenderTarget = NULL;
+			//hr = g_d2dDeviceContext->CreateBitmapFromDxgiSurface(pDxgiSurface, &bitmapProperties, &pRenderTarget);
+
+			
+			ID2D1SolidColorBrush* pSolidBrush = NULL;
 			hr = pRenderTarget->CreateSolidColorBrush(
 				D2D1::ColorF(D2D1::ColorF::White),
 				&pSolidBrush
@@ -386,17 +401,35 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		}
 
 		// drawing //
+		// Now we can set the Direct2D render target.
+		//g_d2dDeviceContext->SetTarget(res2d->pRenderTarget);
+
 		res2d->pRenderTarget->BeginDraw();
 		res2d->pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
-		//res2d->pRenderTarget->Clear(D2D1::ColorF(D2D1::ColorF::White));
 
 		res2d->pRenderTarget->DrawLine(
 			D2D1::Point2F(100.f, 100.f),
 			D2D1::Point2F(500.f, 500.f),
 			res2d->pSolidBrush,
-			0.5f, g_d2dStrokeStyleMap["DEFAULT"]
+			1.5f, g_d2dStrokeStyleMap["DEFAULT"]
 		);
-		HRESULT hr = res2d->pRenderTarget->EndDraw();
+		if (res2d->pRenderTarget->EndDraw() != S_OK)
+			vmlog::LogErr("D2D Draw Error!");
+
+		// https://learn.microsoft.com/en-us/windows/win32/direct2d/path-geometries-overview
+
+		/*
+		if (pvtrLineList)
+		{
+			int num_lines = ((int)pvtrLineList->size() - prev_lines_count) / 4;
+			if (num_lines) {
+				vtrLineListObjColor.push_back(vmfloat3(actor->color));
+				vtrLineListObjNum.push_back(num_lines);
+				vtrLineListObjID.push_back(pobj->GetObjectID());
+				prev_lines_count = (int)pvtrLineList->size();
+			}
+		}
+		/**/
 	}
 
 	if (is_system_out) {
@@ -462,6 +495,7 @@ void DeInitModule(fncontainer::VmFnContainer& _fncontainer)
 		VMSAFE_RELEASE(it->second);
 	}
 	g_d2dStrokeStyleMap.clear();
+
 	VMSAFE_RELEASE(g_pDirect2dFactory);
 
 

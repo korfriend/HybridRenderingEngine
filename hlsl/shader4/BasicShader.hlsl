@@ -145,3 +145,95 @@ void GS_PickingPoint(uint pid : SV_PrimitiveId, triangle VS_OUTPUT input[3], ino
         }
     }
 }
+
+int GetSegmentPlaneIntersection(float3 planeN, float planeD, float3 P1, float3 P2, out float3 output[2]) {
+
+    int count = 0;
+
+    float d1 = dot(planeN, P1) + planeD;
+    float d2 = dot(planeN, P2) + planeD;
+
+    bool bP1OnPlane = (abs(d1) < FLT_MIN__);
+    bool bP2OnPlane = (abs(d2) < FLT_MIN__);
+
+    if (bP1OnPlane) {
+        output[count++] = P1;
+    }
+    if (bP2OnPlane) {
+        output[count++] = P2;
+    }
+    if (bP1OnPlane && bP2OnPlane)
+        return count;
+
+    if (d1 * d2 > FLT_MIN__)  // points on the same side of plane
+        return count;
+
+    float t = d1 / (d1 - d2); // 'time' of intersection point on the segment
+
+    output[count++] = P1 + t * (P2 - P1);
+    return count;
+}
+
+[maxvertexcount(42)]
+void GS_MeshCutLines(uint pid : SV_PrimitiveId, triangle VS_OUTPUT input[3], inout PointStream<SO_OUTPUT> pointStream)
+{
+    float3 P1 = input[0].f3PosWS;
+    float3 P2 = input[1].f3PosWS;
+    float3 P3 = input[2].f3PosWS;
+
+    float3 planeN = g_cbCamState.dir_view_ws;
+    float3 planeP = g_cbCamState.pos_cam_ws;
+    float plandD = -dot(planeN, planeP);
+
+    // 4 cases :
+    // no intersection point ==> no SO_OUTPUT
+    // 1 intersection point ==> no SO_OUTPUT
+    // 2 interseciton points ==> two SO_OUTPUTs
+    // 3 intersection points ==> four SO_OUTPUTs (composed of P1, P2 an P3)
+
+    float3 intersectionPts1[2];
+    int count1 = GetSegmentPlaneIntersection(planeN, plandD, P1, P2, intersectionPts1);
+    float3 intersectionPts2[2];
+    int count2 = GetSegmentPlaneIntersection(planeN, plandD, P2, P3, intersectionPts2);
+
+    SO_OUTPUT so_out;
+    if (count1 + count2 == 2) {
+        for (int i = 0; i < count1; i++) {
+            so_out.infoIntersection = intersectionPts1[i];
+            pointStream.Append(so_out);
+        }
+        for (i = 0; i < count2; i++) {
+            so_out.infoIntersection = intersectionPts2[i];
+            pointStream.Append(so_out);
+        }
+    }
+    else if (count1 + count2 == 4) {
+        so_out.infoIntersection = P1;
+        pointStream.Append(so_out);
+        so_out.infoIntersection = P2;
+        pointStream.Append(so_out);
+        so_out.infoIntersection = P2;
+        pointStream.Append(so_out);
+        so_out.infoIntersection = P3;
+        pointStream.Append(so_out);
+    }
+    else {
+        float3 intersectionPts3[2];
+        int count3 = GetSegmentPlaneIntersection(planeN, plandD, P3, P1, intersectionPts3);
+        if (count1 + count2 + count3 == 0) return;
+
+        // note only two points are to be appended!
+        if (count1) {
+            so_out.infoIntersection = intersectionPts1[0];
+            pointStream.Append(so_out);
+        }
+        if (count2) {
+            so_out.infoIntersection = intersectionPts2[0];
+            pointStream.Append(so_out);
+        }
+        if (count3) {
+            so_out.infoIntersection = intersectionPts3[0];
+            pointStream.Append(so_out);
+        }
+    }
+}

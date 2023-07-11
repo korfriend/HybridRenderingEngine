@@ -8,7 +8,7 @@
 #else
 #include <d3d11.h>
 #endif
-//#define SDK_REDISTRIBUTE
+#define SDK_REDISTRIBUTE
 
 //#define _DEBUG
 #if (defined(_DEBUG) || defined(DEBUG)) && !defined(SDK_REDISTRIBUTE)
@@ -21,6 +21,29 @@ ID3D11Debug *debugDev;
 
 #ifndef VMSAFE_RELEASE
 #define VMSAFE_RELEASE(p)			{ if(p) { (p)->Release(); (p)=NULL; } }
+#endif
+
+//#define USE_D2D
+
+#ifdef USE_D2D
+#include <d2d1_1.h>
+
+ID2D1Factory1* g_pDirect2dFactory = NULL;
+struct D2DRes {
+	IDXGISurface* pDxgiSurface = NULL;
+	ID2D1RenderTarget* pRenderTarget = NULL;
+	ID2D1SolidColorBrush* pSolidBrush = NULL;
+
+	ID3D11Texture2D* pTex2DRT = NULL; // do not release this!
+
+	void ReleaseD2DRes() {
+		VMSAFE_RELEASE(pSolidBrush);
+		VMSAFE_RELEASE(pRenderTarget);
+		VMSAFE_RELEASE(pDxgiSurface);
+	}
+};
+map<int, D2DRes> g_d2dResMap;
+map<string, ID2D1StrokeStyle*> g_d2dStrokeStyleMap;
 #endif
 
 struct RES_INDICATOR
@@ -93,7 +116,7 @@ bool __InitializeDevice()
 		return true;
 	}
 
-	UINT createDeviceFlags = 0;
+	UINT createDeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 	D3D_DRIVER_TYPE driverTypes = D3D_DRIVER_TYPE_HARDWARE;
 #if (defined(_DEBUG) || defined(DEBUG)) && !defined(SDK_REDISTRIBUTE)
 	createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
@@ -203,6 +226,7 @@ bool __InitializeDevice()
 	debugDev->ReportLiveDeviceObjects(D3D11_RLDO_IGNORE_INTERNAL );
 #endif
 
+	// __uuidof(IDXGIDevice), reinterpret_cast<void**>(&g_pdxgiDevice)
 	g_pdx11Device->QueryInterface(IID_PPV_ARGS(&g_pdxgiDevice));
 	g_pdxgiDevice->GetAdapter(&g_pdxgiAdapter);
 	g_pdxgiAdapter->GetDesc(&g_adapterDesc);
@@ -218,13 +242,49 @@ bool __InitializeDevice()
 
 //	VmDeviceSetting(g_pdx11Device, g_pdx11DeviceImmContext, g_adapterDesc);
 
+#ifdef USE_D2D
+	// Create a Direct2D factory.
+	if (g_pDirect2dFactory == NULL) {
+		if (D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &g_pDirect2dFactory) != S_OK)
+			vmlog::LogErr("Failure D2D1CreateFactory!!");
+
+		ID2D1StrokeStyle* pStrokeStyle = NULL;
+		HRESULT hr = g_pDirect2dFactory->CreateStrokeStyle(
+			D2D1::StrokeStyleProperties(
+				D2D1_CAP_STYLE_ROUND,
+				D2D1_CAP_STYLE_ROUND,
+				D2D1_CAP_STYLE_ROUND,
+				D2D1_LINE_JOIN_ROUND,
+				10.0f,
+				D2D1_DASH_STYLE_SOLID,
+				0.0f),
+			NULL,
+			0,
+			&pStrokeStyle
+		);
+
+		g_d2dStrokeStyleMap["DEFAULT"] = pStrokeStyle;
+	}
+#endif
 	return true;
 }
 
 bool __DeinitializeDevice()
 {
+#ifdef USE_D2D
+	for (auto it = g_d2dResMap.begin(); it != g_d2dResMap.end(); it++) {
+		it->second.ReleaseD2DRes();
+	}
+	g_d2dResMap.clear();
+	for (auto it = g_d2dStrokeStyleMap.begin(); it != g_d2dStrokeStyleMap.end(); it++) {
+		VMSAFE_RELEASE(it->second);
+	}
+	g_d2dStrokeStyleMap.clear();
+	VMSAFE_RELEASE(g_pDirect2dFactory);
+
 	if (g_pdx11DeviceImmContext == NULL || g_pdx11Device == NULL)
 		return false;
+#endif
 
 	g_pdx11DeviceImmContext->Flush();
 	g_pdx11DeviceImmContext->ClearState();
@@ -289,11 +349,10 @@ bool __GetDeviceInformation(void* devInfo, const string& devSpecification)
 		DXGI_ADAPTER_DESC* pdx11Adapter = (DXGI_ADAPTER_DESC*)devInfo;
 		*pdx11Adapter = g_adapterDesc;
 	}
-	else if (devSpecification.compare("DEVICE_DXGI2") == 0)
+	else if (devSpecification.compare("DEVICE_DXGI") == 0)
 	{
-		//void** ppvDev = (void**)devInfo;
-		//*ppvDev = g_pdxgiFactory2;
-		//*ppvDev = g_pdxgiFactory2 ? (void*)g_pdxgiFactory2 : (void*)g_pdxgiFactory;
+		void** ppvDev = (void**)devInfo;
+		*ppvDev = g_pdxgiDevice;
 	}
 	else if (devSpecification.compare("FEATURE_LEVEL") == 0)
 	{

@@ -554,7 +554,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
             ComputeColor(v_rgba.rgb, Ka, Kd, Ks, Ns, 1.0, input.f3PosWS, view_dir, nor, nor_len);
             v_rgba.a *= clr_map.a;
         }
-        //v_rgba = clr_map;// float4(input.f3Custom, 1);
+        v_rgba = clr_map;//float4(input.f3Custom, 1);
         //v_rgba.rgb = float3(1, 0, 0);
     }
     else

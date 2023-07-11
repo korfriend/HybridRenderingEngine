@@ -799,6 +799,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			  ,"GS_ThickLines_gs_5_0"
 		};
 #endif
+		int testNum = sizeof(strNames_GS) / sizeof(string);
 
 		for (int i = 0; i < GS_NUM; i++)
 		{

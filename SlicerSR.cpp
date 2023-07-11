@@ -775,10 +775,6 @@ void intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 	hitdistance = hitT;
 }
 
-
-
-
-
 bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	VmGpuManager* gpu_manager,
 	grd_helper::GpuDX11CommonParameters* dx11CommonParams,
@@ -901,9 +897,17 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			hlslobj_path += token + "\\";
 			exe_path.erase(0, pos + delimiter.length());
 		}
-		//hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
-		hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
+		//hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\";
+		hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\";
+
+		string hlslobj_path_4_0 = hlslobj_path + "shader_compiled_objs_4_0\\";
 		//cout << hlslobj_path << endl;
+
+#ifdef DX10_0
+		hlslobj_path += "shader_compiled_objs_4_0\\";
+#else
+		hlslobj_path += "shader_compiled_objs\\";
+#endif
 
 		string prefix_path = hlslobj_path;
 		cout << "RECOMPILE HLSL _ OIT renderer!!" << endl;
@@ -1017,6 +1021,43 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 				else
 				{
 					SET_CS(strName, dx11CShader);
+				}
+				VMSAFE_DELETEARRAY(pyRead);
+			}
+		}
+
+		{
+			string strName = "GS_MeshCutLines_gs_4_0";
+			FILE* pFile;
+			if (fopen_s(&pFile, (hlslobj_path_4_0 + strName).c_str(), "rb") == 0)
+			{
+				fseek(pFile, 0, SEEK_END);
+				ullong ullFileSize = ftell(pFile);
+				fseek(pFile, 0, SEEK_SET);
+				byte* pyRead = new byte[ullFileSize];
+				fread(pyRead, sizeof(byte), ullFileSize, pFile);
+				fclose(pFile);
+
+				// https://learn.microsoft.com/en-us/windows/win32/direct3d11/d3d10-graphics-programming-guide-output-stream-stage-getting-started
+				// https://strange-cpp.tistory.com/101
+				D3D11_SO_DECLARATION_ENTRY pDecl[] =
+				{
+					// semantic name, semantic index, start component, component count, output slot
+					{ 0, "TEXCOORD", 0, 0, 3, 0 },   // output 
+				};
+				int numEntries = sizeof(pDecl) / sizeof(D3D11_SO_DECLARATION_ENTRY);
+				uint bufferStrides[] = { sizeof(vmfloat3) };
+				int numStrides = sizeof(bufferStrides) / sizeof(uint);
+				ID3D11GeometryShader* dx11GShader = NULL;
+				if (dx11CommonParams->dx11Device->CreateGeometryShaderWithStreamOutput(
+					pyRead, ullFileSize, pDecl, numEntries, bufferStrides, numStrides, D3D11_SO_NO_RASTERIZED_STREAM, NULL,
+					(ID3D11GeometryShader**)&dx11GShader) != S_OK)
+				{
+					VMERRORMESSAGE("SHADER COMPILE FAILURE!");
+				}
+				else
+				{
+					SET_GS(strName, dx11GShader);
 				}
 				VMSAFE_DELETEARRAY(pyRead);
 			}

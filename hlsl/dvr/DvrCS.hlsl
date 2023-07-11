@@ -542,19 +542,23 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	//depth_out = fragment_zdepth[DTid.xy];
 	// use the result from VR_SURFACE
 	depth_out = vr_fragment_1sthit_read[DTid.xy];
+
+	if (BitCheck(g_cbVobj.vobj_flag, 1) && vr_hit_enc == __VRHIT_OUTSIDE_VOLUME) {
+		int outlinePPack = g_cbCamState.iSrCamDummy__1;
+		float3 outline_color = float3(((outlinePPack >> 16) & 0xFF) / 255.f, ((outlinePPack >> 8) & 0xFF) / 255.f, (outlinePPack & 0xFF) / 255.f);
+		int pixThickness = (outlinePPack >> 24) & 0xFF;
+		//v_rgba = OutlineTest(tex2d_xy, z_depth, 10000.f, outline_color, pixThickness);
 	
-	float4 outline_test = ConvertUIntToFloat4(g_cbVobj.outline_color);
-	if (outline_test.w > 0 && vr_hit_enc == __VRHIT_OUTSIDE_VOLUME) {
 		// note that the outline appears over background of the DVR front-surface
-		float4 outline_color = VrOutlineTest(tex2d_xy, depth_out, 100000.f, outline_test.rgb, (int)(outline_test.w*255.f));
+		float4 v_rgba = VrOutlineTest(tex2d_xy, depth_out, 10000.f, outline_color, pixThickness);
 		uint idx_dlayer = 0;
 		int num_ray_samples = VR_MAX_LAYERS;
 		vis_out = (float4)0;
 #if FRAG_MERGING == 1
 		Fragment f_dly = fs[0]; // if no frag, the z-depth is infinite
-		INTERMIX(vis_out, idx_dlayer, num_frags, outline_color, depth_out, g_cbVobj.sample_dist, fs, merging_beta);
+		INTERMIX(vis_out, idx_dlayer, num_frags, v_rgba, depth_out, g_cbVobj.sample_dist, fs, merging_beta);
 #else
-		INTERMIX_V1(vis_out, idx_dlayer, num_frags, outline_color, depth_out, fs);
+		INTERMIX_V1(vis_out, idx_dlayer, num_frags, v_rgba, depth_out, fs);
 #endif
 		REMAINING_MIX(vis_out, idx_dlayer, num_frags, fs);
 		fragment_vis[tex2d_xy] = vis_out;
