@@ -200,7 +200,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		double dRuntime = 0;
 		RenderVrCurvedSlicer(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
 		g_dRunTimeVRs += dRuntime;
-		bool is_system_out = true;
+		is_system_out = true;
 	}
 	else if (strRendererSource == "SECTIONAL_MESH")
 	{

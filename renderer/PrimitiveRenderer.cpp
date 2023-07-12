@@ -734,7 +734,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #ifdef DX10_0
 #define VS_NUM 5
 #define GS_NUM 4
-#define PS_NUM 7
+#define PS_NUM 8
 #else
 #define VS_NUM 5
 #define GS_NUM 3
@@ -877,6 +877,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			,"SR_BASIC_TEXTMAPPING_ps_4_0"
 			,"SR_BASIC_TEXTUREIMGMAP_ps_4_0"
 			,"SR_BASIC_VOLUMEMAP_ps_4_0"
+			,"SR_QUAD_OUTLINE_ps_4_0"
 		};
 #else
 		string strNames_PS[PS_NUM] = {
@@ -2867,7 +2868,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	else if (mode_OIT == MFR_MODE::MOMENT) {
 #ifdef DX10_0
 		assert(0);
-#endif
+#else
 		SetCamConstBuf(cbCamState);
 
 		RenderStage1(general_oit_routine_objs, MFR_MODE::MOMENT, RENDER_GEOPASS::PASS_OIT // moment generation
@@ -2878,6 +2879,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 		RenderStage1(general_oit_routine_objs, MFR_MODE::MOMENT, RENDER_GEOPASS::PASS_OIT // moment generation
 			, false /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false /*is_MOMENT_gen_buffer*/);
+#endif
 	}
 
 	iobj->SetObjParam("_int_NumCallRenders", count_call_render);
@@ -2889,6 +2891,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	// * color 저장 옵션...
 	// * general 만 있을 때, 그냥 종료				\
 
+#ifndef DX10_0
 	if (check_pixel_transmittance)
 	{
 		dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_fb_sys_counter.alloc_res_ptrs[DTYPE_RES],
@@ -3129,7 +3132,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			}
 		}
 	}
-
+#endif
 	dx11DeviceImmContext->ClearState();
 
 	dx11DeviceImmContext->OMSetRenderTargets(1, &pdxRTVOld, pdxDSVOld);

@@ -881,6 +881,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			dx11DeviceImmContext->CSSetShaderResources(20, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_vr_tex.alloc_res_ptrs[DTYPE_SRV]);
 		}
 	}
+	iobj->SetObjParam("_int_NumCallRenders", count_call_render);
 
 	//dx11DeviceImmContext->Flush();
 	//printf("# Textures : %d, # Drawing : %d, # RTBuffer Change : %d, # Merging : %d\n", iNumTexureLayers, iCountRendering, iCountRTBuffers, iCountMerging);
