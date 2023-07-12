@@ -1,154 +1,16 @@
 //{{NO_DEPENDENCIES}}
 // Microsoft Visual C++ generated include file.
 // Used by vismtv_inbuilt_renderergpudx.rc
-#define IDR_RCDATA0010                     10
-#define IDR_RCDATA0011                     11
-#define IDR_RCDATA0012                     12
-#define IDR_RCDATA0013                     13
-#define IDR_RCDATA0014                     14
-#define IDR_RCDATA0015                     15
-#define IDR_RCDATA0016                     16
-#define IDR_RCDATA0017                     17
-
-#define IDR_RCDATA0110                    110
-#define IDR_RCDATA0111                    111
-#define IDR_RCDATA0112                    112
-#define IDR_RCDATA0113                    113
-#define IDR_RCDATA0114                    114
-#define IDR_RCDATA0115                    115
-#define IDR_RCDATA0116                    116
-#define IDR_RCDATA0117                    117
-
-#define IDR_RCDATA0210                    210
-#define IDR_RCDATA0211                    211
-#define IDR_RCDATA0212                    212
-#define IDR_RCDATA0213                    213
-#define IDR_RCDATA0214                    214
-#define IDR_RCDATA0215                    215
-#define IDR_RCDATA0216                    216
-#define IDR_RCDATA0217                    217
-
-#define IDR_RCDATA0310                    310
-#define IDR_RCDATA0311                    311
-#define IDR_RCDATA0312                    312
-#define IDR_RCDATA0313                    313
-#define IDR_RCDATA0314                    314
-#define IDR_RCDATA0315                    315
-#define IDR_RCDATA0316                    316
-
-#define IDR_RCDATA0500                    500
-
-#define IDR_RCDATA0610                    610
-#define IDR_RCDATA0611                    611
-#define IDR_RCDATA0612                    612
-#define IDR_RCDATA0613                    613
-#define IDR_RCDATA0614                    614
-#define IDR_RCDATA0615                    615
-
-#define IDR_RCDATA0810                    810
-#define IDR_RCDATA0811                    811
-
-////
-#define IDR_RCDATA1010                    1010
-#define IDR_RCDATA1011                    1011
-#define IDR_RCDATA1012                    1012
-#define IDR_RCDATA1013                    1013
-#define IDR_RCDATA1014                    1014
-#define IDR_RCDATA1015                    1015
-#define IDR_RCDATA1016                    1016
-#define IDR_RCDATA1017                    1017
-
-#define IDR_RCDATA1110                    1110
-#define IDR_RCDATA1111                    1111
-#define IDR_RCDATA1112                    1112
-#define IDR_RCDATA1113                    1113
-#define IDR_RCDATA1114                    1114
-#define IDR_RCDATA1115                    1115
-#define IDR_RCDATA1116                    1116
-#define IDR_RCDATA1117                    1117
-
-#define IDR_RCDATA1210                    1210
-#define IDR_RCDATA1211                    1211
-#define IDR_RCDATA1212                    1212
-#define IDR_RCDATA1213                    1213
-#define IDR_RCDATA1214                    1214
-#define IDR_RCDATA1215                    1215
-#define IDR_RCDATA1216                    1216
-#define IDR_RCDATA1217                    1217
-
-#define IDR_RCDATA1310                    1310
-#define IDR_RCDATA1311                    1311
-#define IDR_RCDATA1312                    1312
-#define IDR_RCDATA1313                    1313
-#define IDR_RCDATA1314                    1314
-#define IDR_RCDATA1315                    1315
-#define IDR_RCDATA1316                    1316
-
-#define IDR_RCDATA1500                    1500
-
-#define IDR_RCDATA1610                    1610
-#define IDR_RCDATA1611                    1611
-#define IDR_RCDATA1612                    1612
-#define IDR_RCDATA1613                    1613
-#define IDR_RCDATA1614                    1614
-#define IDR_RCDATA1615                    1615
-
-#define IDR_RCDATA1810                    1810
-#define IDR_RCDATA1811                    1811
-//
-
-#define IDR_RCDATA20000                   20000
-#define IDR_RCDATA20010                   20010
-#define IDR_RCDATA20020                   20020
-
-#define IDR_RCDATA20100                   20100
-#define IDR_RCDATA20110                   20110
-#define IDR_RCDATA20120                   20120
-#define IDR_RCDATA20500					  20500
 								 
-#define IDR_RCDATA10001                   10001
-#define IDR_RCDATA10002                   10002
-#define IDR_RCDATA10003                   10003
-#define IDR_RCDATA10004                   10004
-#define IDR_RCDATA10005                   10005
-#define IDR_RCDATA10006                   10006
-#define IDR_RCDATA10007                   10007
-
-#define IDR_RCDATA15110                   15110
-#define IDR_RCDATA15120                   15120
-#define IDR_RCDATA15130                   15130
-#define IDR_RCDATA15140                   15140
-#define IDR_RCDATA15150                   15150
-
-#define IDR_RCDATA15010                   15010
-#define IDR_RCDATA15020                   15020
-#define IDR_RCDATA15030                   15030
-#define IDR_RCDATA15040                   15040
-#define IDR_RCDATA15050                   15050
-								 
-#define IDR_RCDATA10010                   10010
-#define IDR_RCDATA10020                   10020
-#define IDR_RCDATA10030                   10030
-#define IDR_RCDATA10031                   10031
-#define IDR_RCDATA10035                   10035
-#define IDR_RCDATA10036                   10036
-#define IDR_RCDATA10040                   10040
-#define IDR_RCDATA10050                   10050
-#define IDR_RCDATA10060                   10060
-#define IDR_RCDATA10065                   10065
-#define IDR_RCDATA10070                   10070
-#define IDR_RCDATA10080                   10080
-#define IDR_RCDATA10090                   10090
-
-#define IDR_RCDATA30010                   30010
-#define IDR_RCDATA30020                   30020
-#define IDR_RCDATA30030                   30030
-
 #define IDR_RCDATA31010                   31010
 #define IDR_RCDATA31011                   31011
 #define IDR_RCDATA31020                   31020
 #define IDR_RCDATA31030                   31030
 #define IDR_RCDATA31031                   31031
+
+#define IDR_RCDATA91010                   91010
+#define IDR_RCDATA91011                   91011
+#define IDR_RCDATA91020                   91020
 
 // new oit
 #define IDR_RCDATA11001					  11001
@@ -157,6 +19,12 @@
 #define IDR_RCDATA11004					  11004
 #define IDR_RCDATA11005					  11005
 
+#define IDR_RCDATA91001					  91001
+#define IDR_RCDATA91002					  91002
+#define IDR_RCDATA91003					  91003
+#define IDR_RCDATA91004					  91004
+#define IDR_RCDATA91005					  91005
+
 #define IDR_RCDATA10101					  10101
 #define IDR_RCDATA10102					  10102
 #define IDR_RCDATA10103					  10103
@@ -164,7 +32,15 @@
 #define IDR_RCDATA10105					  10105
 #define IDR_RCDATA10106					  10106
 
+#define IDR_RCDATA90101					  90101
+#define IDR_RCDATA90102					  90102
+#define IDR_RCDATA90103					  90103
+#define IDR_RCDATA90104					  90104
+#define IDR_RCDATA90105					  90105
+#define IDR_RCDATA90106					  90106
+
 #define IDR_RCDATA10150					  10150
+#define IDR_RCDATA90150					  90150
 
 #define IDR_RCDATA11010					  11010
 #define IDR_RCDATA11011					  11011
@@ -173,6 +49,8 @@
 #define IDR_RCDATA11014					  11014
 
 #define IDR_RCDATA11015					  11015
+
+#define IDR_RCDATA91015					  91015
 
 #define IDR_RCDATA12010					  12010
 #define IDR_RCDATA12011					  12011
@@ -295,6 +173,7 @@
 #define IDR_RCDATA60100					  60100
 #define IDR_RCDATA60101					  60101
 #define IDR_RCDATA60102					  60102
+#define IDR_RCDATA9102					  6102
 #define IDR_RCDATA60103					  60103
 #define IDR_RCDATA60104					  60104
 
