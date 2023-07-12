@@ -601,6 +601,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	bool apply_fragmerge = _fncontainer->fnParams.GetParam("_bool_ApplyFragMerge", true);
 	MFR_MODE mode_OIT = (MFR_MODE)_fncontainer->fnParams.GetParam("_int_OitMode", (int)MFR_MODE::DYNAMIC_FB);
 	mode_OIT = (MFR_MODE)min((int)mode_OIT, (int)MFR_MODE::MOMENT);
+#ifdef DX10_0
+	mode_OIT = MFR_MODE::NONE;
+#endif
 
 	//if (mode_OIT == MFR_MODE::STATIC_KB_FM) apply_fragmerge = true;
 
@@ -1523,6 +1526,13 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	for (VmActor& __actor : temperal_actors)
 		foremost_surfaces_routine_objs.push_back(&__actor);
 
+#ifdef DX10_0
+	for (int i = 0; i < (int)general_oit_routine_objs.size(); i++) {
+		foremost_surfaces_routine_objs.push_back(general_oit_routine_objs[i]);
+	}
+	general_oit_routine_objs.clear();
+#endif
+
 	if (dx11CommonParams->gpu_profile)
 	{
 		cout << "  ** general_oit_routine_objs    : " << general_oit_routine_objs.size() << endl;
@@ -1797,7 +1807,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #ifdef DX10_0
 			// ASSERT 
 			assert(render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES || render_pass == RENDER_GEOPASS::PASS_SINGLELAYERS);
-			assert(mode_OIT == MFR_MODE::DYNAMIC_FB);
+			assert(mode_OIT == MFR_MODE::NONE);
 #endif
 
 			bool is_picking_routine = pickType != PICKING_TYPE::NONE;
@@ -2492,7 +2502,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			_fncontainer->fnParams.SetParam("_vlist_int_PickPrimitiveId", picking_prim_id_out);
 		// END of Render Process for picking
 	}
-	else if (mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB || mode_OIT == MFR_MODE::STATIC_KB) {
+	else if (mode_OIT == MFR_MODE::NONE || mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB || mode_OIT == MFR_MODE::STATIC_KB) {
 		
 		cbCamState.iSrCamDummy__0 = *(uint*)&merging_beta;
 		int oulineiRGB = (int)(outline_color.r * 255.f) | (int)(outline_color.g * 255.f) << 8 | (int)(outline_color.b * 255.f) << 16;

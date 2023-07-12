@@ -67,4 +67,4 @@ inline void __check_and_release(GpuhelperResType res_type, ID3D11DeviceChild* re
 	}
 };
 
-//#define USE_DX11_3
+//#define DX11_3

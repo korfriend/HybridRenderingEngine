@@ -114,7 +114,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		}
 	}
 
-#ifdef USE_DX11_3
+#ifdef DX11_3
 	if (g_vmCommonParams.dx11_featureLevel < 0xb100) {
 		_fncontainer.fnParams.SetParam("_bool_UseSpinLock", true);
 	}

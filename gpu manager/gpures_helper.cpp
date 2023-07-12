@@ -99,7 +99,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		return __ALREADY_CHECKED;
 	}
 
-#ifdef USE_DX11_3
+#ifdef DX11_3
 	g_pCGpuManager->GetDeviceInformation((void*)(&g_pvmCommonParams->dx11Device), "DEVICE_POINTER_3");
 	g_pCGpuManager->GetDeviceInformation((void*)(&g_pvmCommonParams->dx11DeviceImmContext), "DEVICE_CONTEXT_POINTER_3");
 #else
@@ -119,6 +119,8 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 	}
 
 	g_pvmCommonParams->Delete();
+
+	//goto ERROR_PRESETTING;
 	
 	D3D11_QUERY_DESC qr_desc;
 	qr_desc.MiscFlags = 0;
@@ -147,7 +149,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		hr |= g_pvmCommonParams->dx11Device->CreateBlendState(&descBlend, &blender_state);
 		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::BLEND_STATE, "ADD"), blender_state);
 
-#ifdef USE_DX11_3
+#ifdef DX11_3
 		D3D11_RASTERIZER_DESC2 descRaster;
 		ZeroMemory(&descRaster, sizeof(D3D11_RASTERIZER_DESC2));
 		ID3D11RasterizerState2* raster_state;
@@ -168,7 +170,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		descRaster.ScissorEnable = FALSE;
 		descRaster.MultisampleEnable = FALSE;
 		descRaster.AntialiasedLineEnable = FALSE;
-#ifdef USE_DX11_3
+#ifdef DX11_3
 		descRaster.ForcedSampleCount = 0;
 		descRaster.ConservativeRaster = D3D11_CONSERVATIVE_RASTERIZATION_MODE_OFF;
 #endif
@@ -196,7 +198,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 
 		descRaster.FillMode = D3D11_FILL_WIREFRAME;
 		descRaster.CullMode = D3D11_CULL_BACK;
-#ifdef USE_DX11_3
+#ifdef DX11_3
 		descRaster.ConservativeRaster = D3D11_CONSERVATIVE_RASTERIZATION_MODE_OFF;
 #endif
 		descRaster.AntialiasedLineEnable = false;
@@ -420,6 +422,32 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 
 #define VRETURN(v, ERR) if(v != S_OK) { vmlog::LogErr(#ERR); goto ERROR_PRESETTING; }
 
+#ifdef DX10_0
+		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91001), "SR_OIT_P_vs_4_0", "vs_4_0", "P", lotypeInputPos, 1), SR_OIT_P_vs_4_0);
+		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91002), "SR_OIT_PN_vs_4_0", "vs_4_0", "PN", lotypeInputPosNor, 2), SR_OIT_PN_vs_4_0);
+		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91003), "SR_OIT_PT_vs_4_0", "vs_4_0", "PT", lotypeInputPosTex, 2), SR_OIT_PT_vs_4_0);
+		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91004), "SR_OIT_PNT_vs_4_0", "vs_4_0", "PNT", lotypeInputPosNorTex, 3), SR_OIT_PNT_vs_4_0);
+		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91005), "SR_OIT_PTTT_vs_4_0", "vs_4_0", "PTTT", lotypeInputPosTTTex, 4), SR_OIT_PTTT_vs_4_0);
+
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA91015), "SR_SINGLE_LAYER_ps_4_0", "ps_4_0"), SR_SINGLE_LAYER_ps_4_0);
+
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31030), "GS_PickingBasic_gs_4_0", "gs_4_0_SO"), GS_PickingBasic_gs_4_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31031), "GS_MeshCutLines_gs_4_0", "gs_4_0_SO"), GS_MeshCutLines_gs_4_0);
+
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA91010), "GS_ThickPoints_gs_4_0", "gs_4_0"), GS_ThickPoints_gs_4_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA91011), "GS_SurfelPoints_gs_4_0", "gs_4_0"), GS_SurfelPoints_gs_4_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA91020), "GS_ThickLines_gs_4_0", "gs_4_0"), GS_ThickLines_gs_4_0);
+
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60102), "SliceOutline_cs_4_0", "cs_4_0"), SliceOutline_cs_4_0);
+
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90101), "SR_BASIC_PHONGBLINN_ps_4_0", "ps_4_0"), SR_BASIC_PHONGBLINN_ps_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90102), "SR_BASIC_DASHEDLINE_ps_4_0", "ps_4_0"), SR_BASIC_DASHEDLINE_ps_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90103), "SR_BASIC_MULTITEXTMAPPING_ps_4_0", "ps_4_0"), SR_BASIC_MULTITEXTMAPPING_ps_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90104), "SR_BASIC_TEXTMAPPING_ps_4_0", "ps_4_0"), SR_BASIC_TEXTMAPPING_ps_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90105), "SR_BASIC_TEXTUREIMGMAP_ps_4_0", "ps_4_0"), SR_BASIC_TEXTUREIMGMAP_ps_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90106), "SR_BASIC_VOLUMEMAP_ps_4_0", "ps_4_0"), SR_BASIC_VOLUMEMAP_ps_5_0);
+
+#else
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11001), "SR_OIT_P_vs_5_0", "vs_5_0", "P", lotypeInputPos, 1), SR_OIT_P_vs_5_0);
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11002), "SR_OIT_PN_vs_5_0", "vs_5_0", "PN", lotypeInputPosNor, 2), SR_OIT_PN_vs_5_0);
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11003), "SR_OIT_PT_vs_5_0", "vs_5_0", "PT", lotypeInputPosTex, 2), SR_OIT_PT_vs_5_0);
@@ -571,8 +599,6 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31010), "GS_ThickPoints_gs_5_0", "gs_5_0"), GS_ThickPoints_gs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31011), "GS_SurfelPoints_gs_5_0", "gs_5_0"), GS_SurfelPoints_gs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31020), "GS_ThickLines_gs_5_0", "gs_5_0"), GS_ThickLines_gs_5_0);
-		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31030), "GS_PickingBasic_gs_4_0", "gs_4_0_SO"), GS_PickingBasic_gs_4_0);
-		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31031), "GS_MeshCutLines_gs_4_0", "gs_4_0_SO"), GS_MeshCutLines_gs_4_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50000), "VR_RAYMAX_cs_5_0", "cs_5_0"), VR_RAYMAX_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50001), "VR_RAYMIN_cs_5_0", "cs_5_0"), VR_RAYMIN_cs_5_0);
@@ -618,6 +644,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60102), "SliceOutline_cs_5_0", "cs_5_0"), SliceOutline_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60103), "PickingThickSlice_cs_5_0", "cs_5_0"), PickingThickSlice_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60104), "PickingCurvedThickSlice_cs_5_0", "cs_5_0"), PickingCurvedThickSlice_cs_5_0);
+#endif
 	}
 
 	g_pvmCommonParams->is_initialized = true;

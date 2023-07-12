@@ -3,7 +3,7 @@
 
 //#include <d3dx9math.h>	// For Math and Structure
 //
-#ifdef USE_DX11_3
+#ifdef DX11_3
 #include <d3d11_3.h>
 #else
 #include <d3d11.h>
@@ -97,7 +97,7 @@ map<HWND, _gp_dxgiPresenter> g_mapDxgiPrensentor;
 
 static ID3D11Device* g_pdx11Device = NULL;
 static ID3D11DeviceContext* g_pdx11DeviceImmContext = NULL;
-#ifdef USE_DX11_3
+#ifdef DX11_3
 static ID3D11Device3* g_pdx11Device3= NULL;
 static ID3D11DeviceContext3* g_pdx11DeviceImmContext3 = NULL;
 #endif
@@ -126,7 +126,7 @@ bool __InitializeDevice()
 	{
 		D3D_FEATURE_LEVEL featureLevels[] =
 		{
-#ifdef USE_DX11_3
+#ifdef DX11_3
 			D3D_FEATURE_LEVEL_12_1,
 			D3D_FEATURE_LEVEL_12_0,
 			D3D_FEATURE_LEVEL_11_1,
@@ -160,7 +160,7 @@ bool __InitializeDevice()
 
 		if (g_eFeatureLevel < 0xb100) {
 			if (g_eFeatureLevel < 0xb000) {
-				vmlog::LogErr(string("(Low Capacity GPU) Direct3D Feature Level 10.x : ") + hex_FeatureLevel);
+				vmlog::LogWarn(string("(Low Capacity GPU) Direct3D Feature Level 10.x : ") + hex_FeatureLevel);
 				return false;
 			}
 			else {
@@ -169,7 +169,7 @@ bool __InitializeDevice()
 		}
 		//g_eFeatureLevel = (D3D_FEATURE_LEVEL)0xb000;
 
-#ifdef USE_DX11_3
+#ifdef DX11_3
 		D3D11_FEATURE_DATA_D3D11_OPTIONS3 FeatureData = {};
 		HRESULT hh = g_pdx11Device->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS3, &FeatureData, sizeof(D3D11_FEATURE_DATA_D3D11_OPTIONS3));
 		if (!SUCCEEDED(hh)) {
@@ -209,7 +209,7 @@ bool __InitializeDevice()
 		vmlog::LogErr(string("g_pdx11Device : ") + to_string((int)g_pdx11Device));
 		vmlog::LogErr(string("g_pdx11DeviceImmContext : ") + to_string((int)g_pdx11DeviceImmContext));
 		vmlog::LogErr(string("g_eFeatureLevel : ") + hex_FeatureLevel);
-#ifdef USE_DX11_3
+#ifdef DX11_3
 		VMSAFE_RELEASE(g_pdx11DeviceImmContext3);
 		VMSAFE_RELEASE(g_pdx11Device3);
 #endif
@@ -295,7 +295,7 @@ bool __DeinitializeDevice()
 	VMSAFE_RELEASE(g_pdxgiDevice);
 	VMSAFE_RELEASE(g_pdxgiAdapter);
 
-#ifdef USE_DX11_3
+#ifdef DX11_3
 	VMSAFE_RELEASE(g_pdx11DeviceImmContext3);
 	VMSAFE_RELEASE(g_pdx11Device3);
 #endif
@@ -332,7 +332,7 @@ bool __GetDeviceInformation(void* devInfo, const string& devSpecification)
 		void** ppvDev = (void**)devInfo;
 		*ppvDev = (void*)g_pdx11DeviceImmContext;
 	}
-#ifdef USE_DX11_3
+#ifdef DX11_3
 	else if (devSpecification.compare("DEVICE_POINTER_3") == 0)
 	{
 		void** ppvDev = (void**)devInfo;

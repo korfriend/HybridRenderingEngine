@@ -8,12 +8,6 @@
     <ClCompile Include="gpu manager\gpures_helper.cpp">
       <Filter>gpu manager</Filter>
     </ClCompile>
-    <ClCompile Include="gpu manager\gpures_interface.cpp">
-      <Filter>gpu manager</Filter>
-    </ClCompile>
-    <ClCompile Include="renderer\PrimitiveRenderer.cpp">
-      <Filter>renderer</Filter>
-    </ClCompile>
     <ClCompile Include="renderer\VolumeRenderer.cpp">
       <Filter>renderer</Filter>
     </ClCompile>
@@ -25,6 +19,12 @@
     </ClCompile>
     <ClCompile Include="SlicerSR.cpp">
       <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="renderer\PrimitiveRenderer.cpp">
+      <Filter>hlsl source code</Filter>
+    </ClCompile>
+    <ClCompile Include="gpu manager\gpures_interface.cpp">
+      <Filter>hlsl source code</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
