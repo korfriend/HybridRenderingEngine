@@ -515,7 +515,7 @@ int intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 		tmin = rayorig.w;
 
 		// ooeps is very small number, used instead of raydir xyz component when that component is near zero
-		float ooeps = exp2(-80.0f); // Avoid div by zero, returns 1/2^80, an extremely small number
+		float ooeps = FLT_MIN; // exp2(-80.0f); // Avoid div by zero, returns 1/2^80, an extremely small number
 		float ooeps_x = raydir.x >= 0 ? ooeps : -ooeps;
 		float ooeps_y = raydir.y >= 0 ? ooeps : -ooeps;
 		float ooeps_z = raydir.z >= 0 ? ooeps : -ooeps;
@@ -701,7 +701,7 @@ int intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 					float Dx = dirx * v11.x + diry * v11.y + dirz * v11.z;  // Direction.x
 					float u = Ox + t * Dx; /// parametric equation of a ray (intersection point)
 
-					if (u >= 0.0f && u <= 1.0f)
+					if (u >= -0.0001f && u <= 1.0001f)
 					{
 						// Compute and check barycentric v.
 
@@ -711,7 +711,8 @@ int intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 						float Dy = dirx * v22.x + diry * v22.y + dirz * v22.z;
 						float v = Oy + t * Dy;
 
-						if (v >= 0.0f && u + v <= 1.0f)
+						if (v >= -0.0001f && u + v <= 1.0001f)
+						//if (v >= -0.0000f && u + v <= 1.0000f)
 						{
 							// We've got a hit!
 							// Record intersection.
@@ -909,12 +910,12 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	float3 ray_orig_os = TransformPoint(pos_ip_ws, g_cbPobj.mat_ws2os);
 	float3 ray_dir_unit_os = normalize(TransformVector(ray_dir_unit_ws, g_cbPobj.mat_ws2os));
 
-	if (ray_orig_os.z == 0) ray_orig_os.z = 0.00001234f; // trick... for avoiding zero block skipping error
-	if (ray_orig_os.y == 0) ray_orig_os.y = 0.00001234f; // trick... for avoiding zero block skipping error
-	if (ray_orig_os.x == 0) ray_orig_os.x = 0.00001234f; // trick... for avoiding zero block skipping error
-	if (ray_dir_unit_os.z == 0) ray_dir_unit_os.z = 0.00001234f; // trick... for avoiding zero block skipping error
-	if (ray_dir_unit_os.y == 0) ray_dir_unit_os.y = 0.00001234f; // trick... for avoiding zero block skipping error
-	if (ray_dir_unit_os.x == 0) ray_dir_unit_os.x = 0.00001234f; // trick... for avoiding zero block skipping error
+	//if (ray_orig_os.z == 0) ray_orig_os.z = 0.00001234f; // trick... for avoiding zero block skipping error
+	//if (ray_orig_os.y == 0) ray_orig_os.y = 0.00001234f; // trick... for avoiding zero block skipping error
+	//if (ray_orig_os.x == 0) ray_orig_os.x = 0.00001234f; // trick... for avoiding zero block skipping error
+	//if (ray_dir_unit_os.z == 0) ray_dir_unit_os.z = 0.00001234f; // trick... for avoiding zero block skipping error
+	//if (ray_dir_unit_os.y == 0) ray_dir_unit_os.y = 0.00001234f; // trick... for avoiding zero block skipping error
+	//if (ray_dir_unit_os.x == 0) ray_dir_unit_os.x = 0.00001234f; // trick... for avoiding zero block skipping error
 
 	bool isInside = false;
 	// safe inside test //
@@ -961,8 +962,11 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 			rayorig.xyz = posHitOS + 0.0001f * ray_dir_unit_os;
 		}
 	}
-	if (hitCount == 0)
+	if (hitCount == 0) {
+		//fragment_vis[ss_xy] = float4(1, 0, 0, 1);
+		// note ... when ray passes through a triangle edge or vertex, hit may not be detected
 		__EXIT;
+	}
 	//if (hitDistsWS[0] > 0) {
 	//	fragment_vis[ss_xy] = float4(1, 0, 0, 1);
 	//	//return;
@@ -996,8 +1000,9 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 			float hitDistance2 = 1e20;
 			int hitTriIdx2 = -1;
 			intersectBVHandTriangles(rayorig2, raydir2, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx2, hitDistance2, debugbingo, trinormal2, false);
-			if (hitTriIdx2 < 0)
+			if (hitTriIdx2 < 0) {
 				__EXIT;
+			}
 
 			zdepth0 = 0;
 			zdepth1 = 0;
@@ -1014,8 +1019,9 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 					break;
 				}
 			}
-			if (zdepth1 < 0)
+			if (zdepth1 < 0) {
 				__EXIT;
+			}
 		}
 	}
 	else { // outside
@@ -1172,6 +1178,7 @@ float4 SlicerOutlineTest(const in int2 tex2d_xy, const in float3 edge_color, con
 			if (fv == 1.f) {
 				//cloestDist = min(cloestDist, length(neighbor_pos - tex2d_xy.xy));
 				cnt++;
+				break;
 			}
 		}
 	}
@@ -1179,11 +1186,12 @@ float4 SlicerOutlineTest(const in int2 tex2d_xy, const in float3 edge_color, con
 	if (cnt == 0)
 		return (float4)0;
 	//float w = 2 * thick + 1;
-	float alpha = min(cnt / 3.f, 1.f);// min((thick + 1 - cloestDist) / thick, 1.0); // min((floaT)count / (w * w / 2.f), 1.f);
 	//alpha *= alpha;
 
-	vout = float4(edge_color * alpha, alpha);
+	//float alpha = min(cnt / 3.f, 1.f);// min((thick + 1 - cloestDist) / thick, 1.0); // min((floaT)count / (w * w / 2.f), 1.f);
+	//vout = float4(edge_color * alpha, alpha);
 
+	vout = float4(edge_color, 1);
 	return vout;
 }
 
@@ -1208,11 +1216,13 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 
 	// (int)g_cbPobj.pix_thickness
 	float4 outline_color = SlicerOutlineTest(ss_xy, g_cbPobj.Kd, 2);
+	//float4 outline_color = SlicerOutlineTest(ss_xy, float3(1, 1, 0), 2);
 	
 	if (outline_color.a == 0)
 	//float fvcur = fragment_zdepth[ss_xy];
 	//if (fvcur != 0.f)
 		__EXIT;
+	//__EXIT;
 
 	//float fvcur = fragment_zdepth[ss_xy];
 	//if (fvcur == 1.f)
