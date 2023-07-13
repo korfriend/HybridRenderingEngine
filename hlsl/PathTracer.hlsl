@@ -215,7 +215,7 @@ struct PS_FILL_OUTPUT
 	float4 color : SV_TARGET0; // UNORM
 	float depthcs : SV_TARGET1;
 
-	float ds_z : SV_Depth;
+	//float ds_z : SV_Depth;
 };
 #else
 RWTexture2D<uint> fragment_counter : register(u0);
@@ -771,7 +771,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 {
 #if DX10_0 == 1
 	PS_FILL_OUTPUT out_ps;
-	out_ps.ds_z = 0;
+	//out_ps.ds_z = 0;
 	out_ps.color = (float4)0;
 	out_ps.depthcs = 0;
 	int2 ss_xy = int2(input.f4PosSS.xy);
@@ -1075,7 +1075,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
 	v_rgba.a = 1;
 	if (planeThickness == 0.f)
-		v_rgba.a = min(0.5, v_rgba.a);
+		v_rgba.a = min(0.3, v_rgba.a);
 
 	if (planeThickness > 0 && v_rgba.a > 0) {
 		// effect for x-ray
@@ -1089,7 +1089,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	if (depthZ_prev < zDepth)
 		__EXIT;
 
-	out_ps.ds_z = input.f4PosSS.z;
+	//out_ps.ds_z = input.f4PosSS.z;
 	out_ps.color = v_rgba;
 	out_ps.depthcs = zDepth;
 
@@ -1204,7 +1204,7 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 {
 #if DX10_0 == 1
 	PS_FILL_OUTPUT out_ps;
-	out_ps.ds_z = 0;
+	//out_ps.ds_z = 0;
 	out_ps.color = (float4)0;
 	out_ps.depthcs = 0;
 	int2 ss_xy = int2(input.f4PosSS.xy);
@@ -1215,7 +1215,7 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 #endif
 
 	// (int)g_cbPobj.pix_thickness
-	float4 outline_color = SlicerOutlineTest(ss_xy, g_cbPobj.Kd, 2);
+	float4 outline_color = SlicerOutlineTest(ss_xy, g_cbPobj.Kd, 1);
 	//float4 outline_color = SlicerOutlineTest(ss_xy, float3(1, 1, 0), 2);
 	
 	if (outline_color.a == 0)
@@ -1229,7 +1229,7 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 	//outline_color = float4(1, 0, 0, 1);
 
 #if DX10_0 == 1
-	out_ps.ds_z = input.f4PosSS.z;
+	//out_ps.ds_z = input.f4PosSS.z;
 	out_ps.color = outline_color;
 	out_ps.depthcs = WILDCARD_DEPTH_OUTLINE;
 

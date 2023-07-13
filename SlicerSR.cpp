@@ -1575,10 +1575,10 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			cbPolygonObj.tex_map_enum = tex_map_enum;
 			cbPolygonObj.pobj_dummy_0 = actor->actorId;// pobj->GetObjectID(); // used for picking
 			grd_helper::SetCb_PolygonObj(cbPolygonObj, pobj, actor, matWS2SS, matWS2PS, false, use_vertex_color);
-			cbPolygonObj.Ka *= material_phongCoeffs.x;
-			cbPolygonObj.Kd *= material_phongCoeffs.y;
-			cbPolygonObj.Ks *= material_phongCoeffs.z;
-			cbPolygonObj.Ns *= material_phongCoeffs.w;
+			//cbPolygonObj.Ka *= material_phongCoeffs.x;
+			//cbPolygonObj.Kd *= material_phongCoeffs.y;
+			//cbPolygonObj.Ks *= material_phongCoeffs.z;
+			//cbPolygonObj.Ns *= material_phongCoeffs.w;
 			if (default_color_cmmobj.x >= 0 && default_color_cmmobj.y >= 0 && default_color_cmmobj.z >= 0)
 				cbPolygonObj.Ka = cbPolygonObj.Kd = cbPolygonObj.Ks = default_color_cmmobj;
 			if (is_ghost_mode)

@@ -180,12 +180,14 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	if (strRendererSource == "SECTIONAL_VOLUME" && !curved_slicer)
 		strRendererSource = "VOLUME";
 	
+	bool is_vr = false;
 	if (strRendererSource == "VOLUME")
 	{
 		double dRuntime = 0;
 		RenderVrDLS(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
 		g_dRunTimeVRs += dRuntime;
 		is_system_out = true;
+		is_vr = true;
 	}
 	else if (strRendererSource == "MESH")
 	{
@@ -201,6 +203,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		RenderVrCurvedSlicer(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
 		g_dRunTimeVRs += dRuntime;
 		is_system_out = true;
+		is_vr = true;
 	}
 	else if (strRendererSource == "SECTIONAL_MESH")
 	{
@@ -210,7 +213,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		if (is_final_renderer || planeThickness <= 0.f) is_system_out = true;
 	}
 
-	auto RenderOut = [&iobj, &is_final_renderer, &planeThickness, &_fncontainer]() {
+	auto RenderOut = [&iobj, &is_final_renderer, &planeThickness, &_fncontainer, &is_vr]() {
 
 		g_vmCommonParams.GpuProfile("Copyback");
 
@@ -227,10 +230,17 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 
 		GpuRes gres_fb_rgba, gres_fb_depthcs;
 		GpuRes gres_fb_sys_rgba, gres_fb_sys_depthcs;
+#ifdef DX10_0
+		grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, is_vr? "RENDER_OUT_RGBA_1" : "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D,
+			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+		grd_helper::UpdateFrameBuffer(gres_fb_depthcs, iobj, is_vr? "RENDER_OUT_DEPTH_1" : "RENDER_OUT_DEPTH_0", RTYPE_TEXTURE2D,
+			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE, DXGI_FORMAT_R32_FLOAT, 0);
+#else
 		grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D,
 			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
 		grd_helper::UpdateFrameBuffer(gres_fb_depthcs, iobj, "RENDER_OUT_DEPTH_0", RTYPE_TEXTURE2D,
 			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_FLOAT, 0);
+#endif
 		grd_helper::UpdateFrameBuffer(gres_fb_sys_rgba, iobj, "SYSTEM_OUT_RGBA", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_SYSOUT);
 		grd_helper::UpdateFrameBuffer(gres_fb_sys_depthcs, iobj, "SYSTEM_OUT_DEPTH", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R32_FLOAT, UPFB_SYSOUT);
 

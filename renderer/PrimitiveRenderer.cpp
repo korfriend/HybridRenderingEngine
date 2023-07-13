@@ -646,8 +646,13 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	bool is_picking_routine = _fncontainer->fnParams.GetParam("_bool_IsPickingRoutine", false);
 	bool pickPrimitive = false; 
 	if (is_picking_routine) {
+#ifdef DX10_0
+		mode_OIT = MFR_MODE::NONE;
+		pickPrimitive = true;
+#else
 		mode_OIT = DYNAMIC_FB;
 		pickPrimitive = _fncontainer->fnParams.GetParam("_bool_PickPrimitive", false);
+#endif
 		//gi_v_thickness = v_thickness = 0.0000001f;
 	}
 	vmint2 picking_pos_ss = _fncontainer->fnParams.GetParam("_int2_PickingPosSS", vmint2(-1, -1));
@@ -721,7 +726,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #endif
 
 		string prefix_path = hlslobj_path;
-		cout << "RECOMPILE HLSL _ OIT renderer!!" << endl;
+		vmlog::LogInfo("RELOAD HLSL _ SR renderer");
 
 		dx11CommonParams->dx11DeviceImmContext->VSSetShader(NULL, NULL, 0);
 		dx11CommonParams->dx11DeviceImmContext->GSSetShader(NULL, NULL, 0);
@@ -1136,8 +1141,10 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	GpuRes gres_fb_singlelayer_rgba, gres_fb_singlelayer_depthcs, gres_fb_singlelayer_tempDepth;
 	GpuRes gres_fb_sys_rgba, gres_fb_sys_depthcs;
 #ifdef DX10_0
+	const uint rtbind = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 	GpuRes gres_fb_pickingId, gres_fb_pickingDepthcs, gres_fb_pickingDepthstencil;
 #else
+	const uint rtbind = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 	GpuRes gres_fb_counter, gres_fb_spinlock;
 	GpuRes gres_fb_k_buffer, gres_fb_ubk_buffer;
 	//GpuRes gres_fb_mip_a_halftexs[2], gres_fb_mip_z_halftexs[2]; // deprecated
@@ -1150,18 +1157,12 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #endif
 	// Ghost effect mode
 	//GpuRes gres_fb_mask_hotspot;
-	grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D,
-		D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
-	grd_helper::UpdateFrameBuffer(gres_fb_depthcs, iobj, "RENDER_OUT_DEPTH_0", RTYPE_TEXTURE2D,
-		D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_FLOAT, 0);
-	grd_helper::UpdateFrameBuffer(gres_fb_singlelayer_rgba, iobj, "RENDER_OUT_RGBA_1", RTYPE_TEXTURE2D,
-		D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
-	grd_helper::UpdateFrameBuffer(gres_fb_singlelayer_depthcs, iobj, "RENDER_OUT_DEPTH_1", RTYPE_TEXTURE2D,
-		D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_FLOAT, 0);
-	grd_helper::UpdateFrameBuffer(gres_fb_singlelayer_tempDepth, iobj, "RENDER_OUT_DEPTH_2", RTYPE_TEXTURE2D,
-		D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_FLOAT, 0);
-	grd_helper::UpdateFrameBuffer(gres_fb_depthstencil, iobj, "DEPTH_STENCIL", RTYPE_TEXTURE2D,
-		D3D11_BIND_DEPTH_STENCIL, DXGI_FORMAT_D32_FLOAT, false);
+	grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+	grd_helper::UpdateFrameBuffer(gres_fb_depthcs, iobj, "RENDER_OUT_DEPTH_0", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
+	grd_helper::UpdateFrameBuffer(gres_fb_singlelayer_rgba, iobj, "RENDER_OUT_RGBA_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+	grd_helper::UpdateFrameBuffer(gres_fb_singlelayer_depthcs, iobj, "RENDER_OUT_DEPTH_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
+	grd_helper::UpdateFrameBuffer(gres_fb_singlelayer_tempDepth, iobj, "RENDER_OUT_DEPTH_2", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
+	grd_helper::UpdateFrameBuffer(gres_fb_depthstencil, iobj, "DEPTH_STENCIL", RTYPE_TEXTURE2D, D3D11_BIND_DEPTH_STENCIL, DXGI_FORMAT_D32_FLOAT, false);
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_rgba, iobj, "SYSTEM_OUT_RGBA", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_SYSOUT);
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_depthcs, iobj, "SYSTEM_OUT_DEPTH", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R32_FLOAT, UPFB_SYSOUT);
 
@@ -1184,8 +1185,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			pickPrimitive? (ID3D11Buffer*)gres_picking_GSO_buffer.alloc_res_ptrs[DTYPE_RES] : (ID3D11Buffer*)gres_picking_buffer.alloc_res_ptrs[DTYPE_RES]
 			, 0, NULL, &clearDataUnit[0], sizeof(uint) * clearDataUnit.size(), sizeof(uint) * clearDataUnit.size());
 	}
+
 #ifdef DX10_0
-	// to do // ... picking...
 #else
 	// also using singlelayer rt
 	grd_helper::UpdateFrameBuffer(gres_fb_counter, iobj, "RW_COUNTER", RTYPE_TEXTURE2D,

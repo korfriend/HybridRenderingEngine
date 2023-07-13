@@ -212,6 +212,15 @@
 #define IDR_RCDATA11074					  11074
 #define IDR_RCDATA11075					  11075
 
+#define IDR_RCDATA90003					  90003
+#define IDR_RCDATA90004					  90004
+#define IDR_RCDATA90005					  90005
+#define IDR_RCDATA90006					  90006
+#define IDR_RCDATA90011					  90011
+#define IDR_RCDATA90041					  90041
+#define IDR_RCDATA90012					  90012
+#define IDR_RCDATA90042					  90042
+#define IDR_RCDATA90043					  90043
 
 // Next default values for new objects
 // 

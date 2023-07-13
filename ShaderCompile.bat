@@ -144,18 +144,6 @@ fxc /E GS_Surfels /T gs_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/GS_
 fxc /E GS_ThickPoints_Pixels /T gs_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/GS_ThickPoints_gs_5_0
 fxc /E GS_ThickLines /T gs_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/GS_ThickLines_gs_5_0
 
-//fxc /E DVR /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/VR_RAYMAX_cs_5_0 /D RAYMODE=1 /D OTF_MASK=0 /D MAX_LAYERS=8
-//fxc /E DVR /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/VR_RAYMIN_cs_5_0 /D RAYMODE=2 /D OTF_MASK=0 /D MAX_LAYERS=8
-//fxc /E DVR /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/VR_RAYSUM_cs_5_0 /D RAYMODE=3 /D OTF_MASK=0 /D MAX_LAYERS=8
-//fxc /E DVR /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/VR_DEFAULT_cs_5_0 /D RAYMODE=0 /D OTF_MASK=0 /D MAX_LAYERS=8 /D VR_MODE=0
-//fxc /E DVR /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/VR_OPAQUE_cs_5_0 /D RAYMODE=0 /D OTF_MASK=0 /D MAX_LAYERS=8 /D VR_MODE=1
-//fxc /E DVR /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/VR_CONTEXT_cs_5_0 /D RAYMODE=0 /D OTF_MASK=0 /D MAX_LAYERS=8 /D VR_MODE=2
-//fxc /E VR_SURFACE /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/VR_SURFACE_cs_5_0 /D RAYMODE=0 /D OTF_MASK=0 /D MAX_LAYERS=8
-//fxc /E DVR /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/VR_RAYMAX_cs_5_0 /D RAYMODE=1 /D OTF_MASK=0 /D FRAG_MERGING=1 /D DYNAMIC_K_MODE=0
-//fxc /E DVR /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/VR_RAYMIN_cs_5_0 /D RAYMODE=2 /D OTF_MASK=0 /D FRAG_MERGING=1 /D DYNAMIC_K_MODE=0
-//fxc /E DVR /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/VR_RAYSUM_cs_5_0 /D RAYMODE=3 /D OTF_MASK=0 /D FRAG_MERGING=1 /D DYNAMIC_K_MODE=0
-
-
 fxc /E RayCasting /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/VR_RAYMAX_cs_5_0 /D RAYMODE=1 /D OTF_MASK=0 /D MAX_LAYERS=8 /D FRAG_MERGING=1
 fxc /E RayCasting /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/VR_RAYMIN_cs_5_0 /D RAYMODE=2 /D OTF_MASK=0 /D MAX_LAYERS=8 /D FRAG_MERGING=1
 fxc /E RayCasting /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/VR_RAYSUM_cs_5_0 /D RAYMODE=3 /D OTF_MASK=0 /D MAX_LAYERS=8 /D FRAG_MERGING=1
