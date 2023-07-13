@@ -25,10 +25,12 @@ struct PS_FILL_OUTPUT
 {
 	float4 color : SV_TARGET0; // UNORM
 	float depthcs : SV_TARGET1;
+
+	//float ds_z : SV_Depth;
 };
 struct PS_FILL_OUTPUT_SURF
 {
-	uint enc : SV_TARGET0;
+	uint enc : SV_TARGET0; // UNORM
 	float depthcs : SV_TARGET1;
 };
 #else
@@ -441,6 +443,7 @@ float PhongBlinnVr(const float3 cam_view, const in float4 shading_factors, const
 
 #if DX10_0 == 1
 #define __EXIT_VR_RayCasting return output
+[earlydepthstencil]
 PS_FILL_OUTPUT RayCasting(VS_OUTPUT input)
 #else
 #define __EXIT_VR_RayCasting return
@@ -459,6 +462,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	PS_FILL_OUTPUT output;
 	output.depthcs = FLT_MAX;
 	output.color = (float4)0;
+	//output.ds_z = input.f4PosSS.z;
 
 	uint2 tex2d_xy = uint2(input.f4PosSS.xy);
 
@@ -483,6 +487,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	// in DX10_0 mode, use the register for vr_hit_enc
 	uint vr_hit_enc = vrHitEnc[tex2d_xy];
 	int i = 0;
+
 #else
     uint2 tex2d_xy = uint2(DTid.xy);
     if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)

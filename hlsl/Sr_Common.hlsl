@@ -291,18 +291,28 @@ float4 OutlineTest(const in int2 tex2d_xy, inout float depth_c, const in float d
                 if (depth < 100000) {
                     count++;
                     depth_min = min(depth_min, depth);
+#if DX10_0 == 1
+                    y = thick + 1;
+                    break;
+#endif
                 }
             }
         }
 
-        if (BitCheck(g_cbCamState.cam_flag, 9)) {
-            float w = 2 * thick + 1;
-            float alpha = min((floaT)count / (w * w / 2.f), 1.f);
-            //alpha *= alpha;
+        if (count > 0) {
+#if DX10_0 == 1
+            vout = float4(edge_color, 1);
+#else
+            if (BitCheck(g_cbCamState.cam_flag, 9)) {
+                float w = 2 * thick + 1;
+                float alpha = min((float)count / (w * w / 2.f), 1.f);
+                //alpha *= alpha;
 
-            vout = float4(edge_color * alpha, alpha);
+                vout = float4(edge_color * alpha, alpha);
+            }
+            else vout = float4(edge_color, 1);
+#endif
         }
-        else vout = float4(edge_color, 1);
 
         depth_c = depth_min;
         //vout = float4(nor_c, 1);
@@ -389,8 +399,8 @@ void TextMapping(inout float4 v_rgba, inout float depthcs, float2 pos_sample, co
     }
     else
     {
-        v_rgba.a = intensity;
         v_rgba.rgb = v_rgba.rgb * intensity + (float3(1, 1, 1) - v_rgba.rgb) * (1.f - intensity);
+        v_rgba.a = intensity;
     }
 }
 
@@ -485,8 +495,8 @@ void MultiTextMapping(inout float4 v_rgba, inout float depthcs, float2 pos_sampl
     }
     else
     {
-        v_rgba.a = intensity;
         v_rgba.rgb = v_rgba.rgb * intensity + (float3(1, 1, 1) - v_rgba.rgb) * (1.f - intensity);
+        v_rgba.a = intensity;
     }
 }
 
@@ -515,7 +525,11 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
         || (uint)input.f4PosSS.y >= g_cbCamState.rt_height)
         clip(-1);
 
+#if DX10_0
+    float4 v_rgba = float4(g_cbPobj.Kd, 1.f); // note zero alpha actors are filtered out in the preprocessing of the rendering
+#else
     float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
+#endif
     float3 nor = (float3) 0;
     float nor_len = 0;
 
@@ -622,6 +636,9 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
 
 #endif
 
+#if DX10_0 == 1
+    v_rgba.a = 1.f;
+#else
     // make it as an associated color.
     // as a color component is stored into 8 bit channel, the alpha-multiplied precision must be determined in this stage.
     // unless, noise dots appear.
@@ -646,6 +663,8 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
             if (v_rgba.a <= 0.01) clip(-1);
         }
     }
+#endif
+
 #endif
 
     v_rgba_out = v_rgba;

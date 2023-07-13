@@ -6,14 +6,14 @@ fxc /E CommonVS_PTTT /T vs_4_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs_
 
 fxc /E SINGLE_LAYER /T ps_4_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs_4_0/SR_SINGLE_LAYER_ps_4_0
 
-fxc /E BasicShader4 /T ps_4_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs_4_0/SR_BASIC_PHONGBLINN_ps_4_0 /D __RENDERING_MODE=0 
-fxc /E BasicShader4 /T ps_4_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs_4_0/SR_BASIC_DASHEDLINE_ps_4_0 /D __RENDERING_MODE=1 
-fxc /E BasicShader4 /T ps_4_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs_4_0/SR_BASIC_MULTITEXTMAPPING_ps_4_0 /D __RENDERING_MODE=2 
-fxc /E BasicShader4 /T ps_4_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs_4_0/SR_BASIC_TEXTMAPPING_ps_4_0 /D __RENDERING_MODE=3 
-fxc /E BasicShader4 /T ps_4_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs_4_0/SR_BASIC_TEXTUREIMGMAP_ps_4_0 /D __RENDERING_MODE=4 
-fxc /E BasicShader4 /T ps_4_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs_4_0/SR_BASIC_VOLUMEMAP_ps_4_0 /D __RENDERING_MODE=5 
+fxc /E BasicShader4 /T ps_4_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs_4_0/SR_BASIC_PHONGBLINN_ps_4_0 /D __RENDERING_MODE=0 /D DX10_0=1
+fxc /E BasicShader4 /T ps_4_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs_4_0/SR_BASIC_DASHEDLINE_ps_4_0 /D __RENDERING_MODE=1 /D DX10_0=1
+fxc /E BasicShader4 /T ps_4_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs_4_0/SR_BASIC_MULTITEXTMAPPING_ps_4_0 /D __RENDERING_MODE=2 /D DX10_0=1
+fxc /E BasicShader4 /T ps_4_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs_4_0/SR_BASIC_TEXTMAPPING_ps_4_0 /D __RENDERING_MODE=3 /D DX10_0=1
+fxc /E BasicShader4 /T ps_4_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs_4_0/SR_BASIC_TEXTUREIMGMAP_ps_4_0 /D __RENDERING_MODE=4 /D DX10_0=1
+fxc /E BasicShader4 /T ps_4_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs_4_0/SR_BASIC_VOLUMEMAP_ps_4_0 /D __RENDERING_MODE=5 /D DX10_0=1
 
-fxc /E BasicShader4 /T ps_4_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs_4_0/SR_QUAD_OUTLINE_ps_4_0 /D __RENDERING_MODE=6 
+fxc /E BasicShader4 /T ps_4_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs_4_0/SR_QUAD_OUTLINE_ps_4_0 /D __RENDERING_MODE=6  /D DX10_0=1
 
 fxc /E GS_PickingPoint /T gs_4_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs_4_0/GS_PickingBasic_gs_4_0 
 fxc /E GS_MeshCutLines /T gs_4_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs_4_0/GS_MeshCutLines_gs_4_0 

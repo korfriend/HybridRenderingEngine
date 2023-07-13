@@ -13,6 +13,10 @@ PS_FILL_OUTPUT BasicShader4(__VS_OUT input)
 
 #if __RENDERING_MODE != 6
 	BasicShader(input, v_rgba, z_depth);
+#if DX10_0
+    if (v_rgba.a <= 0.01) clip(-1);
+    v_rgba.a = 1.f;
+#endif
 #else
 	int2 tex2d_xy = int2(input.f4PosSS.xy);
 	z_depth = sr_fragment_zdepth[tex2d_xy];

@@ -310,12 +310,13 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #ifdef DX10_0
 	const uint rtbind = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 	
-	GpuRes gres_fb_rgba, gres_fb_depthcs, gres_fb_vrdepthcs;
+	GpuRes gres_fb_rgba, gres_fb_depthcs;
 	grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
 	grd_helper::UpdateFrameBuffer(gres_fb_depthcs, iobj, "RENDER_OUT_DEPTH_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
 	
-	GpuRes gres_fb_vrenc;
-	grd_helper::UpdateFrameBuffer(gres_fb_vrenc, iobj, "RENDER_OUT_DEPTH_2", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
+	GpuRes gres_fb_vrdepthcs, gres_fb_vrenc;
+	grd_helper::UpdateFrameBuffer(gres_fb_vrdepthcs, iobj, "RENDER_OUT_DEPTH_2", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
+	grd_helper::UpdateFrameBuffer(gres_fb_vrenc, iobj, "RENDER_OUT_VRENC", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8_UINT, 0);
 
 	GpuRes gres_fb_rgba_prev, gres_fb_depthcs_prev;
 	grd_helper::UpdateFrameBuffer(gres_fb_rgba_prev, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
@@ -401,6 +402,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	}
 #pragma endregion 
 
+	int count_call_render = iobj->GetObjParam("_int_NumCallRenders", (int)0);
+
 	// Backup Previous Render Target //
 	ID3D11RenderTargetView* pdxRTVOld = NULL;
 	ID3D11DepthStencilView* pdxDSVOld = NULL;
@@ -429,6 +432,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->ClearUnorderedAccessViewFloat((ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV], clr_float_fltmax_4);
 		// note that gres_fb_vrdepthcs is supposed to be initialized in VR_SURFACE
 #endif
+		count_call_render = 0;
 	}
 
 	ID3D11Buffer* cbuf_cam_state = dx11CommonParams->get_cbuf("CB_CameraState");
@@ -462,11 +466,25 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 	if (gpu_manager->UpdateGpuResource(gres_quad))
 	{
+		D3D11_MAPPED_SUBRESOURCE mappedResPobjData;
+		dx11DeviceImmContext->Map(cbuf_pobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResPobjData);
+		CB_PolygonObject* cbPolygonObjData = (CB_PolygonObject*)mappedResPobjData.pData;
+
+		vmmat44f matQaudWS2CS;
+		vmmath::fMatrixWS2CS(&matQaudWS2CS, &vmfloat3(0, 0, 1), &vmfloat3(0, 1, 0), &vmfloat3(0, 0, -1));
+		vmmat44f matQaudCS2PS;
+		vmmath::fMatrixOrthogonalCS2PS(&matQaudCS2PS, 2.f, 2.f, 0, 2.f);
+		vmmat44f matQaudWS2PS = matQaudWS2CS * matQaudCS2PS;
+		cbPolygonObjData->mat_os2ps = TRANSPOSE(matQaudWS2PS);
+		dx11DeviceImmContext->Unmap(cbuf_pobj, 0);
+		dx11DeviceImmContext->VSSetConstantBuffers(1, 1, &cbuf_pobj);
+
+
 		ID3D11InputLayout* dx11LI_P = (ID3D11InputLayout*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "P"));
 		ID3D11VertexShader* dx11VShader_P = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_P_vs_4_0"));
 
 		ID3D11Buffer* dx11BufferTargetPrim = (ID3D11Buffer*)gres_quad.alloc_res_ptrs[DTYPE_RES];
-		ID3D11Buffer* dx11IndiceTargetPrim = NULL;
+		//ID3D11Buffer* dx11IndiceTargetPrim = NULL;
 		uint stride_inputlayer = sizeof(vmfloat3);
 		uint offset = 0;
 		dx11DeviceImmContext->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&dx11BufferTargetPrim, &stride_inputlayer, &offset);
@@ -479,6 +497,24 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->OMSetDepthStencilState(dx11CommonParams->get_depthstencil("ALWAYS"), 0);
 	}
 	else assert(0);
+
+	D3D11_RECT rects[1];
+	rects[0].left = 0;
+	rects[0].right = fb_size_cur.x;
+	rects[0].top = 0;
+	rects[0].bottom = fb_size_cur.y;
+	dx11DeviceImmContext->RSSetScissorRects(1, rects);
+
+	// View Port Setting //
+	D3D11_VIEWPORT dx11ViewPort;
+	dx11ViewPort.Width = (float)fb_size_cur.x;
+	dx11ViewPort.Height = (float)fb_size_cur.y;
+	dx11ViewPort.MinDepth = 0;
+	dx11ViewPort.MaxDepth = 1.0f;
+	dx11ViewPort.TopLeftX = 0;
+	dx11ViewPort.TopLeftY = 0;
+	dx11DeviceImmContext->RSSetViewports(1, &dx11ViewPort);
+
 #else
 #define SET_SAMPLERS dx11DeviceImmContext->CSSetSamplers
 #define SET_CBUFFERS dx11DeviceImmContext->CSSetConstantBuffers
@@ -577,7 +613,6 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	dx11CommonParams->GpuProfile("VR Begin");
 
 	// Initial Setting of Frame Buffers //
-	int count_call_render = iobj->GetObjParam("_int_NumCallRenders", (int)0);
 	bool is_performed_ssao = false;
 
 	for (VmActor* actor : dvr_volumes)
@@ -939,8 +974,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 #ifdef DX10_0
 			ID3D11RenderTargetView* dx11RTVs[2] = {
-				(ID3D11RenderTargetView*)gres_fb_vrdepthcs.alloc_res_ptrs[DTYPE_RTV],
-				(ID3D11RenderTargetView*)gres_fb_vrenc.alloc_res_ptrs[DTYPE_RTV] };
+				(ID3D11RenderTargetView*)gres_fb_vrenc.alloc_res_ptrs[DTYPE_RTV],
+				(ID3D11RenderTargetView*)gres_fb_vrdepthcs.alloc_res_ptrs[DTYPE_RTV] };
 			dx11DeviceImmContext->OMSetRenderTargets(2, dx11RTVs, NULL);
 
 			SET_SHADER(GETPS(VR_SURFACE_ps_4_0), NULL, 0);
@@ -957,8 +992,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
 
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(4, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs));
-			SET_SHADER_RES(6, 1, (ID3D11ShaderResourceView**)&gres_fb_vrdepthcs.alloc_res_ptrs[DTYPE_SRV]);
 #endif
+			SET_SHADER_RES(6, 1, (ID3D11ShaderResourceView**)&gres_fb_vrdepthcs.alloc_res_ptrs[DTYPE_SRV]);
 		}
 
 #ifdef DX10_0
@@ -990,9 +1025,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #endif
 
 #ifdef DX10_0
-		SET_SHADER_RES(0, 20, (ID3D11ShaderResourceView**)&gres_fb_rgba_prev.alloc_res_ptrs[DTYPE_SRV]);
-		SET_SHADER_RES(0, 21, (ID3D11ShaderResourceView**)&gres_fb_depthcs_prev.alloc_res_ptrs[DTYPE_SRV]);
-		SET_SHADER_RES(0, 22, (ID3D11ShaderResourceView**)&gres_fb_vrdepthcs.alloc_res_ptrs[DTYPE_SRV]);
+		SET_SHADER_RES(20, 1, (ID3D11ShaderResourceView**)&gres_fb_rgba_prev.alloc_res_ptrs[DTYPE_SRV]);
+		SET_SHADER_RES(21, 1, (ID3D11ShaderResourceView**)&gres_fb_depthcs_prev.alloc_res_ptrs[DTYPE_SRV]);
+		SET_SHADER_RES(22, 1, (ID3D11ShaderResourceView**)&gres_fb_vrenc.alloc_res_ptrs[DTYPE_SRV]);
 		
 		ID3D11RenderTargetView* dx11RTVs[2] = {
 			(ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV],
@@ -1005,7 +1040,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 		dx11DeviceImmContext->OMSetRenderTargets(2, dx11RTVs_NULL, NULL);
 
-		SET_SHADER_RES(3, 20, dx11SRVs_NULL);
+		SET_SHADER_RES(20, 3, dx11SRVs_NULL);
 #else
 		SET_SHADER(cshader, NULL, 0);
 		//dx11DeviceImmContext->Flush();
