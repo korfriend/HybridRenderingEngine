@@ -161,7 +161,6 @@ bool __InitializeDevice()
 		if (g_eFeatureLevel < 0xb100) {
 			if (g_eFeatureLevel < 0xb000) {
 				vmlog::LogWarn(string("(Low Capacity GPU) Direct3D Feature Level 10.x : ") + hex_FeatureLevel);
-				return false;
 			}
 			else {
 				vmlog::LogWarn(string("(Low Capacity GPU) Direct3D Feature Level 11.0 : ") + hex_FeatureLevel);

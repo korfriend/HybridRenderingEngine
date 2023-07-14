@@ -457,6 +457,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90043), "VR_SCULPTMASK_CONTEXT_ps_4_0", "ps_4_0"), VR_SCULPTMASK_CONTEXT_ps_4_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90006), "VR_SURFACE_ps_4_0", "ps_4_0"), VR_SURFACE_ps_4_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90150), "SR_QUAD_OUTLINE_ps_4_0", "ps_5_0"), SR_QUAD_OUTLINE_ps_4_0);
 
 #else
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11001), "SR_OIT_P_vs_5_0", "vs_5_0", "P", lotypeInputPos, 1), SR_OIT_P_vs_5_0);

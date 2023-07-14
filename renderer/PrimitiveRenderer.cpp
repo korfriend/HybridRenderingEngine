@@ -1832,12 +1832,11 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					}
 
 					if (is_annotation_obj && dx11InputLayer_Target == dx11LI_PNT) {
-						if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
 #ifdef DX10_0
-							dx11PS_Target = GETPS(SR_BASIC_TEXTMAPPING_ps_4_0);
+						dx11PS_Target = GETPS(SR_BASIC_TEXTMAPPING_ps_4_0); // if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES)
 #else
+						if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
 							dx11PS_Target = GETPS(SR_BASIC_TEXTMAPPING_ps_5_0);
-#endif
 						}
 						else {
 							switch (mode_OIT)
@@ -1859,14 +1858,14 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 								break;
 							}
 						}
+#endif
 					}
 					else if (has_texture_img && dx11InputLayer_Target == dx11LI_PNT) {
-						if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
 #ifdef DX10_0
-							dx11PS_Target = GETPS(SR_BASIC_VOLUMEMAP_ps_4_0);
+						dx11PS_Target = GETPS(SR_BASIC_TEXTUREIMGMAP_ps_4_0); // render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES
 #else
-							dx11PS_Target = GETPS(SR_BASIC_VOLUMEMAP_ps_5_0);
-#endif
+						if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
+							dx11PS_Target = GETPS(SR_BASIC_TEXTUREIMGMAP_ps_5_0);
 						}
 						else {
 							switch (mode_OIT)
@@ -1888,27 +1887,27 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 								break;
 							}
 						}
+#endif
 					}
 					else if (vobj && tobj_maptable) {
-						if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
 #ifdef DX10_0
-							dx11PS_Target = GETPS(SR_BASIC_VOLUMEMAP_ps_4_0);
+						dx11PS_Target = GETPS(SR_BASIC_VOLUMEMAP_ps_4_0); // render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES
 #else
+						if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
 							dx11PS_Target = GETPS(SR_BASIC_VOLUMEMAP_ps_5_0);
-#endif
 						}
 						else {
 							assert(mode_OIT == MFR_MODE::DYNAMIC_FB);
 							dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_ABUFFER_VOLUMEMAP_ps_5_0);
 						}
+#endif
 					}
 					else {
-						if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
 #ifdef DX10_0
-							dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_4_0);
+						dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_4_0); // render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES
 #else
+						if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
 							dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_5_0);
-#endif
 						}
 						else {
 							switch (mode_OIT)
@@ -1930,6 +1929,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 								break;
 							}
 						}
+#endif
 					}
 				}
 				else if (prim_data->GetVerticeDefinition("TEXCOORD0"))
@@ -1942,12 +1942,11 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 						dx11InputLayer_Target = dx11LI_PTTT;
 						dx11VS_Target = dx11VShader_PTTT;
 
-						if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
 #ifdef DX10_0
-							dx11PS_Target = GETPS(SR_BASIC_MULTITEXTMAPPING_ps_4_0);
+						dx11PS_Target = GETPS(SR_BASIC_MULTITEXTMAPPING_ps_4_0); // render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES
 #else
+						if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
 							dx11PS_Target = GETPS(SR_BASIC_MULTITEXTMAPPING_ps_5_0);
-#endif
 						}
 						else {
 							switch (mode_OIT)
@@ -1969,6 +1968,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 								break;
 							}
 						}
+#endif
 					}
 					else // prim_data->GetVerticeDefinition("TEXCOORD2") is NULL
 					{
@@ -1977,22 +1977,22 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 						dx11InputLayer_Target = dx11LI_PT;
 						dx11VS_Target = dx11VShader_PT;
 
-						if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
 #ifdef DX10_0
-							if (is_annotation_obj)
-								dx11PS_Target = GETPS(SR_BASIC_TEXTMAPPING_ps_4_0);
-							else if ((cbPolygonObj.pobj_flag & (0x1 << 19)) && prim_data->ptype == PrimitiveTypeLINE)
-								dx11PS_Target = GETPS(SR_BASIC_DASHEDLINE_ps_4_0);
-							else
-								dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_4_0);
+						// render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES
+						if (is_annotation_obj)
+							dx11PS_Target = GETPS(SR_BASIC_TEXTMAPPING_ps_4_0);
+						else if ((cbPolygonObj.pobj_flag & (0x1 << 19)) && prim_data->ptype == PrimitiveTypeLINE)
+							dx11PS_Target = GETPS(SR_BASIC_DASHEDLINE_ps_4_0);
+						else
+							dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_4_0);
 #else
+						if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
 							if (is_annotation_obj)
 								dx11PS_Target = GETPS(SR_BASIC_TEXTMAPPING_ps_5_0);
 							else if ((cbPolygonObj.pobj_flag & (0x1 << 19)) && prim_data->ptype == PrimitiveTypeLINE)
 								dx11PS_Target = GETPS(SR_BASIC_DASHEDLINE_ps_5_0);
 							else
 								dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_5_0);
-#endif
 						}
 						else {
 
@@ -2054,6 +2054,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 									break;
 								}
 						}
+#endif
 					}
 				}
 				else
@@ -2062,12 +2063,11 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					dx11InputLayer_Target = dx11LI_P;
 					dx11VS_Target = dx11VShader_P;
 
-					if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
 #ifdef DX10_0
-						dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_4_0);
+					dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_4_0); // render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES
 #else
+					if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
 						dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_5_0);
-#endif
 					}
 					else {
 						switch (mode_OIT)
@@ -2089,6 +2089,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 							break;
 						}
 					}
+#endif
 				}
 
 				if (render_pass == RENDER_GEOPASS::PASS_SINGLELAYERS) {
@@ -2099,6 +2100,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #endif
 				}
 				else if (render_pass == RENDER_GEOPASS::PASS_OIT) {
+#ifdef DX10_0
+					assert(0);
+#endif
 					if (is_frag_counter_buffer)
 					{
 						// Create a count of the number of fragments at each pixel location
@@ -2560,7 +2564,11 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				dx11DeviceImmContext->IASetInputLayout(dx11LI_P);
 				dx11DeviceImmContext->VSSetShader(dx11VShader_P, NULL, 0);
 				dx11DeviceImmContext->GSSetShader(NULL, NULL, 0);
+#ifdef DX10_0
+				dx11DeviceImmContext->PSSetShader(GETPS(SR_QUAD_OUTLINE_ps_4_0), NULL, 0);
+#else
 				dx11DeviceImmContext->PSSetShader(GETPS(SR_QUAD_OUTLINE_ps_5_0), NULL, 0);
+#endif
 				dx11DeviceImmContext->RSSetState(GETRASTER(SOLID_NONE));
 				dx11DeviceImmContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 				dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(ALWAYS), 0);

@@ -195,14 +195,14 @@ Texture2D g_tex2D_Mat_NS : register(t14);
 Texture2D g_tex2D_Mat_BUMP : register(t15);
 Texture2D g_tex2D_Mat_D : register(t16);
 
-#define WILDCARD_DEPTH_OUTLINE 2.f
+#define WILDCARD_DEPTH_OUTLINE -2.f
 
 #if DX10_0 == 1
 // USE PIXEL SHADER //
-// USE PS_FILL_OUTPUT
-Texture2D fragment_vis : register(t20);
-Texture2D<float> fragment_zdepth : register(t21);
-RWBuffer<uint> picking_buf : register(u0);
+// USE PS_FILL_OUTPUT //
+Texture2D prev_fragment_vis : register(t20);
+Texture2D<float> prev_fragment_zdepth : register(t21);
+
 struct VS_OUTPUT
 {
 	float4 f4PosSS : SV_POSITION;
@@ -1084,10 +1084,13 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	}
 
 #if DX10_0 == 1
-	float depthZ_prev = fragment_zdepth[ss_xy];// .r;
+	float4 vis_prev = prev_fragment_vis[ss_xy];// .r;
+	float depthZ_prev = prev_fragment_zdepth[ss_xy];// .r;
 
-	if (depthZ_prev < zDepth)
-		__EXIT;
+	if (planeThickness > 0.f) {
+		if (depthZ_prev < zDepth)
+			__EXIT;
+	}
 
 	//out_ps.ds_z = input.f4PosSS.z;
 	out_ps.color = v_rgba;
