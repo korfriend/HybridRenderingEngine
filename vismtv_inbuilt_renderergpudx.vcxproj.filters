@@ -20,11 +20,11 @@
     <ClCompile Include="SlicerSR.cpp">
       <Filter>renderer</Filter>
     </ClCompile>
-    <ClCompile Include="gpu manager\gpures_interface.cpp">
-      <Filter>hlsl source code</Filter>
-    </ClCompile>
     <ClCompile Include="renderer\PrimitiveRenderer.cpp">
       <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="gpu manager\gpures_interface.cpp">
+      <Filter>gpu manager</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

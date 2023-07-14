@@ -138,10 +138,13 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		vmlog::LogInfo("RELOAD HLSL _ VR renderer");
 
 #ifdef DX10_0
-#define PS_NUM 9
+#define PS_NUM 12
 #define SET_PS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::PIXEL_SHADER, NAME), dx11PShader, true)
 
 		string strNames_PS[PS_NUM] = {
+			   "VR_RAYMAX_ps_4_0"
+			  ,"VR_RAYMIN_ps_4_0"
+			  ,"VR_RAYSUM_ps_4_0"
 			   "VR_DEFAULT_ps_4_0"
 			  ,"VR_OPAQUE_ps_4_0"
 			  ,"VR_CONTEXT_ps_4_0"

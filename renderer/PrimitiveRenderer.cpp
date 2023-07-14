@@ -1777,8 +1777,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			{
 				bool is_ghost_surface = actor->GetParam("_bool_IsGhostSurface", false);
 				bool is_only_hotspot_visible = actor->GetParam("_bool_IsOnlyHotSpotVisible", false);
-				if (is_ghost_surface) cbPolygonObj.pobj_flag |= 0x1 << 22;
-				if (is_only_hotspot_visible) cbPolygonObj.pobj_flag |= 0x1 << 23;
+				cbPolygonObj.pobj_flag |= (int)is_ghost_surface << 22;
+				cbPolygonObj.pobj_flag |= (int)is_only_hotspot_visible << 23;
 				//cout << "TEST : " << is_ghost_surface << ", " << is_only_hotspot_visible << endl;
 			}
 			D3D11_MAPPED_SUBRESOURCE mappedResPobjData;

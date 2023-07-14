@@ -1,7 +1,7 @@
 #include "CommonShader.hlsl"
 
 #if DX10_0 == 1
-#define __EXIT clip(-1)
+#define __EXIT return out_ps
 #else
 #define __EXIT return
 #endif
@@ -772,13 +772,14 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 #if DX10_0 == 1
 	PS_FILL_OUTPUT out_ps;
 	//out_ps.ds_z = 0;
-	out_ps.color = (float4)0;
-	out_ps.depthcs = 0;
 	int2 ss_xy = int2(input.f4PosSS.xy);
 
-	float fvPrev = fragment_zdepth[ss_xy];// asfloat(ConvertFloat4ToUInt(v_rgba));
+	out_ps.color = prev_fragment_vis[ss_xy];
+	out_ps.depthcs = prev_fragment_zdepth[ss_xy];
+	float fvPrev = prev_fragment_zdepth[ss_xy];
 	if (fvPrev == WILDCARD_DEPTH_OUTLINE)
 		__EXIT;
+
 #else
 	int2 ss_xy = int2(DTid.xy);
 
@@ -786,16 +787,16 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	int x_pick_ss = g_cbCamState.iSrCamDummy__1 & 0xFFFF;
 	int y_pick_ss = g_cbCamState.iSrCamDummy__1 >> 16;
 	if (x_pick_ss != ss_xy.x || y_pick_ss != ss_xy.y)
-		return;
+		__EXIT;
 #endif
 
 	// do not compute 1st hit surface separately
 	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height || g_cbPobj.alpha < 0.001f)
-		return;
+		__EXIT;
 
 	float fvPrev = fragment_zdepth[ss_xy];// asfloat(ConvertFloat4ToUInt(v_rgba));
 	if (fvPrev == WILDCARD_DEPTH_OUTLINE)
-		return;
+		__EXIT;
 	fragment_zdepth[ss_xy] = 0;
 
 	const uint k_value = g_cbCamState.k_value;
@@ -1084,19 +1085,19 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	}
 
 #if DX10_0 == 1
-	float4 vis_prev = prev_fragment_vis[ss_xy];// .r;
-	float depthZ_prev = prev_fragment_zdepth[ss_xy];// .r;
-
 	if (planeThickness > 0.f) {
-		if (depthZ_prev < zDepth)
-			__EXIT;
+		if (out_ps.depthcs > zDepth) {
+			out_ps.color = v_rgba;
+			out_ps.depthcs = zDepth;
+		}
+	}
+	else if (planeThickness == 0.f) 
+	{
+		out_ps.color = MixOpt(v_rgba, v_rgba.a, out_ps.color, out_ps.color.a);
+		out_ps.depthcs = 1.f;
 	}
 
-	//out_ps.ds_z = input.f4PosSS.z;
-	out_ps.color = v_rgba;
-	out_ps.depthcs = zDepth;
-
-	return out_ps;
+	__EXIT;
 #else
 	uint numFrag = fragment_counter[ss_xy];
 
@@ -1159,7 +1160,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 
 float4 SlicerOutlineTest(const in int2 tex2d_xy, const in float3 edge_color, const in int thick)
 {
-	float fvcur = fragment_zdepth[tex2d_xy];
+	float fvcur = prev_fragment_zdepth[tex2d_xy];
 	if (fvcur != 0.f)
 		return (float4)0;
 
@@ -1177,7 +1178,7 @@ float4 SlicerOutlineTest(const in int2 tex2d_xy, const in float3 edge_color, con
 			float2 v12 = v1 * v2;
 			if (v12.x >= 0 || v12.y >= 0)
 				continue;
-			float fv = fragment_zdepth[(int2)neighbor_pos];
+			float fv = prev_fragment_zdepth[(int2)neighbor_pos];
 			if (fv == 1.f) {
 				//cloestDist = min(cloestDist, length(neighbor_pos - tex2d_xy.xy));
 				cnt++;
@@ -1206,11 +1207,17 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 #endif
 {
 #if DX10_0 == 1
+	int2 ss_xy = int2(input.f4PosSS.xy);
 	PS_FILL_OUTPUT out_ps;
 	//out_ps.ds_z = 0;
-	out_ps.color = (float4)0;
-	out_ps.depthcs = 0;
-	int2 ss_xy = int2(input.f4PosSS.xy);
+	out_ps.color = prev_fragment_vis[ss_xy];
+	out_ps.depthcs = prev_fragment_zdepth[ss_xy];
+
+	//if (out_ps.depthcs == WILDCARD_DEPTH_OUTLINE)
+	//	return out_ps;
+	//out_ps.color = (float4)1;
+	//out_ps.depthcs = 1;
+	//return out_ps;
 #else
 	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
 		return;

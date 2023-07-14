@@ -447,6 +447,10 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90105), "SR_BASIC_TEXTUREIMGMAP_ps_4_0", "ps_4_0"), SR_BASIC_TEXTUREIMGMAP_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90106), "SR_BASIC_VOLUMEMAP_ps_4_0", "ps_4_0"), SR_BASIC_VOLUMEMAP_ps_5_0);
 
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA9000), "VR_RAYMAX_ps_4_0", "ps_4_0"), VR_RAYMAX_ps_4_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA9001), "VR_RAYMIN_ps_4_0", "ps_4_0"), VR_RAYMIN_ps_4_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA9002), "VR_RAYSUM_ps_4_0", "ps_4_0"), VR_RAYSUM_ps_4_0);
+
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90003), "VR_DEFAULT_ps_4_0", "ps_4_0"), VR_DEFAULT_ps_4_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90004), "VR_OPAQUE_ps_4_0", "ps_4_0"), VR_OPAQUE_ps_4_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90005), "VR_CONTEXT_ps_4_0", "ps_4_0"), VR_CONTEXT_ps_4_0);
@@ -459,6 +463,9 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90006), "VR_SURFACE_ps_4_0", "ps_4_0"), VR_SURFACE_ps_4_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90150), "SR_QUAD_OUTLINE_ps_4_0", "ps_5_0"), SR_QUAD_OUTLINE_ps_4_0);
 
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA9100), "ThickSlicePathTracer_ps_4_0", "ps_4_0"), ThickSlicePathTracer_ps_4_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA9101), "CurvedThickSlicePathTracer_ps_4_0", "ps_4_0"), CurvedThickSlicePathTracer_ps_4_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA9102), "SliceOutline_ps_4_0", "ps_4_0"), SliceOutline_ps_4_0);
 #else
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11001), "SR_OIT_P_vs_5_0", "vs_5_0", "P", lotypeInputPos, 1), SR_OIT_P_vs_5_0);
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11002), "SR_OIT_PN_vs_5_0", "vs_5_0", "PN", lotypeInputPosNor, 2), SR_OIT_PN_vs_5_0);

@@ -154,20 +154,33 @@ bool __InitializeDevice()
 		std::string hex_FeatureLevel(stream.str());
 
 		if (g_pdx11Device == NULL || g_pdx11DeviceImmContext == NULL) {
-			vmlog::LogErr(string("Not Supported GPUs : ") + hex_FeatureLevel);
+			string errMessage = "Device Creation Failure!";
+#ifdef DX11_3
+			errMessage += " (DX11.3 features)";
+#elif DX11_0
+			errMessage += " (DX11.0 features)";
+#elif DX10_0
+			errMessage += " (DX10.0 features)";
+#endif
+			vmlog::LogErr(errMessage);
 			return false;
 		}
 
 		if (g_eFeatureLevel < 0xb100) {
+#ifdef DX11_3
+			vmlog::LogWarn(string("(Low Capacity GPU) Direct3D Feature Level 11.3 : " + hex_FeatureLevel));
+			return false;
+#elif DX11_0
 			if (g_eFeatureLevel < 0xb000) {
-				vmlog::LogWarn(string("(Low Capacity GPU) Direct3D Feature Level 10.x : ") + hex_FeatureLevel);
-			}
-			else {
 				vmlog::LogWarn(string("(Low Capacity GPU) Direct3D Feature Level 11.0 : ") + hex_FeatureLevel);
+				return false;
 			}
+#elif DX10_0
+			vmlog::LogWarn(string("(Low Capacity GPU) Try Direct3D Feature Level 10.0 : ") + hex_FeatureLevel); 
+#endif
 		}
 		//g_eFeatureLevel = (D3D_FEATURE_LEVEL)0xb000;
-
+		
 #ifdef DX11_3
 		D3D11_FEATURE_DATA_D3D11_OPTIONS3 FeatureData = {};
 		HRESULT hh = g_pdx11Device->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS3, &FeatureData, sizeof(D3D11_FEATURE_DATA_D3D11_OPTIONS3));

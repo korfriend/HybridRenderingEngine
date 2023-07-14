@@ -928,6 +928,8 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 #endif
 #define SET_VS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, NAME), __S, true)
 #define SET_GS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::GEOMETRY_SHADER, NAME), __S, true)
+#define GETRASTER(NAME) dx11CommonParams->get_rasterizer(#NAME)
+#define GETDEPTHSTENTIL(NAME) dx11CommonParams->get_depthstencil(#NAME)
 
 #ifdef DX10_0
 		string strNames_VS[VS_NUM] = {
@@ -1165,27 +1167,34 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	}
 	ullong lastest_render_time = iobj->GetObjParam("_ullong_LatestSrTime", (ullong)0);
 
-	GpuRes gres_fb_rgba, gres_fb_depthcs, gres_fb_depthstencil;
+	GpuRes gres_fb_rgba, gres_fb_depthcs;
 	GpuRes gres_fb_sys_rgba, gres_fb_sys_depthcs;
 
 #ifdef DX10_0
 	const uint rtbind = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+#define SET_SAMPLERS dx11DeviceImmContext->PSSetSamplers
+#define SET_CBUFFERS dx11DeviceImmContext->PSSetConstantBuffers
+#define SET_SHADER_RES dx11DeviceImmContext->PSSetShaderResources
+#define SET_SHADER dx11DeviceImmContext->PSSetShader
 #else
 	const uint rtbind = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+#define SET_SAMPLERS dx11DeviceImmContext->CSSetSamplers
+#define SET_CBUFFERS dx11DeviceImmContext->CSSetConstantBuffers
+#define SET_SHADER_RES dx11DeviceImmContext->CSSetShaderResources
+#define SET_SHADER dx11DeviceImmContext->CSSetShader
 #endif
 	
 	// Ghost effect mode
 	//GpuRes gres_fb_mask_hotspot;
 	grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
 	grd_helper::UpdateFrameBuffer(gres_fb_depthcs, iobj, "RENDER_OUT_DEPTH_0", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
-	grd_helper::UpdateFrameBuffer(gres_fb_depthstencil, iobj, "DEPTH_STENCIL", RTYPE_TEXTURE2D, D3D11_BIND_DEPTH_STENCIL, DXGI_FORMAT_D32_FLOAT, false);
 
 #ifdef DX10_0
 	GpuRes gres_fb_rgba2, gres_fb_depthcs2;
 	grd_helper::UpdateFrameBuffer(gres_fb_rgba2, iobj, "RENDER_OUT_RGBA_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
 	grd_helper::UpdateFrameBuffer(gres_fb_depthcs2, iobj, "RENDER_OUT_DEPTH_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
-	GpuRes gres_fb_counter, gres_fb_k_buffer;
 #else
+	GpuRes gres_fb_counter, gres_fb_k_buffer;
 	grd_helper::UpdateFrameBuffer(gres_fb_counter, iobj, "RW_COUNTER", RTYPE_TEXTURE2D, D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
 	const int num_frags_perpixel = k_value * 4;
 	grd_helper::UpdateFrameBuffer(gres_fb_k_buffer, iobj, "BUFFER_RW_K_BUF", RTYPE_BUFFER, D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, num_frags_perpixel);
@@ -1199,13 +1208,20 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		grd_helper::UpdateFrameBuffer(gres_picking_system_buffer, iobj, "SYSTEM_OUT_RW_PICKING_BUF", RTYPE_BUFFER,
 			NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT | UPFB_NFPP_BUFFERSIZE, max_picking_layers * 2);
 
-		std::vector<uint> clearDataUnit(max_picking_layers * 3, 0);//make sure that this thing is aligned
+		static std::vector<uint> clearDataUnit(max_picking_layers * 3, 0);//make sure that this thing is aligned
 		dx11CommonParams->dx11DeviceImmContext->UpdateSubresource((ID3D11Buffer*)gres_picking_buffer.alloc_res_ptrs[DTYPE_RES]
 			, 0, NULL, &clearDataUnit[0], sizeof(uint) * clearDataUnit.size(), sizeof(uint) * clearDataUnit.size());
 	}
 
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_rgba, iobj, "SYSTEM_OUT_RGBA", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_SYSOUT);
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_depthcs, iobj, "SYSTEM_OUT_DEPTH", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R32_FLOAT, UPFB_SYSOUT);
+
+	const int max_cutlines = 10000;
+	GpuRes gres_cutlines_buffer, gres_cutlines_system_buffer;
+	grd_helper::UpdateFrameBuffer(gres_cutlines_buffer, iobj, "BUFFER_RW_CUTLINES_GSO_BUF", RTYPE_BUFFER,
+		D3D11_BIND_STREAM_OUTPUT, DXGI_FORMAT_R32G32B32A32_FLOAT, UPFB_NFPP_BUFFERSIZE, max_cutlines);
+	grd_helper::UpdateFrameBuffer(gres_cutlines_system_buffer, iobj, "SYSTEM_OUT_RW_CUTLINES_GSO_BUF", RTYPE_BUFFER,
+		NULL, DXGI_FORMAT_R32G32B32A32_FLOAT, UPFB_SYSOUT | UPFB_NFPP_BUFFERSIZE, max_cutlines);
 
 #pragma endregion 
 
@@ -1223,8 +1239,8 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			return false;
 		grd_helper::UpdateCustomBuffer(gres_cpPoints, iobj, "CurvedPlanePoints", &vtrCurveInterpolations[0], num_curvedPoints, DXGI_FORMAT_R32G32B32_FLOAT, 12);
 		grd_helper::UpdateCustomBuffer(gres_cpTangents, iobj, "CurvedPlaneTangents", &vtrCurveTangentVectors[0], num_curvedPoints, DXGI_FORMAT_R32G32B32_FLOAT, 12);
-		dx11DeviceImmContext->CSSetShaderResources(30, 1, (ID3D11ShaderResourceView**)&gres_cpPoints.alloc_res_ptrs[DTYPE_SRV]);
-		dx11DeviceImmContext->CSSetShaderResources(31, 1, (ID3D11ShaderResourceView**)&gres_cpTangents.alloc_res_ptrs[DTYPE_SRV]);
+		SET_SHADER_RES(30, 1, (ID3D11ShaderResourceView**)&gres_cpPoints.alloc_res_ptrs[DTYPE_SRV]);
+		SET_SHADER_RES(31, 1, (ID3D11ShaderResourceView**)&gres_cpTangents.alloc_res_ptrs[DTYPE_SRV]);
 	
 		float sample_dist = 1.f;
 		CB_CurvedSlicer cbCurvedSlicer;
@@ -1234,7 +1250,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		CB_CurvedSlicer* cbCurvedSlicerData = (CB_CurvedSlicer*)mappedResCurvedSlicerState.pData;
 		memcpy(cbCurvedSlicerData, &cbCurvedSlicer, sizeof(CB_CurvedSlicer));
 		dx11DeviceImmContext->Unmap(cbuf_curvedslicer, 0);
-		dx11DeviceImmContext->CSSetConstantBuffers(10, 1, &cbuf_curvedslicer);
+		SET_CBUFFERS(10, 1, &cbuf_curvedslicer);
 	}
 
 #pragma region // Camera & Light Setting
@@ -1372,10 +1388,20 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	CB_EnvState* cbEnvStateData = (CB_EnvState*)mappedResEnvState.pData;
 	memcpy(cbEnvStateData, &cbEnvState, sizeof(CB_EnvState));
 	dx11DeviceImmContext->Unmap(cbuf_env_state, 0);
-	dx11DeviceImmContext->PSSetConstantBuffers(7, 1, &cbuf_env_state);
-	dx11DeviceImmContext->CSSetConstantBuffers(7, 1, &cbuf_env_state);
+	SET_CBUFFERS(7, 1, &cbuf_env_state);
 
 #ifdef DX10_0
+	GpuRes gres_quad;
+	gres_quad.vm_src_id = 1;
+	gres_quad.res_name = string("PROXY_QUAD");
+	assert(gpu_manager->UpdateGpuResource(gres_quad));
+
+	vmmat44f matQaudWS2CS;
+	vmmath::fMatrixWS2CS(&matQaudWS2CS, &vmfloat3(0, 0, 1), &vmfloat3(0, 1, 0), &vmfloat3(0, 0, -1));
+	vmmat44f matQaudCS2PS;
+	vmmath::fMatrixOrthogonalCS2PS(&matQaudCS2PS, 2.f, 2.f, 0, 2.f);
+	vmmat44f matQaudWS2PS = matQaudWS2CS * matQaudCS2PS;
+	vmmat44f matQaudWS2PS_T = TRANSPOSE(matQaudWS2PS);
 #else
 	if (is_ghost_mode)
 	{
@@ -1385,14 +1411,12 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		CB_HotspotMask* cbHSMaskData = (CB_HotspotMask*)mappedResHSMask.pData;
 		grd_helper::SetCb_HotspotMask(*cbHSMaskData, _fncontainer, matWS2SS);
 		dx11DeviceImmContext->Unmap(cbuf_hsmask, 0);
-		dx11DeviceImmContext->PSSetConstantBuffers(9, 1, &cbuf_hsmask);
-		dx11DeviceImmContext->CSSetConstantBuffers(9, 1, &cbuf_hsmask);
+		SET_CBUFFERS(9, 1, &cbuf_hsmask);
 	}
 #endif
 	//if (is_ghost_mode)
 	//{
-	//	dx11DeviceImmContext->PSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_mask_hotspot.alloc_res_ptrs[DTYPE_SRV]);
-	//	dx11DeviceImmContext->CSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_mask_hotspot.alloc_res_ptrs[DTYPE_SRV]);
+	//	SET_SHADER_RES(50, 1, (ID3D11ShaderResourceView**)&gres_fb_mask_hotspot.alloc_res_ptrs[DTYPE_SRV]);
 	//}
 
 	D3D11_RECT rects[1];
@@ -1491,10 +1515,6 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 
 	dx11CommonParams->GpuProfile("Clear for Slicer Render - SR");
 
-	// Clear Depth Stencil //
-	ID3D11DepthStencilView* dx11DSV = (ID3D11DepthStencilView*)gres_fb_depthstencil.alloc_res_ptrs[DTYPE_DSV];
-	dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
-
 	float flt_max_ = FLT_MAX;
 	uint flt_max_u = *(uint*)&flt_max_;
 	uint clr_unit4[4] = { 0, 0, 0, 0 };
@@ -1504,15 +1524,23 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	//float clr_float_minus_4[4] = { -1.f, -1.f, -1.f, -1.f };
 #ifdef DX10_0
 	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_rgba2.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
-	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_depthcs2.alloc_res_ptrs[DTYPE_RTV], clr_float_fltmax_4);
+	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_depthcs2.alloc_res_ptrs[DTYPE_RTV], planeThickness > 0? clr_float_fltmax_4 : clr_float_zero_4);
 #else
 	dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 #endif
 	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
-	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV], clr_float_fltmax_4);
+	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV], planeThickness > 0 ? clr_float_fltmax_4 : clr_float_zero_4);
+
+	if (!curved_slicer && planeThickness == 0.f) {
+		static std::vector<vmfloat4> clearDataUnit(max_cutlines, vmfloat4(0, 0, 0, 0));//make sure that this thing is aligned
+		dx11CommonParams->dx11DeviceImmContext->UpdateSubresource(
+			(ID3D11Buffer*)gres_cutlines_buffer.alloc_res_ptrs[DTYPE_RES]
+			, 0, NULL, &clearDataUnit[0], sizeof(vmfloat4) * clearDataUnit.size(), sizeof(vmfloat4) * clearDataUnit.size());
+	}
 
 	dx11CommonParams->GpuProfile("Clear for Slicer Render - SR", true);
 #pragma endregion 
+
 
 #pragma region // HLSL Sampler Setting
 	ID3D11SamplerState* sampler_PZ = dx11CommonParams->get_sampler("POINT_ZEROBORDER");
@@ -1522,44 +1550,37 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	ID3D11SamplerState* sampler_PW = dx11CommonParams->get_sampler("POINT_WRAP");
 	ID3D11SamplerState* sampler_LW = dx11CommonParams->get_sampler("LINEAR_WRAP");
 
-	dx11DeviceImmContext->VSSetSamplers(0, 1, &sampler_LZ);
-	dx11DeviceImmContext->VSSetSamplers(1, 1, &sampler_PZ);
-	dx11DeviceImmContext->VSSetSamplers(2, 1, &sampler_LC);
-	dx11DeviceImmContext->VSSetSamplers(3, 1, &sampler_PC);
-	dx11DeviceImmContext->VSSetSamplers(4, 1, &sampler_LW);
-	dx11DeviceImmContext->VSSetSamplers(5, 1, &sampler_PW);
-
-	dx11DeviceImmContext->PSSetSamplers(0, 1, &sampler_LZ);
-	dx11DeviceImmContext->PSSetSamplers(1, 1, &sampler_PZ);
-	dx11DeviceImmContext->PSSetSamplers(2, 1, &sampler_LC);
-	dx11DeviceImmContext->PSSetSamplers(3, 1, &sampler_PC);
-	dx11DeviceImmContext->PSSetSamplers(4, 1, &sampler_LW);
-	dx11DeviceImmContext->PSSetSamplers(5, 1, &sampler_PW);
-
-	dx11DeviceImmContext->CSSetSamplers(0, 1, &sampler_LZ);
-	dx11DeviceImmContext->CSSetSamplers(1, 1, &sampler_PZ);
-	dx11DeviceImmContext->CSSetSamplers(2, 1, &sampler_LC);
-	dx11DeviceImmContext->CSSetSamplers(3, 1, &sampler_PC);
-	dx11DeviceImmContext->CSSetSamplers(4, 1, &sampler_LW);
-	dx11DeviceImmContext->CSSetSamplers(5, 1, &sampler_PW);
+	SET_SAMPLERS(0, 1, &sampler_LZ);
+	SET_SAMPLERS(1, 1, &sampler_PZ);
+	SET_SAMPLERS(2, 1, &sampler_LC);
+	SET_SAMPLERS(3, 1, &sampler_PC);
+	SET_SAMPLERS(4, 1, &sampler_LW);
+	SET_SAMPLERS(5, 1, &sampler_PW);
 #pragma endregion 
 
-	ID3D11DepthStencilView* dx11DSVNULL = NULL;
 	ID3D11RenderTargetView* dx11RTVsNULL[2] = { NULL, NULL };
 	ID3D11UnorderedAccessView* dx11UAVs_NULL[7] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 	ID3D11ShaderResourceView* dx11SRVs_NULL[7] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 	// For Each Primitive //
-	int count_call_render = 0;
+	int count_call_render = 0; 
 
 #define NUM_UAVs 5
 	auto PathTracer = [&dx11CommonParams, &dx11DeviceImmContext, &_fncontainer, &dx11LI_P, &dx11LI_PN, &dx11LI_PT, &dx11LI_PNT, &dx11LI_PTTT, &dx11VShader_P,
-		&dx11VShader_PN, &dx11VShader_PT, &dx11VShader_PNT, &dx11VShader_PTTT, &dx11DSV,
-		&gres_fb_counter, &gres_picking_buffer, &gres_fb_k_buffer, &gres_fb_rgba, &gres_fb_depthcs,
+		&dx11VShader_PN, &dx11VShader_PT, &dx11VShader_PNT, &dx11VShader_PTTT, 
+#ifdef DX10_0
+		&gres_fb_rgba2, &gres_fb_depthcs2, &gres_quad,
+#else
+		&gres_fb_counter, &gres_fb_k_buffer, 
+#endif	
+		&gres_picking_buffer, &gres_fb_rgba, &gres_fb_depthcs, &gres_cutlines_buffer,
 		&cbuf_cam_state, &cbuf_env_state, &cbuf_clip, &cbuf_pobj, &cbuf_vobj, &cbuf_reffect, &cbuf_tmap, &cbuf_hsmask,
 		&num_grid_x, &num_grid_y, &matWS2PS, &matWS2SS, &matSS2WS,
 		&light_src, &default_phong_lighting_coeff, &default_point_thickness, &default_surfel_size, &default_line_thickness, &default_color_cmmobj, &use_spinlock_pixsynch, &use_blending_option_MomentOIT,
-		&count_call_render, &progress, &cam_obj, &planeThickness,
-		&clr_float_zero_4, &clr_float_fltmax_4, &dx11DSVNULL, &dx11RTVsNULL, &dx11UAVs_NULL, &dx11SRVs_NULL
+		&count_call_render, &progress, &cam_obj, &planeThickness, 
+#ifdef DX10_0
+		&matQaudWS2PS_T, 
+#endif
+		&clr_float_zero_4, &clr_float_fltmax_4, &dx11RTVsNULL, &dx11UAVs_NULL, &dx11SRVs_NULL
 	](vector<VmActor*>& actor_list, const bool curved_slicer, const bool is_ghost_mode, const bool is_picking_routine)
 	{
 
@@ -1602,7 +1623,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			//	{
 			//		tex_map_enum = 1;
 			//		GpuRes& gres_tex = it_tex->second;
-			//		dx11DeviceImmContext->CSSetShaderResources(10, 1, (ID3D11ShaderResourceView**)&gres_tex.alloc_res_ptrs[DTYPE_SRV]);
+			//		SET_SHADER_RES(10, 1, (ID3D11ShaderResourceView**)&gres_tex.alloc_res_ptrs[DTYPE_SRV]);
 			//	}
 			//}
 			//else 
@@ -1613,7 +1634,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 				{
 					tex_map_enum |= 0x1;
 					GpuRes& gres_tex = it_tex->second;
-					dx11DeviceImmContext->CSSetShaderResources(10, 1, (ID3D11ShaderResourceView**)&gres_tex.alloc_res_ptrs[DTYPE_SRV]);
+					SET_SHADER_RES(10, 1, (ID3D11ShaderResourceView**)&gres_tex.alloc_res_ptrs[DTYPE_SRV]);
 				}
 
 				for (int i = 0; i < NUM_MATERIALS; i++)
@@ -1623,15 +1644,19 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 					{
 						tex_map_enum |= (0x1 << (i + 1));
 						GpuRes& gres_tex = it_tex->second;
-						dx11DeviceImmContext->CSSetShaderResources(11 + i, 1, (ID3D11ShaderResourceView**)&gres_tex.alloc_res_ptrs[DTYPE_SRV]);
+						SET_SHADER_RES(11 + i, 1, (ID3D11ShaderResourceView**)&gres_tex.alloc_res_ptrs[DTYPE_SRV]);
 					}
 				}
 			}
 
-			CB_PolygonObject cbPolygonObj;
+			CB_PolygonObject cbPolygonObj;				
 			cbPolygonObj.tex_map_enum = tex_map_enum;
 			cbPolygonObj.pobj_dummy_0 = actor->actorId;// pobj->GetObjectID(); // used for picking
 			grd_helper::SetCb_PolygonObj(cbPolygonObj, pobj, actor, matWS2SS, matWS2PS, false, use_vertex_color);
+#ifdef DX10_0
+			vmmat44f pobj_mat_os2ps_T = cbPolygonObj.mat_os2ps;
+			cbPolygonObj.mat_os2ps = matQaudWS2PS_T;
+#endif
 			//cbPolygonObj.Ka *= material_phongCoeffs.x;
 			//cbPolygonObj.Kd *= material_phongCoeffs.y;
 			//cbPolygonObj.Ks *= material_phongCoeffs.z;
@@ -1642,8 +1667,8 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			{
 				bool is_ghost_surface = actor->GetParam("_bool_IsGhostSurface", false);
 				bool is_only_hotspot_visible = actor->GetParam("_bool_IsOnlyHotSpotVisible", false);
-				if (is_ghost_surface) cbPolygonObj.pobj_flag |= 0x1 << 22;
-				if (is_only_hotspot_visible) cbPolygonObj.pobj_flag |= 0x1 << 23;
+				cbPolygonObj.pobj_flag |= (int)is_ghost_surface << 22;
+				cbPolygonObj.pobj_flag |= (int)is_only_hotspot_visible << 23;
 				//cout << "TEST : " << is_ghost_surface << ", " << is_only_hotspot_visible << endl;
 			}
 			D3D11_MAPPED_SUBRESOURCE mappedResPobjData;
@@ -1660,25 +1685,16 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			memcpy(cbClipInfoData, &cbClipInfo, sizeof(CB_ClipInfo));
 			dx11DeviceImmContext->Unmap(cbuf_clip, 0);
 
-			//dx11DeviceImmContext->CSSetConstantBuffers(0, 1, &cbuf_cam_state);
-			dx11DeviceImmContext->CSSetConstantBuffers(1, 1, &cbuf_pobj);
-			dx11DeviceImmContext->CSSetConstantBuffers(2, 1, &cbuf_clip);
-			dx11DeviceImmContext->CSSetConstantBuffers(3, 1, &cbuf_reffect);
+			//SET_CBUFFERS(0, 1, &cbuf_cam_state);
+			dx11DeviceImmContext->VSSetConstantBuffers(1, 1, &cbuf_pobj);
+			SET_CBUFFERS(1, 1, &cbuf_pobj);
+			SET_CBUFFERS(2, 1, &cbuf_clip);
+			SET_CBUFFERS(3, 1, &cbuf_reffect);
 #pragma endregion
-
-			ID3D11UnorderedAccessView* dx11UAVs[NUM_UAVs] = {
-					(ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], 
-					(ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV], 
-					is_picking_routine ? (ID3D11UnorderedAccessView*)gres_picking_buffer.alloc_res_ptrs[DTYPE_UAV] : NULL,
-					(ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV],
-					(ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
-			};
-
-#define GETDEPTHSTENTIL(NAME) dx11CommonParams->get_depthstencil(#NAME)
-
 			// to do ray-tracer
-			//const bool fillInside = true;
-			//if (fillInside)
+			const bool fillInside = true;
+			const bool cutPlane = true && !curved_slicer;
+			if (fillInside)
 			{
 				vmint4* nodePtr;
 				int nodeSize;
@@ -1697,10 +1713,10 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 				grd_helper::UpdateCustomBuffer(bvhTriDebug, pobj, "BvhTriDebug", triDebugPtr, triDebugSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4));
 				grd_helper::UpdateCustomBuffer(bvhIndice, pobj, "BvhIndice", cpuTriIndicesPtr, triIndicesSize, DXGI_FORMAT_R32_SINT, sizeof(int));
 
-				dx11DeviceImmContext->CSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&bvhNode.alloc_res_ptrs[DTYPE_SRV]);
-				dx11DeviceImmContext->CSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&bvhTriWoop.alloc_res_ptrs[DTYPE_SRV]);
-				dx11DeviceImmContext->CSSetShaderResources(2, 1, (ID3D11ShaderResourceView**)&bvhTriDebug.alloc_res_ptrs[DTYPE_SRV]);
-				dx11DeviceImmContext->CSSetShaderResources(3, 1, (ID3D11ShaderResourceView**)&bvhIndice.alloc_res_ptrs[DTYPE_SRV]);
+				SET_SHADER_RES(0, 1, (ID3D11ShaderResourceView**)&bvhNode.alloc_res_ptrs[DTYPE_SRV]);
+				SET_SHADER_RES(1, 1, (ID3D11ShaderResourceView**)&bvhTriWoop.alloc_res_ptrs[DTYPE_SRV]);
+				SET_SHADER_RES(2, 1, (ID3D11ShaderResourceView**)&bvhTriDebug.alloc_res_ptrs[DTYPE_SRV]);
+				SET_SHADER_RES(3, 1, (ID3D11ShaderResourceView**)&bvhIndice.alloc_res_ptrs[DTYPE_SRV]);
 
 				// test //
 				if(0)
@@ -1771,125 +1787,174 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 					int gg = 0;
 				}
 
-				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs, dx11UAVs, NULL);
-
-				if (curved_slicer)
-					dx11DeviceImmContext->CSSetShader(
-						is_picking_routine ? GETCS(PickingCurvedThickSlice_cs_5_0) :
-						GETCS(CurvedThickSlicePathTracer_cs_5_0), NULL, 0);
-				else
-					dx11DeviceImmContext->CSSetShader(
-						is_picking_routine ? GETCS(PickingThickSlice_cs_5_0) :
-						GETCS(ThickSlicePathTracer_cs_5_0), NULL, 0);
-
-				//dx11DeviceImmContext->Flush();
-				dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
-				//dx11DeviceImmContext->Flush();
-
-				if (planeThickness == 0.f) {
-					dx11DeviceImmContext->CSSetShader(GETCS(SliceOutline_cs_5_0), NULL, 0);
-					//dx11DeviceImmContext->Flush();
+#ifdef DX10_0
+#else
+				ID3D11UnorderedAccessView* dx11UAVs[NUM_UAVs] = {
+					(ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], 
+					(ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV], 
+					is_picking_routine ? (ID3D11UnorderedAccessView*)gres_picking_buffer.alloc_res_ptrs[DTYPE_UAV] : NULL,
+					(ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV],
+					(ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV] };
+#endif
+				if (is_picking_routine) {
+#ifdef DX10_0
+					assert(0);
+#else
+					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs, dx11UAVs, NULL);
+					SET_SHADER(curved_slicer ? GETCS(PickingCurvedThickSlice_cs_5_0) : GETCS(PickingThickSlice_cs_5_0), NULL, 0);
 					dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
-					// SliceOutline_cs_5_0
+					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs, dx11UAVs_NULL, NULL);
+#endif
 				}
-				
-				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+				else {
+#ifdef DX10_0
+					ID3D11Buffer* dx11BufferTargetPrim = (ID3D11Buffer*)gres_quad.alloc_res_ptrs[DTYPE_RES];
+					ID3D11Buffer* dx11IndiceTargetPrim = NULL;
+					uint stride_inputlayer = sizeof(vmfloat3);
+					uint offset = 0;
+					dx11DeviceImmContext->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&dx11BufferTargetPrim, &stride_inputlayer, &offset);
+					dx11DeviceImmContext->IASetInputLayout(dx11LI_P);
+					dx11DeviceImmContext->VSSetShader(dx11VShader_P, NULL, 0);
+					dx11DeviceImmContext->GSSetShader(NULL, NULL, 0);
+					dx11DeviceImmContext->RSSetState(GETRASTER(SOLID_NONE));
+					dx11DeviceImmContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+					dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(ALWAYS), 0);
+
+					SET_SHADER(
+						curved_slicer ? GETPS(CurvedThickSlicePathTracer_ps_4_0) : GETPS(ThickSlicePathTracer_ps_4_0),
+						NULL, 0);
+
+					SET_SHADER_RES(20, 1, (ID3D11ShaderResourceView**)&gres_fb_rgba.alloc_res_ptrs[DTYPE_SRV]);
+					SET_SHADER_RES(21, 1, (ID3D11ShaderResourceView**)&gres_fb_depthcs.alloc_res_ptrs[DTYPE_SRV]);
+					ID3D11RenderTargetView* dx11RTVs[2] = {
+					(ID3D11RenderTargetView*)gres_fb_rgba2.alloc_res_ptrs[DTYPE_RTV],
+						(ID3D11RenderTargetView*)gres_fb_depthcs2.alloc_res_ptrs[DTYPE_RTV] };
+					dx11DeviceImmContext->OMSetRenderTargets(2, dx11RTVs, NULL);
+					dx11DeviceImmContext->Draw(4, 0);
+					dx11DeviceImmContext->OMSetRenderTargets(2, dx11RTVsNULL, NULL);
+					SET_SHADER_RES(20, 2, dx11SRVs_NULL);
+
+					if (planeThickness == 0.f) {
+						SET_SHADER(GETPS(SliceOutline_ps_4_0), NULL, 0);
+						SET_SHADER_RES(20, 1, (ID3D11ShaderResourceView**)&gres_fb_rgba2.alloc_res_ptrs[DTYPE_SRV]);
+						SET_SHADER_RES(21, 1, (ID3D11ShaderResourceView**)&gres_fb_depthcs2.alloc_res_ptrs[DTYPE_SRV]);
+						dx11RTVs[0] = (ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV];
+						dx11RTVs[1] = (ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV];
+						dx11DeviceImmContext->OMSetRenderTargets(2, dx11RTVs, NULL);
+						dx11DeviceImmContext->Draw(4, 0);
+						dx11DeviceImmContext->OMSetRenderTargets(2, dx11RTVsNULL, NULL);
+						SET_SHADER_RES(20, 2, dx11SRVs_NULL);
+					}
+					else {
+						dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RES],
+							(ID3D11Texture2D*)gres_fb_rgba2.alloc_res_ptrs[DTYPE_RES]);
+					}
+#else
+					SET_SHADER(
+						curved_slicer ? GETCS(CurvedThickSlicePathTracer_cs_5_0) : GETCS(ThickSlicePathTracer_cs_5_0),
+						NULL, 0);
+					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs, dx11UAVs, NULL);
+					dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+					if (planeThickness == 0.f) {
+						SET_SHADER(GETCS(SliceOutline_cs_5_0), NULL, 0);
+						dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+				}
+					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs, dx11UAVs_NULL, NULL);
+#endif
+				}
+				//dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 			}
 
-			if (is_picking_routine) 
-				continue;
-
-			// Lines Cuttins
+			// cutPlane
+			if (0) {
+				// Lines Cuttins
 #pragma region // Setting Rasterization Stages
-			ID3D11InputLayout* dx11InputLayer_Target = NULL;
-			ID3D11VertexShader* dx11VS_Target = NULL;
-			ID3D11GeometryShader* dx11GS_Target = NULL;
-			//ID3D11PixelShader* dx11PS_Target = NULL;
-			ID3D11RasterizerState2* dx11RState_TargetObj = NULL;
-			uint offset = 0;
-			D3D_PRIMITIVE_TOPOLOGY pobj_topology_type;
+				ID3D11InputLayout* dx11InputLayer_Target = NULL;
+				ID3D11VertexShader* dx11VS_Target = NULL;
+				ID3D11GeometryShader* dx11GS_Target = NULL;
+				//ID3D11PixelShader* dx11PS_Target = NULL;
+				ID3D11RasterizerState2* dx11RState_TargetObj = NULL;
+				uint offset = 0;
+				D3D_PRIMITIVE_TOPOLOGY pobj_topology_type;
 
-			if (prim_data->GetVerticeDefinition("NORMAL"))
-			{
-				if (prim_data->GetVerticeDefinition("TEXCOORD0"))
+				if (prim_data->GetVerticeDefinition("NORMAL"))
 				{
-					// PNT (here, T is used as color)
-					dx11InputLayer_Target = dx11LI_PNT;
-					dx11VS_Target = dx11VShader_PNT;
+					if (prim_data->GetVerticeDefinition("TEXCOORD0"))
+					{
+						// PNT (here, T is used as color)
+						dx11InputLayer_Target = dx11LI_PNT;
+						dx11VS_Target = dx11VShader_PNT;
+					}
+					else
+					{
+						// PN
+						dx11InputLayer_Target = dx11LI_PN;
+						dx11VS_Target = dx11VShader_PN;
+					}
+				}
+				else if (prim_data->GetVerticeDefinition("TEXCOORD0"))
+				{
+					if (prim_data->GetVerticeDefinition("TEXCOORD2"))
+					{
+						dx11InputLayer_Target = dx11LI_PTTT;
+						dx11VS_Target = dx11VShader_PTTT;
+					}
+					else
+					{
+						dx11InputLayer_Target = dx11LI_PT;
+						dx11VS_Target = dx11VShader_PT;
+					}
 				}
 				else
 				{
-					// PN
-					dx11InputLayer_Target = dx11LI_PN;
-					dx11VS_Target = dx11VShader_PN;
+					// P
+					dx11InputLayer_Target = dx11LI_P;
+					dx11VS_Target = dx11VShader_P;
 				}
-			}
-			else if (prim_data->GetVerticeDefinition("TEXCOORD0"))
-			{
-				if (prim_data->GetVerticeDefinition("TEXCOORD2"))
-				{
-					dx11InputLayer_Target = dx11LI_PTTT;
-					dx11VS_Target = dx11VShader_PTTT;
-				}
+
+				assert(prim_data->ptype == PrimitiveTypeTRIANGLE);
+
+				if (prim_data->is_stripe)
+					pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
 				else
+					pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+
+				dx11RState_TargetObj = GETRASTER(SOLID_NONE);
+
+				ID3D11Buffer* dx11BufferTargetPrim = (ID3D11Buffer*)gres_vtx.alloc_res_ptrs[DTYPE_RES];
+				ID3D11Buffer* dx11IndiceTargetPrim = NULL;
+				uint stride_inputlayer = sizeof(vmfloat3) * (uint)prim_data->GetNumVertexDefinitions();
+				dx11DeviceImmContext->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&dx11BufferTargetPrim, &stride_inputlayer, &offset);
+				if (prim_data->vidx_buffer != NULL)
 				{
-					dx11InputLayer_Target = dx11LI_PT;
-					dx11VS_Target = dx11VShader_PT;
+					dx11IndiceTargetPrim = (ID3D11Buffer*)gres_idx.alloc_res_ptrs[DTYPE_RES];
+					dx11DeviceImmContext->IASetIndexBuffer(dx11IndiceTargetPrim, DXGI_FORMAT_R32_UINT, 0);
 				}
-			}
-			else
-			{
-				// P
-				dx11InputLayer_Target = dx11LI_P;
-				dx11VS_Target = dx11VShader_P;
-			}
 
-			assert(prim_data->ptype == PrimitiveTypeTRIANGLE);
-			if (prim_data->is_stripe)
-				pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
-			else
-				pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-
-#define GETRASTER(NAME) dx11CommonParams->get_rasterizer(#NAME)
-
-			dx11RState_TargetObj = GETRASTER(SOLID_NONE);
-
-			// cut lines to dx11GS_Target
-			// dx11DeviceImmContext->GSSetConstantBuffers
-			
-			ID3D11Buffer* dx11BufferTargetPrim = (ID3D11Buffer*)gres_vtx.alloc_res_ptrs[DTYPE_RES];
-			ID3D11Buffer* dx11IndiceTargetPrim = NULL;
-			uint stride_inputlayer = sizeof(vmfloat3) * (uint)prim_data->GetNumVertexDefinitions();
-			dx11DeviceImmContext->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&dx11BufferTargetPrim, &stride_inputlayer, &offset);
-			if (prim_data->vidx_buffer != NULL && prim_data->ptype != EvmPrimitiveType::PrimitiveTypePOINT)
-			{
-				dx11IndiceTargetPrim = (ID3D11Buffer*)gres_idx.alloc_res_ptrs[DTYPE_RES];
-				dx11DeviceImmContext->IASetIndexBuffer(dx11IndiceTargetPrim, DXGI_FORMAT_R32_UINT, 0);
-			}
-
-			dx11DeviceImmContext->IASetInputLayout(dx11InputLayer_Target);
-			dx11DeviceImmContext->VSSetShader(dx11VS_Target, NULL, 0);
-			dx11DeviceImmContext->GSSetShader(dx11GS_Target, NULL, 0);
-			dx11DeviceImmContext->RSSetState(dx11RState_TargetObj);
-			dx11DeviceImmContext->IASetPrimitiveTopology(pobj_topology_type);
+				dx11DeviceImmContext->IASetInputLayout(dx11InputLayer_Target);
+				dx11DeviceImmContext->VSSetShader(dx11VS_Target, NULL, 0);
+				dx11DeviceImmContext->GSSetShader(dx11GS_Target, NULL, 0);
+				dx11DeviceImmContext->RSSetState(dx11RState_TargetObj);
+				dx11DeviceImmContext->IASetPrimitiveTopology(pobj_topology_type);
+				dx11DeviceImmContext->PSSetShader(NULL, NULL, 0);
 #pragma endregion 
 
 #pragma region // GEO RENDERING PASS
 
-			// https://stackoverflow.com/questions/12606556/how-do-you-use-geometry-shader-with-output-stream
-			//dx11DeviceImmContext->GSSetShaderResources(0, NUM_UAVs, dx11UAVs, NULL);
+				// https://stackoverflow.com/questions/12606556/how-do-you-use-geometry-shader-with-output-stream
+				dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(ALWAYS), 0);
 
-			dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(ALWAYS), 0);
+				dx11DeviceImmContext->SOSetTargets(1, (ID3D11Buffer**)&gres_cutlines_buffer.alloc_res_ptrs[DTYPE_RES], &offset);
 
-			//dx11DeviceImmContext->Flush();
-			if (prim_data->is_stripe || pobj_topology_type == D3D11_PRIMITIVE_TOPOLOGY_POINTLIST)
-				dx11DeviceImmContext->Draw(prim_data->num_vtx, 0);
-			else
-				dx11DeviceImmContext->DrawIndexed(prim_data->num_vidx, 0, 0);
-			count_call_render++;
+				if (prim_data->is_stripe || prim_data->vidx_buffer == NULL)
+					dx11DeviceImmContext->Draw(prim_data->num_vtx, 0);
+				else
+					dx11DeviceImmContext->DrawIndexed(prim_data->num_vidx, 0, 0);
 
-			dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, NUM_UAVs, dx11UAVs_NULL, 0);
+				dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, NULL, 2, NUM_UAVs, dx11UAVs_NULL, 0);
 #pragma endregion // GEO RENDERING PASS
+			}
+			count_call_render++;
 		}
 	};
 
@@ -1992,7 +2057,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 
 		// Set NULL States //
 		//dx11DeviceImmContext->CSSetUnorderedAccessViews(1, NUM_UAVs_GEO, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-		dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
+		SET_SHADER_RES(0, 2, dx11SRVs_NULL);
 	}
 
 	iobj->SetObjParam("_int_NumCallRenders", count_call_render);
