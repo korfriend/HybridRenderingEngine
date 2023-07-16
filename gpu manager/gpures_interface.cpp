@@ -3,7 +3,7 @@
 
 //#include <d3dx9math.h>	// For Math and Structure
 //
-#ifdef DX11_3
+#if defined(DX11_3) || defined(DX11_0)
 #include <d3d11_3.h>
 #else
 #include <d3d11.h>
@@ -97,7 +97,7 @@ map<HWND, _gp_dxgiPresenter> g_mapDxgiPrensentor;
 
 static ID3D11Device* g_pdx11Device = NULL;
 static ID3D11DeviceContext* g_pdx11DeviceImmContext = NULL;
-#ifdef DX11_3
+#if defined(DX11_3) || defined(DX11_0)
 static ID3D11Device3* g_pdx11Device3= NULL;
 static ID3D11DeviceContext3* g_pdx11DeviceImmContext3 = NULL;
 #endif
@@ -126,7 +126,7 @@ bool __InitializeDevice()
 	{
 		D3D_FEATURE_LEVEL featureLevels[] =
 		{
-#ifdef DX11_3
+#if defined(DX11_3) || defined(DX11_0)
 			D3D_FEATURE_LEVEL_12_1,
 			D3D_FEATURE_LEVEL_12_0,
 			D3D_FEATURE_LEVEL_11_1,
@@ -181,7 +181,7 @@ bool __InitializeDevice()
 		}
 		//g_eFeatureLevel = (D3D_FEATURE_LEVEL)0xb000;
 		
-#ifdef DX11_3
+#if defined(DX11_3)// || defined(DX11_0)
 		D3D11_FEATURE_DATA_D3D11_OPTIONS3 FeatureData = {};
 		HRESULT hh = g_pdx11Device->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS3, &FeatureData, sizeof(D3D11_FEATURE_DATA_D3D11_OPTIONS3));
 		if (!SUCCEEDED(hh)) {

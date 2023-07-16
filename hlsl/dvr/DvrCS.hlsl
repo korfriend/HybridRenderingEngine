@@ -1131,12 +1131,48 @@ void VR_SURFACE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	fragment_counter[DTid.xy] = fcnt | (dvr_hit_enc << 24);
 #endif
 }
-/*
+
+#if DX10_0 == 1
+#define __EXIT_PanoVR return output
+[earlydepthstencil]
+PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
+#else
+#define __EXIT_PanoVR return 
 [numthreads(GRIDSIZE_VR, GRIDSIZE_VR, 1)]
 void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
+#endif
 {
-	uint2 cip_xy = uint2(DTid.xy);
+	float4 vis_out = 0;
+	float depth_out = 0;
 
+#if DX10_0 == 1
+	PS_FILL_OUTPUT output;
+	output.depthcs = FLT_MAX;
+	output.color = (float4)0;
+
+	uint2 cip_xy = uint2(input.f4PosSS.xy);
+
+	float4 prev_vis = prev_fragment_vis[cip_xy];
+	float prev_depthcs = FLT_MAX;
+	uint num_frags = 0;
+	Fragment fs[2];
+	if (prev_vis.a > 0) {
+		num_frags = 1;
+		prev_depthcs = prev_fragment_zdepth[cip_xy];
+		Fragment f;
+		f.i_vis = ConvertFloat4ToUInt(prev_vis);
+		f.z = prev_depthcs;
+		fs[0] = f;
+	}
+	fs[num_frags] = (Fragment)0;
+	fs[num_frags].z = FLT_MAX;
+
+	output.color = prev_vis;
+	output.depthcs = prev_depthcs;
+
+	int i = 0;
+#else
+	uint2 cip_xy = uint2(DTid.xy);
 	// do not compute 1st hit surface separately
 	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
 		return;
@@ -1150,7 +1186,6 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	uint num_frags = fragment_counter[DTid.xy];
 	num_frags = num_frags & 0xFFF;
 
-
 	bool isDither = BitCheck(g_cbCamState.cam_flag, 8);
 	if (isDither) {
 		if (cip_xy.x % 2 != 0 || cip_xy.y % 2 != 0) {
@@ -1162,25 +1197,6 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 		//return;
 	}
 
-	float4 vis_out = 0;
-	float depth_out = 0;
-
-	// Image Plane's Position and Camera State //
-	// cip refers to curved-ip
-
-	// g_cbCurvedSlicer::
-	//float3 posTopLeftCOS;
-	//int numCurvePoints;
-	//float3 posTopRightCOS;
-	//float planeHeight;
-	//float3 posBottomLeftCOS;
-	//float thicknessPlane;
-	//float3 posBottomRightCOS;
-	//uint __dummy0; 
-	//float3 planeUp; // WS, length is planePitch
-	//uint flag; // 1st bit : isRightSide
-
-	//return;
 	Fragment fs[VR_MAX_LAYERS];
 
 	[loop]
@@ -1200,7 +1216,24 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	fs[num_frags] = (Fragment)0;
 	fs[num_frags].z = FLT_MAX;
 	fragment_vis[cip_xy] = vis_out;
+#endif
 
+
+	// Image Plane's Position and Camera State //
+	// cip refers to curved-ip
+
+	// g_cbCurvedSlicer::
+	//float3 posTopLeftCOS;
+	//int numCurvePoints;
+	//float3 posTopRightCOS;
+	//float planeHeight;
+	//float3 posBottomLeftCOS;
+	//float thicknessPlane;
+	//float3 posBottomRightCOS;
+	//uint __dummy0; 
+	//float3 planeUp; // WS, length is planePitch
+	//uint flag; // 1st bit : isRightSide
+	
 	int2 i2SizeBuffer = int2(g_cbCamState.rt_width, g_cbCamState.rt_height);
 	int iPlaneSizeX = g_cbCurvedSlicer.numCurvePoints;
 	float3 f3VecSampleUpWS = g_cbCurvedSlicer.planeUp;
@@ -1224,7 +1257,7 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	f2PosInterTopCOS.y = fRatio0 * f3PosTopLeftCOS.y + fRatio1 * f3PosTopRightCOS.y;
 
 	if (f2PosInterTopCOS.x < 0 || f2PosInterTopCOS.x >= (float)(iPlaneSizeX - 1))
-		return;
+		__EXIT_PanoVR;
 
 	int iPosSampleCOS = (int)floor(f2PosInterTopCOS.x);
 	float fInterpolateRatio = f2PosInterTopCOS.x - iPosSampleCOS;
@@ -1258,7 +1291,7 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	f2PosSampleCOS.y = fRatio0Y * f2PosInterTopCOS.y + fRatio1Y * f2PosInterBottomCOS.y;
 
 	if (f2PosSampleCOS.y < 0 || f2PosSampleCOS.y > fPlaneSizeY)
-		return;
+		__EXIT_PanoVR;
 
 	float sample_dist = g_cbVobj.sample_dist;
 	// start position //
@@ -1296,7 +1329,7 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	Find1stSampleHit(hit_step, pos_ray_start_ws, dir_sample_ws, num_ray_samples);
 	if (hit_step < 0) {
 		//fragment_vis[cip_xy] = float4(1, 1, 0, 1);
-		return;
+		__EXIT_PanoVR;
 	}
 
 	float3 pos_hit_ws = pos_ray_start_ws + dir_sample_ws * (float)hit_step;
@@ -1626,11 +1659,21 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 
 	uint idx_dlayer = 0;
 	Fragment f_dly = fs[0]; // if no frag, the z-depth is infinite
+#if FRAG_MERGING == 1
 	INTERMIX(vis_out, idx_dlayer, num_frags, vis_otf, depth_begin, fPlaneThickness, fs, merging_beta);
+#else
+	INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_otf, depth_begin, fs);
+#endif
 	REMAINING_MIX(vis_out, idx_dlayer, num_frags, fs);
 #endif
 
+#ifdef DX10_0
+	output.color = vis_out;
+	output.depthcs = depth_out;
+	return output;
+#else
 	fragment_vis[cip_xy] = vis_out;
 	fragment_zdepth[cip_xy] = depth_out;
+#endif
 }
 /**/

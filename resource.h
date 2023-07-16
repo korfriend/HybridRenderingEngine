@@ -170,6 +170,14 @@
 #define IDR_RCDATA60006					  60006
 #define IDR_RCDATA60007					  60007
 
+#define IDR_RCDATA6001					  6001
+#define IDR_RCDATA6002					  6002
+#define IDR_RCDATA6003					  6003
+#define IDR_RCDATA6004					  6004
+#define IDR_RCDATA6005					  6005
+#define IDR_RCDATA6006					  6006
+#define IDR_RCDATA6007					  6007
+
 #define IDR_RCDATA60100					  60100
 #define IDR_RCDATA60101					  60101
 #define IDR_RCDATA60102					  60102

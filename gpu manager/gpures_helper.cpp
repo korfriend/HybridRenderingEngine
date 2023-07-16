@@ -26,7 +26,8 @@ HRESULT PresetCompiledShader(__ID3D11Device* pdx11Device, HMODULE hModule, LPCWS
 	string _strShaderProfile = strShaderProfile;
 	if (_strShaderProfile.compare(0, 2, "cs") == 0)
 	{
-		if (pdx11Device->CreateComputeShader(pdata, ullFileSize, NULL, (ID3D11ComputeShader**)ppdx11Shader) != S_OK)
+		HRESULT hr = pdx11Device->CreateComputeShader(pdata, ullFileSize, NULL, (ID3D11ComputeShader**)ppdx11Shader);
+		if (hr != S_OK)
 			goto ERROR_SHADER;
 	}
 	else if (_strShaderProfile.compare(0, 2, "ps") == 0)
@@ -461,11 +462,19 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90043), "VR_SCULPTMASK_CONTEXT_ps_4_0", "ps_4_0"), VR_SCULPTMASK_CONTEXT_ps_4_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90006), "VR_SURFACE_ps_4_0", "ps_4_0"), VR_SURFACE_ps_4_0);
-		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90150), "SR_QUAD_OUTLINE_ps_4_0", "ps_5_0"), SR_QUAD_OUTLINE_ps_4_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90150), "SR_QUAD_OUTLINE_ps_4_0", "ps_4_0"), SR_QUAD_OUTLINE_ps_4_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA9100), "ThickSlicePathTracer_ps_4_0", "ps_4_0"), ThickSlicePathTracer_ps_4_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA9101), "CurvedThickSlicePathTracer_ps_4_0", "ps_4_0"), CurvedThickSlicePathTracer_ps_4_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA9102), "SliceOutline_ps_4_0", "ps_4_0"), SliceOutline_ps_4_0);
+
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA6001), "PanoVR_RAYMAX_ps_4_0", "ps_4_0"), PanoVR_RAYMAX_ps_4_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA6002), "PanoVR_RAYMIN_ps_4_0", "ps_4_0"), PanoVR_RAYMIN_ps_4_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA6003), "PanoVR_RAYSUM_ps_4_0", "ps_4_0"), PanoVR_RAYSUM_ps_4_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA6004), "PanoVR_DEFAULT_ps_4_0", "ps_4_0"), PanoVR_DEFAULT_ps_4_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA6005), "PanoVR_MODULATE_ps_4_0", "ps_4_0"), PanoVR_MODULATE_ps_4_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA6006), "PanoVR_MULTIOTF_DEFAULT_ps_4_0", "ps_4_0"), PanoVR_MULTIOTF_DEFAULT_ps_4_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA6007), "PanoVR_MULTIOTF_MODULATE_ps_4_0", "ps_4_0"), PanoVR_MULTIOTF_MODULATE_ps_4_0);
 #else
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11001), "SR_OIT_P_vs_5_0", "vs_5_0", "P", lotypeInputPos, 1), SR_OIT_P_vs_5_0);
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11002), "SR_OIT_PN_vs_5_0", "vs_5_0", "PN", lotypeInputPosNor, 2), SR_OIT_PN_vs_5_0);
@@ -538,10 +547,12 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11172), "SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ROV_ps_5_0", "ps_5_0"), SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ROV_ps_5_0);
 			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11173), "SR_OIT_FILL_DKBT_TEXTMAPPING_ROV_ps_5_0", "ps_5_0"), SR_OIT_FILL_DKBT_TEXTMAPPING_ROV_ps_5_0);
 			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11174), "SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ROV_ps_5_0", "ps_5_0"), SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ROV_ps_5_0);
+
+			// for dynamic k-buffer
+			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA21050), "SR_FillHistogram_cs_5_0", "cs_5_0"), SR_FillHistogram_cs_5_0); 
+			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA21051), "SR_CreateOffsetTableKpB_cs_5_0", "cs_5_0"), SR_CreateOffsetTableKpB_cs_5_0);
 		}
 
-		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA21050), "SR_FillHistogram_cs_5_0", "cs_5_0"), SR_FillHistogram_cs_5_0);
-		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA21051), "SR_CreateOffsetTableKpB_cs_5_0", "cs_5_0"), SR_CreateOffsetTableKpB_cs_5_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11020), "SR_OIT_ABUFFER_FRAGCOUNTER_ps_5_0", "ps_5_0"), SR_OIT_ABUFFER_FRAGCOUNTER_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11026), "SR_OIT_ABUFFER_FRAGCOUNTER_MTT_ps_5_0", "ps_5_0"), SR_OIT_ABUFFER_FRAGCOUNTER_MTT_ps_5_0);

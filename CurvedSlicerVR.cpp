@@ -101,11 +101,59 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		}
 		//hlslobj_path += "..\\..\\VmModuleProjects\\renderer_gpudx11\\shader_compiled_objs\\";
 		//hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
-		hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\shader_compiled_objs\\";
+		hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\";
 		//cout << hlslobj_path << endl;
+		string hlslobj_path_4_0 = hlslobj_path + "shader_compiled_objs_4_0\\";
 
+#ifdef DX10_0
+		hlslobj_path += "shader_compiled_objs_4_0\\";
+#else
+		hlslobj_path += "shader_compiled_objs\\";
+#endif
 		string prefix_path = hlslobj_path;
+		vmlog::LogInfo("RELOAD HLSL _ VR renderer");
 
+#ifdef DX10_0
+#define PS_NUM 7
+#define SET_PS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::PIXEL_SHADER, NAME), dx11PShader, true)
+
+		string strNames_PS[PS_NUM] = {
+			   "PanoVR_RAYMAX_ps_4_0"
+			  ,"PanoVR_RAYMIN_ps_4_0"
+			  ,"PanoVR_RAYSUM_ps_4_0"
+			  ,"PanoVR_DEFAULT_ps_4_0"
+			  ,"PanoVR_MODULATE_ps_4_0"
+			  ,"PanoVR_MULTIOTF_DEFAULT_ps_4_0"
+			  ,"PanoVR_MULTIOTF_MODULATE_ps_4_0"
+		};
+
+		for (int i = 0; i < PS_NUM; i++)
+		{
+			string strName = strNames_PS[i];
+
+			FILE* pFile;
+			if (fopen_s(&pFile, (prefix_path + strName).c_str(), "rb") == 0)
+			{
+				fseek(pFile, 0, SEEK_END);
+				ullong ullFileSize = ftell(pFile);
+				fseek(pFile, 0, SEEK_SET);
+				byte* pyRead = new byte[ullFileSize];
+				fread(pyRead, sizeof(byte), ullFileSize, pFile);
+				fclose(pFile);
+
+				ID3D11PixelShader* dx11PShader = NULL;
+				if (dx11CommonParams->dx11Device->CreatePixelShader(pyRead, ullFileSize, NULL, &dx11PShader) != S_OK)
+				{
+					VMERRORMESSAGE("SHADER COMPILE FAILURE!");
+				}
+				else
+				{
+					SET_PS(strName);
+				}
+				VMSAFE_DELETEARRAY(pyRead);
+			}
+		}
+#else
 #define CS_NUM 8
 #define SET_CS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::COMPUTE_SHADER, NAME), dx11CShader, true)
 
@@ -146,6 +194,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 				VMSAFE_DELETEARRAY(pyRead);
 			}
 		}
+#endif
 	}
 #pragma endregion 
 
@@ -176,38 +225,32 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		iobj->SetObjParam("_int_PreviousBufferEx", (int)1);
 	}
 
-	GpuRes gres_fb_rgba, gres_fb_depthcs, gres_fb_vrdepthcs;
-	GpuRes gres_fb_k_buffer, gres_fb_counter;
 	GpuRes gres_fb_sys_rgba, gres_fb_sys_depthcs;
-
-	grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D,
-		D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
-	grd_helper::UpdateFrameBuffer(gres_fb_depthcs, iobj, "RENDER_OUT_DEPTH_0", RTYPE_TEXTURE2D,
-		D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_FLOAT, 0);
-	grd_helper::UpdateFrameBuffer(gres_fb_vrdepthcs, iobj, "RENDER_OUT_DEPTH_1", RTYPE_TEXTURE2D,
-		D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_FLOAT, 0);
-	grd_helper::UpdateFrameBuffer(gres_fb_counter, iobj, "RW_COUNTER", RTYPE_TEXTURE2D,
-		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
-
-	const int num_frags_perpixel = k_value * 4;
-	grd_helper::UpdateFrameBuffer(gres_fb_k_buffer, iobj, "BUFFER_RW_K_BUF", RTYPE_BUFFER,
-		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, num_frags_perpixel);
-
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_rgba, iobj, "SYSTEM_OUT_RGBA", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_SYSOUT);
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_depthcs, iobj, "SYSTEM_OUT_DEPTH", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R32_FLOAT, UPFB_SYSOUT);
-#pragma endregion 
 
-	vector<vmfloat3>& vtrCurveInterpolations = *_fncontainer->fnParams.GetParamPtr<vector<vmfloat3>>("_vlist_FLOAT3_CurveInterpolations");
-	vector<vmfloat3>& vtrCurveUpVectors = *_fncontainer->fnParams.GetParamPtr<vector<vmfloat3>>("_vlist_FLOAT3_CurveUpVectors");
-	vector<vmfloat3>& vtrCurveTangentVectors = *_fncontainer->fnParams.GetParamPtr<vector<vmfloat3>>("_vlist_FLOAT3_CurveTangentVectors");
-	GpuRes gres_cpPoints, gres_cpTangents;
-	int num_curvedPoints = (int)vtrCurveInterpolations.size();
-	if (num_curvedPoints < 1) 
-		return false;
-	grd_helper::UpdateCustomBuffer(gres_cpPoints, iobj, "CurvedPlanePoints", &vtrCurveInterpolations[0], num_curvedPoints, DXGI_FORMAT_R32G32B32_FLOAT, 12);
-	grd_helper::UpdateCustomBuffer(gres_cpTangents, iobj, "CurvedPlaneTangents", &vtrCurveTangentVectors[0], num_curvedPoints, DXGI_FORMAT_R32G32B32_FLOAT, 12);
-	dx11DeviceImmContext->CSSetShaderResources(30, 1, (__SRV_PTR*)&gres_cpPoints.alloc_res_ptrs[DTYPE_SRV]);
-	dx11DeviceImmContext->CSSetShaderResources(31, 1, (__SRV_PTR*)&gres_cpTangents.alloc_res_ptrs[DTYPE_SRV]);
+	GpuRes gres_fb_rgba, gres_fb_depthcs;
+#ifdef DX10_0
+	const uint rtbind = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+
+	grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+	grd_helper::UpdateFrameBuffer(gres_fb_depthcs, iobj, "RENDER_OUT_DEPTH_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
+
+	GpuRes gres_fb_rgba_prev, gres_fb_depthcs_prev;
+	grd_helper::UpdateFrameBuffer(gres_fb_rgba_prev, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+	grd_helper::UpdateFrameBuffer(gres_fb_depthcs_prev, iobj, "RENDER_OUT_DEPTH_0", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
+#else
+	const uint rtbind = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+
+	grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+	grd_helper::UpdateFrameBuffer(gres_fb_depthcs, iobj, "RENDER_OUT_DEPTH_0", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
+
+	GpuRes gres_fb_k_buffer, gres_fb_counter;
+	grd_helper::UpdateFrameBuffer(gres_fb_counter, iobj, "RW_COUNTER", RTYPE_TEXTURE2D, D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
+	const int num_frags_perpixel = k_value * 4;
+	grd_helper::UpdateFrameBuffer(gres_fb_k_buffer, iobj, "BUFFER_RW_K_BUF", RTYPE_BUFFER, D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, num_frags_perpixel);
+#endif
+#pragma endregion 
 
 #pragma region // Presetting of VmObject
 	vector<VmActor*> dvr_volumes;
@@ -253,11 +296,16 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	float clr_float_minus_4[4] = { -1.f, -1.f, -1.f, -1.f };
 	if (without_sr)
 	{
+#ifdef DX10_0
+		dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_rgba_prev.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
+		dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_depthcs_prev.alloc_res_ptrs[DTYPE_RTV], clr_float_fltmax_4);
+#else
 		dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 		//dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 		dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 		dx11DeviceImmContext->ClearUnorderedAccessViewFloat((ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV], clr_float_fltmax_4);
 		// note that gres_fb_vrdepthcs is supposed to be initialized in VR_SURFACE
+#endif
 	}
 
 	ID3D11Buffer* cbuf_cam_state = dx11CommonParams->get_cbuf("CB_CameraState");
@@ -276,14 +324,99 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	ID3D11SamplerState* sampler_LZ = dx11CommonParams->get_sampler("LINEAR_ZEROBORDER");
 	ID3D11SamplerState* sampler_PC = dx11CommonParams->get_sampler("POINT_CLAMP");
 	ID3D11SamplerState* sampler_LC = dx11CommonParams->get_sampler("LINEAR_CLAMP");
-	dx11DeviceImmContext->CSSetSamplers(0, 1, &sampler_LZ);
-	dx11DeviceImmContext->CSSetSamplers(1, 1, &sampler_PZ);
-	dx11DeviceImmContext->CSSetSamplers(2, 1, &sampler_LC);
-	dx11DeviceImmContext->CSSetSamplers(3, 1, &sampler_PC);
+
+
+#ifdef DX10_0
+#define SET_SAMPLERS dx11DeviceImmContext->PSSetSamplers
+#define SET_CBUFFERS dx11DeviceImmContext->PSSetConstantBuffers
+#define SET_SHADER_RES dx11DeviceImmContext->PSSetShaderResources
+#define SET_SHADER dx11DeviceImmContext->PSSetShader
+
+	ID3D11RenderTargetView* dx11RTVs_NULL[2] = { NULL, NULL };
+
+	GpuRes gres_quad;
+	gres_quad.vm_src_id = 1;
+	gres_quad.res_name = string("PROXY_QUAD");
+
+	if (gpu_manager->UpdateGpuResource(gres_quad))
+	{
+		D3D11_MAPPED_SUBRESOURCE mappedResPobjData;
+		dx11DeviceImmContext->Map(cbuf_pobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResPobjData);
+		CB_PolygonObject* cbPolygonObjData = (CB_PolygonObject*)mappedResPobjData.pData;
+
+		vmmat44f matQaudWS2CS;
+		vmmath::fMatrixWS2CS(&matQaudWS2CS, &vmfloat3(0, 0, 1), &vmfloat3(0, 1, 0), &vmfloat3(0, 0, -1));
+		vmmat44f matQaudCS2PS;
+		vmmath::fMatrixOrthogonalCS2PS(&matQaudCS2PS, 2.f, 2.f, 0, 2.f);
+		vmmat44f matQaudWS2PS = matQaudWS2CS * matQaudCS2PS;
+		cbPolygonObjData->mat_os2ps = TRANSPOSE(matQaudWS2PS);
+		dx11DeviceImmContext->Unmap(cbuf_pobj, 0);
+		dx11DeviceImmContext->VSSetConstantBuffers(1, 1, &cbuf_pobj);
+
+
+		ID3D11InputLayout* dx11LI_P = (ID3D11InputLayout*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "P"));
+		ID3D11VertexShader* dx11VShader_P = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_P_vs_4_0"));
+
+		ID3D11Buffer* dx11BufferTargetPrim = (ID3D11Buffer*)gres_quad.alloc_res_ptrs[DTYPE_RES];
+		//ID3D11Buffer* dx11IndiceTargetPrim = NULL;
+		uint stride_inputlayer = sizeof(vmfloat3);
+		uint offset = 0;
+		dx11DeviceImmContext->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&dx11BufferTargetPrim, &stride_inputlayer, &offset);
+		dx11DeviceImmContext->IASetInputLayout(dx11LI_P);
+		dx11DeviceImmContext->VSSetShader(dx11VShader_P, NULL, 0);
+		dx11DeviceImmContext->GSSetShader(NULL, NULL, 0);
+		dx11DeviceImmContext->PSSetShader(NULL, NULL, 0);
+		dx11DeviceImmContext->RSSetState(dx11CommonParams->get_rasterizer("SOLID_NONE"));
+		dx11DeviceImmContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+		dx11DeviceImmContext->OMSetDepthStencilState(dx11CommonParams->get_depthstencil("ALWAYS"), 0);
+	}
+	else assert(0);
+
+	D3D11_RECT rects[1];
+	rects[0].left = 0;
+	rects[0].right = fb_size_cur.x;
+	rects[0].top = 0;
+	rects[0].bottom = fb_size_cur.y;
+	dx11DeviceImmContext->RSSetScissorRects(1, rects);
+
+	// View Port Setting //
+	D3D11_VIEWPORT dx11ViewPort;
+	dx11ViewPort.Width = (float)fb_size_cur.x;
+	dx11ViewPort.Height = (float)fb_size_cur.y;
+	dx11ViewPort.MinDepth = 0;
+	dx11ViewPort.MaxDepth = 1.0f;
+	dx11ViewPort.TopLeftX = 0;
+	dx11ViewPort.TopLeftY = 0;
+	dx11DeviceImmContext->RSSetViewports(1, &dx11ViewPort);
+
+#else
+#define SET_SAMPLERS dx11DeviceImmContext->CSSetSamplers
+#define SET_CBUFFERS dx11DeviceImmContext->CSSetConstantBuffers
+#define SET_SHADER_RES dx11DeviceImmContext->CSSetShaderResources
+#define SET_SHADER dx11DeviceImmContext->CSSetShader
+#endif
+
+	SET_SAMPLERS(0, 1, &sampler_LZ);
+	SET_SAMPLERS(1, 1, &sampler_PZ);
+	SET_SAMPLERS(2, 1, &sampler_LC);
+	SET_SAMPLERS(3, 1, &sampler_PC);
 #pragma endregion
 
 	ID3D11UnorderedAccessView* dx11UAVs_NULL[10] = { NULL };
 	ID3D11ShaderResourceView* dx11SRVs_NULL[10] = { NULL };
+
+
+	vector<vmfloat3>& vtrCurveInterpolations = *_fncontainer->fnParams.GetParamPtr<vector<vmfloat3>>("_vlist_FLOAT3_CurveInterpolations");
+	vector<vmfloat3>& vtrCurveUpVectors = *_fncontainer->fnParams.GetParamPtr<vector<vmfloat3>>("_vlist_FLOAT3_CurveUpVectors");
+	vector<vmfloat3>& vtrCurveTangentVectors = *_fncontainer->fnParams.GetParamPtr<vector<vmfloat3>>("_vlist_FLOAT3_CurveTangentVectors");
+	GpuRes gres_cpPoints, gres_cpTangents;
+	int num_curvedPoints = (int)vtrCurveInterpolations.size();
+	if (num_curvedPoints < 1)
+		return false;
+	grd_helper::UpdateCustomBuffer(gres_cpPoints, iobj, "CurvedPlanePoints", &vtrCurveInterpolations[0], num_curvedPoints, DXGI_FORMAT_R32G32B32_FLOAT, 12);
+	grd_helper::UpdateCustomBuffer(gres_cpTangents, iobj, "CurvedPlaneTangents", &vtrCurveTangentVectors[0], num_curvedPoints, DXGI_FORMAT_R32G32B32_FLOAT, 12);
+	SET_SHADER_RES(30, 1, (__SRV_PTR*)&gres_cpPoints.alloc_res_ptrs[DTYPE_SRV]);
+	SET_SHADER_RES(31, 1, (__SRV_PTR*)&gres_cpTangents.alloc_res_ptrs[DTYPE_SRV]);
 
 #pragma region // Camera & Environment 
 	// 	const int __BLOCKSIZE = 8;
@@ -316,7 +449,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	CB_CameraState* cbCamStateData = (CB_CameraState*)mappedResCamState.pData;
 	memcpy(cbCamStateData, &cbCamState, sizeof(CB_CameraState));
 	dx11DeviceImmContext->Unmap(cbuf_cam_state, 0);
-	dx11DeviceImmContext->CSSetConstantBuffers(0, 1, &cbuf_cam_state);
+	SET_CBUFFERS(0, 1, &cbuf_cam_state);
 
 	CB_EnvState cbEnvState;
 	grd_helper::SetCb_Env(cbEnvState, cam_obj, light_src, global_lighting, lens_effect);
@@ -327,7 +460,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	CB_EnvState* cbEnvStateData = (CB_EnvState*)mappedResEnvState.pData;
 	memcpy(cbEnvStateData, &cbEnvState, sizeof(CB_EnvState));
 	dx11DeviceImmContext->Unmap(cbuf_env_state, 0);
-	dx11DeviceImmContext->CSSetConstantBuffers(7, 1, &cbuf_env_state);
+	SET_CBUFFERS(7, 1, &cbuf_env_state);
 
 	if (is_ghost_mode)
 	{
@@ -337,7 +470,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		CB_HotspotMask* cbHSMaskData = (CB_HotspotMask*)mappedResHSMask.pData;
 		grd_helper::SetCb_HotspotMask(*cbHSMaskData, _fncontainer, matWS2SS);
 		dx11DeviceImmContext->Unmap(cbuf_hsmask, 0);
-		dx11DeviceImmContext->CSSetConstantBuffers(9, 1, &cbuf_hsmask);
+		SET_CBUFFERS(9, 1, &cbuf_hsmask);
 	}
 #pragma endregion // Light & Shadow Setting
 
@@ -350,7 +483,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	CB_CurvedSlicer* cbCurvedSlicerData = (CB_CurvedSlicer*)mappedResCurvedSlicerState.pData;
 	memcpy(cbCurvedSlicerData, &cbCurvedSlicer, sizeof(CB_CurvedSlicer));
 	dx11DeviceImmContext->Unmap(cbuf_curvedslicer, 0);
-	dx11DeviceImmContext->CSSetConstantBuffers(10, 1, &cbuf_curvedslicer);
+	SET_CBUFFERS(10, 1, &cbuf_curvedslicer);
 
 	// Initial Setting of Frame Buffers //
 	int count_call_render = iobj->GetObjParam("_int_NumCallRenders", (int)0);
@@ -446,7 +579,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 			else {
 				GpuRes gres_mask_vol;
 				grd_helper::UpdateVolumeModel(gres_mask_vol, mask_vol_obj, true);
-				dx11DeviceImmContext->CSSetShaderResources(2, 1, (__SRV_PTR*)&gres_mask_vol.alloc_res_ptrs[DTYPE_SRV]);
+				SET_SHADER_RES(2, 1, (__SRV_PTR*)&gres_mask_vol.alloc_res_ptrs[DTYPE_SRV]);
 			}
 		}
 		else if (ray_cast_type == __RM_MULTIOTF || ray_cast_type == __RM_VISVOLMASK) {
@@ -455,13 +588,13 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 
 		GpuRes gres_vol;
 		grd_helper::UpdateVolumeModel(gres_vol, vobj, ray_cast_type == __RM_VISVOLMASK, planeThickness <= 0, progress); // ray_cast_type == __RM_MAXMASK
-		dx11DeviceImmContext->CSSetShaderResources(0, 1, (__SRV_PTR*)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
+		SET_SHADER_RES(0, 1, (__SRV_PTR*)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
 
 		GpuRes gres_tmap_otf, gres_tmap_preintotf;
 		grd_helper::UpdateTMapBuffer(gres_tmap_otf, tobj_otf, false);
 		grd_helper::UpdateTMapBuffer(gres_tmap_preintotf, tobj_otf, true);
-		dx11DeviceImmContext->CSSetShaderResources(3, 1, (__SRV_PTR*)&gres_tmap_otf.alloc_res_ptrs[DTYPE_SRV]);
-		dx11DeviceImmContext->CSSetShaderResources(13, 1, (__SRV_PTR*)&gres_tmap_preintotf.alloc_res_ptrs[DTYPE_SRV]);
+		SET_SHADER_RES(3, 1, (__SRV_PTR*)&gres_tmap_otf.alloc_res_ptrs[DTYPE_SRV]);
+		SET_SHADER_RES(13, 1, (__SRV_PTR*)&gres_tmap_preintotf.alloc_res_ptrs[DTYPE_SRV]);
 
 		VolumeBlocks* vol_blk = vobj->GetVolumeBlock(blk_level);
 		if (vol_blk == NULL)
@@ -488,7 +621,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 			grd_helper::UpdateOtfBlocks(gres_volblk_otf, vobj, mask_vol_obj, tobj_otf, sculpt_index); // this tagged mask volume is always used even when MIP mode
 			volblk_srv = (__SRV_PTR)gres_volblk_otf.alloc_res_ptrs[DTYPE_SRV];
 		}
-		dx11DeviceImmContext->CSSetShaderResources(1, 1, (__SRV_PTR*)&volblk_srv);
+		SET_SHADER_RES(1, 1, (__SRV_PTR*)&volblk_srv);
 
 		CB_VolumeObject cbVolumeObj;
 		grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, actor->matWS2OS, gres_vol, tmap_data->valid_min_idx.x, gres_volblk.options["FORMAT"] == DXGI_FORMAT_R16_UNORM ? 65535.f : 255.f, samplePrecisionLevel, is_xray_mode);
@@ -528,7 +661,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		CB_VolumeObject* cbVolumeObjData = (CB_VolumeObject*)mappedResVolObj.pData;
 		memcpy(cbVolumeObjData, &cbVolumeObj, sizeof(CB_VolumeObject));
 		dx11DeviceImmContext->Unmap(cbuf_vobj, 0);
-		dx11DeviceImmContext->CSSetConstantBuffers(4, 1, &cbuf_vobj);
+		SET_CBUFFERS(4, 1, &cbuf_vobj);
 
 		CB_ClipInfo cbClipInfo;
 		grd_helper::SetCb_ClipInfo(cbClipInfo, vobj, actor);
@@ -537,7 +670,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		CB_ClipInfo* cbClipInfoData = (CB_ClipInfo*)mappedResClipInfo.pData;
 		memcpy(cbClipInfoData, &cbClipInfo, sizeof(CB_ClipInfo));
 		dx11DeviceImmContext->Unmap(cbuf_clip, 0);
-		dx11DeviceImmContext->CSSetConstantBuffers(2, 1, &cbuf_clip);
+		SET_CBUFFERS(2, 1, &cbuf_clip);
 
 		CB_TMAP cbTmap;
 		grd_helper::SetCb_TMap(cbTmap, tobj_otf);
@@ -546,7 +679,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		CB_TMAP* cbTmapData = (CB_TMAP*)mappedResOtf.pData;
 		memcpy(cbTmapData, &cbTmap, sizeof(CB_TMAP));
 		dx11DeviceImmContext->Unmap(cbuf_tmap, 0);
-		dx11DeviceImmContext->CSSetConstantBuffers(5, 1, &cbuf_tmap);
+		SET_CBUFFERS(5, 1, &cbuf_tmap);
 
 		CB_Material cbRndEffect;
 		grd_helper::SetCb_RenderingEffect(cbRndEffect, actor);
@@ -555,7 +688,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		CB_Material* cbRndEffectData = (CB_Material*)mappedResRdnEffect.pData;
 		memcpy(cbRndEffectData, &cbRndEffect, sizeof(CB_Material));
 		dx11DeviceImmContext->Unmap(cbuf_reffect, 0);
-		dx11DeviceImmContext->CSSetConstantBuffers(6, 1, &cbuf_vreffect);
+		SET_CBUFFERS(6, 1, &cbuf_vreffect);
 
 		CB_VolumeMaterial cbVrEffect;
 		grd_helper::SetCb_VolumeRenderingEffect(cbVrEffect, vobj, actor);
@@ -564,7 +697,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		CB_VolumeMaterial* cbVrEffectData = (CB_VolumeMaterial*)mappedVrEffect.pData;
 		memcpy(cbVrEffectData, &cbVrEffect, sizeof(CB_VolumeMaterial));
 		dx11DeviceImmContext->Unmap(cbuf_vreffect, 0);
-		dx11DeviceImmContext->CSSetConstantBuffers(3, 1, &cbuf_reffect);
+		SET_CBUFFERS(3, 1, &cbuf_reffect);
 #pragma endregion 
 
 #pragma region GPU resource updates
@@ -573,16 +706,46 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 #pragma region Renderer
 		// LATER... MFR_MODE::DYNAMIC_KB ==> DEPRECATED in VR
 		// MFR_MODE::DYNAMIC_KB also uses static K buffer in VR
-		ID3D11ComputeShader* cshader = NULL;
+#ifdef DX10_0
+		ID3D11PixelShader* _shader = NULL;
 		switch (ray_cast_type)
 		{
-		case __RM_RAYMIN: cshader = GETCS(PanoVR_RAYMIN_cs_5_0); break;
-		case __RM_RAYMAX: cshader = GETCS(PanoVR_RAYMAX_cs_5_0); break;
-		case __RM_RAYSUM: cshader = GETCS(PanoVR_RAYSUM_cs_5_0); break;
-		case __RM_DEFAULT: cshader = GETCS(PanoVR_DEFAULT_cs_5_0); break;
-		case __RM_MODULATION: cshader = GETCS(PanoVR_MODULATE_cs_5_0); break;
-		case __RM_MULTIOTF: cshader = GETCS(PanoVR_MULTIOTF_DEFAULT_cs_5_0); break;
-		case __RM_MULTIOTF_MODULATION: cshader = GETCS(PanoVR_MULTIOTF_MODULATE_cs_5_0); break;
+		case __RM_RAYMIN: _shader = GETPS(PanoVR_RAYMIN_ps_4_0); break;
+		case __RM_RAYMAX: _shader = GETPS(PanoVR_RAYMAX_ps_4_0); break;
+		case __RM_RAYSUM: _shader = GETPS(PanoVR_RAYSUM_ps_4_0); break;
+		case __RM_DEFAULT: _shader = GETPS(PanoVR_DEFAULT_ps_4_0); break;
+		case __RM_MODULATION: _shader = GETPS(PanoVR_MODULATE_ps_4_0); break;
+		case __RM_MULTIOTF: _shader = GETPS(PanoVR_MULTIOTF_DEFAULT_ps_4_0); break;
+		case __RM_MULTIOTF_MODULATION: _shader = GETPS(PanoVR_MULTIOTF_MODULATE_ps_4_0); break;
+		case __RM_CLIPOPAQUE:
+		case __RM_OPAQUE:
+		case __RM_VISVOLMASK:
+		case __RM_SCULPTMASK:
+		default:
+			VMERRORMESSAGE("NOT SUPPORT RAY CASTER!"); return false;
+		}
+
+		SET_SHADER_RES(20, 1, (ID3D11ShaderResourceView**)&gres_fb_rgba_prev.alloc_res_ptrs[DTYPE_SRV]);
+		SET_SHADER_RES(21, 1, (ID3D11ShaderResourceView**)&gres_fb_depthcs_prev.alloc_res_ptrs[DTYPE_SRV]);
+
+		ID3D11RenderTargetView* dx11RTVs[2] = {
+			(ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV],
+			(ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV] };
+		dx11DeviceImmContext->OMSetRenderTargets(2, dx11RTVs, NULL);
+		SET_SHADER(_shader, NULL, 0);
+		dx11DeviceImmContext->Draw(4, 0);
+		dx11DeviceImmContext->OMSetRenderTargets(2, dx11RTVs_NULL, NULL);
+#else
+		ID3D11ComputeShader* _shader = NULL;
+		switch (ray_cast_type)
+		{
+		case __RM_RAYMIN: _shader = GETCS(PanoVR_RAYMIN_cs_5_0); break;
+		case __RM_RAYMAX: _shader = GETCS(PanoVR_RAYMAX_cs_5_0); break;
+		case __RM_RAYSUM: _shader = GETCS(PanoVR_RAYSUM_cs_5_0); break;
+		case __RM_DEFAULT: _shader = GETCS(PanoVR_DEFAULT_cs_5_0); break;
+		case __RM_MODULATION: _shader = GETCS(PanoVR_MODULATE_cs_5_0); break;
+		case __RM_MULTIOTF: _shader = GETCS(PanoVR_MULTIOTF_DEFAULT_cs_5_0); break;
+		case __RM_MULTIOTF_MODULATION: _shader = GETCS(PanoVR_MULTIOTF_MODULATE_cs_5_0); break;
 		case __RM_CLIPOPAQUE:
 		case __RM_OPAQUE:
 		case __RM_VISVOLMASK:
@@ -599,21 +762,21 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		};
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs, (UINT*)(&dx11UAVs));
 
-		dx11DeviceImmContext->CSSetShader(cshader, NULL, 0);
+		SET_SHADER(_shader, NULL, 0);
 		//dx11DeviceImmContext->Flush();
 		dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
 #ifdef __DX_DEBUG_QUERY
 		dx11CommonParams->debug_info_queue->PushEmptyStorageFilter();
 #endif
 		if (fastRender2x) {
-			dx11DeviceImmContext->CSSetShader(GETCS(FillDither_cs_5_0), NULL, 0);
+			SET_SHADER(GETCS(FillDither_cs_5_0), NULL, 0);
 			dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
 		}
-		count_call_render++;
-
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-		dx11DeviceImmContext->CSSetShaderResources(6, 1, dx11SRVs_NULL);
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(50, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+#endif
+		SET_SHADER_RES(6, 1, dx11SRVs_NULL);
+		count_call_render++;
 #pragma endregion 
 	}
 	iobj->SetObjParam("_int_NumCallRenders", count_call_render);

@@ -277,8 +277,9 @@ void KB_SSAO(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTi
 
 	if (frag_cnt == 0 && vr_hit_enc == 0)
 	{
+		//[unroll]
 		for(int k = 0; k < MAX_LAYERS; k++)
-		rw_ao_textures[int3(DTid.xy, k)] = 0;
+			rw_ao_textures[int3(DTid.xy, k)] = 0;
 		rw_ao_vr_texture[DTid.xy] = 0;
 		return;
 	}

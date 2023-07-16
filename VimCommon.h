@@ -30,7 +30,8 @@
 //#define __VERSION "1.11" // released at 22.05.17
 //#define __VERSION "1.12" // released at 22.08.08
 //#define __VERSION "1.13" // released at 22.12.05
-#define __VERSION "1.20" // released at 23.04.03
+//#define __VERSION "1.20" // released at 23.04.03
+#define __VERSION "1.21" // released at 23.07.16
 
 #define _HAS_STD_BYTE 0
 
@@ -711,7 +712,7 @@ namespace vmobjects
 
 		/// constructor, 모두 0 (NULL or false)으로 초기화
 		PrimitiveData() {
-			is_ccw = true; num_prims = 0; num_vtx = 0;
+			is_ccw = false; num_prims = 0; num_vtx = 0;
 			idx_stride = num_vidx = 0;
 			ptype = PrimitiveTypeUNDEFINED;
 			is_stripe = false;

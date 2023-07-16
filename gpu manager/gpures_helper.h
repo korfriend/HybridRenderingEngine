@@ -15,7 +15,11 @@ using namespace fncontainer;
 #elif defined(DX11_0)
 #define __ID3D11Device ID3D11Device
 #define __ID3D11DeviceContext ID3D11DeviceContext
+#ifdef _DEBUG
+#define __DLLNAME "vismtv_inbuilt_renderergpudx.dll"
+#else
 #define __DLLNAME "vismtv_inbuilt_renderergpudx11_0.dll"
+#endif
 #elif defined(DX10_0)
 #define __ID3D11Device ID3D11Device
 #define __ID3D11DeviceContext ID3D11DeviceContext
