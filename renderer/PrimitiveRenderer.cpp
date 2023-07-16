@@ -1044,7 +1044,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 		for (int i = 0; i < CS_NUM; i++)
 		{
-			string strName = hlslobj_path_4_0 + strNames_CS[i];
+			string strName = strNames_CS[i];
 
 			FILE* pFile;
 			if (fopen_s(&pFile, (prefix_path + strName).c_str(), "rb") == 0)
@@ -1500,7 +1500,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 		bool has_wire = actor->GetParam("_bool_HasWireframe", false);
 
-		bool is_foremost_surfaces = actor->GetParam("_bool_OnlyForemostSurfaces", false);
+		bool is_foremost_surfaces = actor->GetParam("_bool_OnlyForemostSurfaces", true);
+		if (actor->color.a < 1.f) is_foremost_surfaces = false;
 		if (has_wire && prim_data->ptype == PrimitiveTypeTRIANGLE)
 		{
 			temperal_actors.push_back(*actor);
@@ -2831,7 +2832,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
 		};
 
-		int additionalKLayerForMFB = (int)(foremost_surfaces_routine_objs.size() == 0 && single_layer_routine_objs.size() > 0);
+		int additionalKLayerForMFB = (int)(foremost_surfaces_routine_objs.size() == 0 || single_layer_routine_objs.size() > 0);
 		cbCamState.cam_flag |= (additionalKLayerForMFB << 8);
 		int storeKBuf = (int)(!is_final_renderer || check_pixel_transmittance
 			|| cbEnvState.r_kernel_ao > 0
