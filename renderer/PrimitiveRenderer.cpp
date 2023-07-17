@@ -2832,7 +2832,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
 		};
 
-		int additionalKLayerForMFB = (int)(foremost_surfaces_routine_objs.size() == 0 || single_layer_routine_objs.size() > 0);
+		int additionalKLayerForMFB = (int)(foremost_surfaces_routine_objs.size() > 0 || single_layer_routine_objs.size() > 0);
 		cbCamState.cam_flag |= (additionalKLayerForMFB << 8);
 		int storeKBuf = (int)(!is_final_renderer || check_pixel_transmittance
 			|| cbEnvState.r_kernel_ao > 0
