@@ -616,12 +616,13 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     float Ns = g_cbPobj.Ns;
     if ((g_cbPobj.pobj_flag & (0x1 << 3)) == 0)
     {
-        Ka = input.f3Custom;
-        Kd = input.f3Custom;
-        Ks = input.f3Custom;
+        Ka = input.f3Custom * g_cbPobj.Ka.x;
+        Kd = input.f3Custom * g_cbPobj.Ka.y;
+        Ks = input.f3Custom * g_cbPobj.Ka.z;
     }
     else
     {
+        // note g_cbPobj's Ka, Kd, and Ks has already been multiplied by pb_shading_factor.xyz
         Ka = g_cbPobj.Ka, Kd = g_cbPobj.Kd, Ks = g_cbPobj.Ks;
     }
     if (nor_len > 0)
@@ -631,8 +632,9 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
         Ks *= g_cbEnv.ltint_spec.rgb;
         ComputeColor(v_rgba.rgb, Ka, Kd, Ks, Ns, 1.0, input.f3PosWS, view_dir, nor, nor_len);
     }
-    else
+    else {
         v_rgba.rgb = Kd;
+    }
 
 #endif
 

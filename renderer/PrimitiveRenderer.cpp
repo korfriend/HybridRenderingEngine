@@ -1760,10 +1760,16 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			cbPolygonObj.tex_map_enum = tex_map_enum;
 			cbPolygonObj.pobj_dummy_0 = actor->actorId;// pobj->GetObjectID(); // used for picking
 			grd_helper::SetCb_PolygonObj(cbPolygonObj, pobj, actor, matWS2SS, matWS2PS, is_annotation_obj, use_vertex_color);
-			cbPolygonObj.Ka *= material_phongCoeffs.x;
-			cbPolygonObj.Kd *= material_phongCoeffs.y;
-			cbPolygonObj.Ks *= material_phongCoeffs.z;
-			cbPolygonObj.Ns *= material_phongCoeffs.w;
+			if (use_vertex_color) {
+				cbPolygonObj.Ka = vmfloat3(material_phongCoeffs);
+				cbPolygonObj.Ns *= material_phongCoeffs.w;
+			}
+			else {
+				cbPolygonObj.Ka *= material_phongCoeffs.x;
+				cbPolygonObj.Kd *= material_phongCoeffs.y;
+				cbPolygonObj.Ks *= material_phongCoeffs.z;
+				cbPolygonObj.Ns *= material_phongCoeffs.w;
+			}
 			if (default_color_cmmobj.x >= 0 && default_color_cmmobj.y >= 0 && default_color_cmmobj.z >= 0)
 				cbPolygonObj.Ka = cbPolygonObj.Kd = cbPolygonObj.Ks = default_color_cmmobj;
 			//if (render_pass == RENDER_GEOPASS::PASS_SINGLELAYERS)
