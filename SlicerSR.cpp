@@ -1675,6 +1675,10 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 				cbPolygonObj.pobj_flag |= (int)is_only_hotspot_visible << 23;
 				//cout << "TEST : " << is_ghost_surface << ", " << is_only_hotspot_visible << endl;
 			}
+			if (planeThickness == 0) {
+				bool noSlicerFill = actor->GetParam("_bool_DisableSolidFillOnSlicer", false);
+				cbPolygonObj.pobj_flag |= (int)noSlicerFill << 6;
+			}
 			D3D11_MAPPED_SUBRESOURCE mappedResPobjData;
 			dx11DeviceImmContext->Map(cbuf_pobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResPobjData);
 			CB_PolygonObject* cbPolygonObjData = (CB_PolygonObject*)mappedResPobjData.pData;
