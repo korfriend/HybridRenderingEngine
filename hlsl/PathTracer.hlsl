@@ -1134,6 +1134,8 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	else if (planeThickness == 0.f) 
 	{
 		v_rgba.a = min(0.3, v_rgba.a);
+		if (BitCheck(g_cbPobj.pobj_flag, 6))
+			v_rgba = float4(0, 0, 0, 0.001);
 		out_ps.color = MixOpt(v_rgba, v_rgba.a, out_ps.color, out_ps.color.a);
 		out_ps.depthcs = minDistOnPlane + INSIDE_DIST_FLAG;
 	}
