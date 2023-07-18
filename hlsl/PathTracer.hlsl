@@ -1116,16 +1116,16 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 			//v_rgba = float4(1, 0, 0, 1);
 			fragMerge.i_vis = ConvertFloat4ToUInt(v_rgba);
 			fragMerge.opacity_sum += fragPrev.opacity_sum;
-
-			bool store_to_kbuf = BitCheck(g_cbCamState.cam_flag, 3) && planeThickness > 0;
-			SET_FRAG(addr_base, 0, fragMerge);
-
-			if (!store_to_kbuf)
-				fragment_vis[ss_xy] = v_rgba;
-
-			fragment_counter[ss_xy] = 1;
-			fragment_zdepth[ss_xy] = 1.f;
 		}
+
+		bool store_to_kbuf = BitCheck(g_cbCamState.cam_flag, 3) && planeThickness > 0;
+		SET_FRAG(addr_base, 0, fragMerge);
+
+		if (!store_to_kbuf)
+			fragment_vis[ss_xy] = v_rgba;
+
+		fragment_counter[ss_xy] = 1;
+		fragment_zdepth[ss_xy] = 1.f;
 	}
 	else {
 
@@ -1137,13 +1137,19 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		// always to k-buf not render-out buffer
 		float4 v_rgba0 = v_rgba, v_rgba1 = v_rgba;
 
+		// DOJO TO consider...
+		// preserve thr original alpha (i.e., v_rgba.a) or not..????
 		v_rgba0.a *= min((planeThickness - zdepth0 + zThickness) / planeThickness + 0.1f, 1.0f);
+		v_rgba0.a *= v_rgba0.a;
 		v_rgba0.rgb *= v_rgba0.a;
+		//v_rgba0.a = v_rgba.a;
 		float vz_thickness = GetVZThickness(zdepth0, g_cbPobj.vz_thickness);
 		Fill_kBuffer(ss_xy, g_cbCamState.k_value, v_rgba0, zdepth0, vz_thickness);
 
 		v_rgba1.a *= min((planeThickness - zdepth1 + zThickness) / planeThickness + 0.1f, 1.0f);
+		v_rgba1.a *= v_rgba1.a;
 		v_rgba1.rgb *= v_rgba1.a;
+		//v_rgba1.a = v_rgba.a;
 		vz_thickness = GetVZThickness(zdepth1, g_cbPobj.vz_thickness);
 		Fill_kBuffer(ss_xy, g_cbCamState.k_value, v_rgba1, zdepth1, vz_thickness);
 	}

@@ -2071,24 +2071,26 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 
 #ifdef DX10_0
 #else
-		// to do ...
-		UINT UAVInitialCounts = 0;
-		ID3D11UnorderedAccessView* dx11UAVs_2nd_pass[3] = {
-				(ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]
-				, (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
-				, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
-		};
-		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], 0); // trimming may occur 
-		//dx11DeviceImmContext->CSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_SRV]);
-		//dx11DeviceImmContext->CSSetShaderResources(2, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_depthcs.alloc_res_ptrs[DTYPE_SRV]);
-		dx11DeviceImmContext->CSSetShader(GETCS(OIT_SKBZ_RESOLVE_cs_5_0), NULL, 0);
-		dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 3, dx11UAVs_2nd_pass, (UINT*)(&dx11UAVs_2nd_pass));
+		if (planeThickness > 0) {
+			// to do ...
+			UINT UAVInitialCounts = 0;
+			ID3D11UnorderedAccessView* dx11UAVs_2nd_pass[3] = {
+					(ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]
+					, (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
+					, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
+			};
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], 0); // trimming may occur 
+			//dx11DeviceImmContext->CSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_SRV]);
+			//dx11DeviceImmContext->CSSetShaderResources(2, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_depthcs.alloc_res_ptrs[DTYPE_SRV]);
+			dx11DeviceImmContext->CSSetShader(GETCS(OIT_SKBZ_RESOLVE_cs_5_0), NULL, 0);
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 3, dx11UAVs_2nd_pass, (UINT*)(&dx11UAVs_2nd_pass));
 
-		dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
-		// Set NULL States //
-		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL)); // counter
-		dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 3, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-		dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
+			dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+			// Set NULL States //
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL)); // counter
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 3, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+			dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
+		}
 #endif
 	}
 
