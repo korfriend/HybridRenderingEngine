@@ -1134,7 +1134,7 @@ void VR_SURFACE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 #if DX10_0 == 1
 #define __EXIT_PanoVR return output
-[earlydepthstencil]
+//[earlydepthstencil]
 PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 #else
 #define __EXIT_PanoVR return 
@@ -1162,10 +1162,14 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 		Fragment f;
 		f.i_vis = ConvertFloat4ToUInt(prev_vis);
 		f.z = prev_depthcs;
+		f.zthick = g_cbVobj.sample_dist;
+		f.opacity_sum = prev_vis.a;
 		fs[0] = f;
 	}
 	fs[num_frags] = (Fragment)0;
 	fs[num_frags].z = FLT_MAX;
+
+	vis_out = prev_vis;
 
 	output.color = prev_vis;
 	output.depthcs = prev_depthcs;
@@ -1185,6 +1189,42 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 
 	uint num_frags = fragment_counter[DTid.xy];
 	num_frags = num_frags & 0xFFF;
+
+	//if (num_frags == 0)
+	//{
+	//	fragment_vis[DTid.xy] = float4(1, 0, 0, 1);
+	//	return;
+	//}
+	//else if (num_frags == 1)
+	//{
+	//	fragment_vis[DTid.xy] = float4(0, 0, 1, 1);
+	//	return;
+	//}
+	//else if (num_frags == 2)
+	//{
+	//	fragment_vis[DTid.xy] = float4(0, 1, 0, 1);
+	//	return;
+	//}
+	//else if (num_frags == 3)
+	//{
+	//	fragment_vis[DTid.xy] = float4(1, 1, 0, 1);
+	//	return;
+	//}
+	//else if (num_frags == 4)
+	//{
+	//	fragment_vis[DTid.xy] = float4(0, 1, 1, 1);
+	//	return;
+	//}
+	//else if (num_frags == 5)
+	//{
+	//	fragment_vis[DTid.xy] = float4(1, 0, 1, 1);
+	//	return;
+	//}
+	//fragment_vis[DTid.xy] = float4(1, 1, 1, 1);
+	//return;
+
+
+
 
 	bool isDither = BitCheck(g_cbCamState.cam_flag, 8);
 	if (isDither) {
@@ -1210,6 +1250,8 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 			f.i_vis = ConvertFloat4ToUInt(vis_in);
 		if (vis_in.a > 0)
 			vis_out += vis_in * (1.f - vis_out.a);
+
+		f.zthick = g_cbVobj.sample_dist;
 		fs[i] = f;
 	}
 
@@ -1373,6 +1415,8 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	//return;
 	//////////
 
+	float4 vis_out_prev = vis_out;
+	vis_out = (float4)0;
 	float sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_ray_hit_ts, 0).r;
 	int start_idx = 0;
 
@@ -1428,7 +1472,15 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 			vis_sample *= modulator;
 #endif
 			//vis_sample *= mask_weight;
-			vis_out += vis_sample * (1.f - vis_out.a);
+			
+			//vis_out += vis_sample * (1.f - vis_out.a);
+
+			float depth_sample = depthHit;
+#if FRAG_MERGING == 1
+			INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, sample_dist, fs, merging_beta);
+#else
+			INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, fs);
+#endif
 			//fragment_vis[cip_xy] = float4(1, 0, 0, 1);
 			//return;
 		}
@@ -1506,8 +1558,8 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 #endif
 					
 					float4 vis_sample = float4(shade * vis_otf.rgb, vis_otf.a);
-#if VR_MODE == 2
 					float depth_sample = depthHit + (float)(i + j) * sample_dist;
+#if VR_MODE == 2
 					float __s = grad_len > 0.001f ? abs(dot(view_dir, nrl)) : 0;
 					float kappa_t = 5.0;// g_cbVobj.kappa_i;
 					float kappa_s = 0.5;// g_cbVobj.kappa_s;
@@ -1522,7 +1574,15 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 					vis_sample *= modulator;
 #endif
 
-					vis_out += vis_sample * (1.f - vis_out.a);
+//					vis_out += vis_sample * (1.f - vis_out.a);
+
+#if FRAG_MERGING == 1
+					INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, sample_dist, fs, merging_beta);
+#else
+					INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, fs);
+#endif
+
+
 
 					if (vis_out.a >= ERT_ALPHA)
 					{
@@ -1558,7 +1618,6 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 
 #else // RAYMODE != 0
 	float depth_begin = 0;
-
 
 #if RAYMODE==1 || RAYMODE==2
 	int luckyStep = (int)((float)(Random(pos_ray_start_ws.xy) + 1) * (float)num_ray_samples * 0.5f);

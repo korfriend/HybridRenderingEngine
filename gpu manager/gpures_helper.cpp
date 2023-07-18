@@ -423,6 +423,9 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 
 #define VRETURN(v, ERR) if(v != S_OK) { vmlog::LogErr(#ERR); goto ERROR_PRESETTING; }
 
+		// common...
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31030), "GS_PickingBasic_gs_4_0", "gs_4_0_SO"), GS_PickingBasic_gs_4_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31031), "GS_MeshCutLines_gs_4_0", "gs_4_0_SO"), GS_MeshCutLines_gs_4_0);
 #ifdef DX10_0
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91001), "SR_OIT_P_vs_4_0", "vs_4_0", "P", lotypeInputPos, 1), SR_OIT_P_vs_4_0);
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91002), "SR_OIT_PN_vs_4_0", "vs_4_0", "PN", lotypeInputPosNor, 2), SR_OIT_PN_vs_4_0);
@@ -432,14 +435,9 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA91015), "SR_SINGLE_LAYER_ps_4_0", "ps_4_0"), SR_SINGLE_LAYER_ps_4_0);
 
-		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31030), "GS_PickingBasic_gs_4_0", "gs_4_0_SO"), GS_PickingBasic_gs_4_0);
-		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31031), "GS_MeshCutLines_gs_4_0", "gs_4_0_SO"), GS_MeshCutLines_gs_4_0);
-
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA91010), "GS_ThickPoints_gs_4_0", "gs_4_0"), GS_ThickPoints_gs_4_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA91011), "GS_SurfelPoints_gs_4_0", "gs_4_0"), GS_SurfelPoints_gs_4_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA91020), "GS_ThickLines_gs_4_0", "gs_4_0"), GS_ThickLines_gs_4_0);
-
-		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60102), "SliceOutline_cs_4_0", "cs_4_0"), SliceOutline_cs_4_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90101), "SR_BASIC_PHONGBLINN_ps_4_0", "ps_4_0"), SR_BASIC_PHONGBLINN_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90102), "SR_BASIC_DASHEDLINE_ps_4_0", "ps_4_0"), SR_BASIC_DASHEDLINE_ps_5_0);

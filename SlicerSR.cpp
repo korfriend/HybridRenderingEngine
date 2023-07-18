@@ -803,6 +803,9 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	bool blur_SSAO = _fncontainer->fnParams.GetParam("_bool_BlurSSAO", true);
 
 	bool is_picking_routine = _fncontainer->fnParams.GetParam("_bool_IsPickingRoutine", false);
+#ifdef DX10_0
+	is_picking_routine = false;
+#endif
 	vmint2 picking_pos_ss = _fncontainer->fnParams.GetParam("_int2_PickingPosSS", vmint2(-1, -1));
 
 	int buf_ex_scale = _fncontainer->fnParams.GetParam("_int_BufExScale", (int)8); // scaling the capacity of the k-buffer for _bool_PixelTransmittance
@@ -923,7 +926,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 #define PS_NUM 3
 #define SET_PS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::PIXEL_SHADER, NAME), __S, true)
 #else
-#define CS_NUM 5
+#define CS_NUM 6
 #define SET_CS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::COMPUTE_SHADER, NAME), __S, true)
 #endif
 #define SET_VS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, NAME), __S, true)
@@ -1024,6 +1027,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			  ,"SliceOutline_cs_5_0"
 			  ,"PickingThickSlice_cs_5_0"
 			  ,"PickingCurvedThickSlice_cs_5_0"
+			  ,"OIT_SKBZ_RESOLVE_cs_5_0"
 		};
 		for (int i = 0; i < CS_NUM; i++)
 		{
@@ -1848,6 +1852,8 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 					else {
 						dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RES],
 							(ID3D11Texture2D*)gres_fb_rgba2.alloc_res_ptrs[DTYPE_RES]);
+						dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RES],
+							(ID3D11Texture2D*)gres_fb_depthcs2.alloc_res_ptrs[DTYPE_RES]);
 					}
 #else
 					SET_SHADER(
@@ -1858,7 +1864,11 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 					if (planeThickness == 0.f) {
 						SET_SHADER(GETCS(SliceOutline_cs_5_0), NULL, 0);
 						dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
-				}
+					}
+					else if (planeThickness > 0.f) {
+						// call k-buffer resolve pass
+					}
+					else assert(0);
 					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs, dx11UAVs_NULL, NULL);
 #endif
 				}
@@ -2058,6 +2068,28 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		// Set NULL States //
 		//dx11DeviceImmContext->CSSetUnorderedAccessViews(1, NUM_UAVs_GEO, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 		SET_SHADER_RES(0, 2, dx11SRVs_NULL);
+
+#ifdef DX10_0
+#else
+		// to do ...
+		UINT UAVInitialCounts = 0;
+		ID3D11UnorderedAccessView* dx11UAVs_2nd_pass[3] = {
+				(ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]
+				, (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
+				, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
+		};
+		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], 0); // trimming may occur 
+		//dx11DeviceImmContext->CSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_SRV]);
+		//dx11DeviceImmContext->CSSetShaderResources(2, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_depthcs.alloc_res_ptrs[DTYPE_SRV]);
+		dx11DeviceImmContext->CSSetShader(GETCS(OIT_SKBZ_RESOLVE_cs_5_0), NULL, 0);
+		dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 3, dx11UAVs_2nd_pass, (UINT*)(&dx11UAVs_2nd_pass));
+
+		dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+		// Set NULL States //
+		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL)); // counter
+		dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 3, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+		dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
+#endif
 	}
 
 	iobj->SetObjParam("_int_NumCallRenders", count_call_render);

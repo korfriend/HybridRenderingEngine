@@ -348,10 +348,16 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 	}
 }
 #else
+
+#if PATHTR_USE_KBUF == 1
+RWTexture2D<uint> fragment_counter : register(u0);
+RWByteAddressBuffer deep_k_buf : register(u1);
+#else
 RWTexture2D<uint> fragment_counter : register(u2);
+RWByteAddressBuffer deep_k_buf : register(u4);
+#endif
 RWTexture2D<uint> fragment_spinlock : register(u3);
 //RWBuffer<uint> deep_k_buf : register(u4);
-RWByteAddressBuffer deep_k_buf : register(u4);
 
 void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4 v_rgba, const in float z_depth, const in float z_thickness)
 {

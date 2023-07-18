@@ -97,6 +97,7 @@ void OIT_RESOLVE_OLD(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, u
 	uint addr_base = pixel_id * bytes_frags_per_pixel;
 #endif
 	
+	////////// ???????????????????????????
 	float vz_thickness = GetHotspotThickness((int2)DTid);
 	vz_thickness = max(vz_thickness, g_cbCamState.cam_vz_thickness);
 
@@ -260,7 +261,7 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 		// ==> therefore, we do not clear the k-buffer here, reducing the overhead of memory-write.
 		return;
 	}
-
+	//return;
 #ifdef DEBUG__
 	else if (frag_cnt == 7777777)
 	{
@@ -334,6 +335,7 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 	uint valid_frag_cnt = frag_cnt;
 	//int mer_cnt = 0;
 #if FRAG_MERGING == 1
+	
 	// extended merging for consistent visibility transition
 	[loop]
 	for (k = 0; k < frag_cnt; k++)
@@ -362,6 +364,7 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 			}
 
 			/**/
+	
 			// optional setting for manual z-thickness
 			f_k.zthick = max(f_k.zthick, GetVZThickness(f_k.z, vz_thickness));
 			fs[k] = f_k;
@@ -420,9 +423,10 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 #define NUM_K 8
 	int cnt_stored_fs = 0;
 	Fragment f_1, f_2;
-	f_1.i_vis = fragments[0].i_vis;
-	f_1.z = fragments[0].z;
-	f_1.zthick = GetVZThickness(f_1.z, g_cbCamState.cam_vz_thickness);
+	//f_1.i_vis = fragments[0].i_vis;
+	//f_1.z = fragments[0].z;
+	//f_1.zthick = fragments[0].zthick;// GetVZThickness(f_1.z, g_cbCamState.cam_vz_thickness);
+	f_1 = fragments[0];
 	//{
 	//	if (f_1.zthick < 0)
 	//		fragment_blendout[nDTid.xy] = float4(1, 0, 0, 1);
@@ -431,6 +435,7 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 	//	return;
 	//}
 	f_1.opacity_sum = ConvertUIntToFloat4(f_1.i_vis).a;
+
 	// use the SFM
 	[loop]
 	for (i = 0; i < (uint)valid_frag_cnt; i++)
@@ -440,9 +445,10 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 		uint inext = i + 1;
 		if (inext < valid_frag_cnt)
 		{
-			f_2.i_vis = fragments[inext].i_vis;
-			f_2.z = fragments[inext].z;
-			f_2.zthick = GetVZThickness(f_2.z, g_cbCamState.cam_vz_thickness);
+			//f_2.i_vis = fragments[inext].i_vis;
+			//f_2.z = fragments[inext].z;
+			//f_2.zthick = GetVZThickness(f_2.z, 0);
+			f_2 = fragments[inext];
 			f_2.opacity_sum = ConvertUIntToFloat4(f_2.i_vis).a;
 
 			f_merge = MergeFrags_ver2(f_1, f_2, merging_beta);
@@ -495,7 +501,10 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 		float4 vis = ConvertUIntToFloat4(f_1.i_vis);
 		fmix_vis += vis * (1 - fmix_vis.a);
 	}
-	if (store_to_kbuf) fragment_counter[DTid.xy] = cnt_stored_fs;
+	//fragment_counter[DTid.xy] = cnt_stored_fs;
+	//return;
+	if (store_to_kbuf) 
+		fragment_counter[DTid.xy] = cnt_stored_fs;
 	cnt_sorted_ztsurf = cnt_stored_fs;
 	/**/
 #endif

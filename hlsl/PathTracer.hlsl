@@ -1,5 +1,3 @@
-#include "CommonShader.hlsl"
-
 #if DX10_0 == 1
 #define __EXIT return out_ps
 #else
@@ -187,17 +185,11 @@ Buffer<float4> buf_gpuTriWoops : register(t1);
 Buffer<float4> buf_gpuDebugTris : register(t2);
 Buffer<int> buf_gpuTriIndices : register(t3);
 
-Texture2DArray g_texRgbaArray : register(t10); // for cmm text and ply textures
-Texture2D g_tex2D_Mat_KA : register(t11);
-Texture2D g_tex2D_Mat_KD : register(t12);
-Texture2D g_tex2D_Mat_KS : register(t13);
-Texture2D g_tex2D_Mat_NS : register(t14);
-Texture2D g_tex2D_Mat_BUMP : register(t15);
-Texture2D g_tex2D_Mat_D : register(t16);
-
 #define WILDCARD_DEPTH_OUTLINE -2.f
 
 #if DX10_0 == 1
+#include "CommonShader.hlsl"
+
 // USE PIXEL SHADER //
 // USE PS_FILL_OUTPUT //
 Texture2D prev_fragment_vis : register(t20);
@@ -218,8 +210,12 @@ struct PS_FILL_OUTPUT
 	//float ds_z : SV_Depth;
 };
 #else
+#include "./kbuf/Sr_Kbuf.hlsl"
+
+#if PATHTR_USE_KBUF == 0
 RWTexture2D<uint> fragment_counter : register(u0);
 RWByteAddressBuffer deep_k_buf : register(u1);
+#endif
 RWBuffer<uint> picking_buf : register(u2);
 RWTexture2D<unorm float4> fragment_vis : register(u3);
 RWTexture2D<float> fragment_zdepth : register(u4);
@@ -730,6 +726,7 @@ int intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 							// compute normal vector by taking the cross product of two edge vectors
 							// because of Woop transformation, only one set of vectors works
 
+							// assume... CW 
 							trinormal = cross(float3(v22.x, v22.y, v22.z), float3(v11.x, v11.y, v11.z));  // works
 							//trinormal = float3(100, 100, 100);
 						}
@@ -1053,19 +1050,17 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		zdepth1 = min(zdepth1, planeThickness);
 	}
 
-	float zThickness = zdepth1 - zdepth0;// max(zdepth1 - zdepth0, 0);
 	//if (zThickness < 0)
 	//{
 	//	fragment_vis[ss_xy] = float4(1, 1, 1, 1);
 	//	return;
 	//}
-	float zDepth = zdepth1;
 
 #if PICKING == 1 // NO DEFINED DX10_0
 	uint fc = 0;
 	InterlockedAdd(fragment_counter[ss_xy], 1, fc);
 	picking_buf[2 * fc + 0] = g_cbPobj.pobj_dummy_0;
-	picking_buf[2 * fc + 1] = asuint(zDepth - zThickness);
+	picking_buf[2 * fc + 1] = asuint(zdepth0);
 	//float3 posPlane = pos_ip_ws + ray_dir_unit_ws * (planeThickness * 0.5f);// -fThicknessPosition);
 	//picking_buf[5 * fc + 2] = asuint(posPlane.x);
 	//picking_buf[5 * fc + 3] = asuint(posPlane.y);
@@ -1073,64 +1068,46 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	return;
 #endif
 
+#if DX10_0 == 1
 	float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
 	v_rgba.a = 1;
-	if (planeThickness == 0.f)
-		v_rgba.a = min(0.3, v_rgba.a);
 
-	if (planeThickness > 0 && v_rgba.a > 0) {
-		// effect for x-ray
-		v_rgba.a *= min((planeThickness - zDepth + zThickness) / planeThickness + 0.1f, 1.0f);
-		v_rgba.rgb *= v_rgba.a;
-	}
-
-#if DX10_0 == 1
-	if (planeThickness > 0.f) {
-		if (out_ps.depthcs > zDepth) {
+	if (planeThickness > 0.f) 
+	{
+		if (out_ps.depthcs > zdepth0) {
 			out_ps.color = v_rgba;
-			out_ps.depthcs = zDepth;
+			out_ps.depthcs = zdepth0;
 		}
 	}
 	else if (planeThickness == 0.f) 
 	{
+		v_rgba.a = min(0.3, v_rgba.a);
 		out_ps.color = MixOpt(v_rgba, v_rgba.a, out_ps.color, out_ps.color.a);
 		out_ps.depthcs = 1.f;
 	}
 
 	__EXIT;
 #else
-	uint numFrag = fragment_counter[ss_xy];
+	if (planeThickness == 0) {
 
-	Fragment frag;
-	frag.i_vis = ConvertFloat4ToUInt(v_rgba); // current
-	frag.zthick = zThickness;
-	frag.z = zDepth;
-	frag.opacity_sum = v_rgba.a;
-	Fragment fragMerge = (Fragment)frag;
+		float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
+		v_rgba.a = 1;
+		if (planeThickness == 0.f)
+			v_rgba.a = min(0.3, v_rgba.a);
 
-	if (numFrag > 0) {
-		Fragment fragPrev = (Fragment)0;
-		GET_FRAG(fragPrev, addr_base, 0); // previous frag stored in K-buffer
+		Fragment frag;
+		frag.i_vis = ConvertFloat4ToUInt(v_rgba); // current
+		frag.zthick = 0.1;
+		frag.z = zdepth0;
+		frag.opacity_sum = v_rgba.a;
 
-		if (planeThickness > 0) {
-			Fragment_OUT fragMergeOut;
-			if (frag.z > fragPrev.z)
-				fragMergeOut = MergeFrags(fragPrev, frag, 1.0f);
-			else
-				fragMergeOut = MergeFrags(frag, fragPrev, 1.0f);
+		Fragment fragMerge = (Fragment)frag;
 
-			fragMerge.z = fragMergeOut.f_posterior.z;
-			fragMerge.zthick = fragMerge.z
-				- min(fragMergeOut.f_prior.z - fragMergeOut.f_prior.zthick, fragMergeOut.f_posterior.z - fragMergeOut.f_posterior.zthick);
-			fragMerge.opacity_sum = fragMergeOut.f_prior.opacity_sum + fragMergeOut.f_posterior.opacity_sum;
-			float4 v_rgbaPrior = ConvertUIntToFloat4(fragMergeOut.f_prior.i_vis);
-			float4 v_rgbaPosterior = ConvertUIntToFloat4(fragMergeOut.f_posterior.i_vis);
-			v_rgba = v_rgbaPrior.rgba * v_rgbaPrior.a + (1 - v_rgbaPrior.a) * v_rgbaPosterior.rgba;
-			//fragMerge = fragPrev;
-			fragMerge.i_vis = ConvertFloat4ToUInt(v_rgba);
-			//v_rgba = ConvertUIntToFloat4(fragMerge.i_vis);
-		}
-		else {
+		uint numFrag = fragment_counter[ss_xy];
+		if (numFrag > 0) {
+			Fragment fragPrev = (Fragment)0;
+			GET_FRAG(fragPrev, addr_base, 0); // previous frag stored in K-buffer
+
 			float4 v_rgbaPrev = ConvertUIntToFloat4(fragPrev.i_vis);
 			v_rgba = MixOpt(v_rgba, v_rgba.a, v_rgbaPrev, fragPrev.opacity_sum);
 			//v_rgba = float4(v_rgba.rgb, 1);//
@@ -1139,20 +1116,37 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 			//v_rgba = float4(1, 0, 0, 1);
 			fragMerge.i_vis = ConvertFloat4ToUInt(v_rgba);
 			fragMerge.opacity_sum += fragPrev.opacity_sum;
+
+			bool store_to_kbuf = BitCheck(g_cbCamState.cam_flag, 3) && planeThickness > 0;
+			SET_FRAG(addr_base, 0, fragMerge);
+
+			if (!store_to_kbuf)
+				fragment_vis[ss_xy] = v_rgba;
+
+			fragment_counter[ss_xy] = 1;
+			fragment_zdepth[ss_xy] = 1.f;
 		}
 	}
+	else {
 
-	bool store_to_kbuf = BitCheck(g_cbCamState.cam_flag, 3) && planeThickness > 0;
-	SET_FRAG(addr_base, 0, fragMerge);
+		float zThickness = zdepth1 - zdepth0;
 
-	if (!store_to_kbuf)
-		fragment_vis[ss_xy] = v_rgba;
+		float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
+		if (v_rgba.a < 0.01)
+			return;
+		// always to k-buf not render-out buffer
+		float4 v_rgba0 = v_rgba, v_rgba1 = v_rgba;
 
-	//fragment_vis[ss_xy] = float4(1, 1, 0, 1);
-	//fragment_vis[ss_xy] = v_rgba;
-	fragment_counter[ss_xy] = 1;
-	if (planeThickness == 0.f)
-		fragment_zdepth[ss_xy] = 1.f;// asfloat(ConvertFloat4ToUInt(v_rgba));
+		v_rgba0.a *= min((planeThickness - zdepth0 + zThickness) / planeThickness + 0.1f, 1.0f);
+		v_rgba0.rgb *= v_rgba0.a;
+		float vz_thickness = GetVZThickness(zdepth0, g_cbPobj.vz_thickness);
+		Fill_kBuffer(ss_xy, g_cbCamState.k_value, v_rgba0, zdepth0, vz_thickness);
+
+		v_rgba1.a *= min((planeThickness - zdepth1 + zThickness) / planeThickness + 0.1f, 1.0f);
+		v_rgba1.rgb *= v_rgba1.a;
+		vz_thickness = GetVZThickness(zdepth1, g_cbPobj.vz_thickness);
+		Fill_kBuffer(ss_xy, g_cbCamState.k_value, v_rgba1, zdepth1, vz_thickness);
+	}
 
 	return;
 #endif
@@ -1160,7 +1154,11 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 
 float4 SlicerOutlineTest(const in int2 tex2d_xy, const in float3 edge_color, const in int thick)
 {
+#if DX10_0 == 1
 	float fvcur = prev_fragment_zdepth[tex2d_xy];
+#else
+	float fvcur = fragment_zdepth[tex2d_xy];
+#endif
 	if (fvcur != 0.f)
 		return (float4)0;
 
@@ -1178,7 +1176,11 @@ float4 SlicerOutlineTest(const in int2 tex2d_xy, const in float3 edge_color, con
 			float2 v12 = v1 * v2;
 			if (v12.x >= 0 || v12.y >= 0)
 				continue;
+#if DX10_0 == 1
 			float fv = prev_fragment_zdepth[(int2)neighbor_pos];
+#else
+			float fv = fragment_zdepth[(int2)neighbor_pos];
+#endif
 			if (fv == 1.f) {
 				//cloestDist = min(cloestDist, length(neighbor_pos - tex2d_xy.xy));
 				cnt++;

@@ -2033,7 +2033,7 @@ float GetVZThickness(const float z, const float vz_thick)
 #define nbits 24
 		// view-source:https://www.sjbaker.org/steve/omniv/love_your_z_buffer.html
 		// compute z-precision
-		const float zNear = g_cbCamState.near_plane;
+		const float zNear = max(g_cbCamState.near_plane, 0.0001f);
 		const float zFar = g_cbCamState.far_plane;
 		float b = zFar * zNear / (zNear - zFar);
 		float res = (b / ((b / z) - 1.0f / (1 << nbits))) - z;
