@@ -492,6 +492,8 @@ bool __ReleaseDXGI(const HWND hwnd)
 	VMSAFE_RELEASE(it->second.pdxgiFactory2);
 	VMSAFE_RELEASE(it->second.pdxgiFactory);
 
+	g_mapDxgiPrensentor.erase(it);
+
 	return true;
 }
 

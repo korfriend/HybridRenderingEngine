@@ -254,6 +254,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 			dx11DeviceImmContext->CopyResource(pTex2dHwndRT, (ID3D11Texture2D*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RES]);
 		}
 		else {
+			if (hWnd) gpu_manager->ReleaseDXGI(hWnd);
 			int outIndex = planeThickness == 0.f && !is_final_renderer ? 1 : 0; // just for SlicerSR combined with CPU MPR
 			FrameBuffer* fb_rout = (FrameBuffer*)iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, outIndex);
 			FrameBuffer* fb_dout = (FrameBuffer*)iobj->GetFrameBuffer(FrameBufferUsageDEPTH, 0);
