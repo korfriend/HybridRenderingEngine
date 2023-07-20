@@ -18,16 +18,24 @@ PS_FILL_OUTPUT BasicShader4(__VS_OUT input)
     v_rgba.a = 1.f;
 #endif
 #else
-	int2 tex2d_xy = int2(input.f4PosSS.xy);
-	z_depth = sr_fragment_zdepth[tex2d_xy];
-	int outlinePPack = g_cbCamState.iSrCamDummy__1;
-	float3 outline_color = float3(((outlinePPack >> 16) & 0xFF) / 255.f, ((outlinePPack >> 8) & 0xFF) / 255.f, (outlinePPack & 0xFF) / 255.f);
-	int pixThickness = (outlinePPack >> 24) & 0xFF;
-	v_rgba = OutlineTest(tex2d_xy, z_depth, 10000.f, outline_color, pixThickness);
-	//v_rgba = float4(tex2d_xy / 1000.f, 0, 1);
-	//v_rgba = float4(1, 0, 0, 1);
-	//z_depth = 10.f;
-	if (v_rgba.a <= 0.01) clip(-1);
+    int2 tex2d_xy = int2(input.f4PosSS.xy);
+    z_depth = sr_fragment_zdepth[tex2d_xy];
+
+    int outlinePPack = g_cbCamState.iSrCamDummy__1;
+    float3 outline_color = float3(((outlinePPack >> 16) & 0xFF) / 255.f, ((outlinePPack >> 8) & 0xFF) / 255.f, (outlinePPack & 0xFF) / 255.f);
+#if DX10_0 == 1
+    int pixThickness = 1;
+#else
+    int pixThickness = (outlinePPack >> 24) & 0xFF;
+#endif
+    v_rgba = OutlineTest(tex2d_xy, z_depth, 10000.f, outline_color, pixThickness);
+    if (v_rgba.a <= 0.01) clip(-1);
+
+#if DX10_0 == 1
+    float z_prev = sr_fragment_zdepth_prev[tex2d_xy];
+    if (z_depth > z_prev) clip(-1);
+#endif
+
 #endif
 
 	out_ps.ds_z = input.f4PosSS.z;

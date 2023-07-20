@@ -162,6 +162,9 @@ VS_OUTPUT_TTT CommonVS_PTTT(VS_INPUT_PTTT input)
 
 Texture2D<unorm float4> sr_fragment_vis : register(t10);
 Texture2D<float> sr_fragment_zdepth : register(t11);
+#if DX10_0 == 1
+Texture2D<float> sr_fragment_zdepth_prev : register(t12);
+#endif
 
 float4 OutlineTest2(const in int2 tex2d_xy, inout float depth_c, const in float discont_depth_criterion)
 {

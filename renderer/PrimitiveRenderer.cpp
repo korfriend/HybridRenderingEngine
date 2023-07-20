@@ -1533,6 +1533,10 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		foremost_surfaces_routine_objs.push_back(general_oit_routine_objs[i]);
 	}
 	general_oit_routine_objs.clear();
+	if (is_picking_routine) {
+		general_oit_routine_objs = foremost_surfaces_routine_objs;
+		foremost_surfaces_routine_objs.clear();
+	}
 #endif
 
 	if (dx11CommonParams->gpu_profile)
@@ -1814,8 +1818,10 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 #ifdef DX10_0
 			// ASSERT 
-			assert(render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES || render_pass == RENDER_GEOPASS::PASS_SINGLELAYERS);
-			assert(mode_OIT == MFR_MODE::NONE);
+			if (!is_picking_routine) {
+				assert(render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES || render_pass == RENDER_GEOPASS::PASS_SINGLELAYERS);
+				assert(mode_OIT == MFR_MODE::NONE);
+			}
 #endif
 
 			bool is_picking_routine = pickType != PICKING_TYPE::NONE;
@@ -2403,8 +2409,11 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	dx11CommonParams->GpuProfile("SR Render");
 
 	if (is_picking_routine) {
+#ifdef DX10_0
+#else
 		assert(single_layer_routine_objs.size() + foremost_surfaces_routine_objs.size() == 0);
 		assert(mode_OIT == MFR_MODE::DYNAMIC_FB);
+#endif
 
 		map<int, tuple<float, int>> picking_layers_id_depthPrimId;
 		map<float, vmint2> picking_layers_depth_actorid_primid;
@@ -2580,12 +2589,24 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				dx11DeviceImmContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 				dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(ALWAYS), 0);
 
+#ifdef DX10_0
+				dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_RES], (ID3D11Texture2D*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RES]);
+				dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_fb_singlelayer_depthcs.alloc_res_ptrs[DTYPE_RES], (ID3D11Texture2D*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RES]);
+				dx11DeviceImmContext->PSSetShaderResources(10, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_SRV]);
+				dx11DeviceImmContext->PSSetShaderResources(11, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_tempDepth.alloc_res_ptrs[DTYPE_SRV]);
+				dx11DeviceImmContext->PSSetShaderResources(12, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_depthcs.alloc_res_ptrs[DTYPE_SRV]);
+				ID3D11RenderTargetView* dx11RTVs[2] = {
+					(ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV],
+					(ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV] };
+				dx11DeviceImmContext->OMSetRenderTargets(2, dx11RTVs, dx11DSV);
+#else
 				//dx11DeviceImmContext->PSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_fb_rgba.alloc_res_ptrs[DTYPE_SRV]);
 				dx11DeviceImmContext->PSSetShaderResources(11, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_tempDepth.alloc_res_ptrs[DTYPE_SRV]);
 				ID3D11RenderTargetView* dx11RTVs[2] = {
 					(ID3D11RenderTargetView*)gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_RTV],
 					(ID3D11RenderTargetView*)gres_fb_singlelayer_depthcs.alloc_res_ptrs[DTYPE_RTV] };
 				dx11DeviceImmContext->OMSetRenderTargets(2, dx11RTVs, dx11DSV);
+#endif
 
 				dx11DeviceImmContext->Draw(4, 0);
 
