@@ -1501,7 +1501,10 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		bool has_wire = actor->GetParam("_bool_HasWireframe", false);
 
 		bool is_foremost_surfaces = actor->GetParam("_bool_OnlyForemostSurfaces", true);
-		if (actor->color.a < 1.f) is_foremost_surfaces = false;
+
+
+		bool is_annotation_obj = pobj->GetObjParam("_bool_IsAnnotationObj", false);
+		if (actor->color.a < 1.f || is_annotation_obj) is_foremost_surfaces = false;
 		if (has_wire && prim_data->ptype == PrimitiveTypeTRIANGLE)
 		{
 			temperal_actors.push_back(*actor);
