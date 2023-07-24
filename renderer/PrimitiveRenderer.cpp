@@ -1522,6 +1522,13 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			single_layer_routine_objs.push_back(actor);
 		}
 
+		VmObject* imgObj = actor->GetAssociateRes("TEXTURE2DIMAGE");
+		if (imgObj && is_foremost_surfaces) {
+
+			if (imgObj->GetObjParam("IS_SEMIPARENT", false))
+				is_foremost_surfaces = false;
+		}
+
 		if (is_foremost_surfaces)
 			foremost_surfaces_routine_objs.push_back(actor);
 		else
