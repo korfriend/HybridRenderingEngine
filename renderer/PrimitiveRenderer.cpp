@@ -1736,6 +1736,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			VmObject* imgObj = actor->GetAssociateRes("TEXTURE2DIMAGE");
 			bool has_texture_img = false;
 			grd_helper::UpdatePrimitiveModel(gres_vtx, gres_idx, map_gres_texs, pobj, imgObj, &has_texture_img);
+			use_vertex_color &= !has_texture_img;
 			int tex_map_enum = 0;
 			bool is_annotation_obj = pobj->GetObjParam("_bool_IsAnnotationObj", false) && prim_data->texture_res_info.size() > 0;
 			if (is_annotation_obj)
