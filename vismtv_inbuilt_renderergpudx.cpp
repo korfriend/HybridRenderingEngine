@@ -2,6 +2,7 @@
 //#include "VXDX11Helper.h"
 
 #include <d2d1_1.h>
+#include <dwrite.h>
 #include "RendererHeader.h"
 
 #include <iostream>
@@ -18,6 +19,7 @@ LocalProgress g_LocalProgress;
 VmGpuManager* g_pCGpuManager = NULL;
 
 ID2D1Factory1* g_pDirect2dFactory = NULL;
+IDWriteFactory* g_pDWriteFactory = NULL;
 
 struct D2DRes {
 	IDXGISurface* pDxgiSurface = NULL;
@@ -34,6 +36,7 @@ struct D2DRes {
 };
 map<int, D2DRes> g_d2dResMap;
 map<string, ID2D1StrokeStyle*> g_d2dStrokeStyleMap;
+map<string, IDWriteTextFormat*> g_d2dTextFormatMap;
 
 
 bool CheckModuleParameters(fncontainer::VmFnContainer& _fncontainer)
@@ -76,6 +79,10 @@ bool InitModule(fncontainer::VmFnContainer& _fncontainer)
 		if (D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &g_pDirect2dFactory) != S_OK)
 			vmlog::LogErr("Failure D2D1CreateFactory!!");
 
+		// IDWriteFactory는 DWriteCreateFactory 함수 호출 생성.
+		DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(g_pDWriteFactory), reinterpret_cast<IUnknown**>(&g_pDWriteFactory));
+		
+
 		ID2D1StrokeStyle* pStrokeStyle = NULL;
 		HRESULT hr = g_pDirect2dFactory->CreateStrokeStyle(
 			D2D1::StrokeStyleProperties(
@@ -91,6 +98,19 @@ bool InitModule(fncontainer::VmFnContainer& _fncontainer)
 			&pStrokeStyle
 		);
 		g_d2dStrokeStyleMap["DEFAULT"] = pStrokeStyle;
+
+		IDWriteTextFormat* pTextFormat = NULL;
+		g_pDWriteFactory->CreateTextFormat(
+			L"Comic Sans MS",                  // 폰트 패밀리 이름의 문자열
+			NULL,                        // 폰트 컬렉션 객체, NULL=시스템 폰트 컬렉션
+			DWRITE_FONT_WEIGHT_NORMAL,   // 폰트 굵기. LIGHT, NORMAL, BOLD 등.
+			DWRITE_FONT_STYLE_NORMAL,    // 폰트 스타일. NORMAL, OBLIQUE, ITALIC.
+			DWRITE_FONT_STRETCH_NORMAL,  // 폰트 간격. CONDENSED, NORMAL, MEDIUM, EXTEXDED 등.
+			50.f,                          // 폰트 크기.
+			L"",                         // 로케일을 문자열로 명시.  영어-미국=L"en-us", 한국어-한국=L"ko-kr"
+			&pTextFormat
+		);
+		g_d2dTextFormatMap["DEFAULT"] = pTextFormat;
 
 		if (hr != S_OK)
 			vmlog::LogErr("D2D Device Setting Error!");
@@ -353,7 +373,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		g_vmCommonParams.GpuProfile("Copyback", true);
 	};
 
-	if(0)//is_system_out)
+	if(is_system_out)
 	{
 		GpuRes gres_fb_rgba;
 		grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D,
@@ -418,12 +438,63 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		res2d->pRenderTarget->BeginDraw();
 		res2d->pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
 
-		res2d->pRenderTarget->DrawLine(
-			D2D1::Point2F(100.f, 100.f),
-			D2D1::Point2F(500.f, 500.f),
-			res2d->pSolidBrush,
-			1.5f, g_d2dStrokeStyleMap["DEFAULT"]
-		);
+		if (0)
+		{
+			res2d->pRenderTarget->DrawLine(
+				D2D1::Point2F(100.f, 100.f),
+				D2D1::Point2F(500.f, 500.f),
+				res2d->pSolidBrush,
+				1.5f, g_d2dStrokeStyleMap["DEFAULT"]
+			);
+		}
+
+		vector<TextItem>* textItems = (vector<TextItem>*)_fncontainer.fnParams.GetParam("_vector<TextItem>*_TextItems", (void*)NULL);
+		if (textItems) {
+			// IDWriteTextFormat 객체 생성.
+			// https://learn.microsoft.com/en-us/windows/win32/Direct2D/how-to--draw-text
+			D2D1_SIZE_F rSize = res2d->pRenderTarget->GetSize();
+			IDWriteTextFormat* textFormat = g_d2dTextFormatMap["DEFAULT"];
+			vector<TextItem>& _textItems = *textItems;
+			for (TextItem& titem : _textItems) {
+				std::wstring fontName_w;
+				fontName_w.assign(titem.font.begin(), titem.font.end());
+				std::wstring text_w;
+				text_w.assign(titem.textStr.begin(), titem.textStr.end());
+
+				IDWriteTextFormat* pDynamicTextFormat = nullptr;
+				if (g_pDWriteFactory->CreateTextFormat(
+					fontName_w.c_str(), nullptr,
+					DWRITE_FONT_WEIGHT_REGULAR,
+					DWRITE_FONT_STYLE_NORMAL,
+					DWRITE_FONT_STRETCH_NORMAL, titem.fontSize, L"", &pDynamicTextFormat) != S_OK)
+					continue;
+
+				if (titem.alignment == "CENTER") {
+					pDynamicTextFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+				}
+				else if (titem.alignment == "RIGHT") {
+					pDynamicTextFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
+				}
+				
+				res2d->pSolidBrush->SetColor(D2D1::ColorF(titem.iColor, 1.0f)); // D2D1::ColorF::Black
+				const D2D1_RECT_F rectangle1 = D2D1::RectF(titem.posScreenX, titem.posScreenY, rSize.width, rSize.height);
+
+				res2d->pRenderTarget->DrawText(
+					text_w.c_str(),
+					text_w.length(),
+					pDynamicTextFormat,
+					&rectangle1,
+					res2d->pSolidBrush
+				);
+
+				pDynamicTextFormat->Release();
+			}
+		}
+
+		//= D2D1::RectF(0, 0, rSize.width, rSize.height);
+		
+
+
 		if (res2d->pRenderTarget->EndDraw() != S_OK)
 			vmlog::LogErr("D2D Draw Error!");
 
@@ -507,6 +578,12 @@ void DeInitModule(fncontainer::VmFnContainer& _fncontainer)
 	}
 	g_d2dStrokeStyleMap.clear();
 
+	for (auto it = g_d2dTextFormatMap.begin(); it != g_d2dTextFormatMap.end(); it++) {
+		VMSAFE_RELEASE(it->second);
+	}
+	g_d2dTextFormatMap.clear();
+
+	VMSAFE_RELEASE(g_pDWriteFactory);
 	VMSAFE_RELEASE(g_pDirect2dFactory);
 
 

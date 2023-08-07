@@ -68,3 +68,15 @@ inline void __check_and_release(GpuhelperResType res_type, ID3D11DeviceChild* re
 };
 
 //#define DX11_3
+struct TextItem
+{
+private:
+	int version = 230807;
+public:
+	std::string textStr = "";
+	std::string font = "";
+	std::string alignment = ""; // CENTER, LEFT, RIGHT to the position
+	float fontSize = 10.f;
+	int iColor = 0xFFFFFF; //RGB ==> 0xFF0000 (Red), 0x00FF00 (Green)
+	int posScreenX = 0, posScreenY = 0; // 
+};
