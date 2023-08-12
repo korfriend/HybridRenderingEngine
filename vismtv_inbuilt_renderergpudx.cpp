@@ -464,8 +464,8 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 				IDWriteTextFormat* pDynamicTextFormat = nullptr;
 				if (g_pDWriteFactory->CreateTextFormat(
 					fontName_w.c_str(), nullptr,
-					DWRITE_FONT_WEIGHT_REGULAR,
-					DWRITE_FONT_STYLE_NORMAL,
+					(DWRITE_FONT_WEIGHT)(titem.fontWeight * 100),
+					titem.isItalic? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
 					DWRITE_FONT_STRETCH_NORMAL, titem.fontSize, L"", &pDynamicTextFormat) != S_OK)
 					continue;
 
@@ -476,7 +476,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 					pDynamicTextFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
 				}
 				
-				res2d->pSolidBrush->SetColor(D2D1::ColorF(titem.iColor, 1.0f)); // D2D1::ColorF::Black
+				res2d->pSolidBrush->SetColor(D2D1::ColorF(titem.iColor, titem.alpha)); // D2D1::ColorF::Black
 				const D2D1_RECT_F rectangle1 = D2D1::RectF(titem.posScreenX, titem.posScreenY, rSize.width, rSize.height);
 
 				res2d->pRenderTarget->DrawText(

@@ -68,15 +68,19 @@ inline void __check_and_release(GpuhelperResType res_type, ID3D11DeviceChild* re
 };
 
 //#define DX11_3
+#define TEXTITEM_VERSION 230813
 struct TextItem
 {
 private:
-	int version = 230807;
+	int version = TEXTITEM_VERSION;
 public:
 	std::string textStr = "";
 	std::string font = "";
 	std::string alignment = ""; // CENTER, LEFT, RIGHT to the position
-	float fontSize = 10.f;
+	float fontSize = 10.f; // Logical size of the font in DIP units. A DIP ("device-independent pixel") equals 1/96 inch.
 	int iColor = 0xFFFFFF; //RGB ==> 0xFF0000 (Red), 0x00FF00 (Green)
+	float alpha = 1.f;
+	bool isItalic = false;
+	int fontWeight = 4; // 1 : thinest, 4 : regular, 7 : bold, 9 : maximum heavy
 	int posScreenX = 0, posScreenY = 0; // 
 };
