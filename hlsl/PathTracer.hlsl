@@ -185,9 +185,9 @@ Buffer<float4> buf_gpuTriWoops : register(t1);
 Buffer<float4> buf_gpuDebugTris : register(t2);
 Buffer<int> buf_gpuTriIndices : register(t3);
 
-#define WILDCARD_DEPTH_OUTLINE -2.f
-#define INSIDE_DIST_FLAG 10000.f
-#define OUTSIDE_PLANE -1.f
+// magic values
+#define WILDCARD_DEPTH_OUTLINE 7777888
+#define OUTSIDE_PLANE 7777788
 
 #if DX10_0 == 1
 #include "CommonShader.hlsl"
@@ -780,10 +780,11 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	out_ps.color = prev_fragment_vis[ss_xy];
 	out_ps.depthcs = prev_fragment_zdepth[ss_xy];
 	float fvPrev = prev_fragment_zdepth[ss_xy];
-	if (fvPrev == WILDCARD_DEPTH_OUTLINE)
+	uint wildcard_v = asuint(fvPrev);
+	if (wildcard_v == WILDCARD_DEPTH_OUTLINE)
 		__EXIT;
 
-	out_ps.depthcs = OUTSIDE_PLANE;
+	out_ps.depthcs = asfloat(OUTSIDE_PLANE);
 #else
 	int2 ss_xy = int2(DTid.xy);
 
@@ -799,9 +800,10 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		__EXIT;
 
 	float fvPrev = fragment_zdepth[ss_xy];// asfloat(ConvertFloat4ToUInt(v_rgba));
-	if (fvPrev == WILDCARD_DEPTH_OUTLINE)
+	uint wildcard_v = asuint(fvPrev);
+	if (wildcard_v == WILDCARD_DEPTH_OUTLINE)
 		__EXIT;
-	fragment_zdepth[ss_xy] = OUTSIDE_PLANE;
+	fragment_zdepth[ss_xy] = asfloat(OUTSIDE_PLANE);
 
 	const uint k_value = g_cbCamState.k_value;
 	uint bytes_per_frag = 4 * NUM_ELES_PER_FRAG;
@@ -960,17 +962,18 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	// safe inside test (up- and down-side)//
 	{
 #if CURVEDPLANE == 0
-		float3 upPos0 = TransformVector(float3(ss_xy, 0), g_cbCamState.mat_ss2ws);
-		float3 upPos1 = TransformVector(float3(ss_xy + float2(0, -1), 0), g_cbCamState.mat_ss2ws);
+		float3 upPos0 = TransformPoint(float3(ss_xy, 0), g_cbCamState.mat_ss2ws);
+		float3 upPos1 = TransformPoint(float3(ss_xy + float2(0, -1), 0), g_cbCamState.mat_ss2ws);
 		float3 updir = normalize(TransformVector(upPos1 - upPos0, g_cbPobj.mat_ws2os));
 #else
-		float3 updir = normalize(f3VecSampleUpWS);// / fPlanePitch; // unit vector
+		float3 updir = normalize(TransformVector(f3VecSampleUpWS, g_cbPobj.mat_ws2os));// / fPlanePitch; // unit vector
 #endif
 		float4 test_rayorig = float4(ray_orig_os, ray_tmin);
 		float4 test_raydir = float4(updir, ray_tmax);
 		intersectBVHandTriangles(test_rayorig, test_raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
 		if (hitTriIdx >= 0) {
-			isInsideOnPlane = dot(trinormal, test_raydir.xyz) > 0;
+			bool localInside = dot(trinormal, test_raydir.xyz) > 0;
+			isInsideOnPlane = localInside;
 			float3 posHitOS = test_rayorig.xyz + hitDistance * test_raydir.xyz;
 #if CURVEDPLANE == 0
 			float3 posHitSS = TransformPoint(posHitOS, mat_os2ss);
@@ -980,14 +983,17 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 			float hitDistWS = length(posHitWS - pos_ip_ws);
 			float hitDistSS = hitDistWS / pixelSpace;
 #endif
-			minDistOnPlane = min(hitDistSS, minDistOnPlane);
+			if (minDistOnPlane * minDistOnPlane > hitDistSS * hitDistSS) {
+				minDistOnPlane = localInside ? -hitDistSS : hitDistSS;
+			}
 		}
 
 		test_raydir = float4(-updir, ray_tmax);
 		intersectBVHandTriangles(test_rayorig, test_raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
 
 		if (hitTriIdx >= 0) {
-			isInsideOnPlane = dot(trinormal, test_raydir.xyz) > 0 && isInsideOnPlane;
+			bool localInside = dot(trinormal, test_raydir.xyz) > 0;
+			isInsideOnPlane = localInside && isInsideOnPlane;
 
 			float3 posHitOS = test_rayorig.xyz + hitDistance * test_raydir.xyz;
 #if CURVEDPLANE == 0
@@ -998,23 +1004,26 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 			float hitDistWS = length(posHitWS - pos_ip_ws);
 			float hitDistSS = hitDistWS / pixelSpace;
 #endif
-			minDistOnPlane = min(hitDistSS, minDistOnPlane);
+			if (minDistOnPlane * minDistOnPlane > hitDistSS * hitDistSS) {
+				minDistOnPlane = localInside ? -hitDistSS : hitDistSS;
+			}
 		}
 	}
 	// safe inside test (right- and left-side)//
 	{
 #if CURVEDPLANE == 0
-		float3 rightPos0 = TransformVector(float3(ss_xy, 0), g_cbCamState.mat_ss2ws);
-		float3 rightPos1 = TransformVector(float3(ss_xy + float2(1, 0), 0), g_cbCamState.mat_ss2ws);
+		float3 rightPos0 = TransformPoint(float3(ss_xy, 0), g_cbCamState.mat_ss2ws);
+		float3 rightPos1 = TransformPoint(float3(ss_xy + float2(1, 0), 0), g_cbCamState.mat_ss2ws);
 		float3 rightdir = normalize(TransformVector(rightPos1 - rightPos0, g_cbPobj.mat_ws2os));
 #else
-		float3 rightdir = f3VecSampleTangentWS;
+		float3 rightdir = normalize(TransformVector(f3VecSampleTangentWS, g_cbPobj.mat_ws2os));
 #endif
 		float4 test_rayorig = float4(ray_orig_os, ray_tmin);
 		float4 test_raydir = float4(rightdir, ray_tmax);
 		intersectBVHandTriangles(test_rayorig, test_raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
 		if (hitTriIdx >= 0) {
-			isInsideOnPlane = dot(trinormal, test_raydir.xyz) > 0 && isInsideOnPlane;
+			bool localInside = dot(trinormal, test_raydir.xyz) > 0;
+			isInsideOnPlane = localInside && isInsideOnPlane;
 
 			float3 posHitOS = test_rayorig.xyz + hitDistance * test_raydir.xyz;
 #if CURVEDPLANE == 0
@@ -1025,14 +1034,17 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 			float hitDistWS = length(posHitWS - pos_ip_ws);
 			float hitDistSS = hitDistWS / pixelSpace;
 #endif
-			minDistOnPlane = min(hitDistSS, minDistOnPlane);
+			if (minDistOnPlane * minDistOnPlane > hitDistSS * hitDistSS) {
+				minDistOnPlane = localInside ? -hitDistSS : hitDistSS;
+			}
 		}
 
 		test_raydir = float4(-rightdir, ray_tmax);
 		intersectBVHandTriangles(test_rayorig, test_raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
 
 		if (hitTriIdx >= 0) {
-			isInsideOnPlane = dot(trinormal, test_raydir.xyz) > 0 && isInsideOnPlane;
+			bool localInside = dot(trinormal, test_raydir.xyz) > 0;
+			isInsideOnPlane = localInside && isInsideOnPlane;
 
 			float3 posHitOS = test_rayorig.xyz + hitDistance * test_raydir.xyz;
 #if CURVEDPLANE == 0
@@ -1043,15 +1055,17 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 			float hitDistWS = length(posHitWS - pos_ip_ws);
 			float hitDistSS = hitDistWS / pixelSpace;
 #endif
-			minDistOnPlane = min(hitDistSS, minDistOnPlane);
+			if (minDistOnPlane * minDistOnPlane > hitDistSS * hitDistSS) {
+				minDistOnPlane = localInside ? -hitDistSS : hitDistSS;
+			}
 		}
 	}
 
 	if (planeThickness == 0) {
 #if DX10_0
-		out_ps.depthcs = minDistOnPlane + INSIDE_DIST_FLAG;
+		out_ps.depthcs = minDistOnPlane;
 #else
-		fragment_zdepth[ss_xy] = minDistOnPlane + INSIDE_DIST_FLAG;
+		fragment_zdepth[ss_xy] = minDistOnPlane;
 #endif
 		//EXIT;
 	}
@@ -1207,7 +1221,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		if (disableSolidFill)
 			v_rgba = float4(0, 0, 0, 0.001);
 		out_ps.color = MixOpt(v_rgba, v_rgba.a, out_ps.color, out_ps.color.a);
-		out_ps.depthcs = minDistOnPlane + INSIDE_DIST_FLAG;
+		out_ps.depthcs = minDistOnPlane;
 		if (g_cbCamState.far_plane > 0) out_ps.depthcs = g_cbCamState.far_plane * 0.5f;
 	}
 
@@ -1261,7 +1275,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		fragment_vis[ss_xy] = v_rgba;
 
 		fragment_counter[ss_xy] = 1;
-		fragment_zdepth[ss_xy] = minDistOnPlane + INSIDE_DIST_FLAG;
+		fragment_zdepth[ss_xy] = minDistOnPlane;
 	}
 	else 
 	{
@@ -1311,9 +1325,9 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 //			if (v12.x >= 0 || v12.y >= 0)
 //				continue;
 //#if DX10_0 == 1
-//			float fv = prev_fragment_zdepth[(int2)neighbor_pos] - INSIDE_DIST_FLAG;
+//			float fv = prev_fragment_zdepth[(int2)neighbor_pos];
 //#else
-//			float fv = fragment_zdepth[(int2)neighbor_pos] - INSIDE_DIST_FLAG;
+//			float fv = fragment_zdepth[(int2)neighbor_pos];
 //#endif
 //			if (fv < 1.5f && fv >= 0.f) {
 //				//cloestDist = min(cloestDist, length(neighbor_pos - tex2d_xy.xy));
@@ -1335,6 +1349,19 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 //	return vout;
 //}
 
+float TestAlpha(float v) {
+	uint wildcard_v = asuint(v);
+	if (wildcard_v == WILDCARD_DEPTH_OUTLINE || wildcard_v == OUTSIDE_PLANE)
+		return 0;
+
+	const float lingThres = 1.5f;
+	float distAbs = abs(v);
+	if (distAbs >= lingThres)
+		return 0;
+
+	return max(min(lingThres - distAbs, 1.f), 0); // AA option
+}
+
 #if DX10_0 == 1
 PS_FILL_OUTPUT Outline2D(VS_OUTPUT input)
 #else
@@ -1349,6 +1376,11 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 	out_ps.color = prev_fragment_vis[ss_xy];
 	out_ps.depthcs = prev_fragment_zdepth[ss_xy];
 	float fvcur = out_ps.depthcs;
+
+	float fvcur1 = prev_fragment_zdepth[ss_xy + int2(1, 0)];
+	float fvcur2 = prev_fragment_zdepth[ss_xy + int2(0, 1)];
+	float fvcur3 = prev_fragment_zdepth[ss_xy + int2(-1, 0)];
+	float fvcur4 = prev_fragment_zdepth[ss_xy + int2(0, -1)];
 	
 	//if (out_ps.depthcs == WILDCARD_DEPTH_OUTLINE)
 	//	return out_ps;
@@ -1360,20 +1392,29 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 		return;
 	int2 ss_xy = int2(DTid.xy);
 	float fvcur = fragment_zdepth[ss_xy];
+
+	float fvcur1 = fragment_zdepth[ss_xy + int2(1, 0)];
+	float fvcur2 = fragment_zdepth[ss_xy + int2(0, 1)];
+	float fvcur3 = fragment_zdepth[ss_xy + int2(-1, 0)];
+	float fvcur4 = fragment_zdepth[ss_xy + int2(0, -1)];
 #endif
 
-	if (fvcur == WILDCARD_DEPTH_OUTLINE || fvcur == OUTSIDE_PLANE)
-		__EXIT;
-	
-	if (fvcur >= INSIDE_DIST_FLAG) 
-		fvcur -= INSIDE_DIST_FLAG;
+	float a = TestAlpha(fvcur);
+	if (a == 0) __EXIT;
 
-	const float lingThres = 1.3f;
-	if (fvcur >= lingThres)
-		__EXIT;
+	float a1 = TestAlpha(fvcur1);
+	float a2 = TestAlpha(fvcur2);
+	float a3 = TestAlpha(fvcur3);
+	float a4 = TestAlpha(fvcur4);
+
+	if (a1 <= a && a2 <= a && a3 <= a && a4 <= a && 1.f > a) {
+
+		if (fvcur * fvcur1 < 0 || fvcur * fvcur2 < 0 || fvcur * fvcur3 < 0 || fvcur * fvcur4 < 0)
+			a = 1.f;
+	}
 
 	float4 outline_color = float4(g_cbPobj.Kd, 1);
-	outline_color.a = max(min((lingThres - fvcur) * 1.f, 1.f), 0); // AA option
+	outline_color.a = a;
 	outline_color.rgb *= outline_color.a;
 
 	//outline_color = float4(fvcur / 1000, fvcur / 1000, fvcur / 1000, 1);
@@ -1389,12 +1430,12 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 #if DX10_0 == 1
 	//out_ps.ds_z = input.f4PosSS.z;
 	out_ps.color = outline_color;
-	out_ps.depthcs = WILDCARD_DEPTH_OUTLINE;
+	out_ps.depthcs = asfloat(WILDCARD_DEPTH_OUTLINE);
 
 	return out_ps;
 #else
 	fragment_vis[ss_xy] = outline_color;
-	fragment_zdepth[ss_xy] = WILDCARD_DEPTH_OUTLINE;
+	fragment_zdepth[ss_xy] = asfloat(WILDCARD_DEPTH_OUTLINE);
 
 	// to do 
 	if (disableSolidFill)
