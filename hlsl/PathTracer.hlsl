@@ -810,6 +810,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	uint addr_base = pixel_id * bytes_frags_per_pixel;
 #endif
 
+	bool disableSolidFill = BitCheck(g_cbPobj.pobj_flag, 6);
 
 	// Image Plane's Position and Camera State //
 #if CURVEDPLANE == 0
@@ -909,6 +910,14 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	// intersect all triangles in the scene stored in BVH
 	int debugbingo = 0;
 	float planeThickness = g_cbCamState.far_plane;// g_cbCurvedSlicer.thicknessPlane;// g_cbCamState.far_plane;
+
+	if (disableSolidFill) {
+		// planeThickness > 0
+		pos_ip_ws = pos_ip_ws + ray_dir_unit_ws * planeThickness * 0.5f;
+		planeThickness = 0;
+		//return;
+	}
+
 	//pos_ip_ws = float3(0, 0, 0);
 	//ray_dir_unit_ws = float3(0, 1, 0);
 	float3 ray_orig_os = TransformPoint(pos_ip_ws, g_cbPobj.mat_ws2os);
@@ -1038,9 +1047,9 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 
 	if (planeThickness == 0) {
 #if DX10_0
-		out_ps.depthcs = minDistOnPlane;
+		out_ps.depthcs = minDistOnPlane + INSIDE_DIST_FLAG;
 #else
-		fragment_zdepth[ss_xy] = minDistOnPlane;
+		fragment_zdepth[ss_xy] = minDistOnPlane + INSIDE_DIST_FLAG;
 #endif
 	}
 
@@ -1192,22 +1201,25 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	else if (planeThickness == 0.f) 
 	{
 		v_rgba.a = min(0.3, v_rgba.a);
-		if (BitCheck(g_cbPobj.pobj_flag, 6))
+		if (disableSolidFill)
 			v_rgba = float4(0, 0, 0, 0.001);
 		out_ps.color = MixOpt(v_rgba, v_rgba.a, out_ps.color, out_ps.color.a);
 		out_ps.depthcs = minDistOnPlane + INSIDE_DIST_FLAG;
+		if (g_cbCamState.far_plane > 0) out_ps.depthcs = g_cbCamState.far_plane * 0.5f;
 	}
 
 	__EXIT;
 #else
-	if (planeThickness == 0) {
+	if (planeThickness == 0)
+	//if (g_cbCamState.far_plane == 0)
+	{
 
 		float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
 		v_rgba.a = 1;
 		if (planeThickness == 0.f)
 			v_rgba.a = min(0.3, v_rgba.a);
 
-		if(BitCheck(g_cbPobj.pobj_flag, 6))
+		if(disableSolidFill)
 			v_rgba = float4(0, 0, 0, 0.001);
 
 		Fragment frag;
@@ -1242,8 +1254,8 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		fragment_counter[ss_xy] = 1;
 		fragment_zdepth[ss_xy] = minDistOnPlane + INSIDE_DIST_FLAG;
 	}
-	else {
-
+	else 
+	{
 		float zThickness = zdepth1 - zdepth0;
 
 		float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
@@ -1363,6 +1375,8 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 	//if (fvcur < 10)
 	//	outline_color = float4(1, 0, 0, 1);
 
+	bool disableSolidFill = BitCheck(g_cbPobj.pobj_flag, 6);
+
 #if DX10_0 == 1
 	//out_ps.ds_z = input.f4PosSS.z;
 	out_ps.color = outline_color;
@@ -1372,5 +1386,9 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 #else
 	fragment_vis[ss_xy] = outline_color;
 	fragment_zdepth[ss_xy] = WILDCARD_DEPTH_OUTLINE;
+
+	// to do 
+	if (disableSolidFill)
+		Fill_kBuffer(ss_xy, g_cbCamState.k_value, outline_color, 0.01f, g_cbCamState.far_plane);
 #endif
 }

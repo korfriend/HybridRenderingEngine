@@ -49,7 +49,7 @@ struct HxCB_CameraState // Hlsl dX Contant Buffer
 	// 9- bit : 0 : outlint mode (solid), 1 : outlint mode (gradient alpha)
 	uint cam_flag;
 	// used for 1) A-Buffer prefix computations /*deprecated*/ or 2) beta (asfloat) for merging operation
-	uint iSrCamDummy__0; 
+	uint iSrCamDummy__0;
 
 	float near_plane;
 	float far_plane;
@@ -97,7 +97,7 @@ struct HxCB_EnvState
 
 struct HxCB_ClipInfo
 {
-    float4x4 mat_clipbox_ws2bs; // To Clip Box Space (BS)
+	float4x4 mat_clipbox_ws2bs; // To Clip Box Space (BS)
 	float3 pos_clipplane;
 	// 1st bit : 0 (No) 1 (Clip Box)
 	// 2nd bit : 0 (No) 1 (Clip plane)
@@ -109,15 +109,15 @@ struct HxCB_ClipInfo
 
 struct HxCB_PolygonObject
 {
-    float4x4 mat_os2ws;
-	float4x4 mat_ws2os; 
+	float4x4 mat_os2ws;
+	float4x4 mat_ws2os;
 	float4x4 mat_os2ps;
-    
-    float3 Ka;
-    float Ns;
-    float3 Kd;
-    float alpha;
-    float3 Ks;
+
+	float3 Ka;
+	float Ns;
+	float3 Kd;
+	float alpha;
+	float3 Ks;
 	// 1st bit : g_texRgbaArray
 	// 2nd bit : g_tex2D_KA
 	// 3rd bit : g_tex2D_KD
@@ -125,7 +125,7 @@ struct HxCB_PolygonObject
 	// 5th bit : g_tex2D_NS
 	// 6th bit : g_tex2D_BUMP
 	// 7th bit : g_tex2D_D
-    uint tex_map_enum;
+	uint tex_map_enum;
 
 	// 1st bit : 0 (shading color to RT) 1 (normal to RT for the purpose of silhouette rendering)
 	// 4th bit : 0 (Set texture0 to texture0) 1 (Set global_color to texture0)
@@ -138,40 +138,40 @@ struct HxCB_PolygonObject
 	// 23th bit : 0 (static alpha) 1 (dynamic alpha using mask t50) ... mode 1
 	// 24th bit : 0 (static alpha) 1 (dynamic alpha using mask t50) ... mode 2
 	// 31~32th bit : max components for dashed line : 0 ==> x, 1 ==> y, 2 ==> z
-    uint pobj_flag;
-    uint num_letters;
-    float dash_interval;
-    float depth_thres; // for outline!
+	uint pobj_flag;
+	uint num_letters;
+	float dash_interval;
+	float depth_thres; // for outline!
 
-    float pix_thickness; // 1) for POINT and LINE TOPOLOGY, 2) outline thickness (in pixel)
-    float vz_thickness;
+	float pix_thickness; // 1) for POINT and LINE TOPOLOGY, 2) outline thickness (in pixel)
+	float vz_thickness;
 	uint pobj_dummy_0; // 1) actor_id used for picking, 2) outline color
-	uint pobj_dummy_1; 
+	uint pobj_dummy_1;
 };
 
 struct HxCB_VolumeObject
 {
 	// Volume Information and Clipping Information
-    float4x4 mat_ws2ts; // for Sampling and Ray Traversing
+	float4x4 mat_ws2ts; // for Sampling and Ray Traversing
 
-    float4x4 mat_alignedvbox_tr_ws2bs;
+	float4x4 mat_alignedvbox_tr_ws2bs;
 
 	float grad_max; // 
 	float grad_scale; // 
 	float kappa_i; // 
 	float kappa_s; // 
 
-    float3 vec_grad_x;
-    float value_range;
-    float3 vec_grad_y;
-    float sample_dist;
-    float3 vec_grad_z;
-    float opacity_correction;
-    float3 vol_size; // volume size stored in GPU memory
-    float vz_thickness;
+	float3 vec_grad_x;
+	float value_range;
+	float3 vec_grad_y;
+	float sample_dist;
+	float3 vec_grad_z;
+	float opacity_correction;
+	float3 vol_size; // volume size stored in GPU memory
+	float vz_thickness;
 
-    float3 volblk_size_ts;
-    float volblk_value_range;
+	float3 volblk_size_ts;
+	float volblk_value_range;
 
 	// 0 bit : 0 (use the input normal) 1 (invert the input normal) ==> will be deprecated! (always faces to camera)
 	// 19 bit : 0 : 1 (ghost surface)
@@ -179,7 +179,7 @@ struct HxCB_VolumeObject
 	// 24~31bit : Sculpt Mask Value (1 byte)
 	uint vobj_flag;
 	uint iso_value;
-	uint v_dummy0;	
+	uint v_dummy0;
 	uint v_dummy1;
 
 	float4 pb_shading_factor; // x : Ambient, y : Diffuse, z : Specular, w : specular
@@ -193,20 +193,20 @@ struct HxCB_Material // normally for each object
 	// 1st bit : AO or Not , 2nd bit : Anisotropic BRDF or Not , 3rd bit : Apply Shading Factor or Not
 	// NA ==> 4th bit : 0 : Normal Curvature Map (2D), 1 : Apply Concaveness
 	// NA ==> 5th bit : Concaveness Direction or Not
-    uint rf_flag;
-    uint outline_mode;
-    float curvature_kernel_radius;
-    uint rf_dummy_0;
+	uint rf_flag;
+	uint outline_mode;
+	float curvature_kernel_radius;
+	uint rf_dummy_0;
 
-    float brdf_diffuse_ratio;
-    float brdf_reft_ratio;
-    float brdf_expw_u;
-    float brdf_expw_v;
+	float brdf_diffuse_ratio;
+	float brdf_reft_ratio;
+	float brdf_expw_u;
+	float brdf_expw_v;
 
-    float shadowmap_occusion_w; // for shadow
-    float shadowmap_depth_bias; // for shadow
-    float occ_radius;
-    uint occ_num_rays;
+	float shadowmap_occusion_w; // for shadow
+	float shadowmap_depth_bias; // for shadow
+	float occ_radius;
+	uint occ_num_rays;
 
 	float ao_intensity;
 	uint rf_dummy_1;
@@ -216,31 +216,31 @@ struct HxCB_Material // normally for each object
 
 struct HxCB_VolumeMaterial // normally for each volume
 {
-    float clip_plane_intensity;
-    float attribute_voxel_sharpness;
-    float vrf_dummy_2;
-    float vrf_dummy_3;
+	float clip_plane_intensity;
+	float attribute_voxel_sharpness;
+	float vrf_dummy_2;
+	float vrf_dummy_3;
 
-    float occ_sample_dist_scale; // for occlusion
-    float sdm_sample_dist_scale; // for shadow
+	float occ_sample_dist_scale; // for occlusion
+	float sdm_sample_dist_scale; // for shadow
 	// 0-bit : 0 - normal surface hit, 1 - jittering 
-    uint flag;
-    uint vrf_dummy_1;
+	uint flag;
+	uint vrf_dummy_1;
 };
 
 struct HxCB_TMAP
 {
-    float4 last_color;
+	float4 last_color;
 
-    uint first_nonzeroalpha_index; // For ESS
-    uint last_nonzeroalpha_index;
-    uint tmap_size_x;
-    float mapping_v_min;
+	uint first_nonzeroalpha_index; // For ESS
+	uint last_nonzeroalpha_index;
+	uint tmap_size_x;
+	float mapping_v_min;
 
-    float mapping_v_max;
-    uint tm_dummy_0;
-    uint tm_dummy_1;
-    uint tm_dummy_2;
+	float mapping_v_max;
+	uint tm_dummy_0;
+	uint tm_dummy_1;
+	uint tm_dummy_2;
 };
 
 //struct HxCB_HotspotMask
@@ -288,7 +288,7 @@ struct HxCB_CurvedSlicer
 	float3 posBottomLeftCOS;
 	float thicknessPlane;
 	float3 posBottomRightCOS;
-	uint __dummy0; 
+	uint __dummy0;
 	float3 planeUp; // WS, length is planePitch
 	uint flag; // 1st bit : isRightSide
 };
@@ -298,17 +298,17 @@ struct HxCB_CurvedSlicer
 //=====================
 cbuffer cbGlobalParams : register(b0)
 {
-    HxCB_CameraState g_cbCamState;
+	HxCB_CameraState g_cbCamState;
 }
 
 cbuffer cbGlobalParams : register(b1)
 {
-    HxCB_PolygonObject g_cbPobj;
+	HxCB_PolygonObject g_cbPobj;
 }
 
 cbuffer cbGlobalParams : register(b2)
 {
-    HxCB_ClipInfo g_cbClipInfo;
+	HxCB_ClipInfo g_cbClipInfo;
 }
 
 cbuffer cbGlobalParams : register(b3)
@@ -318,12 +318,12 @@ cbuffer cbGlobalParams : register(b3)
 
 cbuffer cbGlobalParams : register(b4)
 {
-    HxCB_VolumeObject g_cbVobj;
+	HxCB_VolumeObject g_cbVobj;
 }
 
 cbuffer cbGlobalParams : register(b5)
 {
-    HxCB_TMAP g_cbTmap;
+	HxCB_TMAP g_cbTmap;
 }
 
 cbuffer cbGlobalParams : register(b6)
@@ -343,7 +343,7 @@ float3 TransformPoint(in float3 pos_src, in float4x4 matT)
 {
 	//float4 pos_src_h = mul(float4(pos_src, 1.f), matT);
 	float4 pos_src_h = mul(matT, float4(pos_src, 1.f));
-    return pos_src_h.xyz / pos_src_h.w;
+	return pos_src_h.xyz / pos_src_h.w;
 }
 
 float3 TransformVector(in float3 vec_src, in float4x4 matT)
@@ -356,11 +356,11 @@ float3 TransformPerspVector(const in float3 vec_src, const in float4x4 matT)
 {
 	//float4 f4PosOrigin = mul(float4(0, 0, 0, 1), matT);
 	float4 f4PosOrigin = mul(matT, float4(0, 0, 0, 1));
-    float3 f3PosOrigin = f4PosOrigin.xyz / f4PosOrigin.w;
+	float3 f3PosOrigin = f4PosOrigin.xyz / f4PosOrigin.w;
 	//float4 f4PosDistance = mul(float4(vec_src, 1.f), matT);
 	float4 f4PosDistance = mul(matT, float4(vec_src, 1.f));
-    float3 f3PosDistance = f4PosDistance.xyz / f4PosDistance.w;
-    return f3PosDistance - f3PosOrigin;
+	float3 f3PosDistance = f4PosDistance.xyz / f4PosDistance.w;
+	return f3PosDistance - f3PosOrigin;
 }
 
 float3 TransformVectorWoPerspective(const in float3 vec_src, const in float4x4 matT)
@@ -371,121 +371,121 @@ float3 TransformVectorWoPerspective(const in float3 vec_src, const in float4x4 m
 
 float4 BlendFloat4AndFloat4(const in float4 fColor1, const in float4 fColor2)
 {
-    return fColor1 + fColor2 - (fColor1 * fColor2.a + fColor2 * fColor1.a) / 2.f;
-    //float4 color_merge;
-    //float _a_sum = fColor1.a + fColor2.a;
-    //color_merge.a = fColor1.a + fColor2.a - fColor1.a * fColor2.a;
-    //color_merge.rgb = (fColor1.rgb + fColor2.rgb) / _a_sum * color_merge.a;
-    //return color_merge;
+	return fColor1 + fColor2 - (fColor1 * fColor2.a + fColor2 * fColor1.a) / 2.f;
+	//float4 color_merge;
+	//float _a_sum = fColor1.a + fColor2.a;
+	//color_merge.a = fColor1.a + fColor2.a - fColor1.a * fColor2.a;
+	//color_merge.rgb = (fColor1.rgb + fColor2.rgb) / _a_sum * color_merge.a;
+	//return color_merge;
 }
 
 float4 ConvertUIntToFloat4(const uint iColor)
 {
 	// RGBA
-    return float4(((iColor >> 16) & 0xFF) / 255.f, ((iColor >> 8) & 0xFF) / 255.f, (iColor & 0xFF) / 255.f, ((iColor >> 24) & 0xFF) / 255.f);
+	return float4(((iColor >> 16) & 0xFF) / 255.f, ((iColor >> 8) & 0xFF) / 255.f, (iColor & 0xFF) / 255.f, ((iColor >> 24) & 0xFF) / 255.f);
 }
 
 uint ConvertFloat4ToUInt(const in float4 fColor)
 {
 	// RGBA
-    uint iR = (uint) (min(fColor.x * 255.f, 255.f) + 0.5f);
-    uint iG = (uint) (min(fColor.y * 255.f, 255.f) + 0.5f);
-    uint iB = (uint) (min(fColor.z * 255.f, 255.f) + 0.5f);
-    uint iA = (uint) (min(fColor.w * 255.f, 255.f) + 0.5f);
-    return (iA << 24) | (iR << 16) | (iG << 8) | iB;
+	uint iR = (uint) (min(fColor.x * 255.f, 255.f) + 0.5f);
+	uint iG = (uint) (min(fColor.y * 255.f, 255.f) + 0.5f);
+	uint iB = (uint) (min(fColor.z * 255.f, 255.f) + 0.5f);
+	uint iA = (uint) (min(fColor.w * 255.f, 255.f) + 0.5f);
+	return (iA << 24) | (iR << 16) | (iG << 8) | iB;
 }
 
 bool IsInsideClipBox(const in float3 pos_target, const in float4x4 mat_2_bs)
 {
-    float3 pos_target_bs = TransformPoint(pos_target, mat_2_bs);
-    //float3 pos_maxbs2targetbs = pos_target_bs - pos_max_bs;
-    float3 _dot = (pos_target_bs + float3(0.5, 0.5, 0.5)) * (pos_target_bs - float3(0.5, 0.5, 0.5));
+	float3 pos_target_bs = TransformPoint(pos_target, mat_2_bs);
+	//float3 pos_maxbs2targetbs = pos_target_bs - pos_max_bs;
+	float3 _dot = (pos_target_bs + float3(0.5, 0.5, 0.5)) * (pos_target_bs - float3(0.5, 0.5, 0.5));
 	return _dot.x <= 0 && _dot.y <= 0 && _dot.z <= 0;
-    //if (_dot.x > 0 || _dot.y > 0 || _dot.z > 0)
-    //    return false;
-    //return true;
+	//if (_dot.x > 0 || _dot.y > 0 || _dot.z > 0)
+	//    return false;
+	//return true;
 }
 
 float2 ComputeAaBbHits(const in float3 pos_start, in float3 pos_min, const in float3 pos_max, const in float3 vec_dir)
 {
 	// intersect ray with a box
 	// http://www.siggraph.org/education/materials/HyperGraph/raytrace/rtinter3.htm
-    float3 invR = float3(1.0f, 1.0f, 1.0f) / vec_dir;
-    float3 tbot = invR * (pos_min - pos_start);
-    float3 ttop = invR * (pos_max - pos_start);
+	float3 invR = float3(1.0f, 1.0f, 1.0f) / vec_dir;
+	float3 tbot = invR * (pos_min - pos_start);
+	float3 ttop = invR * (pos_max - pos_start);
 
-    // re-order intersections to find smallest and largest on each axis
-    float3 tmin = min(ttop, tbot);
-    float3 tmax = max(ttop, tbot);
+	// re-order intersections to find smallest and largest on each axis
+	float3 tmin = min(ttop, tbot);
+	float3 tmax = max(ttop, tbot);
 
-    // find the largest tmin and the smallest tmax
-    float largest_tmin = max(max(tmin.x, tmin.y), max(tmin.x, tmin.z));
-    float smallest_tmax = min(min(tmax.x, tmax.y), min(tmax.x, tmax.z));
+	// find the largest tmin and the smallest tmax
+	float largest_tmin = max(max(tmin.x, tmin.y), max(tmin.x, tmin.z));
+	float smallest_tmax = min(min(tmax.x, tmax.y), min(tmax.x, tmax.z));
 
-    float tnear = max(largest_tmin, 0.f);
-    float tfar = smallest_tmax;
-    return float2(tnear, tfar);
+	float tnear = max(largest_tmin, 0.f);
+	float tfar = smallest_tmax;
+	return float2(tnear, tfar);
 }
 
 float2 ComputeClipBoxHits(const in float3 pos_start, const in float3 vec_dir, const in float4x4 mat_vbox_2bs)
 {
-    float3 pos_src_bs = TransformPoint(pos_start, mat_vbox_2bs);
-    //float3 pos_max_bs = TransformPoint(pos_vbox_max, mat_vbox_2bs);
+	float3 pos_src_bs = TransformPoint(pos_start, mat_vbox_2bs);
+	//float3 pos_max_bs = TransformPoint(pos_vbox_max, mat_vbox_2bs);
 	float3 vec_dir_bs = TransformVector(vec_dir, mat_vbox_2bs);// normalize(TransformVector(vec_dir, mat_vbox_2bs));
-    float2 hit_t = ComputeAaBbHits(pos_src_bs, float3(-0.5, -0.5, -0.5), float3(0.5, 0.5, 0.5), vec_dir_bs);
-    return hit_t;
+	float2 hit_t = ComputeAaBbHits(pos_src_bs, float3(-0.5, -0.5, -0.5), float3(0.5, 0.5, 0.5), vec_dir_bs);
+	return hit_t;
 }
 
 float2 ComputePlaneHits(const in float prev_t, const in float next_t, const in float3 pos_onplane, const in float3 vec_plane, const in float3 pos_start, const in float3 vec_dir)
 {
-    float2 hits_t = float2(prev_t, next_t);
+	float2 hits_t = float2(prev_t, next_t);
 
 	// H : vec_planeSVS, V : f3VecSampleSVS, A : f3PosIPSampleSVS, Q : f3PosPlaneSVS //
 	// 0. Is ray direction parallel with plane's vector?
-    float dot_HV = dot(vec_plane, vec_dir);
-    if (dot_HV != 0)
-    {
+	float dot_HV = dot(vec_plane, vec_dir);
+	if (dot_HV != 0)
+	{
 		// 1. Compute T for Position on Plane
-        float fT = dot(vec_plane, pos_onplane - pos_start) / dot_HV;
+		float fT = dot(vec_plane, pos_onplane - pos_start) / dot_HV;
 		// 2. Check if on Cube
-        if (fT > prev_t && fT < next_t)
-        {
+		if (fT > prev_t && fT < next_t)
+		{
 			// 3. Check if front or next position
-            if (dot_HV < 0)
-                hits_t.x = fT;
-            else
-                hits_t.y = fT;
-        }
-        else if (fT > prev_t && fT > next_t)
-        {
-            if (dot_HV < 0)
-                hits_t.y = -FLT_MAX; // return;
-            else
+			if (dot_HV < 0)
+				hits_t.x = fT;
+			else
+				hits_t.y = fT;
+		}
+		else if (fT > prev_t && fT > next_t)
+		{
+			if (dot_HV < 0)
+				hits_t.y = -FLT_MAX; // return;
+			else
 				; // conserve prev_t and next_t
-        }
-        else if (fT < prev_t && fT < next_t)
-        {
-            if (dot_HV < 0)
+		}
+		else if (fT < prev_t && fT < next_t)
+		{
+			if (dot_HV < 0)
 				;
-            else
-                hits_t.y = -FLT_MAX; // return;
-        }
-    }
-    else
-    {
+			else
+				hits_t.y = -FLT_MAX; // return;
+		}
+	}
+	else
+	{
 		// Check Upperside of plane
-        if (dot(vec_plane, pos_onplane - pos_start) <= 0)
-            hits_t.y = -FLT_MAX; // return;
-    }
-	
-    return hits_t;
+		if (dot(vec_plane, pos_onplane - pos_start) <= 0)
+			hits_t.y = -FLT_MAX; // return;
+	}
+
+	return hits_t;
 }
 
 float2 ComputeVBoxHits(const in float3 pos_start, const in float3 vec_dir, const in float4x4 mat_vbox_2bs, const in HxCB_ClipInfo clip_info)
 {
 	// Compute VObject Box Enter and Exit //
-    float2 hits_t = ComputeClipBoxHits(pos_start, vec_dir, mat_vbox_2bs);
-	
+	float2 hits_t = ComputeClipBoxHits(pos_start, vec_dir, mat_vbox_2bs);
+
 	if (hits_t.y > hits_t.x)
 	{
 		// Custom Clip Plane //
@@ -515,14 +515,14 @@ float2 ComputeVBoxHits(const in float3 pos_start, const in float3 vec_dir, const
 			//}
 		}
 	}
-	
-    return hits_t;
+
+	return hits_t;
 }
 
 float Random(const in float2 seed2)
 {
-    float2 temp = float2(23.1406926327792690, 2.6651441426902251);
-    return frac(cos(123456789.0 % 1e-7 + 256.0 * dot(seed2, temp)));
+	float2 temp = float2(23.1406926327792690, 2.6651441426902251);
+	return frac(cos(123456789.0 % 1e-7 + 256.0 * dot(seed2, temp)));
 }
 
 // A single iteration of Bob Jenkins' One-At-A-Time hashing algorithm.
@@ -561,10 +561,10 @@ float _random(float4 v) { return floatConstruct(hash(asuint(v))); }
 
 float4 LoadOtfBuf(const in int sample_value, const in Buffer<float4> buf_otf, const in float opacity_correction)
 {
-    float4 vis_otf = buf_otf[sample_value];
-    vis_otf.a *= opacity_correction;
-    vis_otf.rgb *= vis_otf.a; // associate color
-    return vis_otf;
+	float4 vis_otf = buf_otf[sample_value];
+	vis_otf.a *= opacity_correction;
+	vis_otf.rgb *= vis_otf.a; // associate color
+	return vis_otf;
 }
 
 float4 LoadSlabOtfBuf_Avg(const in int sample_v, const in int sample_prev, const in Buffer<float4> buf_otf, const in float opacity_correction)
@@ -597,10 +597,10 @@ float4 LoadSlabOtfBuf_PreInt(const int sample_v, int sample_prev, const Buffer<f
 
 float4 LoadOtfBufId(const in int sample_v, const in Buffer<float4> buf_otf, const in float opacity_correction, const in int id)
 {
-    float4 vis_otf = buf_otf[sample_v + id * g_cbTmap.tmap_size_x];
-    vis_otf.a *= opacity_correction;
-    vis_otf.rgb *= vis_otf.a; // associate color
-    return vis_otf;
+	float4 vis_otf = buf_otf[sample_v + id * g_cbTmap.tmap_size_x];
+	vis_otf.a *= opacity_correction;
+	vis_otf.rgb *= vis_otf.a; // associate color
+	return vis_otf;
 }
 
 float4 LoadSlabOtfBufId_PreInt(const int sample_v, int sample_prev, const Buffer<float4> buf_preintotf, const float opacity_correction, const int id)
@@ -624,46 +624,46 @@ float4 LoadSlabOtfBufId_PreInt(const int sample_v, int sample_prev, const Buffer
 	return vis_otf;
 }
 
-int LoadMaxValueInt(float3 pos_ts, float3 size_tex3d, const int scale, const in Texture3D tex3d_data)
+int LoadMaxValueInt(float3 pos_ts, float3 size_tex3d, const int scale, Texture3D tex3d_data)
 {
-    float3 pos_vs = float3(pos_ts.x * size_tex3d.x - 0.5f, pos_ts.y * size_tex3d.y - 0.5f, pos_ts.z * size_tex3d.z - 0.5f);
-    int3 idx_vs = int3(pos_vs);
+	float3 pos_vs = float3(pos_ts.x * size_tex3d.x - 0.5f, pos_ts.y * size_tex3d.y - 0.5f, pos_ts.z * size_tex3d.z - 0.5f);
+	int3 idx_vs = int3(pos_vs);
 
-    float samples[8];
-    samples[0] = tex3d_data.Load(int4(idx_vs, 0)).r;
-    samples[1] = tex3d_data.Load(int4(idx_vs + int3(1, 0, 0), 0)).r;
-    samples[2] = tex3d_data.Load(int4(idx_vs + int3(0, 1, 0), 0)).r;
-    samples[3] = tex3d_data.Load(int4(idx_vs + int3(1, 1, 0), 0)).r;
-    samples[4] = tex3d_data.Load(int4(idx_vs + int3(0, 0, 1), 0)).r;
-    samples[5] = tex3d_data.Load(int4(idx_vs + int3(1, 0, 1), 0)).r;
-    samples[6] = tex3d_data.Load(int4(idx_vs + int3(0, 1, 1), 0)).r;
-    samples[7] = tex3d_data.Load(int4(idx_vs + int3(1, 1, 1), 0)).r;
-	
-    float max_v = 0;
-    for (int i = 0; i < 8; i++)
-    {
-        max_v = max(samples[i], max_v);
-    }
-    return (int) (max_v * scale + 0.5f);
+	float samples[8];
+	samples[0] = tex3d_data.Load(int4(idx_vs, 0)).r;
+	samples[1] = tex3d_data.Load(int4(idx_vs + int3(1, 0, 0), 0)).r;
+	samples[2] = tex3d_data.Load(int4(idx_vs + int3(0, 1, 0), 0)).r;
+	samples[3] = tex3d_data.Load(int4(idx_vs + int3(1, 1, 0), 0)).r;
+	samples[4] = tex3d_data.Load(int4(idx_vs + int3(0, 0, 1), 0)).r;
+	samples[5] = tex3d_data.Load(int4(idx_vs + int3(1, 0, 1), 0)).r;
+	samples[6] = tex3d_data.Load(int4(idx_vs + int3(0, 1, 1), 0)).r;
+	samples[7] = tex3d_data.Load(int4(idx_vs + int3(1, 1, 1), 0)).r;
+
+	float max_v = 0;
+	for (int i = 0; i < 8; i++)
+	{
+		max_v = max(samples[i], max_v);
+	}
+	return (int)(max_v * scale + 0.5f);
 }
 
 struct BlockSkip
 {
-    float blk_value;
-    int num_skip_steps;
+	float blk_value;
+	int num_skip_steps;
 };
 BlockSkip ComputeBlockSkip(const float3 pos_start_ts, const float3 vec_sample_ts, const float3 size_volblk_ts, const float volblk_value_range, const Texture3D tex3d_blk_data)
 {
-    BlockSkip blk_v = (BlockSkip) 0;
-    //int3 blk_id = int3(pos_start_ts.x / size_volblk_ts.x, pos_start_ts.y / size_volblk_ts.y, pos_start_ts.z / size_volblk_ts.z);
-    int3 blk_id = pos_start_ts / size_volblk_ts;
+	BlockSkip blk_v = (BlockSkip)0;
+	//int3 blk_id = int3(pos_start_ts.x / size_volblk_ts.x, pos_start_ts.y / size_volblk_ts.y, pos_start_ts.z / size_volblk_ts.z);
+	int3 blk_id = pos_start_ts / size_volblk_ts;
 	//blk_v.blk_value = (int)(tex3d_blk_data.Load(int4(blk_id, 0)).r * volblk_value_range + 0.5f);
 	blk_v.blk_value = tex3d_blk_data.Load(int4(blk_id, 0)).r;
-    
-    float3 pos_min_ts = float3(blk_id.x * size_volblk_ts.x, blk_id.y * size_volblk_ts.y, blk_id.z * size_volblk_ts.z);
-    float3 pos_max_ts = pos_min_ts + size_volblk_ts;
-    float2 hits_t = ComputeAaBbHits(pos_start_ts, pos_min_ts, pos_max_ts, vec_sample_ts);
-    float dist_skip_ts = hits_t.y - hits_t.x;
+
+	float3 pos_min_ts = float3(blk_id.x * size_volblk_ts.x, blk_id.y * size_volblk_ts.y, blk_id.z * size_volblk_ts.z);
+	float3 pos_max_ts = pos_min_ts + size_volblk_ts;
+	float2 hits_t = ComputeAaBbHits(pos_start_ts, pos_min_ts, pos_max_ts, vec_sample_ts);
+	float dist_skip_ts = hits_t.y - hits_t.x;
 	//if (dist_skip_ts < 0) {
 	//	float3 ss = float3(0, 0, 0);
 	//	hits_t = ComputeAaBbHits(ss, ss, size_volblk_ts, vec_sample_ts);
@@ -673,21 +673,10 @@ BlockSkip ComputeBlockSkip(const float3 pos_start_ts, const float3 vec_sample_ts
 	blk_v.num_skip_steps = max(int(dist_skip_ts), 0);// +1;// +0.5) + 1;
 	//blk_v.num_skip_steps = (int)dist_skip_ts;// ceil(dist_skip_ts);
 	//blk_v.num_skip_steps = ceil(dist_skip_ts);
-    return blk_v;
+	return blk_v;
 };
 
-float3 GradientVolume(const in float3 pos_sample_ts, const in float3 vec_x, const in float3 vec_y, const in float3 vec_z, const in Texture3D tex3d_data)
-{
-    float fGx = tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts + vec_x, 0).r
-		- tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts - vec_x, 0).r;
-    float fGy = tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts + vec_y, 0).r
-		- tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts - vec_y, 0).r;
-    float fGz = tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts + vec_z, 0).r
-		- tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts - vec_z, 0).r;
-    return float3(fGx, fGy, fGz);
-}
-
-float3 GradientVolume2(const in float3 pos_sample_ts, const in float3 vec_x, const in float3 vec_y, const in float3 vec_z, const in Texture3D tex3d_data)
+float3 GradientVolume(const in float3 pos_sample_ts, const in float3 vec_x, const in float3 vec_y, const in float3 vec_z, Texture3D tex3d_data)
 {
 	float fGx = tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts + vec_x, 0).r
 		- tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts - vec_x, 0).r;
@@ -698,10 +687,18 @@ float3 GradientVolume2(const in float3 pos_sample_ts, const in float3 vec_x, con
 	return float3(fGx, fGy, fGz);
 }
 
-float3 GradientNormalVolume(inout float leng, const in float3 pos_sample_ts, const in float3 pos_view_ws, const in float3 vec_x, const in float3 vec_y, const in float3 vec_z, const in Texture3D tex3d_data)
+float3 GradientVolume2(const in float sampleV, const in float3 pos_sample_ts, const in float3 vec_x, const in float3 vec_y, const in float3 vec_z, Texture3D tex3d_data)
 {
-    float3 grad = GradientVolume(pos_sample_ts, vec_x, vec_y, vec_z, tex3d_data);
-    leng = length(grad);
+	float fGx = tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts + 2.f * vec_x, 0).r;
+	float fGy = tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts + 2.f * vec_y, 0).r;
+	float fGz = tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts + 2.f * vec_z, 0).r;
+	return float3(fGx, fGy, fGz) - float3(sampleV, sampleV, sampleV);
+}
+
+float3 GradientNormalVolume(inout float leng, const in float3 pos_sample_ts, const in float3 pos_view_ws, const in float3 vec_x, const in float3 vec_y, const in float3 vec_z, Texture3D tex3d_data)
+{
+	float3 grad = GradientVolume(pos_sample_ts, vec_x, vec_y, vec_z, tex3d_data);
+	leng = length(grad);
 	float3 nrl = (float3) 0;
 	if (leng > 0)
 	{
@@ -709,7 +706,22 @@ float3 GradientNormalVolume(inout float leng, const in float3 pos_sample_ts, con
 			grad *= -1.f;
 		nrl = grad / leng;
 	}
-    return nrl;
+	return nrl;
+}
+
+
+float3 GradientNormalVolume2(const in float sampleV, inout float leng, const in float3 pos_sample_ts, const in float3 pos_view_ws, const in float3 vec_x, const in float3 vec_y, const in float3 vec_z, Texture3D tex3d_data)
+{
+	float3 grad = GradientVolume2(sampleV, pos_sample_ts, vec_x, vec_y, vec_z, tex3d_data);
+	leng = length(grad);
+	float3 nrl = (float3) 0;
+	if (leng > 0)
+	{
+		if (dot(grad, pos_view_ws) > 0)
+			grad *= -1.f;
+		nrl = grad / leng;
+	}
+	return nrl;
 }
 
 //==================================
@@ -717,15 +729,15 @@ float3 GradientNormalVolume(inout float leng, const in float3 pos_sample_ts, con
 //==================================
 struct RaySegment
 {
-    float4 fvis;
-    float zdepth;
-    float zthick;
+	float4 fvis;
+	float zdepth;
+	float zthick;
 };
 
 struct MergeRS_OUT
 {
-    RaySegment rs_prior; // Includes current intermixed depth
-    RaySegment rs_posterior;
+	RaySegment rs_prior; // Includes current intermixed depth
+	RaySegment rs_posterior;
 };
 
 // rs_prior and rs_posterior mean rs_prior.zdepth <= rs_posterior.zdepth
@@ -735,286 +747,286 @@ MergeRS_OUT MergeRS(RaySegment rs_prior, RaySegment rs_posterior)
 	// : 3 branches, 2 visibility interpolations, 2 visibility integrations, and 1 fusion of overlapping ray-segments
 
 	// Safe-Check to avoid zero-division
-    rs_prior.fvis.a = min(rs_prior.fvis.a, SAFE_OPAQUEALPHA);
-    rs_posterior.fvis.a = min(rs_posterior.fvis.a, SAFE_OPAQUEALPHA);
+	rs_prior.fvis.a = min(rs_prior.fvis.a, SAFE_OPAQUEALPHA);
+	rs_posterior.fvis.a = min(rs_posterior.fvis.a, SAFE_OPAQUEALPHA);
 
 	// rs_prior and rs_posterior mean rs_prior.zdepth >= rs_prior.zdepth
-    MergeRS_OUT rs_out;
+	MergeRS_OUT rs_out;
 
-    float zfront_posterior_f = rs_posterior.zdepth - rs_posterior.zthick;
-    if (rs_prior.zdepth <= zfront_posterior_f)
-    {
+	float zfront_posterior_f = rs_posterior.zdepth - rs_posterior.zthick;
+	if (rs_prior.zdepth <= zfront_posterior_f)
+	{
 		// Case 1 : No Overlapping
-        rs_out.rs_prior = rs_prior;
-    }
-    else
-    {
-        float zfront_prior_f = rs_prior.zdepth - rs_prior.zthick;
-        if (zfront_prior_f <= zfront_posterior_f)
-        {
+		rs_out.rs_prior = rs_prior;
+	}
+	else
+	{
+		float zfront_prior_f = rs_prior.zdepth - rs_prior.zthick;
+		if (zfront_prior_f <= zfront_posterior_f)
+		{
 			// Case 2 : Intersecting each other
-            //rs_out.rs_prior.zthick = max(zfront_posterior_f - zfront_prior_f, 0); // to avoid computational precision error (0 or small minus)
-            rs_out.rs_prior.zthick = zfront_posterior_f - zfront_prior_f;
+			//rs_out.rs_prior.zthick = max(zfront_posterior_f - zfront_prior_f, 0); // to avoid computational precision error (0 or small minus)
+			rs_out.rs_prior.zthick = zfront_posterior_f - zfront_prior_f;
 
-            rs_out.rs_prior.zdepth = zfront_posterior_f;
+			rs_out.rs_prior.zdepth = zfront_posterior_f;
 
-            rs_out.rs_prior.fvis = rs_prior.fvis * (rs_out.rs_prior.zthick / rs_prior.zthick);
-            
-            rs_prior.zthick -= rs_out.rs_prior.zthick;
-            rs_prior.fvis = (rs_prior.fvis - rs_out.rs_prior.fvis) / (1.f - rs_out.rs_prior.fvis.a);
-        }
-        else
-        {
+			rs_out.rs_prior.fvis = rs_prior.fvis * (rs_out.rs_prior.zthick / rs_prior.zthick);
+
+			rs_prior.zthick -= rs_out.rs_prior.zthick;
+			rs_prior.fvis = (rs_prior.fvis - rs_out.rs_prior.fvis) / (1.f - rs_out.rs_prior.fvis.a);
+		}
+		else
+		{
 			// Case 3 : rs_prior belongs to rs_posterior
-            //rs_out.rs_prior.zthick = max(zfront_prior_f - zfront_posterior_f, 0); // to avoid computational precision error (0 or small minus)
-            rs_out.rs_prior.zthick = zfront_prior_f - zfront_posterior_f;
-            rs_out.rs_prior.zdepth = zfront_prior_f;
+			//rs_out.rs_prior.zthick = max(zfront_prior_f - zfront_posterior_f, 0); // to avoid computational precision error (0 or small minus)
+			rs_out.rs_prior.zthick = zfront_prior_f - zfront_posterior_f;
+			rs_out.rs_prior.zdepth = zfront_prior_f;
 
-            rs_out.rs_prior.fvis = rs_posterior.fvis * (rs_out.rs_prior.zthick / rs_posterior.zthick);
+			rs_out.rs_prior.fvis = rs_posterior.fvis * (rs_out.rs_prior.zthick / rs_posterior.zthick);
 
-            rs_posterior.zthick -= rs_out.rs_prior.zthick;
-            rs_posterior.fvis = (rs_posterior.fvis - rs_out.rs_prior.fvis) / (1.f - rs_out.rs_prior.fvis.a);
-        }
-        
-        // merge the fusion sub_rs (rs_prior) to rs_out.rs_prior
-        rs_out.rs_prior.zthick += rs_prior.zthick;
-        rs_out.rs_prior.zdepth = rs_prior.zdepth;
-        float4 fvis_front_sub_rs = rs_posterior.fvis * (rs_prior.zthick / rs_posterior.zthick); // REDESIGN
-        float4 fvis_fusion_sub_rs = BlendFloat4AndFloat4(fvis_front_sub_rs, rs_prior.fvis);
-        rs_out.rs_prior.fvis += fvis_fusion_sub_rs * (1.f - rs_out.rs_prior.fvis.a);
+			rs_posterior.zthick -= rs_out.rs_prior.zthick;
+			rs_posterior.fvis = (rs_posterior.fvis - rs_out.rs_prior.fvis) / (1.f - rs_out.rs_prior.fvis.a);
+		}
 
-        rs_posterior.zthick -= rs_prior.zthick;
-        rs_posterior.fvis = (rs_posterior.fvis - fvis_front_sub_rs) / (1.f - fvis_front_sub_rs.a);
-    }
-    rs_out.rs_posterior = rs_posterior;
+		// merge the fusion sub_rs (rs_prior) to rs_out.rs_prior
+		rs_out.rs_prior.zthick += rs_prior.zthick;
+		rs_out.rs_prior.zdepth = rs_prior.zdepth;
+		float4 fvis_front_sub_rs = rs_posterior.fvis * (rs_prior.zthick / rs_posterior.zthick); // REDESIGN
+		float4 fvis_fusion_sub_rs = BlendFloat4AndFloat4(fvis_front_sub_rs, rs_prior.fvis);
+		rs_out.rs_prior.fvis += fvis_fusion_sub_rs * (1.f - rs_out.rs_prior.fvis.a);
+
+		rs_posterior.zthick -= rs_prior.zthick;
+		rs_posterior.fvis = (rs_posterior.fvis - fvis_front_sub_rs) / (1.f - fvis_front_sub_rs.a);
+	}
+	rs_out.rs_posterior = rs_posterior;
 	// Safe-Check For Byte Precision //
-    if (rs_out.rs_prior.fvis.a < FLT_OPACITY_MIN__) // DO NOT COUNT OPERATION OF INTERMIXING KERNEL !
-    {
-        rs_out.rs_prior.fvis = (float4) 0;
-        rs_out.rs_prior.zthick = 0;
-    }
-    if (rs_out.rs_posterior.fvis.a < FLT_OPACITY_MIN__) // DO NOT COUNT OPERATION OF INTERMIXING KERNEL !
-    {
-        rs_out.rs_posterior.fvis = (float4) 0;
-        rs_out.rs_posterior.zthick = 0;
-    }
-    return rs_out;
+	if (rs_out.rs_prior.fvis.a < FLT_OPACITY_MIN__) // DO NOT COUNT OPERATION OF INTERMIXING KERNEL !
+	{
+		rs_out.rs_prior.fvis = (float4) 0;
+		rs_out.rs_prior.zthick = 0;
+	}
+	if (rs_out.rs_posterior.fvis.a < FLT_OPACITY_MIN__) // DO NOT COUNT OPERATION OF INTERMIXING KERNEL !
+	{
+		rs_out.rs_posterior.fvis = (float4) 0;
+		rs_out.rs_posterior.zthick = 0;
+	}
+	return rs_out;
 }
 
 int MergeFragRS(inout RaySegment rs_merge, RaySegment rs_1, RaySegment rs_2)
 {
-    RaySegment rs_prior, rs_posterior;
-    if (rs_1.zdepth > rs_2.zdepth)
-    {
-        rs_prior = rs_2;
-        rs_posterior = rs_1;
-    }
-    else
-    {
-        rs_prior = rs_1;
-        rs_posterior = rs_2;
-    }
-    
+	RaySegment rs_prior, rs_posterior;
+	if (rs_1.zdepth > rs_2.zdepth)
+	{
+		rs_prior = rs_2;
+		rs_posterior = rs_1;
+	}
+	else
+	{
+		rs_prior = rs_1;
+		rs_posterior = rs_2;
+	}
+
 	// Overall algorithm computation cost 
 	// : 3 branches, 2 visibility interpolations, 2 visibility integrations, and 1 fusion of overlapping ray-segments
 
 	// Safe-Check to avoid zero-division
-    rs_prior.fvis.a = min(rs_prior.fvis.a, SAFE_OPAQUEALPHA);
-    rs_posterior.fvis.a = min(rs_posterior.fvis.a, SAFE_OPAQUEALPHA);
+	rs_prior.fvis.a = min(rs_prior.fvis.a, SAFE_OPAQUEALPHA);
+	rs_posterior.fvis.a = min(rs_posterior.fvis.a, SAFE_OPAQUEALPHA);
 
 	// rs_prior and rs_posterior mean rs_prior.zdepth >= rs_prior.zdepth
 
-    float zfront_posterior_f = rs_posterior.zdepth - rs_posterior.zthick;
-    int ret = 0;
-    if (rs_prior.zdepth <= zfront_posterior_f)
-    {
+	float zfront_posterior_f = rs_posterior.zdepth - rs_posterior.zthick;
+	int ret = 0;
+	if (rs_prior.zdepth <= zfront_posterior_f)
+	{
 		// Case 1 : No Overlapping
-        //rs_merge = rs_2;
-        ret = 1;
-    }
-    else
-    {
-        MergeRS_OUT rs_out;
-        float zfront_prior_f = rs_prior.zdepth - rs_prior.zthick;
-        if (zfront_prior_f <= zfront_posterior_f)
-        {
+		//rs_merge = rs_2;
+		ret = 1;
+	}
+	else
+	{
+		MergeRS_OUT rs_out;
+		float zfront_prior_f = rs_prior.zdepth - rs_prior.zthick;
+		if (zfront_prior_f <= zfront_posterior_f)
+		{
 			// Case 2 : Intersecting each other
-            //rs_out.rs_prior.zthick = max(zfront_posterior_f - zfront_prior_f, 0); // to avoid computational precision error (0 or small minus)
-            rs_out.rs_prior.zthick = zfront_posterior_f - zfront_prior_f;
+			//rs_out.rs_prior.zthick = max(zfront_posterior_f - zfront_prior_f, 0); // to avoid computational precision error (0 or small minus)
+			rs_out.rs_prior.zthick = zfront_posterior_f - zfront_prior_f;
 
-            rs_out.rs_prior.zdepth = zfront_posterior_f;
+			rs_out.rs_prior.zdepth = zfront_posterior_f;
 
 #define SIMPLE_MERGE 1
 #ifdef SIMPLE_MERGE
-            rs_out.rs_prior.fvis = rs_prior.fvis * (rs_out.rs_prior.zthick / rs_prior.zthick);
+			rs_out.rs_prior.fvis = rs_prior.fvis * (rs_out.rs_prior.zthick / rs_prior.zthick);
 #else
-            float _a = 1.f - pow(1.f - rs_prior.fvis.a, rs_out.rs_prior.zthick / rs_prior.zthick);
-            rs_out.rs_prior.fvis = float4(rs_prior.fvis.rgb * _a / rs_prior.fvis.a, _a);
-#endif
-            
-            rs_prior.zthick -= rs_out.rs_prior.zthick;
-            rs_prior.fvis = (rs_prior.fvis - rs_out.rs_prior.fvis) / (1.f - rs_out.rs_prior.fvis.a);
-        }
-        else
-        {
-			// Case 3 : rs_prior belongs to rs_posterior
-            //rs_out.rs_prior.zthick = max(zfront_prior_f - zfront_posterior_f, 0); // to avoid computational precision error (0 or small minus)
-            rs_out.rs_prior.zthick = zfront_prior_f - zfront_posterior_f;
-            rs_out.rs_prior.zdepth = zfront_prior_f;
-            
-#ifdef SIMPLE_MERGE
-            rs_out.rs_prior.fvis = rs_posterior.fvis * (rs_out.rs_prior.zthick / rs_posterior.zthick);
-#else
-            float _a = 1.f - pow(1.f - rs_posterior.fvis.a, rs_out.rs_prior.zthick / rs_posterior.zthick);
-            rs_out.rs_prior.fvis = float4(rs_posterior.fvis.rgb * _a / rs_posterior.fvis.a, _a);
+			float _a = 1.f - pow(1.f - rs_prior.fvis.a, rs_out.rs_prior.zthick / rs_prior.zthick);
+			rs_out.rs_prior.fvis = float4(rs_prior.fvis.rgb * _a / rs_prior.fvis.a, _a);
 #endif
 
-            rs_posterior.zthick -= rs_out.rs_prior.zthick;
-            rs_posterior.fvis = (rs_posterior.fvis - rs_out.rs_prior.fvis) / (1.f - rs_out.rs_prior.fvis.a);
-        }
-        
-        // merge the fusion sub_rs (rs_prior) to rs_out.rs_prior
-        rs_out.rs_prior.zthick += rs_prior.zthick;
-        rs_out.rs_prior.zdepth = rs_prior.zdepth;
-        float4 fvis_front_sub_rs = rs_posterior.fvis * (rs_prior.zthick / rs_posterior.zthick); // REDESIGN
-        float4 fvis_fusion_sub_rs = BlendFloat4AndFloat4(fvis_front_sub_rs, rs_prior.fvis);
-        rs_out.rs_prior.fvis += fvis_fusion_sub_rs * (1.f - rs_out.rs_prior.fvis.a);
-        
-        rs_posterior.zthick -= rs_prior.zthick;
-        rs_posterior.fvis = (rs_posterior.fvis - fvis_front_sub_rs) / (1.f - fvis_front_sub_rs.a);
-        rs_out.rs_posterior = rs_posterior;
-        
-        rs_merge.zdepth = rs_out.rs_posterior.zdepth;
-        rs_merge.zthick = rs_out.rs_posterior.zthick + rs_out.rs_prior.zthick;
-        rs_merge.fvis = rs_out.rs_prior.fvis + rs_out.rs_posterior.fvis * (1.f - rs_out.rs_prior.fvis.a);
-    }
-    if (rs_merge.fvis.a < FLT_OPACITY_MIN__) // DO NOT COUNT OPERATION OF INTERMIXING KERNEL !
-    {
-        rs_merge.fvis = (float4) 0;
-        rs_merge.zthick = 0;
-    }
-    return ret;
+			rs_prior.zthick -= rs_out.rs_prior.zthick;
+			rs_prior.fvis = (rs_prior.fvis - rs_out.rs_prior.fvis) / (1.f - rs_out.rs_prior.fvis.a);
+		}
+		else
+		{
+			// Case 3 : rs_prior belongs to rs_posterior
+			//rs_out.rs_prior.zthick = max(zfront_prior_f - zfront_posterior_f, 0); // to avoid computational precision error (0 or small minus)
+			rs_out.rs_prior.zthick = zfront_prior_f - zfront_posterior_f;
+			rs_out.rs_prior.zdepth = zfront_prior_f;
+
+#ifdef SIMPLE_MERGE
+			rs_out.rs_prior.fvis = rs_posterior.fvis * (rs_out.rs_prior.zthick / rs_posterior.zthick);
+#else
+			float _a = 1.f - pow(1.f - rs_posterior.fvis.a, rs_out.rs_prior.zthick / rs_posterior.zthick);
+			rs_out.rs_prior.fvis = float4(rs_posterior.fvis.rgb * _a / rs_posterior.fvis.a, _a);
+#endif
+
+			rs_posterior.zthick -= rs_out.rs_prior.zthick;
+			rs_posterior.fvis = (rs_posterior.fvis - rs_out.rs_prior.fvis) / (1.f - rs_out.rs_prior.fvis.a);
+		}
+
+		// merge the fusion sub_rs (rs_prior) to rs_out.rs_prior
+		rs_out.rs_prior.zthick += rs_prior.zthick;
+		rs_out.rs_prior.zdepth = rs_prior.zdepth;
+		float4 fvis_front_sub_rs = rs_posterior.fvis * (rs_prior.zthick / rs_posterior.zthick); // REDESIGN
+		float4 fvis_fusion_sub_rs = BlendFloat4AndFloat4(fvis_front_sub_rs, rs_prior.fvis);
+		rs_out.rs_prior.fvis += fvis_fusion_sub_rs * (1.f - rs_out.rs_prior.fvis.a);
+
+		rs_posterior.zthick -= rs_prior.zthick;
+		rs_posterior.fvis = (rs_posterior.fvis - fvis_front_sub_rs) / (1.f - fvis_front_sub_rs.a);
+		rs_out.rs_posterior = rs_posterior;
+
+		rs_merge.zdepth = rs_out.rs_posterior.zdepth;
+		rs_merge.zthick = rs_out.rs_posterior.zthick + rs_out.rs_prior.zthick;
+		rs_merge.fvis = rs_out.rs_prior.fvis + rs_out.rs_posterior.fvis * (1.f - rs_out.rs_prior.fvis.a);
+	}
+	if (rs_merge.fvis.a < FLT_OPACITY_MIN__) // DO NOT COUNT OPERATION OF INTERMIXING KERNEL !
+	{
+		rs_merge.fvis = (float4) 0;
+		rs_merge.zthick = 0;
+	}
+	return ret;
 }
 
 int MergeFragRS_NV(inout RaySegment rs_1, inout RaySegment rs_2)
 {
-    RaySegment rs_prior, rs_posterior;
-    if (rs_1.zdepth > rs_2.zdepth)
-    {
-        rs_prior = rs_2;
-        rs_posterior = rs_1;
-    }
-    else
-    {
-        rs_prior = rs_1;
-        rs_posterior = rs_2;
-    }
-    
+	RaySegment rs_prior, rs_posterior;
+	if (rs_1.zdepth > rs_2.zdepth)
+	{
+		rs_prior = rs_2;
+		rs_posterior = rs_1;
+	}
+	else
+	{
+		rs_prior = rs_1;
+		rs_posterior = rs_2;
+	}
+
 	// Overall algorithm computation cost 
 	// : 3 branches, 2 visibility interpolations, 2 visibility integrations, and 1 fusion of overlapping ray-segments
 
 	// Safe-Check to avoid zero-division
-    rs_prior.fvis.a = min(rs_prior.fvis.a, SAFE_OPAQUEALPHA);
-    rs_posterior.fvis.a = min(rs_posterior.fvis.a, SAFE_OPAQUEALPHA);
+	rs_prior.fvis.a = min(rs_prior.fvis.a, SAFE_OPAQUEALPHA);
+	rs_posterior.fvis.a = min(rs_posterior.fvis.a, SAFE_OPAQUEALPHA);
 
 	// rs_prior and rs_posterior mean rs_prior.zdepth >= rs_prior.zdepth
 
-    float zfront_posterior_f = rs_posterior.zdepth - rs_posterior.zthick;
-    int ret = 0;
-    MergeRS_OUT rs_out;
-    if (rs_prior.zdepth <= zfront_posterior_f)
-    {
+	float zfront_posterior_f = rs_posterior.zdepth - rs_posterior.zthick;
+	int ret = 0;
+	MergeRS_OUT rs_out;
+	if (rs_prior.zdepth <= zfront_posterior_f)
+	{
 		// Case 1 : No Overlapping
-        //rs_merge = rs_2;
-        ret = 1;
-    }
-    else
-    {
-        float zfront_prior_f = rs_prior.zdepth - rs_prior.zthick;
-        if (zfront_prior_f <= zfront_posterior_f)
-        {
+		//rs_merge = rs_2;
+		ret = 1;
+	}
+	else
+	{
+		float zfront_prior_f = rs_prior.zdepth - rs_prior.zthick;
+		if (zfront_prior_f <= zfront_posterior_f)
+		{
 			// Case 2 : Intersecting each other
-            //rs_out.rs_prior.zthick = max(zfront_posterior_f - zfront_prior_f, 0); // to avoid computational precision error (0 or small minus)
-            rs_out.rs_prior.zthick = zfront_posterior_f - zfront_prior_f;
+			//rs_out.rs_prior.zthick = max(zfront_posterior_f - zfront_prior_f, 0); // to avoid computational precision error (0 or small minus)
+			rs_out.rs_prior.zthick = zfront_posterior_f - zfront_prior_f;
 
-            rs_out.rs_prior.zdepth = zfront_posterior_f;
+			rs_out.rs_prior.zdepth = zfront_posterior_f;
 
 #define SIMPLE_MERGE 1
 #ifdef SIMPLE_MERGE
-            rs_out.rs_prior.fvis = rs_prior.fvis * (rs_out.rs_prior.zthick / rs_prior.zthick);
+			rs_out.rs_prior.fvis = rs_prior.fvis * (rs_out.rs_prior.zthick / rs_prior.zthick);
 #else
-            float _a = 1.f - pow(1.f - rs_prior.fvis.a, rs_out.rs_prior.zthick / rs_prior.zthick);
-            rs_out.rs_prior.fvis = float4(rs_prior.fvis.rgb * _a / rs_prior.fvis.a, _a);
-#endif
-            
-            rs_prior.zthick -= rs_out.rs_prior.zthick;
-            rs_prior.fvis = (rs_prior.fvis - rs_out.rs_prior.fvis) / (1.f - rs_out.rs_prior.fvis.a);
-        }
-        else
-        {
-			// Case 3 : rs_prior belongs to rs_posterior
-            //rs_out.rs_prior.zthick = max(zfront_prior_f - zfront_posterior_f, 0); // to avoid computational precision error (0 or small minus)
-            rs_out.rs_prior.zthick = zfront_prior_f - zfront_posterior_f;
-            rs_out.rs_prior.zdepth = zfront_prior_f;
-            
-#ifdef SIMPLE_MERGE
-            rs_out.rs_prior.fvis = rs_posterior.fvis * (rs_out.rs_prior.zthick / rs_posterior.zthick);
-#else
-            float _a = 1.f - pow(1.f - rs_posterior.fvis.a, rs_out.rs_prior.zthick / rs_posterior.zthick);
-            rs_out.rs_prior.fvis = float4(rs_posterior.fvis.rgb * _a / rs_posterior.fvis.a, _a);
+			float _a = 1.f - pow(1.f - rs_prior.fvis.a, rs_out.rs_prior.zthick / rs_prior.zthick);
+			rs_out.rs_prior.fvis = float4(rs_prior.fvis.rgb * _a / rs_prior.fvis.a, _a);
 #endif
 
-            rs_posterior.zthick -= rs_out.rs_prior.zthick;
-            rs_posterior.fvis = (rs_posterior.fvis - rs_out.rs_prior.fvis) / (1.f - rs_out.rs_prior.fvis.a);
-        }
-        
-        // merge the fusion sub_rs (rs_prior) to rs_out.rs_prior
-        rs_out.rs_prior.zthick += rs_prior.zthick;
-        rs_out.rs_prior.zdepth = rs_prior.zdepth;
-        float4 fvis_front_sub_rs = rs_posterior.fvis * (rs_prior.zthick / rs_posterior.zthick); // REDESIGN
-        float4 fvis_fusion_sub_rs = BlendFloat4AndFloat4(fvis_front_sub_rs, rs_prior.fvis);
-        rs_out.rs_prior.fvis += fvis_fusion_sub_rs * (1.f - rs_out.rs_prior.fvis.a);
-        
-        rs_posterior.zthick -= rs_prior.zthick;
-        rs_posterior.fvis = (rs_posterior.fvis - fvis_front_sub_rs) / (1.f - fvis_front_sub_rs.a);
-    }
-    rs_out.rs_posterior = rs_posterior;
+			rs_prior.zthick -= rs_out.rs_prior.zthick;
+			rs_prior.fvis = (rs_prior.fvis - rs_out.rs_prior.fvis) / (1.f - rs_out.rs_prior.fvis.a);
+		}
+		else
+		{
+			// Case 3 : rs_prior belongs to rs_posterior
+			//rs_out.rs_prior.zthick = max(zfront_prior_f - zfront_posterior_f, 0); // to avoid computational precision error (0 or small minus)
+			rs_out.rs_prior.zthick = zfront_prior_f - zfront_posterior_f;
+			rs_out.rs_prior.zdepth = zfront_prior_f;
+
+#ifdef SIMPLE_MERGE
+			rs_out.rs_prior.fvis = rs_posterior.fvis * (rs_out.rs_prior.zthick / rs_posterior.zthick);
+#else
+			float _a = 1.f - pow(1.f - rs_posterior.fvis.a, rs_out.rs_prior.zthick / rs_posterior.zthick);
+			rs_out.rs_prior.fvis = float4(rs_posterior.fvis.rgb * _a / rs_posterior.fvis.a, _a);
+#endif
+
+			rs_posterior.zthick -= rs_out.rs_prior.zthick;
+			rs_posterior.fvis = (rs_posterior.fvis - rs_out.rs_prior.fvis) / (1.f - rs_out.rs_prior.fvis.a);
+		}
+
+		// merge the fusion sub_rs (rs_prior) to rs_out.rs_prior
+		rs_out.rs_prior.zthick += rs_prior.zthick;
+		rs_out.rs_prior.zdepth = rs_prior.zdepth;
+		float4 fvis_front_sub_rs = rs_posterior.fvis * (rs_prior.zthick / rs_posterior.zthick); // REDESIGN
+		float4 fvis_fusion_sub_rs = BlendFloat4AndFloat4(fvis_front_sub_rs, rs_prior.fvis);
+		rs_out.rs_prior.fvis += fvis_fusion_sub_rs * (1.f - rs_out.rs_prior.fvis.a);
+
+		rs_posterior.zthick -= rs_prior.zthick;
+		rs_posterior.fvis = (rs_posterior.fvis - fvis_front_sub_rs) / (1.f - fvis_front_sub_rs.a);
+	}
+	rs_out.rs_posterior = rs_posterior;
 	// Safe-Check For Byte Precision //
-    if (rs_out.rs_prior.fvis.a < FLT_OPACITY_MIN__) // DO NOT COUNT OPERATION OF INTERMIXING KERNEL !
-    {
-        rs_out.rs_prior.fvis = (float4) 0;
-        rs_out.rs_prior.zthick = 0;
-    }
-    if (rs_out.rs_posterior.fvis.a < FLT_OPACITY_MIN__) // DO NOT COUNT OPERATION OF INTERMIXING KERNEL !
-    {
-        rs_out.rs_posterior.fvis = (float4) 0;
-        rs_out.rs_posterior.zthick = 0;
-    }
-    if (rs_1.zdepth > rs_2.zdepth)
-    {
-        rs_2 = rs_out.rs_prior;
-        rs_1 = rs_out.rs_posterior;
-    }
-    else
-    {
-        rs_1 = rs_out.rs_prior;
-        rs_2 = rs_out.rs_posterior;
-    }
-    return ret;
+	if (rs_out.rs_prior.fvis.a < FLT_OPACITY_MIN__) // DO NOT COUNT OPERATION OF INTERMIXING KERNEL !
+	{
+		rs_out.rs_prior.fvis = (float4) 0;
+		rs_out.rs_prior.zthick = 0;
+	}
+	if (rs_out.rs_posterior.fvis.a < FLT_OPACITY_MIN__) // DO NOT COUNT OPERATION OF INTERMIXING KERNEL !
+	{
+		rs_out.rs_posterior.fvis = (float4) 0;
+		rs_out.rs_posterior.zthick = 0;
+	}
+	if (rs_1.zdepth > rs_2.zdepth)
+	{
+		rs_2 = rs_out.rs_prior;
+		rs_1 = rs_out.rs_posterior;
+	}
+	else
+	{
+		rs_1 = rs_out.rs_prior;
+		rs_2 = rs_out.rs_posterior;
+	}
+	return ret;
 }
 
 struct RaySegment2
 {
-    float4 fvis;
-    float zdepth;
-    float zthick;
-    float alphaw;
+	float4 fvis;
+	float zdepth;
+	float zthick;
+	float alphaw;
 };
 
 struct MergeRS_OUT2
 {
-    RaySegment2 rs_prior; // Includes current intermixed depth
-    RaySegment2 rs_posterior;
+	RaySegment2 rs_prior; // Includes current intermixed depth
+	RaySegment2 rs_posterior;
 };
 
 float4 MixOpt(const in float4 vis1, const in float alphaw1, const in float4 vis2, const in float alphaw2)
@@ -1031,12 +1043,12 @@ float4 MixOpt(const in float4 vis1, const in float alphaw1, const in float4 vis2
 		vout = float4(I_mix * A_mix, A_mix);
 	}
 	return vout;
-    //return vis1 + vis2 - (vis1 * vis2.a + vis2 * vis1.a) / 2.f;
-    //float4 color_merge;
-    //float _a_sum = fColor1.a + fColor2.a;
-    //color_merge.a = fColor1.a + fColor2.a - fColor1.a * fColor2.a;
-    //color_merge.rgb = (fColor1.rgb + fColor2.rgb) / _a_sum * color_merge.a;
-    //return color_merge;
+	//return vis1 + vis2 - (vis1 * vis2.a + vis2 * vis1.a) / 2.f;
+	//float4 color_merge;
+	//float _a_sum = fColor1.a + fColor2.a;
+	//color_merge.a = fColor1.a + fColor2.a - fColor1.a * fColor2.a;
+	//color_merge.rgb = (fColor1.rgb + fColor2.rgb) / _a_sum * color_merge.a;
+	//return color_merge;
 }
 
 MergeRS_OUT2 MergeRS2(RaySegment2 rs_prior, RaySegment2 rs_posterior, const in float beta)
@@ -1045,27 +1057,27 @@ MergeRS_OUT2 MergeRS2(RaySegment2 rs_prior, RaySegment2 rs_posterior, const in f
 	// : 3 branches, 2 visibility interpolations, 2 visibility integrations, and 1 fusion of overlapping ray-segments
 
 	// Safe-Check to avoid zero-division
-    rs_prior.fvis.a = min(rs_prior.fvis.a, SAFE_OPAQUEALPHA);
-    rs_posterior.fvis.a = min(rs_posterior.fvis.a, SAFE_OPAQUEALPHA);
+	rs_prior.fvis.a = min(rs_prior.fvis.a, SAFE_OPAQUEALPHA);
+	rs_posterior.fvis.a = min(rs_posterior.fvis.a, SAFE_OPAQUEALPHA);
 
 	// rs_prior and rs_posterior mean rs_prior.zdepth >= rs_prior.zdepth
-    MergeRS_OUT2 rs_out;
+	MergeRS_OUT2 rs_out;
 
-    float zfront_posterior_f = rs_posterior.zdepth - rs_posterior.zthick;
-    if (rs_prior.zdepth <= zfront_posterior_f)
-    {
+	float zfront_posterior_f = rs_posterior.zdepth - rs_posterior.zthick;
+	if (rs_prior.zdepth <= zfront_posterior_f)
+	{
 		// Case 1 : No Overlapping
-        rs_out.rs_prior = rs_prior;
-    }
-    else
-    {
-        float zfront_prior_f = rs_prior.zdepth - rs_prior.zthick;
-        if (zfront_prior_f <= zfront_posterior_f)
-        {
+		rs_out.rs_prior = rs_prior;
+	}
+	else
+	{
+		float zfront_prior_f = rs_prior.zdepth - rs_prior.zthick;
+		if (zfront_prior_f <= zfront_posterior_f)
+		{
 			// Case 2 : Intersecting each other
-            //rs_out.rs_prior.zthick = max(zfront_posterior_f - zfront_prior_f, 0); // to avoid computational precision error (0 or small minus)
-            rs_out.rs_prior.zthick = zfront_posterior_f - zfront_prior_f;
-            rs_out.rs_prior.zdepth = zfront_posterior_f;
+			//rs_out.rs_prior.zthick = max(zfront_posterior_f - zfront_prior_f, 0); // to avoid computational precision error (0 or small minus)
+			rs_out.rs_prior.zthick = zfront_posterior_f - zfront_prior_f;
+			rs_out.rs_prior.zdepth = zfront_posterior_f;
 			// if simple linear mode
 			{
 				//rs_out.rs_prior.fvis = rs_prior.fvis * (rs_out.rs_prior.zthick / rs_prior.zthick); 
@@ -1088,20 +1100,20 @@ MergeRS_OUT2 MergeRS2(RaySegment2 rs_prior, RaySegment2 rs_posterior, const in f
 				float3 Cz = Id * Az;
 				rs_out.rs_prior.fvis = float4(Cz, Az);
 			}
-            
-            float old_alpha = rs_prior.fvis.a;
-            rs_prior.zthick -= rs_out.rs_prior.zthick;
-            rs_prior.fvis = (rs_prior.fvis - rs_out.rs_prior.fvis) / (1.f - rs_out.rs_prior.fvis.a);
 
-            rs_out.rs_prior.alphaw = rs_prior.alphaw * rs_out.rs_prior.fvis.a / old_alpha;
-            rs_prior.alphaw = rs_prior.alphaw * rs_prior.fvis.a / old_alpha;
-        }
-        else
-        {
+			float old_alpha = rs_prior.fvis.a;
+			rs_prior.zthick -= rs_out.rs_prior.zthick;
+			rs_prior.fvis = (rs_prior.fvis - rs_out.rs_prior.fvis) / (1.f - rs_out.rs_prior.fvis.a);
+
+			rs_out.rs_prior.alphaw = rs_prior.alphaw * rs_out.rs_prior.fvis.a / old_alpha;
+			rs_prior.alphaw = rs_prior.alphaw * rs_prior.fvis.a / old_alpha;
+		}
+		else
+		{
 			// Case 3 : rs_prior belongs to rs_posterior
-            //rs_out.rs_prior.zthick = max(zfront_prior_f - zfront_posterior_f, 0); // to avoid computational precision error (0 or small minus)
-            rs_out.rs_prior.zthick = zfront_prior_f - zfront_posterior_f;
-            rs_out.rs_prior.zdepth = zfront_prior_f;
+			//rs_out.rs_prior.zthick = max(zfront_prior_f - zfront_posterior_f, 0); // to avoid computational precision error (0 or small minus)
+			rs_out.rs_prior.zthick = zfront_prior_f - zfront_posterior_f;
+			rs_out.rs_prior.zdepth = zfront_prior_f;
 
 			// if simple linear mode
 			{
@@ -1125,181 +1137,181 @@ MergeRS_OUT2 MergeRS2(RaySegment2 rs_prior, RaySegment2 rs_posterior, const in f
 				float3 Cz = Id * Az;
 				rs_out.rs_prior.fvis = float4(Cz, Az);
 			}
-            
-            float old_alpha = rs_posterior.fvis.a;
-            rs_posterior.zthick -= rs_out.rs_prior.zthick;
-            rs_posterior.fvis = (rs_posterior.fvis - rs_out.rs_prior.fvis) / (1.f - rs_out.rs_prior.fvis.a);
 
-            rs_out.rs_prior.alphaw = rs_posterior.alphaw * rs_out.rs_prior.fvis.a / old_alpha;
-            rs_posterior.alphaw = rs_posterior.alphaw * rs_posterior.fvis.a / old_alpha;
-        }
-        
-        // merge the fusion sub_rs (rs_prior) to rs_out.rs_prior
-        rs_out.rs_prior.zthick += rs_prior.zthick;
-        rs_out.rs_prior.zdepth = rs_prior.zdepth;
-        float4 fvis_front_sub_rs = rs_posterior.fvis * (rs_prior.zthick / rs_posterior.zthick); // REDESIGN
-        float alphaw_front_sub_rs = rs_posterior.alphaw * fvis_front_sub_rs.a / rs_posterior.fvis.a;
-        //float4 fvis_fusion_sub_rs = BlendFloat4AndFloat4(fvis_front_sub_rs, rs_prior.fvis);
-        float4 fvis_fusion_sub_rs = MixOpt(fvis_front_sub_rs, alphaw_front_sub_rs, rs_prior.fvis, rs_prior.alphaw);
-        rs_out.rs_prior.fvis += fvis_fusion_sub_rs * (1.f - rs_out.rs_prior.fvis.a);
-        rs_out.rs_prior.alphaw += alphaw_front_sub_rs + rs_prior.alphaw;
+			float old_alpha = rs_posterior.fvis.a;
+			rs_posterior.zthick -= rs_out.rs_prior.zthick;
+			rs_posterior.fvis = (rs_posterior.fvis - rs_out.rs_prior.fvis) / (1.f - rs_out.rs_prior.fvis.a);
 
-        rs_posterior.zthick -= rs_prior.zthick;
-        float old_alpha = rs_posterior.fvis.a;
-        rs_posterior.fvis = (rs_posterior.fvis - fvis_front_sub_rs) / (1.f - fvis_front_sub_rs.a);
-        rs_posterior.alphaw *= rs_posterior.fvis.a / old_alpha;
+			rs_out.rs_prior.alphaw = rs_posterior.alphaw * rs_out.rs_prior.fvis.a / old_alpha;
+			rs_posterior.alphaw = rs_posterior.alphaw * rs_posterior.fvis.a / old_alpha;
+		}
+
+		// merge the fusion sub_rs (rs_prior) to rs_out.rs_prior
+		rs_out.rs_prior.zthick += rs_prior.zthick;
+		rs_out.rs_prior.zdepth = rs_prior.zdepth;
+		float4 fvis_front_sub_rs = rs_posterior.fvis * (rs_prior.zthick / rs_posterior.zthick); // REDESIGN
+		float alphaw_front_sub_rs = rs_posterior.alphaw * fvis_front_sub_rs.a / rs_posterior.fvis.a;
+		//float4 fvis_fusion_sub_rs = BlendFloat4AndFloat4(fvis_front_sub_rs, rs_prior.fvis);
+		float4 fvis_fusion_sub_rs = MixOpt(fvis_front_sub_rs, alphaw_front_sub_rs, rs_prior.fvis, rs_prior.alphaw);
+		rs_out.rs_prior.fvis += fvis_fusion_sub_rs * (1.f - rs_out.rs_prior.fvis.a);
+		rs_out.rs_prior.alphaw += alphaw_front_sub_rs + rs_prior.alphaw;
+
+		rs_posterior.zthick -= rs_prior.zthick;
+		float old_alpha = rs_posterior.fvis.a;
+		rs_posterior.fvis = (rs_posterior.fvis - fvis_front_sub_rs) / (1.f - fvis_front_sub_rs.a);
+		rs_posterior.alphaw *= rs_posterior.fvis.a / old_alpha;
 
 
 		//rs_out.rs_prior.fvis = float4(1, 1, 0, 1);
-    }
-    rs_out.rs_posterior = rs_posterior;
+	}
+	rs_out.rs_posterior = rs_posterior;
 	// Safe-Check For Byte Precision //
-    if (rs_out.rs_prior.fvis.a < FLT_OPACITY_MIN__) // DO NOT COUNT OPERATION OF INTERMIXING KERNEL !
-    {
-        rs_out.rs_prior.fvis = (float4) 0;
-        rs_out.rs_prior.zthick = 0;
-    }
-    if (rs_out.rs_posterior.fvis.a < FLT_OPACITY_MIN__) // DO NOT COUNT OPERATION OF INTERMIXING KERNEL !
-    {
-        rs_out.rs_posterior.fvis = (float4) 0;
-        rs_out.rs_posterior.zthick = 0;
-    }
-    return rs_out;
+	if (rs_out.rs_prior.fvis.a < FLT_OPACITY_MIN__) // DO NOT COUNT OPERATION OF INTERMIXING KERNEL !
+	{
+		rs_out.rs_prior.fvis = (float4) 0;
+		rs_out.rs_prior.zthick = 0;
+	}
+	if (rs_out.rs_posterior.fvis.a < FLT_OPACITY_MIN__) // DO NOT COUNT OPERATION OF INTERMIXING KERNEL !
+	{
+		rs_out.rs_posterior.fvis = (float4) 0;
+		rs_out.rs_posterior.zthick = 0;
+	}
+	return rs_out;
 }
 
 int MergeFragRS2(inout RaySegment2 rs_merge, RaySegment2 rs_1, RaySegment2 rs_2)
 {
-    RaySegment2 rs_prior, rs_posterior;
-    if (rs_1.zdepth > rs_2.zdepth)
-    {
-        rs_prior = rs_2;
-        rs_posterior = rs_1;
-    }
-    else
-    {
-        rs_prior = rs_1;
-        rs_posterior = rs_2;
-    }
-    
+	RaySegment2 rs_prior, rs_posterior;
+	if (rs_1.zdepth > rs_2.zdepth)
+	{
+		rs_prior = rs_2;
+		rs_posterior = rs_1;
+	}
+	else
+	{
+		rs_prior = rs_1;
+		rs_posterior = rs_2;
+	}
+
 	// Overall algorithm computation cost 
 	// : 3 branches, 2 visibility interpolations, 2 visibility integrations, and 1 fusion of overlapping ray-segments
 
 	// Safe-Check to avoid zero-division
-    rs_prior.fvis.a = min(rs_prior.fvis.a, SAFE_OPAQUEALPHA);
-    rs_posterior.fvis.a = min(rs_posterior.fvis.a, SAFE_OPAQUEALPHA);
+	rs_prior.fvis.a = min(rs_prior.fvis.a, SAFE_OPAQUEALPHA);
+	rs_posterior.fvis.a = min(rs_posterior.fvis.a, SAFE_OPAQUEALPHA);
 
-    float zfront_posterior_f = rs_posterior.zdepth - rs_posterior.zthick;
-    int ret = 0;
-    if (rs_prior.zdepth <= zfront_posterior_f)
-    {
+	float zfront_posterior_f = rs_posterior.zdepth - rs_posterior.zthick;
+	int ret = 0;
+	if (rs_prior.zdepth <= zfront_posterior_f)
+	{
 		// Case 1 : No Overlapping
-        //rs_merge = rs_2;
-        ret = 1;
-    }
-    else
-    {
-        MergeRS_OUT2 rs_out;
-        float zfront_prior_f = rs_prior.zdepth - rs_prior.zthick;
-        if (zfront_prior_f <= zfront_posterior_f)
-        {
+		//rs_merge = rs_2;
+		ret = 1;
+	}
+	else
+	{
+		MergeRS_OUT2 rs_out;
+		float zfront_prior_f = rs_prior.zdepth - rs_prior.zthick;
+		if (zfront_prior_f <= zfront_posterior_f)
+		{
 			// Case 2 : Intersecting each other
-            //rs_out.rs_prior.zthick = max(zfront_posterior_f - zfront_prior_f, 0); // to avoid computational precision error (0 or small minus)
-            rs_out.rs_prior.zthick = zfront_posterior_f - zfront_prior_f;
-            rs_out.rs_prior.zdepth = zfront_posterior_f;
+			//rs_out.rs_prior.zthick = max(zfront_posterior_f - zfront_prior_f, 0); // to avoid computational precision error (0 or small minus)
+			rs_out.rs_prior.zthick = zfront_posterior_f - zfront_prior_f;
+			rs_out.rs_prior.zdepth = zfront_posterior_f;
 
-//#define SIMPLE_MERGE 1
+			//#define SIMPLE_MERGE 1
 #ifdef SIMPLE_MERGE
-            rs_out.rs_prior.fvis = rs_prior.fvis * (rs_out.rs_prior.zthick / rs_prior.zthick);
+			rs_out.rs_prior.fvis = rs_prior.fvis * (rs_out.rs_prior.zthick / rs_prior.zthick);
 #else
-            float _a = 1.f - pow(1.f - rs_prior.fvis.a, rs_out.rs_prior.zthick / rs_prior.zthick);
-            rs_out.rs_prior.fvis = float4(rs_prior.fvis.rgb * _a / rs_prior.fvis.a, _a);
+			float _a = 1.f - pow(1.f - rs_prior.fvis.a, rs_out.rs_prior.zthick / rs_prior.zthick);
+			rs_out.rs_prior.fvis = float4(rs_prior.fvis.rgb * _a / rs_prior.fvis.a, _a);
 #endif      
-            float old_alpha = rs_prior.fvis.a;
-            rs_prior.zthick -= rs_out.rs_prior.zthick;
-            rs_prior.fvis = (rs_prior.fvis - rs_out.rs_prior.fvis) / (1.f - rs_out.rs_prior.fvis.a);
-            
-            rs_out.rs_prior.alphaw = rs_prior.alphaw * rs_out.rs_prior.fvis.a / old_alpha;
-            rs_prior.alphaw = rs_prior.alphaw * rs_prior.fvis.a / old_alpha;
-        }
-        else
-        {
+			float old_alpha = rs_prior.fvis.a;
+			rs_prior.zthick -= rs_out.rs_prior.zthick;
+			rs_prior.fvis = (rs_prior.fvis - rs_out.rs_prior.fvis) / (1.f - rs_out.rs_prior.fvis.a);
+
+			rs_out.rs_prior.alphaw = rs_prior.alphaw * rs_out.rs_prior.fvis.a / old_alpha;
+			rs_prior.alphaw = rs_prior.alphaw * rs_prior.fvis.a / old_alpha;
+		}
+		else
+		{
 			// Case 3 : rs_prior belongs to rs_posterior
-            //rs_out.rs_prior.zthick = max(zfront_prior_f - zfront_posterior_f, 0); // to avoid computational precision error (0 or small minus)
-            rs_out.rs_prior.zthick = zfront_prior_f - zfront_posterior_f;
-            rs_out.rs_prior.zdepth = zfront_prior_f;
-            
+			//rs_out.rs_prior.zthick = max(zfront_prior_f - zfront_posterior_f, 0); // to avoid computational precision error (0 or small minus)
+			rs_out.rs_prior.zthick = zfront_prior_f - zfront_posterior_f;
+			rs_out.rs_prior.zdepth = zfront_prior_f;
+
 #ifdef SIMPLE_MERGE
-            rs_out.rs_prior.fvis = rs_posterior.fvis * (rs_out.rs_prior.zthick / rs_posterior.zthick);
+			rs_out.rs_prior.fvis = rs_posterior.fvis * (rs_out.rs_prior.zthick / rs_posterior.zthick);
 #else
-            float _a = 1.f - pow(1.f - rs_posterior.fvis.a, rs_out.rs_prior.zthick / rs_posterior.zthick);
-            rs_out.rs_prior.fvis = float4(rs_posterior.fvis.rgb * _a / rs_posterior.fvis.a, _a);
+			float _a = 1.f - pow(1.f - rs_posterior.fvis.a, rs_out.rs_prior.zthick / rs_posterior.zthick);
+			rs_out.rs_prior.fvis = float4(rs_posterior.fvis.rgb * _a / rs_posterior.fvis.a, _a);
 #endif
-            
-            float old_alpha = rs_posterior.fvis.a;
-            rs_posterior.zthick -= rs_out.rs_prior.zthick;
-            rs_posterior.fvis = (rs_posterior.fvis - rs_out.rs_prior.fvis) / (1.f - rs_out.rs_prior.fvis.a);
-            
-            rs_out.rs_prior.alphaw = rs_posterior.alphaw * rs_out.rs_prior.fvis.a / old_alpha;
-            rs_posterior.alphaw = rs_posterior.alphaw * rs_posterior.fvis.a / old_alpha;
-        }
-        
-        // merge the fusion sub_rs (rs_prior) to rs_out.rs_prior
-        rs_out.rs_prior.zthick += rs_prior.zthick;
-        rs_out.rs_prior.zdepth = rs_prior.zdepth;
-        float4 fvis_front_sub_rs = rs_posterior.fvis * (rs_prior.zthick / rs_posterior.zthick); // REDESIGN
-        float alphaw_front_sub_rs = rs_posterior.alphaw * fvis_front_sub_rs.a / rs_posterior.fvis.a;
-        float4 fvis_fusion_sub_rs = MixOpt(fvis_front_sub_rs, alphaw_front_sub_rs, rs_prior.fvis, rs_prior.alphaw);
-        rs_out.rs_prior.fvis += fvis_fusion_sub_rs * (1.f - rs_out.rs_prior.fvis.a);
-        rs_out.rs_prior.alphaw += alphaw_front_sub_rs + rs_prior.alphaw;
-        
-        rs_posterior.zthick -= rs_prior.zthick;
-        rs_posterior.fvis = (rs_posterior.fvis - fvis_front_sub_rs) / (1.f - fvis_front_sub_rs.a);
-        rs_out.rs_posterior = rs_posterior;
-        
-        rs_merge.zdepth = rs_out.rs_posterior.zdepth;
-        rs_merge.zthick = rs_out.rs_posterior.zthick + rs_out.rs_prior.zthick;
-        rs_merge.fvis = rs_out.rs_prior.fvis + rs_out.rs_posterior.fvis * (1.f - rs_out.rs_prior.fvis.a);
-        rs_merge.alphaw = rs_out.rs_prior.alphaw + rs_out.rs_posterior.alphaw;
-    }
-    if (rs_merge.fvis.a < FLT_OPACITY_MIN__) // DO NOT COUNT OPERATION OF INTERMIXING KERNEL !
-    {
-        rs_merge.fvis = (float4) 0;
-        rs_merge.zthick = 0;
-        rs_merge.alphaw = 0;
-    }
-    return ret;
+
+			float old_alpha = rs_posterior.fvis.a;
+			rs_posterior.zthick -= rs_out.rs_prior.zthick;
+			rs_posterior.fvis = (rs_posterior.fvis - rs_out.rs_prior.fvis) / (1.f - rs_out.rs_prior.fvis.a);
+
+			rs_out.rs_prior.alphaw = rs_posterior.alphaw * rs_out.rs_prior.fvis.a / old_alpha;
+			rs_posterior.alphaw = rs_posterior.alphaw * rs_posterior.fvis.a / old_alpha;
+		}
+
+		// merge the fusion sub_rs (rs_prior) to rs_out.rs_prior
+		rs_out.rs_prior.zthick += rs_prior.zthick;
+		rs_out.rs_prior.zdepth = rs_prior.zdepth;
+		float4 fvis_front_sub_rs = rs_posterior.fvis * (rs_prior.zthick / rs_posterior.zthick); // REDESIGN
+		float alphaw_front_sub_rs = rs_posterior.alphaw * fvis_front_sub_rs.a / rs_posterior.fvis.a;
+		float4 fvis_fusion_sub_rs = MixOpt(fvis_front_sub_rs, alphaw_front_sub_rs, rs_prior.fvis, rs_prior.alphaw);
+		rs_out.rs_prior.fvis += fvis_fusion_sub_rs * (1.f - rs_out.rs_prior.fvis.a);
+		rs_out.rs_prior.alphaw += alphaw_front_sub_rs + rs_prior.alphaw;
+
+		rs_posterior.zthick -= rs_prior.zthick;
+		rs_posterior.fvis = (rs_posterior.fvis - fvis_front_sub_rs) / (1.f - fvis_front_sub_rs.a);
+		rs_out.rs_posterior = rs_posterior;
+
+		rs_merge.zdepth = rs_out.rs_posterior.zdepth;
+		rs_merge.zthick = rs_out.rs_posterior.zthick + rs_out.rs_prior.zthick;
+		rs_merge.fvis = rs_out.rs_prior.fvis + rs_out.rs_posterior.fvis * (1.f - rs_out.rs_prior.fvis.a);
+		rs_merge.alphaw = rs_out.rs_prior.alphaw + rs_out.rs_posterior.alphaw;
+	}
+	if (rs_merge.fvis.a < FLT_OPACITY_MIN__) // DO NOT COUNT OPERATION OF INTERMIXING KERNEL !
+	{
+		rs_merge.fvis = (float4) 0;
+		rs_merge.zthick = 0;
+		rs_merge.alphaw = 0;
+	}
+	return ret;
 }
 
 int MergeFragRS_Avr(inout RaySegment2 rs_merge, RaySegment2 rs_1, RaySegment2 rs_2)
 {
-    RaySegment2 rs_prior, rs_posterior;
-    if (rs_1.zdepth >= rs_2.zdepth)
-    {
-        rs_prior = rs_2;
-        rs_posterior = rs_1;
-    }
-    else
-    {
-        rs_prior = rs_1;
-        rs_posterior = rs_2;
-    }
+	RaySegment2 rs_prior, rs_posterior;
+	if (rs_1.zdepth >= rs_2.zdepth)
+	{
+		rs_prior = rs_2;
+		rs_posterior = rs_1;
+	}
+	else
+	{
+		rs_prior = rs_1;
+		rs_posterior = rs_2;
+	}
 
-    float zfront_posterior_f = rs_posterior.zdepth - rs_posterior.zthick;
-    int ret = 0;
-    if (rs_prior.zdepth < zfront_posterior_f)
-    {
+	float zfront_posterior_f = rs_posterior.zdepth - rs_posterior.zthick;
+	int ret = 0;
+	if (rs_prior.zdepth < zfront_posterior_f)
+	{
 		// Case 1 : No Overlapping
-        //rs_merge = rs_2;
-        ret = 1;
-    }
-    else
-    {
-        rs_merge.fvis = MixOpt(rs_prior.fvis, rs_prior.alphaw, rs_posterior.fvis, rs_posterior.alphaw);
-        rs_merge.zdepth = rs_posterior.zdepth;
-        rs_merge.zthick = rs_posterior.zdepth - (rs_prior.zdepth - rs_prior.zthick);
-        rs_merge.alphaw = rs_prior.alphaw + rs_posterior.alphaw;
-    }
-    return ret;
+		//rs_merge = rs_2;
+		ret = 1;
+	}
+	else
+	{
+		rs_merge.fvis = MixOpt(rs_prior.fvis, rs_prior.alphaw, rs_posterior.fvis, rs_posterior.alphaw);
+		rs_merge.zdepth = rs_posterior.zdepth;
+		rs_merge.zthick = rs_posterior.zdepth - (rs_prior.zdepth - rs_prior.zthick);
+		rs_merge.alphaw = rs_prior.alphaw + rs_posterior.alphaw;
+	}
+	return ret;
 }
 
 struct Fragment
@@ -1389,7 +1401,7 @@ Fragment_OUT MergeFrags(Fragment f_prior, Fragment f_posterior, const in float b
 
 #if LINEAR_MODE == 1
 			{
-				f_m_prior_vis = f_posterior_vis * (fs_out.f_prior.zthick / f_posterior.zthick); 
+				f_m_prior_vis = f_posterior_vis * (fs_out.f_prior.zthick / f_posterior.zthick);
 			}
 #else
 			{
@@ -1907,7 +1919,7 @@ float GetHotspotMaskWeightIdx(inout int out_lined, in int2 pos_xy, in int i, in 
 		}
 		else
 		{
-			if(leng < g_cbHSMask.mask_info_[i].radius)
+			if (leng < g_cbHSMask.mask_info_[i].radius)
 				out_lined--;
 		}
 		//count++;
@@ -1965,7 +1977,7 @@ float Get3DHotspotMaskWeightIdx(inout int out_lined, in float3 pos_frag, in floa
 	return weight;
 }
 
-int GhostedEffect(out float mask_weight, out float dynamic_alpha_weight, 
+int GhostedEffect(out float mask_weight, out float dynamic_alpha_weight,
 	const in float3 pos_frag_ws, const in float3 view_dir, const in float3 nor, const in float nor_len,
 	const in bool is_dynamic_transparency)
 {
@@ -2000,7 +2012,7 @@ int GhostedEffect(out float mask_weight, out float dynamic_alpha_weight,
 		if (dynamic_kappa_w > 0 && is_dynamic_transparency)
 		{
 			float s = 1.f;
-			if (nor_len > 0) 
+			if (nor_len > 0)
 				s = saturate(abs(dot(nor / nor_len, view_dir))); // [0, 1]
 			dynamic_alpha_weight = saturate((1.f - kappa_t) * pow(1.f - s, kappa_s));
 		}

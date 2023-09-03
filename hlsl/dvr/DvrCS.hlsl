@@ -732,7 +732,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	// note that raycasters except vismask mode (or x-ray) use SLAB sample
 	start_idx = 1;
 	//float3 grad_prev = GRAD_VOL(pos_ray_start_ts);
-	float3 grad_prev = GradientVolume2(pos_ray_start_ts, g_cbVobj.vec_grad_x, g_cbVobj.vec_grad_y, g_cbVobj.vec_grad_z, tex3D_volume);
+	float3 grad_prev = GradientVolume(pos_ray_start_ts, g_cbVobj.vec_grad_x, g_cbVobj.vec_grad_y, g_cbVobj.vec_grad_z, tex3D_volume);
 	float sample_prev = sample_v;
 #endif
 	
@@ -992,6 +992,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	//if (count == 0) vis_otf = float4(1, 1, 0, 1);
 	//vis_out = float4(ao_vr, ao_vr, ao_vr, 1);
 	//vis_out = float4(TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts), 1);
+	vis_out = saturate(vis_out);
     fragment_vis[tex2d_xy] = vis_out;
     fragment_zdepth[tex2d_xy] = depth_out;
 	//fragment_counter[DTid.xy] = num_frags + 1;
@@ -1251,7 +1252,9 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 		if (vis_in.a > 0)
 			vis_out += vis_in * (1.f - vis_out.a);
 
+#if FRAG_MERGING == 1
 		f.zthick = g_cbVobj.sample_dist;
+#endif
 		fs[i] = f;
 	}
 
@@ -1424,7 +1427,7 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	// note that raycasters except vismask mode (or x-ray) use SLAB sample
 	start_idx = 1;
 	//float3 grad_prev = GRAD_VOL(pos_ray_hit_ts);
-	float3 grad_prev = GradientVolume2(pos_ray_hit_ts, g_cbVobj.vec_grad_x, g_cbVobj.vec_grad_y, g_cbVobj.vec_grad_z, tex3D_volume);
+	float3 grad_prev = GradientVolume(pos_ray_hit_ts, g_cbVobj.vec_grad_x, g_cbVobj.vec_grad_y, g_cbVobj.vec_grad_z, tex3D_volume);
 	float sample_prev = sample_v;
 #endif
 

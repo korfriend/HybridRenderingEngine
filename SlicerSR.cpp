@@ -1675,10 +1675,10 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 				cbPolygonObj.pobj_flag |= (int)is_only_hotspot_visible << 23;
 				//cout << "TEST : " << is_ghost_surface << ", " << is_only_hotspot_visible << endl;
 			}
-			if (planeThickness == 0) {
-				bool noSlicerFill = actor->GetParam("_bool_DisableSolidFillOnSlicer", false);
-				cbPolygonObj.pobj_flag |= (int)noSlicerFill << 6;
-			}
+
+			bool noSlicerFill = actor->GetParam("_bool_DisableSolidFillOnSlicer", false);
+			cbPolygonObj.pobj_flag |= (int)noSlicerFill << 6;
+			
 			D3D11_MAPPED_SUBRESOURCE mappedResPobjData;
 			dx11DeviceImmContext->Map(cbuf_pobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResPobjData);
 			CB_PolygonObject* cbPolygonObjData = (CB_PolygonObject*)mappedResPobjData.pData;
@@ -1865,14 +1865,17 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 						NULL, 0);
 					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs, dx11UAVs, NULL);
 					dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
-					if (planeThickness == 0.f) {
+
+					if (planeThickness == 0.f || noSlicerFill) {
 						SET_SHADER(GETCS(SliceOutline_cs_5_0), NULL, 0);
 						dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
 					}
-					else if (planeThickness > 0.f) {
-						// call k-buffer resolve pass
-					}
-					else assert(0);
+					//else if (planeThickness > 0.f) 
+					//{
+					//	// call k-buffer resolve pass
+					//}
+					//else assert(0);
+					
 					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs, dx11UAVs_NULL, NULL);
 #endif
 				}

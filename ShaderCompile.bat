@@ -181,7 +181,7 @@ fxc /E ThickSlicePathTracer /T cs_5_0 ./hlsl/PathTracer.hlsl /Fo ./shader_compil
 fxc /E ThickSlicePathTracer /T cs_5_0 ./hlsl/PathTracer.hlsl /Fo ./shader_compiled_objs/PickingThickSlice_cs_5_0 /D FRAG_MERGING=1 /D CURVEDPLANE=0 /D PICKING=1 /D PATHTR_USE_KBUF=1 
 fxc /E ThickSlicePathTracer /T cs_5_0 ./hlsl/PathTracer.hlsl /Fo ./shader_compiled_objs/PickingCurvedThickSlice_cs_5_0 /D FRAG_MERGING=1 /D CURVEDPLANE=1 /D PICKING=1 /D PATHTR_USE_KBUF=1 
 
-fxc /E Outline2D /T cs_5_0 ./hlsl/PathTracer.hlsl /Fo ./shader_compiled_objs/SliceOutline_cs_5_0 /D PATHTR_USE_KBUF=1 
+fxc /E Outline2D /T cs_5_0 ./hlsl/PathTracer.hlsl /Fo ./shader_compiled_objs/SliceOutline_cs_5_0 /D PATHTR_USE_KBUF=1 /D FRAG_MERGING=1 /D DO_NOT_USE_DISCARD=1 /D USE_ROV=0 /D TAIL_HANDLING=1
 /////////////////
 // deprecated
 fxc /E RayCasting /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/VR_DEFAULT_DKBZ_cs_5_0 /D RAYMODE=0 /D OTF_MASK=0 /D VR_MODE=0 /D FRAG_MERGING=1 /D DYNAMIC_K_MODE=1

@@ -230,7 +230,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	// note that raycasters except vismask mode (or x-ray) use SLAB sample
 	start_idx = 1;
 	//float3 grad_prev = GRAD_VOL(pos_ray_start_ts);
-	float3 grad_prev = GradientVolume2(pos_ray_start_ts, g_cbVobj.vec_grad_x, g_cbVobj.vec_grad_y, g_cbVobj.vec_grad_z, tex3D_volume);
+	float3 grad_prev = GradientVolume(pos_ray_start_ts, g_cbVobj.vec_grad_x, g_cbVobj.vec_grad_y, g_cbVobj.vec_grad_z, tex3D_volume);
 	float sample_prev = sample_v;
 
 	if (vr_hit_enc == __VRHIT_ON_CLIPPLANE) // on the clip plane
