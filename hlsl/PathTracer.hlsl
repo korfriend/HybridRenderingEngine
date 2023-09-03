@@ -921,8 +921,10 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	//pos_ip_ws = float3(0, 0, 0);
 	//ray_dir_unit_ws = float3(0, 1, 0);
 	float3 ray_orig_os = TransformPoint(pos_ip_ws, g_cbPobj.mat_ws2os);
-	float3 ray_dir_unit_os = normalize(TransformVector(ray_dir_unit_ws, g_cbPobj.mat_ws2os));
-
+	float3 r0 = TransformPoint(float3(0, 0, 0), g_cbPobj.mat_ws2os);
+	float3 r1 = TransformPoint(ray_dir_unit_ws, g_cbPobj.mat_ws2os);
+	//float3 ray_dir_unit_os = normalize(TransformVector(ray_dir_unit_ws, g_cbPobj.mat_ws2os));
+	float3 ray_dir_unit_os = normalize(r1 - r0);
 	//if (ray_orig_os.z == 0) ray_orig_os.z = 0.00001234f; // trick... for avoiding zero block skipping error
 	//if (ray_orig_os.y == 0) ray_orig_os.y = 0.00001234f; // trick... for avoiding zero block skipping error
 	//if (ray_orig_os.x == 0) ray_orig_os.x = 0.00001234f; // trick... for avoiding zero block skipping error
@@ -1051,6 +1053,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 #else
 		fragment_zdepth[ss_xy] = minDistOnPlane + INSIDE_DIST_FLAG;
 #endif
+		//EXIT;
 	}
 
 	float4 rayorig = float4(ray_orig_os, ray_tmin);
@@ -1213,30 +1216,36 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	if (planeThickness == 0)
 	//if (g_cbCamState.far_plane == 0)
 	{
+		//return;
 
 		float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
 		v_rgba.a = 1;
 		if (planeThickness == 0.f)
 			v_rgba.a = min(0.3, v_rgba.a);
 
-		if(disableSolidFill)
-			v_rgba = float4(0, 0, 0, 0.001);
+		float zthickness = 0.1f;
+		if (disableSolidFill) {
+			v_rgba = float4(0, 0, 0, 0.01);
+			zthickness = 0.f;
+		}
 
 		Fragment frag;
 		frag.i_vis = ConvertFloat4ToUInt(v_rgba); // current
-		frag.zthick = 0.1;
+		frag.zthick = zthickness;
 		frag.z = zdepth0;
 		frag.opacity_sum = v_rgba.a;
 
 		Fragment fragMerge = (Fragment)frag;
 
 		uint numFrag = fragment_counter[ss_xy];
-		if (numFrag > 0) {
+		if (numFrag > 0) 
+		{
 			Fragment fragPrev = (Fragment)0;
 			GET_FRAG(fragPrev, addr_base, 0); // previous frag stored in K-buffer
 
 			float4 v_rgbaPrev = ConvertUIntToFloat4(fragPrev.i_vis);
-			v_rgba = MixOpt(v_rgba, v_rgba.a, v_rgbaPrev, fragPrev.opacity_sum);
+			if (v_rgbaPrev.a > 0.01f)
+				v_rgba = MixOpt(v_rgba, v_rgba.a, v_rgbaPrev, fragPrev.opacity_sum);
 			//v_rgba = float4(v_rgba.rgb, 1);//
 			fragMerge = frag;
 			//fragMerge.zthick = 0;
@@ -1245,11 +1254,11 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 			fragMerge.opacity_sum += fragPrev.opacity_sum;
 		}
 
-		bool store_to_kbuf = BitCheck(g_cbCamState.cam_flag, 3) && planeThickness > 0;
+		//bool store_to_kbuf = BitCheck(g_cbCamState.cam_flag, 3) && planeThickness > 0;
 		SET_FRAG(addr_base, 0, fragMerge);
 
-		if (!store_to_kbuf)
-			fragment_vis[ss_xy] = v_rgba;
+		//if (!store_to_kbuf)
+		fragment_vis[ss_xy] = v_rgba;
 
 		fragment_counter[ss_xy] = 1;
 		fragment_zdepth[ss_xy] = minDistOnPlane + INSIDE_DIST_FLAG;
@@ -1364,7 +1373,7 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 		__EXIT;
 
 	float4 outline_color = float4(g_cbPobj.Kd, 1);
-	outline_color.a = max(min(lingThres - fvcur, 1.f), 0); // AA option
+	outline_color.a = max(min((lingThres - fvcur) * 1.f, 1.f), 0); // AA option
 	outline_color.rgb *= outline_color.a;
 
 	//outline_color = float4(fvcur / 1000, fvcur / 1000, fvcur / 1000, 1);

@@ -900,8 +900,8 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			hlslobj_path += token + "\\";
 			exe_path.erase(0, pos + delimiter.length());
 		}
-		//hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\";
-		hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\";
+		hlslobj_path += "..\\..\\VmModuleProjects\\hybrid_rendering_engine\\";
+		//hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\";
 
 		string hlslobj_path_4_0 = hlslobj_path + "shader_compiled_objs_4_0\\";
 		//cout << hlslobj_path << endl;
