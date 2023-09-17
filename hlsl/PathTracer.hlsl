@@ -186,8 +186,8 @@ Buffer<float4> buf_gpuDebugTris : register(t2);
 Buffer<int> buf_gpuTriIndices : register(t3);
 
 // magic values
-#define WILDCARD_DEPTH_OUTLINE 123
-#define OUTSIDE_PLANE 456
+#define WILDCARD_DEPTH_OUTLINE 0x12345678
+#define OUTSIDE_PLANE 0x87654321
 
 #if DX10_0 == 1
 #include "CommonShader.hlsl"
@@ -813,8 +813,8 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	uint bytes_frags_per_pixel = k_value * bytes_per_frag;
 	uint addr_base = pixel_id * bytes_frags_per_pixel;
 #endif
-	fragment_zdepth[ss_xy] = asfloat(OUTSIDE_PLANE);
-	__EXIT;
+	//fragment_zdepth[ss_xy] = asfloat(OUTSIDE_PLANE);
+	//__EXIT;
 
 	bool disableSolidFill = BitCheck(g_cbPobj.pobj_flag, 6);
 
@@ -1406,15 +1406,6 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 #endif
 
 	float a = TestAlpha(fvcur);
-	{
-		uint wildcard_v = asuint(fragment_zdepth[ss_xy]);
-		if (wildcard_v == OUTSIDE_PLANE)
-		{
-			fragment_vis[ss_xy] = float4(1, 1, 0, 1);
-			fragment_zdepth[ss_xy] = asfloat(WILDCARD_DEPTH_OUTLINE);
-			__EXIT;
-		}
-	}
 	if (a == 0) {
 		//fragment_vis[ss_xy] = float4(1, 1, 0, 1);
 		//fragment_zdepth[ss_xy] = asfloat(WILDCARD_DEPTH_OUTLINE);
