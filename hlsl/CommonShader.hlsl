@@ -563,6 +563,9 @@ float4 LoadOtfBuf(const in int sample_value, const in Buffer<float4> buf_otf, co
 {
 	float4 vis_otf = buf_otf[sample_value];
 	vis_otf.a *= opacity_correction;
+#if VR_MODE == 1
+	vis_otf.a = 1.f;
+#endif
 	vis_otf.rgb *= vis_otf.a; // associate color
 	return vis_otf;
 }
@@ -591,6 +594,9 @@ float4 LoadSlabOtfBuf_PreInt(const int sample_v, int sample_prev, const Buffer<f
 	vis_otf.rgb = (f4OtfColorNext.rgb - f4OtfColorPrev.rgb) * divDiff;
 	//vis_otf.a = 1.f - exp(-(f4OtfColorNext.a - f4OtfColorPrev.a) * divDiff * opacity_correction)
 	vis_otf.a = (f4OtfColorNext.a - f4OtfColorPrev.a) * divDiff * opacity_correction;
+#if VR_MODE == 1
+	vis_otf.a = 1.f;
+#endif
 	vis_otf.rgb *= vis_otf.a; // associate color
 	return vis_otf;
 }

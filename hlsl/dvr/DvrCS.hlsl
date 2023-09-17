@@ -736,6 +736,28 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	float sample_prev = sample_v;
 #endif
 	
+#if VR_MODE == 1
+	float4 vis_otf = (float4) 0;
+	if (Vis_Volume_And_Check(vis_otf, sample_v, pos_ray_start_ts)) {
+		float depth_sample = depth_hit;
+		float3 grad = GRAD_VOL(pos_ray_start_ts);
+		float grad_len = length(grad);
+		float3 nrl = grad / (grad_len + 0.00001f);
+
+		float shade = 1.f;
+		if (grad_len > 0 && vr_hit_enc != __VRHIT_ON_CLIPPLANE)
+			shade = PhongBlinnVr(view_dir, g_cbVobj.pb_shading_factor, light_dirinv, nrl, true);
+
+		//float4 vis_sample = float4(shade * vis_otf.rgb, vis_otf.a);
+		float4 vis_sample = float4(shade * vis_otf.rgb, 1.f);
+
+#if FRAG_MERGING == 1
+		INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, sample_dist, fs, merging_beta);
+#else
+		INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, fs);
+#endif
+	}
+#else
 	if (vr_hit_enc == __VRHIT_ON_CLIPPLANE) // on the clip plane
 	{
 		//fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
@@ -876,6 +898,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		// this is for outer loop's i++
 		//i -= 1;
 	}
+#endif
 #if DX10_0 != 1
 	vis_out.rgb *= (1.f - ao_vr);
 #endif
@@ -1160,11 +1183,11 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	if (prev_vis.a > 0) {
 		num_frags = 1;
 		prev_depthcs = prev_fragment_zdepth[cip_xy];
-		Fragment f;
+		Fragment f; 
 		f.i_vis = ConvertFloat4ToUInt(prev_vis);
 		f.z = prev_depthcs;
-		f.zthick = g_cbVobj.sample_dist;
-		f.opacity_sum = prev_vis.a;
+		//f.zthick = g_cbVobj.sample_dist;
+		//f.opacity_sum = prev_vis.a;
 		fs[0] = f;
 	}
 	fs[num_frags] = (Fragment)0;
