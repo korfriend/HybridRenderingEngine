@@ -605,6 +605,9 @@ float4 LoadOtfBufId(const in int sample_v, const in Buffer<float4> buf_otf, cons
 {
 	float4 vis_otf = buf_otf[sample_v + id * g_cbTmap.tmap_size_x];
 	vis_otf.a *= opacity_correction;
+#if VR_MODE == 1
+	vis_otf.a = 1.f;
+#endif
 	vis_otf.rgb *= vis_otf.a; // associate color
 	return vis_otf;
 }

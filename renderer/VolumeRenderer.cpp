@@ -183,7 +183,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			}
 		}
 #else
-#define CS_NUM 26
+#define CS_NUM 27
 #define SET_CS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::COMPUTE_SHADER, NAME), dx11CShader, true)
 
 		string strNames_CS[CS_NUM] = {
@@ -197,6 +197,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			  ,"VR_MASKVIS_cs_5_0"
 			  ,"VR_DEFAULT_FM_cs_5_0"
 			  ,"VR_OPAQUE_FM_cs_5_0"
+			  ,"VR_OPAQUE_MULTIOTF_FM_cs_5_0"
 			  ,"VR_CINEMATIC_FM_cs_5_0"
 			  ,"VR_CONTEXT_FM_cs_5_0"
 			  ,"VR_MULTIOTF_FM_cs_5_0"
@@ -630,6 +631,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #define __RM_MULTIOTF_MODULATION 2
 #define __RM_CLIPOPAQUE 20
 #define __RM_OPAQUE 21
+#define __RM_OPAQUE_MULTIOTF 26
 #define __RM_SCULPTMASK 22
 #define __RM_SCULPTMASK_MODULATION 25
 #define __RM_SAMPLETEST 99
@@ -663,6 +665,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		case __RM_MULTIOTF:
 		case __RM_VISVOLMASK:
 		case __RM_SCULPTMASK:
+		case __RM_OPAQUE:
+		case __RM_OPAQUE_MULTIOTF:
 		default: break;
 		}
 
@@ -892,6 +896,18 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				cshader = apply_fragmerge ? GETCS(VR_OPAQUE_FM_cs_5_0) : GETCS(VR_OPAQUE_cs_5_0); break;
 			case MFR_MODE::DYNAMIC_KB:
 				cshader = apply_fragmerge? GETCS(VR_OPAQUE_DKBZ_cs_5_0) : GETCS(VR_OPAQUE_DFB_cs_5_0); break;
+			default:
+				VMERRORMESSAGE("DOES NOT SUPPORT!!");
+			}
+			break;
+		case __RM_OPAQUE_MULTIOTF:
+			switch (mode_OIT)
+			{
+			case MFR_MODE::STATIC_KB:
+			case MFR_MODE::DYNAMIC_FB:
+				cshader = GETCS(VR_OPAQUE_MULTIOTF_FM_cs_5_0); break;
+			case MFR_MODE::DYNAMIC_KB:
+				assert(0); break;
 			default:
 				VMERRORMESSAGE("DOES NOT SUPPORT!!");
 			}
