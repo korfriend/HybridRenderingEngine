@@ -184,6 +184,9 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 	//else if (num_valid_fs == 1) fragment_blendout[nDTid.xy] = float4(1, 0, 0, 1);
 	//else if (num_valid_fs == 2) fragment_blendout[nDTid.xy] = float4(0, 1, 0, 1);
 	//else if (num_valid_fs == 3) fragment_blendout[nDTid.xy] = float4(0, 0, 1, 1);
+	//else if (num_valid_fs == 4) fragment_blendout[nDTid.xy] = float4(0, 1, 1, 1);
+	//else if (num_valid_fs == 5) fragment_blendout[nDTid.xy] = float4(1, 0, 1, 1);
+	//else if (num_valid_fs == 6) fragment_blendout[nDTid.xy] = float4(1, 1, 0, 1);
 	//return;
 
 	N = num_valid_fs;

@@ -180,9 +180,9 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		descRaster.AntialiasedLineEnable = true;
 		hr |= g_pvmCommonParams->dx11Device->MyCreateRasterizerState(&descRaster, &raster_state);
 		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "AA_SOLID_CW"), raster_state);
-		//descRaster.CullMode = D3D11_CULL_FRONT;
-		descRaster.CullMode = D3D11_CULL_BACK;
-		descRaster.FrontCounterClockwise = TRUE;
+		descRaster.CullMode = D3D11_CULL_FRONT;
+		//descRaster.CullMode = D3D11_CULL_BACK; // ref FrontCounterClockwise
+		//descRaster.FrontCounterClockwise = TRUE;
 		descRaster.AntialiasedLineEnable = false;
 		hr |= g_pvmCommonParams->dx11Device->MyCreateRasterizerState(&descRaster, &raster_state);
 		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "SOLID_CCW"), raster_state);
@@ -202,6 +202,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 #ifdef DX11_3
 		descRaster.ConservativeRaster = D3D11_CONSERVATIVE_RASTERIZATION_MODE_OFF;
 #endif
+		descRaster.CullMode = D3D11_CULL_BACK;
 		descRaster.AntialiasedLineEnable = false;
 		hr |= g_pvmCommonParams->dx11Device->MyCreateRasterizerState(&descRaster, &raster_state);
 		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "WIRE_CW"), raster_state);
@@ -233,6 +234,9 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		ID3D11DepthStencilState* ds_state;
 		hr |= g_pvmCommonParams->dx11Device->CreateDepthStencilState(&descDepthStencil, &ds_state);
 		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::DEPTHSTENCIL_STATE, "LESSEQUAL"), ds_state);
+		descDepthStencil.DepthFunc = D3D11_COMPARISON_EQUAL;
+		hr |= g_pvmCommonParams->dx11Device->CreateDepthStencilState(&descDepthStencil, &ds_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::DEPTHSTENCIL_STATE, "EQUAL"), ds_state);
 		descDepthStencil.DepthFunc = D3D11_COMPARISON_ALWAYS;
 		hr |= g_pvmCommonParams->dx11Device->CreateDepthStencilState(&descDepthStencil, &ds_state);
 		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::DEPTHSTENCIL_STATE, "ALWAYS"), ds_state);
@@ -434,6 +438,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91005), "SR_OIT_PTTT_vs_4_0", "vs_4_0", "PTTT", lotypeInputPosTTTex, 4), SR_OIT_PTTT_vs_4_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA91015), "SR_SINGLE_LAYER_ps_4_0", "ps_4_0"), SR_SINGLE_LAYER_ps_4_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA91016), "WRITE_DEPTH_ps_4_0", "ps_4_0"), WRITE_DEPTH_ps_4_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA91010), "GS_ThickPoints_gs_4_0", "gs_4_0"), GS_ThickPoints_gs_4_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA91011), "GS_SurfelPoints_gs_4_0", "gs_4_0"), GS_SurfelPoints_gs_4_0);
@@ -517,6 +522,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA12054), "SR_OIT_FILL_SKBT_TEXTUREIMGMAP_ROV_ps_5_0", "ps_5_0"), SR_OIT_FILL_SKBT_TEXTUREIMGMAP_ROV_ps_5_0);
 		}
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11015), "SR_SINGLE_LAYER_ps_5_0", "ps_5_0"), SR_SINGLE_LAYER_ps_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11016), "WRITE_DEPTH_ps_5_0", "ps_5_0"), WRITE_DEPTH_ps_5_0);
 		//VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11016), "SR_OIT_KDEPTH_NPRGHOST_ps_5_0", "ps_5_0"));
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11110), "SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0", "ps_5_0"), SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0);

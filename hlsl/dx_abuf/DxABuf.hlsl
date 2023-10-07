@@ -8,6 +8,7 @@ Buffer<uint> sr_offsettable_buf : register(t50);
 
 #define STORE1_RBB(V, ADDR) deep_ubk_buf.Store((ADDR) * 4, V)
 
+[earlydepthstencil]
 void OIT_A_BUFFER_CNF_FRAGS(__VS_OUT input)
 {
 	if (g_cbClipInfo.clip_flag & 0x1)
@@ -24,6 +25,7 @@ void OIT_A_BUFFER_CNF_FRAGS(__VS_OUT input)
 	InterlockedAdd(fragment_counter[tex2d_xy.xy], 1);
 }
 
+[earlydepthstencil]
 void OIT_A_BUFFER_FILL(__VS_OUT input)
 {
 	float4 v_rgba = (float4)0;
@@ -189,6 +191,7 @@ void OIT_A_BUFFER_FILL(__VS_OUT input)
 	STORE1_RBB(asuint(z_depth), 2 * nDeepBufferPos + 1);
 }
 
+[earlydepthstencil]
 void PICKING_A_BUFFER_FILL(__VS_OUT input)
 {
 	//POBJ_PRE_CONTEXT;

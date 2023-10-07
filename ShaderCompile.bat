@@ -13,6 +13,8 @@ fxc /E BasicShader4 /T ps_5_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compi
 
 fxc /E BasicShader4 /T ps_5_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs/SR_QUAD_OUTLINE_ps_5_0 /D __RENDERING_MODE=6 
 
+fxc /E WRITE_DEPTHZ /T ps_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/WRITE_DEPTH_ps_5_0
+
 fxc /E SINGLE_LAYER /T ps_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/SR_SINGLE_LAYER_ps_5_0
 
 fxc /E OIT_RESOLVE /T cs_5_0 ./hlsl/kbuf/KbufResolve.hlsl /Fo ./shader_compiled_objs/OIT_SKBZ_RESOLVE_cs_5_0 /D FRAG_MERGING=1 /D DYNAMIC_K_MODE=0 

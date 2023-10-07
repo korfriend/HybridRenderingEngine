@@ -518,6 +518,22 @@ struct PS_FILL_DEPTHCS
     float ds_z : SV_Depth;
 };
 
+[earlydepthstencil]
+float WRITE_DEPTHZ(__VS_OUT input) : SV_Depth
+{
+    POBJ_PRE_CONTEXT;
+
+    float z = 1;// input.f4PosSS.z / input.f4PosSS.w;
+    //if (g_cbCamState.cam_flag & 0x1) {
+    //    //https://developer.nvidia.com/content/depth-precision-visualized
+    //
+    //    float a = - g_cbCamState.near_plane * g_cbCamState.far_plane / (g_cbCamState.far_plane - g_cbCamState.near_plane);
+    //    float b = - a / g_cbCamState.near_plane;
+    //    z = a / (z_depth + g_cbCamState.near_plane) + b;
+    //}
+    return z;
+}
+
 void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
 {
     POBJ_PRE_CONTEXT;

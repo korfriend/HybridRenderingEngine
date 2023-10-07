@@ -742,11 +742,11 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #ifdef DX10_0
 #define VS_NUM 5
 #define GS_NUM 4
-#define PS_NUM 8
+#define PS_NUM 9
 #else
 #define VS_NUM 5
 #define GS_NUM 3
-#define PS_NUM 77
+#define PS_NUM 78
 #define CS_NUM 27
 #endif
 
@@ -878,6 +878,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #ifdef DX10_0
 		string strNames_PS[PS_NUM] = {
 			 "SR_SINGLE_LAYER_ps_4_0"
+			,"WRITE_DEPTH_ps_4_0"
 
 			,"SR_BASIC_PHONGBLINN_ps_4_0"
 			,"SR_BASIC_DASHEDLINE_ps_4_0"
@@ -937,6 +938,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			  ,"SR_OIT_FILL_DKBT_TEXTMAPPING_ROV_ps_5_0"
 			  ,"SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ROV_ps_5_0"
 
+			  ,"SR_SINGLE_LAYER_ps_5_0"
 			  ,"SR_SINGLE_LAYER_ps_5_0"
 
 			,"SR_BASIC_PHONGBLINN_ps_5_0"
@@ -1461,8 +1463,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 	vector<VmActor> temperal_actors;
 	vector<VmActor*> general_oit_routine_objs;
+	//vector<VmActor*> single_foremost_routine_objs; // 
 	vector<VmActor*> single_layer_routine_objs; // e.g. silhouette
-	vector<VmActor*> foremost_surfaces_routine_objs; // for performance //
+	vector<VmActor*> foremost_opaque_surfaces_routine_objs; // for performance //
 	int minimum_oit_area = _fncontainer->fnParams.GetParam("_int_MinimumOitArea", (int)1000); // 0 means turn-off the wildcard case
 	int _w_max = 0;
 	int _h_max = 0;
@@ -1500,11 +1503,12 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 		bool has_wire = actor->GetParam("_bool_HasWireframe", false);
 
-		bool is_foremost_surfaces = actor->GetParam("_bool_OnlyForemostSurfaces", true);
-
+		bool is_foremost_surfaces = true;
 
 		bool is_annotation_obj = pobj->GetObjParam("_bool_IsAnnotationObj", false);
-		if (actor->color.a < 1.f || is_annotation_obj) is_foremost_surfaces = false;
+		if (is_annotation_obj || actor->color.a < 1.f) {
+			is_foremost_surfaces = false;
+		}
 		if (has_wire && prim_data->ptype == PrimitiveTypeTRIANGLE)
 		{
 			temperal_actors.push_back(*actor);
@@ -1528,24 +1532,34 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			if (imgObj->GetObjParam("IS_SEMIPARENT", false))
 				is_foremost_surfaces = false;
 		}
-
 		if (is_foremost_surfaces)
-			foremost_surfaces_routine_objs.push_back(actor);
-		else
+		{
+			foremost_opaque_surfaces_routine_objs.push_back(actor);
+		}
+		else {
+#ifdef DX10_0
 			general_oit_routine_objs.push_back(actor);
+#else
+			//if(actor->GetParam("_bool_OnlyForemostSurfaces", false))
+			//	general_oit_routine_objs.push_back(actor);
+			//else 
+			//	single_foremost_routine_objs.push_back(actor);
+			general_oit_routine_objs.push_back(actor);
+#endif
+		}
 	}
 
 	for (VmActor& __actor : temperal_actors)
-		foremost_surfaces_routine_objs.push_back(&__actor);
+		foremost_opaque_surfaces_routine_objs.push_back(&__actor);
 
 #ifdef DX10_0
 	for (int i = 0; i < (int)general_oit_routine_objs.size(); i++) {
-		foremost_surfaces_routine_objs.push_back(general_oit_routine_objs[i]);
+		foremost_opaque_surfaces_routine_objs.push_back(general_oit_routine_objs[i]);
 	}
 	general_oit_routine_objs.clear();
 	if (is_picking_routine) {
-		general_oit_routine_objs = foremost_surfaces_routine_objs;
-		foremost_surfaces_routine_objs.clear();
+		general_oit_routine_objs = foremost_opaque_surfaces_routine_objs;
+		foremost_opaque_surfaces_routine_objs.clear();
 	}
 #endif
 
@@ -1553,7 +1567,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	{
 		cout << "  ** general_oit_routine_objs    : " << general_oit_routine_objs.size() << endl;
 		cout << "  ** special_effect_routine_objs : " << single_layer_routine_objs.size() << endl;
-		cout << "  ** foremost_sr_routine_objs : " << foremost_surfaces_routine_objs.size() << endl;
+		//cout << "  ** foremost_single_sr_routine_objs : " << single_foremost_routine_objs.size() << endl;
+		cout << "  ** foremost_sr_routine_objs : " << foremost_opaque_surfaces_routine_objs.size() << endl;
 	}
 #pragma endregion 
 
@@ -1677,7 +1692,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			//vmfloat3 outline_color = actor->GetParam("_float3_SilhouetteColor", vmfloat3(1));
 
 			// Object Unit Conditions
-			bool cull_off = actor->GetParam("_bool_IsForcedCullOff", false);
+			bool bf_cull_on = actor->GetParam("_bool_ForcedBackfaceCulling", false);
 			bool is_surfel = actor->GetParam("_bool_PointToSurfel", true);
 
 			bool force_to_pointsetrender = actor->GetParam("_bool_ForceToPointsetRender", false);
@@ -1787,7 +1802,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			}
 			if (default_color_cmmobj.x >= 0 && default_color_cmmobj.y >= 0 && default_color_cmmobj.z >= 0)
 				cbPolygonObj.Ka = cbPolygonObj.Kd = cbPolygonObj.Ks = default_color_cmmobj;
-			//if (render_pass == RENDER_GEOPASS::PASS_SINGLELAYERS)
+			//if (render_pass == RENDER_GEOPASS::PASS_SILHOUETTE)
 			//{
 			//	//cbPolygonObj.depth_forward_bias = (float)v_discont_depth;
 			//	//cbPolygonObj.pobj_flag |= 0x1;
@@ -1830,7 +1845,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #ifdef DX10_0
 			// ASSERT 
 			if (!is_picking_routine) {
-				assert(render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES || render_pass == RENDER_GEOPASS::PASS_SINGLELAYERS);
+				assert(render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES || render_pass == RENDER_GEOPASS::PASS_SILHOUETTE);
 				assert(mode_OIT == MFR_MODE::NONE);
 			}
 #endif
@@ -1960,7 +1975,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				{
 					if (prim_data->GetVerticeDefinition("TEXCOORD2"))
 					{
-						assert(render_pass != RENDER_GEOPASS::PASS_SINGLELAYERS);
+						assert(render_pass != RENDER_GEOPASS::PASS_SILHOUETTE);
 						// only text case //
 						// PTTT
 						dx11InputLayer_Target = dx11LI_PTTT;
@@ -2116,14 +2131,15 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #endif
 				}
 
-				if (render_pass == RENDER_GEOPASS::PASS_SINGLELAYERS) {
+				switch (render_pass) {
+				case RENDER_GEOPASS::PASS_SILHOUETTE:
 #ifdef DX10_0
 					dx11PS_Target = GETPS(SR_SINGLE_LAYER_ps_4_0); // ONLY K-BUFFER
 #else
 					dx11PS_Target = GETPS(SR_SINGLE_LAYER_ps_5_0); // ONLY K-BUFFER
 #endif
-				}
-				else if (render_pass == RENDER_GEOPASS::PASS_OIT) {
+					break;
+				case RENDER_GEOPASS::PASS_OIT:
 #ifdef DX10_0
 					assert(0);
 #endif
@@ -2144,6 +2160,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 						else
 							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_GEN_ps_5_0) : GETPS(SR_MOMENT_GEN_ROV_ps_5_0);
 					}
+					break;
+				default:
+					break;
 				}
 
 				switch (prim_data->ptype)
@@ -2201,7 +2220,15 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					dx11GS_Target = NULL;
 				}
 				else
-					dx11RState_TargetObj = GETRASTER(SOLID_NONE);
+				{
+
+					if (render_pass == RENDER_GEOPASS::PASS_SILHOUETTE || bf_cull_on) {
+						dx11RState_TargetObj = GETRASTER(SOLID_CW);
+					}
+					else {
+						dx11RState_TargetObj = GETRASTER(SOLID_NONE);
+					}
+				}
 			}break;
 			case PICKING_TYPE::PICK_ON_GS: 
 			{
@@ -2288,7 +2315,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				(ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV] };
 
 #ifdef DX10_0
-			if (render_pass == RENDER_GEOPASS::PASS_SINGLELAYERS) {
+			if (render_pass == RENDER_GEOPASS::PASS_SILHOUETTE) {
 				dx11DeviceImmContext->OMSetRenderTargets(1, (ID3D11RenderTargetView**)&gres_fb_singlelayer_tempDepth.alloc_res_ptrs[DTYPE_RTV], dx11DSV);
 			}
 			else {
@@ -2336,7 +2363,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 							dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(0, NULL, NULL, 2, NUM_UAVs_1ST, dx11UAVs_1st_pass, 0);
 						}
 						break;
-					case RENDER_GEOPASS::PASS_SINGLELAYERS:
+					case RENDER_GEOPASS::PASS_SILHOUETTE:
 						// clear //
 						// to do // 별도의 RT 를 만들어 두어야 한다.
 						//dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
@@ -2357,15 +2384,34 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 						//dx11UAVs_1st_pass[3] = (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV];
 						dx11DeviceImmContext->PSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]); // search why this does not work
 					}
-					dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(0, NULL, NULL, 2, NUM_UAVs_1ST, dx11UAVs_1st_pass, NULL);
-					//dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(ALWAYS), 0);
-					dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(DISABLED), 0);
+					
+					// ... //
+					if (actor->GetParam("_bool_OnlyForemostSurfaces", false)) {
+						dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(0, NULL, dx11DSV, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
+						dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+						dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(LESSEQUAL), 0);
+
+						ID3D11PixelShader* dx11PS_DepthWrite = GETPS(WRITE_DEPTH_ps_5_0);
+						dx11DeviceImmContext->PSSetShader(dx11PS_DepthWrite, NULL, 0);
+						if (prim_data->is_stripe || pobj_topology_type == D3D11_PRIMITIVE_TOPOLOGY_POINTLIST)
+							dx11DeviceImmContext->Draw(prim_data->num_vtx, 0);
+						else
+							dx11DeviceImmContext->DrawIndexed(prim_data->num_vidx, 0, 0);
+
+						dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(0, NULL, dx11DSV, 2, NUM_UAVs_1ST, dx11UAVs_1st_pass, NULL);
+						dx11DeviceImmContext->PSSetShader(dx11PS_Target, NULL, 0);
+						dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(LESSEQUAL), 0);
+					}
+					else {
+						dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(0, NULL, NULL, 2, NUM_UAVs_1ST, dx11UAVs_1st_pass, NULL);
+						//dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(ALWAYS), 0);
+						dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(DISABLED), 0);
+					}
 					break;
-				case RENDER_GEOPASS::PASS_SINGLELAYERS:
+				case RENDER_GEOPASS::PASS_SILHOUETTE:
 					// clear //
 					//dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
 					//dx11DeviceImmContext->OMSetRenderTargets(1, (ID3D11RenderTargetView**)&gres_fb_singlelayer_tempDepth, dx11DSV);
-					//dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(1, (ID3D11RenderTargetView**)&gres_fb_singlelayer_tempDepth.alloc_res_ptrs[DTYPE_RTV], dx11DSV, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
 					dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(1, (ID3D11RenderTargetView**)&gres_fb_singlelayer_tempDepth.alloc_res_ptrs[DTYPE_RTV], dx11DSV, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
 					dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(LESSEQUAL), 0);
 					break;
@@ -2422,7 +2468,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	if (is_picking_routine) {
 #ifdef DX10_0
 #else
-		assert(single_layer_routine_objs.size() + foremost_surfaces_routine_objs.size() == 0);
+		assert(single_layer_routine_objs.size() + foremost_opaque_surfaces_routine_objs.size() == 0);
 		assert(mode_OIT == MFR_MODE::DYNAMIC_FB);
 #endif
 
@@ -2545,12 +2591,12 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		
 		SetCamConstBuf(cbCamState);
 
-		if (foremost_surfaces_routine_objs.size() > 0) 
+		if (foremost_opaque_surfaces_routine_objs.size() > 0) 
 		{
 			dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
 			dx11CommonParams->GpuProfile("Opaque Surface");
 			// Opaque Foremost Rendering ==> to Render Target Textures (gres_fb_rgba and gres_fb_depthcs)
-			RenderStage1(foremost_surfaces_routine_objs, MFR_MODE::NONE, RENDER_GEOPASS::PASS_OPAQUESURFACES
+			RenderStage1(foremost_opaque_surfaces_routine_objs, MFR_MODE::NONE, RENDER_GEOPASS::PASS_OPAQUESURFACES
 				, false /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false);
 			dx11CommonParams->GpuProfile("Opaque Surface", true);
 		}
@@ -2561,7 +2607,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			dx11CommonParams->GpuProfile("Single Layer Pass");
 			// Single Layer Effect (outline) Rendering 
 			// ==> to a Temporary Render Target Texture (gres_fb_singlelayer_depthcs)
-			RenderStage1(single_layer_routine_objs, MFR_MODE::NONE, RENDER_GEOPASS::PASS_SINGLELAYERS
+			RenderStage1(single_layer_routine_objs, MFR_MODE::NONE, RENDER_GEOPASS::PASS_SILHOUETTE
 				, false /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false);
 			dx11CommonParams->GpuProfile("Single Layer Pass", true);
 
@@ -2799,7 +2845,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				}
 				// used for the increment of the fragments (index)
 				dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
-				}
+			}
 
 			dx11CommonParams->GpuProfile("Geometry for OIT");
 			// buffer filling
@@ -2870,7 +2916,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
 		};
 
-		int additionalKLayerForMFB = (int)(foremost_surfaces_routine_objs.size() > 0 || single_layer_routine_objs.size() > 0);
+		int additionalKLayerForMFB = (int)(foremost_opaque_surfaces_routine_objs.size() > 0 || single_layer_routine_objs.size() > 0);
 		cbCamState.cam_flag |= (additionalKLayerForMFB << 8);
 		int storeKBuf = (int)(!is_final_renderer || check_pixel_transmittance
 			|| cbEnvState.r_kernel_ao > 0
@@ -2888,7 +2934,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			// 1. SR_OIT_ABUFFER_SORT2SENDER_SFM_cs_5_0 (to FB to SKB)
 			// 2. OIT_SKBZ_RESOLVE_cs_5_0 (unordered SKB to ordered SKB)
 			// 3. OIT_DKBZ_RESOLVE_cs_5_0 // deprecated..
-			// remember RENDER_GEOPASS::PASS_OPAQUESURFACES and RENDER_GEOPASS::PASS_SINGLELAYERS stores RTs
+			// remember RENDER_GEOPASS::PASS_OPAQUESURFACES and RENDER_GEOPASS::PASS_SILHOUETTE stores RTs
 			// RenderTargetsToSKB the stored RTs to SKB (unordered)
 			// Note that if K-buffer is preserved, then no RT-out is available
 			// Dynamic FB layers into K-buffer if there is post-processing (SS algorithms) or single layer pass

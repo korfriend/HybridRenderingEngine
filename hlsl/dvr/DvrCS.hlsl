@@ -721,8 +721,10 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	//vis_out = float4(TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts), 1);
 	//return;
 
+	float sampleThickness = sample_dist;
 #if FRAG_MERGING == 1
 	Fragment f_dly = fs[0]; // if no frag, the z-depth is infinite
+	sampleThickness = max(sample_dist, g_cbCamState.cam_vz_thickness);
 #endif
 
 	int start_idx = 0;
@@ -752,7 +754,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		float4 vis_sample = float4(shade * vis_otf.rgb, 1.f);
 
 #if FRAG_MERGING == 1
-		INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, sample_dist, fs, merging_beta);
+		INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, sampleThickness, fs, merging_beta);
 #else
 		INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, fs);
 #endif
@@ -792,7 +794,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #endif
 			//vis_sample *= mask_weight;
 #if FRAG_MERGING == 1
-			INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, sample_dist, fs, merging_beta);
+			INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, sampleThickness, fs, merging_beta);
 #else
 			INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, fs);
 #endif
@@ -865,7 +867,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #endif
 					//vis_sample *= mask_weight;
 #if FRAG_MERGING == 1
-					INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, sample_dist, fs, merging_beta);
+					INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, sampleThickness, fs, merging_beta);
 #else
 					INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, fs);
 #endif
