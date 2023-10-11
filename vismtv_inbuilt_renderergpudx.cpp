@@ -58,8 +58,11 @@ bool CheckModuleParameters(fncontainer::VmFnContainer& _fncontainer)
 	return true;
 }
 
+static CRITICAL_SECTION cs;
 bool InitModule(fncontainer::VmFnContainer& _fncontainer)
 {	
+	InitializeCriticalSection(&cs);
+
 	if(g_pCGpuManager == NULL)
 		g_pCGpuManager = new VmGpuManager(GpuSdkTypeDX11, __DLLNAME);
 
@@ -162,6 +165,8 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		return false;
 	}
 
+	EnterCriticalSection(&cs);
+
 #pragma region GPU/CPU Pre Setting
 	//float sizeGpuResourceForVolume = _fncontainer.fnParams.GetParam("_float_SizeGpuResourceForVolume", 80.0f);
 	//// 100 means 50%
@@ -183,6 +188,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	bool is_sectional = strRendererSource == "SECTIONAL_MESH" || strRendererSource == "SECTIONAL_VOLUME";
 	bool is_system_out = false;
 	float planeThickness = _fncontainer.fnParams.GetParam("_float_PlaneThickness", -1.f);
+	bool is_picking_routine = _fncontainer.fnParams.GetParam("_bool_IsPickingRoutine", false);
 	bool is_final_renderer = _fncontainer.fnParams.GetParam("_bool_IsFinalRenderer", true);
 	g_vmCommonParams.gpu_profile = _fncontainer.fnParams.GetParam("_bool_GpuProfile", false);
 	map<string, vmint2>& profile_map = g_vmCommonParams.profile_map;
@@ -204,7 +210,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	if (strRendererSource == "VOLUME")
 	{
 		double dRuntime = 0;
-		RenderVrDLS(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
+		//RenderVrDLS(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
 		g_dRunTimeVRs += dRuntime;
 		is_system_out = true;
 		is_vr = true;
@@ -232,6 +238,8 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		g_dRunTimeVRs += dRuntime;
 		if (is_final_renderer || planeThickness <= 0.f) is_system_out = true;
 	}
+
+	//if (is_picking_routine)
 
 	auto RenderOut = [&iobj, &is_final_renderer, &planeThickness, &_fncontainer, &is_vr]() {
 
@@ -373,7 +381,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		g_vmCommonParams.GpuProfile("Copyback", true);
 	};
 
-	if(is_system_out)
+	if (is_system_out && !is_picking_routine)
 	{
 		GpuRes gres_fb_rgba;
 		grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D,
@@ -512,9 +520,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 			}
 		}
 		/**/
-	}
 
-	if (is_system_out) {
 		RenderOut();
 	}
 
@@ -563,12 +569,14 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		}
 	}
 
+	LeaveCriticalSection(&cs);
 
 	return true;
 }
 
 void DeInitModule(fncontainer::VmFnContainer& _fncontainer)
 {
+	DeleteCriticalSection(&cs);
 	for (auto it = g_d2dResMap.begin(); it != g_d2dResMap.end(); it++) {
 		it->second.ReleaseD2DRes();
 	}
