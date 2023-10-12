@@ -1995,8 +1995,6 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->Unmap(cbuf_cam_state, 0);
 	};
 
-	HWND hWnd = (HWND)_fncontainer->fnParams.GetParam("_hwnd_WindowHandle", (HWND)NULL);
-
 	// RENDER BEGIN
 	dx11CommonParams->GpuProfile("Render Slicer");
 

@@ -11,7 +11,7 @@ PS_FILL_OUTPUT BasicShader4(__VS_OUT input)
 	float4 v_rgba = (float4)0;
 	float z_depth = FLT_MAX;
 
-#if __RENDERING_MODE != 6
+#if __RENDERING_MODE != 100
 	BasicShader(input, v_rgba, z_depth);
 #if DX10_0
     if (v_rgba.a <= 0.01) clip(-1);

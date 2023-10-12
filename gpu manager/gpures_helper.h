@@ -556,8 +556,8 @@ namespace grd_helper
 		float depth_thres;	// for outline!
 
 		float pix_thickness; // 1) for POINT and LINE TOPOLOGY,
-		float vz_thickness; 
-		uint pobj_dummy_0; // 1) actor_id used for picking, 
+		float vz_thickness;
+		uint pobj_dummy_0; // 1) actor_id used for picking, 2) outline color, 3) iso_value for difference map
 		uint pobj_dummy_1;
 
 		ZERO_SET(CB_PolygonObject)
@@ -659,9 +659,9 @@ namespace grd_helper
 		uint		first_nonzeroalpha_index; // For ESS
 		uint		last_nonzeroalpha_index;
 		uint		tmap_size_x;
-		float		mapping_v_min; // deprecated
+		float		mapping_v_min; 
 
-		float		mapping_v_max; // deprecated
+		float		mapping_v_max; 
 		uint		tm_dummy_0;
 		uint		tm_dummy_1;
 		uint		tm_dummy_2;

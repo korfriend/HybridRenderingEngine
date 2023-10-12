@@ -145,7 +145,7 @@ struct HxCB_PolygonObject
 
 	float pix_thickness; // 1) for POINT and LINE TOPOLOGY, 2) outline thickness (in pixel)
 	float vz_thickness;
-	uint pobj_dummy_0; // 1) actor_id used for picking, 2) outline color
+	uint pobj_dummy_0; // 1) actor_id used for picking, 2) outline color, 3) iso_value (float norm [0,1]) for difference map
 	uint pobj_dummy_1;
 };
 

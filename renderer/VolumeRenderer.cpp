@@ -688,6 +688,14 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		//	outline_depthThres = actor->GetParam("_float_SilhouetteDepthThres", outline_depthThres);
 		//	outline_color = actor->GetParam("_float3_SilhouetteColor", outline_color);
 		//}
+
+		// 0 : only full sampling (no downscale) for both main volume and mask volume
+		// 1 : downscaling for 3d view transparency dvr and mask volume
+		// 2 : downscaling for 3d view transparency dvr 
+		// 3 : downscaling for 3d view dvr and mask volume
+		// 4 : downscaling for 3d view dvr 
+		// 5 : downscaling for mask volume
+		int downScaleOption = actor->GetParam("_int_DownScaleOption", (int)1);
 #pragma endregion
 
 #pragma region GPU resource updates
@@ -718,7 +726,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			else {
 				//clock_t __start = clock();
 
-				grd_helper::UpdateVolumeModel(gres_mask_vol, mask_vol_obj, true);
+				// down-scaling true when downScaleOption is 1, 3, or 5
+				grd_helper::UpdateVolumeModel(gres_mask_vol, mask_vol_obj, true, 
+					downScaleOption == 1 || downScaleOption == 3 || downScaleOption == 5);
 				SET_SHADER_RES(2, 1, (__SRV_PTR*)&gres_mask_vol.alloc_res_ptrs[DTYPE_SRV]);
 				
 				//printf("######111 %f√ \n", (double)(clock() - __start) / CLOCKS_PER_SEC);
@@ -728,8 +738,16 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			ray_cast_type = __RM_DEFAULT;
 		}
 
+		// down-scaling true when downScaleOption is 
+		// 1 (&&is_modulation_mode)
+		// 2 (&&is_modulation_mode) 
+		// 3 or 4
 		GpuRes gres_vol;
-		grd_helper::UpdateVolumeModel(gres_vol, vobj, ray_cast_type == __RM_VISVOLMASK, planeThickness < 0, progress); // ray_cast_type == __RM_MAXMASK
+		grd_helper::UpdateVolumeModel(gres_vol, vobj, ray_cast_type == __RM_VISVOLMASK, planeThickness < 0 && 
+			(
+				((downScaleOption == 1 || downScaleOption == 2) && is_modulation_mode)
+				|| downScaleOption == 3 || downScaleOption == 4
+				), progress); // ray_cast_type == __RM_MAXMASK
 		//grd_helper::UpdateVolumeModel(gres_vol, vobj, ray_cast_type == __RM_VISVOLMASK, true, progress); // ray_cast_type == __RM_MAXMASK
 
 		SET_SHADER_RES(0, 1, (__SRV_PTR*)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);

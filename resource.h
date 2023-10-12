@@ -31,6 +31,7 @@
 #define IDR_RCDATA10104					  10104
 #define IDR_RCDATA10105					  10105
 #define IDR_RCDATA10106					  10106
+#define IDR_RCDATA10107					  10107
 
 #define IDR_RCDATA90101					  90101
 #define IDR_RCDATA90102					  90102
@@ -38,6 +39,7 @@
 #define IDR_RCDATA90104					  90104
 #define IDR_RCDATA90105					  90105
 #define IDR_RCDATA90106					  90106
+#define IDR_RCDATA90107					  90107
 
 #define IDR_RCDATA10150					  10150
 #define IDR_RCDATA90150					  90150
@@ -82,6 +84,7 @@
 #define IDR_RCDATA11026					  11026
 #define IDR_RCDATA11027					  11027
 #define IDR_RCDATA11028					  11028
+#define IDR_RCDATA11029					  11029
 
 #define IDR_RCDATA11321					  11321
 #define IDR_RCDATA11322					  11322

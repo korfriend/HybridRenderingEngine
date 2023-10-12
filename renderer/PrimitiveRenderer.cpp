@@ -742,11 +742,11 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #ifdef DX10_0
 #define VS_NUM 5
 #define GS_NUM 4
-#define PS_NUM 9
+#define PS_NUM 10
 #else
 #define VS_NUM 5
 #define GS_NUM 3
-#define PS_NUM 78
+#define PS_NUM 80
 #define CS_NUM 27
 #endif
 
@@ -886,6 +886,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			,"SR_BASIC_TEXTMAPPING_ps_4_0"
 			,"SR_BASIC_TEXTUREIMGMAP_ps_4_0"
 			,"SR_BASIC_VOLUMEMAP_ps_4_0"
+			,"SR_BASIC_VOLUME_DIST_MAP_ps_4_0"
 			,"SR_QUAD_OUTLINE_ps_4_0"
 		};
 #else
@@ -947,6 +948,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			,"SR_BASIC_TEXTMAPPING_ps_5_0"
 			,"SR_BASIC_TEXTUREIMGMAP_ps_5_0"
 			,"SR_BASIC_VOLUMEMAP_ps_5_0"
+			,"SR_BASIC_VOLUME_DIST_MAP_ps_5_0"
 
 			,"SR_QUAD_OUTLINE_ps_5_0"
 			//,"SR_OIT_KDEPTH_NPRGHOST_ps_5_0"
@@ -959,6 +961,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			,"SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0"
 			,"SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0"
 			,"SR_OIT_ABUFFER_VOLUMEMAP_ps_5_0"
+			,"SR_OIT_ABUFFER_VOLUME_DIST_MAP_ps_5_0"
 
 			,"SR_MOMENT_GEN_ps_5_0"
 			,"SR_MOMENT_GEN_TEXT_ps_5_0"
@@ -1697,18 +1700,25 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 			bool force_to_pointsetrender = actor->GetParam("_bool_ForceToPointsetRender", false);
 			bool is_wireframe = actor->GetParam("_bool_IsWireframe", false);
+			bool is_volume_dist_map = actor->GetParam("_bool_IsVolumeDistMap", false);
 #pragma endregion
 
 #pragma region GPU resource updates
-			//VmObject* tobj_otf = (VmObject*)actor->GetAssociateRes("OTF"); 
+			VmObject* tobj_otf = (VmObject*)actor->GetAssociateRes("OTF");
 			VmObject* tobj_maptable = (VmObject*)actor->GetAssociateRes("MAPTABLE"); // single one
 			VmVObjectVolume* vobj = (VmVObjectVolume*)actor->GetAssociateRes("VOLUME");
 
 			if (vobj) {
-				GpuRes gres_vol, gres_tmap_otf;
+				GpuRes gres_vol;
 				grd_helper::UpdateVolumeModel(gres_vol, vobj, false, progress);
 				//dx11DeviceImmContext->VSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
 				dx11DeviceImmContext->PSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
+
+				if (tobj_otf) {
+					GpuRes gres_volblk_otf;
+					grd_helper::UpdateOtfBlocks(gres_volblk_otf, vobj, NULL, tobj_otf, -1); // this tagged mask volume is always used even when MIP mode
+					dx11DeviceImmContext->PSSetShaderResources(2, 1, (ID3D11ShaderResourceView**)&gres_volblk_otf.alloc_res_ptrs[DTYPE_SRV]);
+				}
 
 				vmmat44f matGeoOS2VolOS = actor->GetParam("_matrix44f_GeoOS2VolOS", vmmat44f());
 				CB_VolumeObject cbVolumeObj;
@@ -1790,6 +1800,11 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			cbPolygonObj.tex_map_enum = tex_map_enum;
 			cbPolygonObj.pobj_dummy_0 = actor->actorId;// pobj->GetObjectID(); // used for picking
 			grd_helper::SetCb_PolygonObj(cbPolygonObj, pobj, actor, matWS2SS, matWS2PS, is_annotation_obj, use_vertex_color);
+			if (is_volume_dist_map && tobj_otf && !is_picking_routine) {
+				MapTable* tobj_data = tobj_otf->GetObjParamPtr<MapTable>("_TableMap_OTF");
+				float fisoValue = (float)tobj_data->valid_min_idx.x / (float)tobj_data->array_lengths.x;
+				cbPolygonObj.pobj_dummy_0 = *(uint*)&fisoValue;
+			}
 			if (use_vertex_color) {
 				cbPolygonObj.Ka = vmfloat3(material_phongCoeffs);
 				cbPolygonObj.Ns *= material_phongCoeffs.w;
@@ -1930,14 +1945,19 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					}
 					else if (vobj && tobj_maptable) {
 #ifdef DX10_0
-						dx11PS_Target = GETPS(SR_BASIC_VOLUMEMAP_ps_4_0); // render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES
+						dx11PS_Target = is_volume_dist_map? GETPS(SR_BASIC_VOLUME_DIST_MAP_ps_4_0) : GETPS(SR_BASIC_VOLUMEMAP_ps_4_0); // render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES
 #else
 						if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
-							dx11PS_Target = GETPS(SR_BASIC_VOLUMEMAP_ps_5_0);
+							dx11PS_Target = is_volume_dist_map? GETPS(SR_BASIC_VOLUME_DIST_MAP_ps_5_0) : GETPS(SR_BASIC_VOLUMEMAP_ps_5_0);
 						}
 						else {
 							assert(mode_OIT == MFR_MODE::DYNAMIC_FB);
-							dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_ABUFFER_VOLUMEMAP_ps_5_0);
+							if (is_picking_routine) {
+								dx11PS_Target = GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0);
+							} 
+							else {
+								dx11PS_Target = is_volume_dist_map ? GETPS(SR_OIT_ABUFFER_VOLUME_DIST_MAP_ps_5_0) : GETPS(SR_OIT_ABUFFER_VOLUMEMAP_ps_5_0);
+							}
 						}
 #endif
 					}

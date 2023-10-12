@@ -210,7 +210,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	if (strRendererSource == "VOLUME")
 	{
 		double dRuntime = 0;
-		//RenderVrDLS(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
+		RenderVrDLS(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
 		g_dRunTimeVRs += dRuntime;
 		is_system_out = true;
 		is_vr = true;
@@ -238,8 +238,6 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		g_dRunTimeVRs += dRuntime;
 		if (is_final_renderer || planeThickness <= 0.f) is_system_out = true;
 	}
-
-	//if (is_picking_routine)
 
 	auto RenderOut = [&iobj, &is_final_renderer, &planeThickness, &_fncontainer, &is_vr]() {
 

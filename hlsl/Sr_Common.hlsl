@@ -2,7 +2,7 @@
 
 Buffer<float4> g_f4bufOTF : register(t0); // Mask OTFs StructuredBuffer
 Texture3D g_tex3DVolume : register(t1);
-Texture3D g_tex3DBlock : register(t2); // For Deviation
+Texture3D tex3D_volblk : register(t2); // For Deviation
 
 Texture2DArray g_texRgbaArray : register(t3); // for cmm text and ply textures
 
@@ -534,6 +534,148 @@ float WRITE_DEPTHZ(__VS_OUT input) : SV_Depth
     return z;
 }
 
+
+float3 ComputeDeviation(float3 pos, float3 nrl)
+{
+    float sampleDist = g_cbVobj.sample_dist;
+    float devMin = FLT_COMP_MAX;
+    float distMin = FLT_COMP_MAX;
+    int minSampleSteps = 1000000;
+
+    float dst_isovalue = asfloat(g_cbPobj.pobj_dummy_0);
+
+    // note pos and nrl are defined in WS
+    float3 posOS = TransformPoint(pos, g_cbPobj.mat_ws2os);
+    float3 posTS = TransformPoint(posOS, g_cbVobj.mat_ws2ts);
+
+    nrl = normalize(nrl);
+    float3 dirSampleOS = TransformVector(nrl * sampleDist, g_cbPobj.mat_ws2os);
+    float3 dirSampleTS = TransformVector(dirSampleOS, g_cbVobj.mat_ws2ts);
+    float sampleDistTS = length(dirSampleTS);
+
+    float3 sampleDirs[2] = { dirSampleTS, -dirSampleTS };
+
+    {
+        //float3 boxMin = float3(0, 0, 0);
+        //float3 boxMax = float3(1, 1, 1);
+        //float2 hits_t = ComputeAaBbHits(posTS, boxMin, boxMax, sampleDirs[0]);
+        //int numSamples = min((int)((hits_t.y - hits_t.x)  + 0.5f), minSampleSteps);
+        //if (numSamples > 150)
+        //    return float3(1, 0, 0);
+        //else 
+        //    return float3(0, 1, 0);
+    }
+
+    [loop]
+    for (int k = 0; k < 2; k++)
+    {
+        float3 sampleDir = sampleDirs[k];
+
+        float3 boxMin = float3(0, 0, 0);
+        float3 boxMax = float3(1, 1, 1);
+        float2 hits_t = ComputeAaBbHits(posTS, boxMin, boxMax, sampleDir);
+        if (hits_t.y <= hits_t.x)
+            continue;
+
+        int numSamples = (int)(hits_t.y - hits_t.x);
+
+        float3 posStartTS = posTS + sampleDir * hits_t.x;	// hits_t.x is almost 0
+        float refVolValue = g_tex3DVolume.SampleLevel(g_samplerLinear, posTS, 0).r;
+
+        if (refVolValue < dst_isovalue)
+        {	// The polygonal surface is outside the volume surface
+            if (minSampleSteps == 100000000)
+            {
+                devMin = -FLT_COMP_MAX;
+                minSampleSteps == 99999999;
+            }
+
+            //if (numSamples > 10)
+            //    return float3(1, 1, 1);
+            [loop]
+            for (int i = 1; i < numSamples; i++)
+            {
+                float3 posSampleTS = posStartTS + sampleDir * (float)i;
+
+                LOAD_BLOCK_INFO(blkSkip, posSampleTS, sampleDir, numSamples, i)
+
+                if (blkSkip.blk_value > 0)
+                {
+                    [loop]
+                    for (int j = 0; j <= blkSkip.num_skip_steps; j++)
+                    {
+                        float3 pos_sample_blk_ts = posStartTS + sampleDir * (float)(i + j);
+                        float sampleValue = g_tex3DVolume.SampleLevel(g_samplerLinear_clamp, pos_sample_blk_ts, 0).r;
+
+                        if (sampleValue > dst_isovalue)
+                        {
+                            float steps = (float)(i + j) + hits_t.x;// length(f3PosSampleInBlockWS - pos);
+                            float dist = steps * sampleDist;
+                            if (distMin > dist)
+                            {
+                                distMin = dist;
+                                devMin = -dist;
+                                minSampleSteps = steps;
+                            }
+                            i = numSamples;
+                            j = numSamples + blkSkip.num_skip_steps;
+                            break;
+                        }
+                    }
+                }
+                i += blkSkip.num_skip_steps;
+            }
+        }
+        else
+        {
+            // The polygonal surface is inside the volume surface
+            [loop]
+            for (int i = 1; i < numSamples; i++)
+            {
+                float3 posSampleTS = posStartTS + sampleDir * (float)i;
+
+                float sampleValue = g_tex3DVolume.SampleLevel(g_samplerLinear_clamp, posSampleTS, 0).r;
+                if (sampleValue < dst_isovalue)
+                {
+                    float steps = (float)(i) + hits_t.x;// length(f3PosSampleInBlockWS - pos);
+                    float dist = steps * sampleDist;
+
+                    //return float3(1, 1, 0);
+                    if (distMin > dist)
+                    {
+                        distMin = dist;
+                        devMin = dist;
+                        minSampleSteps = steps;
+                    }
+                    i = numSamples;
+                    break;
+                }
+            }
+        }
+    }
+
+
+    float3 fColor = float3(1, 1, 1);// input.f3Custom;
+
+    float minMapping = -10;// g_cbTmap.mapping_v_min;
+    float maxMapping = 10;// g_cbTmap.mapping_v_max;
+
+    //devMin = abs(devMin);
+    //if (devMin > minMapping && devMin < maxMapping)
+    //if (devMin > 0 && devMin < maxMapping)
+    {
+        float mapValue = saturate((devMin - minMapping)
+            / (maxMapping - minMapping));
+
+        fColor = g_f4bufOTF[(int)(mapValue * (g_cbTmap.tmap_size_x - 1))].rgb;
+        //fColor = g_f4bufOTF[1700].rgb;
+        //if (distMin > 5)
+        //    fColor = float3(1, 1, 0);
+    }
+
+    return fColor;
+}
+
 void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
 {
     POBJ_PRE_CONTEXT;
@@ -619,9 +761,25 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     //float sample_v = g_tex3DVolume.SampleLevel(g_samplerLinear_clamp, posTS, 0).r;
     //float3 tt = (posTS + (float3)1.0f) * 0.5f;
     float sample_v = g_tex3DVolume.SampleLevel(g_samplerLinear_clamp, posTS, 0).r;
-    float4 colorMap = g_f4bufOTF[(int)(sample_v * g_cbTmap.tmap_size_x)];// g_cbTmap.tmap_size_x];
+    float4 colorMap = g_f4bufOTF[(int)(sample_v * (g_cbTmap.tmap_size_x - 1))];// g_cbTmap.tmap_size_x];
     if (colorMap.a > 0)
         v_rgba = colorMap;
+
+    if (nor_len > 0)
+    {
+        float3 Ka = v_rgba.rgb * g_cbPobj.Ka * 1.15, Kd = v_rgba.rgb * g_cbPobj.Kd * 1.15, Ks = v_rgba.rgb * g_cbPobj.Ks * 1.15;
+        Ka *= g_cbEnv.ltint_ambient.rgb;
+        Kd *= g_cbEnv.ltint_diffuse.rgb;
+        Ks *= g_cbEnv.ltint_spec.rgb;
+        float Ns = g_cbPobj.Ns;
+        ComputeColor(v_rgba.rgb, Ka, Kd, Ks, Ns, 1.0, input.f3PosWS, view_dir, nor, nor_len);
+    }
+#elif __RENDERING_MODE == 6
+    if (nor_len > 0)
+        v_rgba.rgb = ComputeDeviation(input.f3PosWS, nor);
+    else
+        v_rgba.rgb = (float3)1;
+    v_rgba.a = g_cbPobj.alpha;
 
     if (nor_len > 0)
     {
