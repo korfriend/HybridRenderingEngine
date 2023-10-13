@@ -534,6 +534,38 @@ float WRITE_DEPTHZ(__VS_OUT input) : SV_Depth
     return z;
 }
 
+float2 BisectionalRefine(const float3 pos_sample_ts, const float3 dir_sample_ts, const int num_refinement,
+    const float dst_isovalue, const bool largerCheck)
+{
+    float t0 = 0, t1 = 1;
+
+    // Interval bisection
+    float3 pos_bis_s_ts = pos_sample_ts - dir_sample_ts;
+    float3 pos_bis_e_ts = pos_sample_ts;
+
+    int min_valid_v = g_cbTmap.first_nonzeroalpha_index;
+    float _singed = largerCheck ? 1.f : -1.f;
+
+    [loop]
+    for (int j = 0; j < num_refinement; j++)
+    {
+        float3 pos_bis_ts = (pos_bis_s_ts + pos_bis_e_ts) * 0.5f;
+        float t = (t0 + t1) * 0.5f;
+        float sample_v = g_tex3DVolume.SampleLevel(g_samplerLinear_clamp, pos_bis_ts, 0).r;
+        if (sample_v * _singed > dst_isovalue * _singed)
+        {
+            pos_bis_e_ts = pos_bis_ts;
+            t1 = t;
+        }
+        else
+        {
+            pos_bis_s_ts = pos_bis_ts;
+            t0 = t;
+        }
+    }
+
+    return float2(t0, t1);
+}
 
 float3 ComputeDeviation(float3 pos, float3 nrl)
 {
@@ -547,6 +579,8 @@ float3 ComputeDeviation(float3 pos, float3 nrl)
     // note pos and nrl are defined in WS
     float3 posOS = TransformPoint(pos, g_cbPobj.mat_ws2os);
     float3 posTS = TransformPoint(posOS, g_cbVobj.mat_ws2ts);
+
+    //float4x4 matTS2WS = inverse(g_cbPobj.mat_ws2os) * inverse(g_cbVobj.mat_ws2ts);
 
     nrl = normalize(nrl);
     float3 dirSampleOS = TransformVector(nrl * sampleDist, g_cbPobj.mat_ws2os);
@@ -609,7 +643,10 @@ float3 ComputeDeviation(float3 pos, float3 nrl)
 
                         if (sampleValue > dst_isovalue)
                         {
-                            float steps = (float)(i + j) + hits_t.x;// length(f3PosSampleInBlockWS - pos);
+                            // Interval bisection
+                            float2 tt = BisectionalRefine(pos_sample_blk_ts, sampleDir, 10, dst_isovalue, true);
+
+                            float steps = (float)(i + j) + hits_t.x + (tt.y - 1.f);// length(f3PosSampleInBlockWS - pos);
                             float dist = steps * sampleDist;
                             if (distMin > dist)
                             {
@@ -637,7 +674,9 @@ float3 ComputeDeviation(float3 pos, float3 nrl)
                 float sampleValue = g_tex3DVolume.SampleLevel(g_samplerLinear_clamp, posSampleTS, 0).r;
                 if (sampleValue < dst_isovalue)
                 {
-                    float steps = (float)(i) + hits_t.x;// length(f3PosSampleInBlockWS - pos);
+                    float2 tt = BisectionalRefine(posSampleTS, sampleDir, 10, dst_isovalue, false);
+
+                    float steps = (float)(i) + hits_t.x + (tt.y - 1.f);// length(f3PosSampleInBlockWS - pos);
                     float dist = steps * sampleDist;
 
                     //return float3(1, 1, 0);
