@@ -7,3 +7,6 @@ __vmstatic void DeInitModule(fncontainer::VmFnContainer& _fncontainer);
 __vmstatic double GetProgress();
 __vmstatic void InteropCustomWork(fncontainer::VmFnContainer& _fncontainer);
 __vmstatic void GetModuleSpecification(std::vector<std::string>& requirements);
+
+// customized function
+__vmstatic bool GetSharedShaderResView(const int iobjId, const void* dx11devPtr, void** sharedSRV);

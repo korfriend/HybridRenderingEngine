@@ -26,12 +26,19 @@ struct D2DRes {
 	ID2D1RenderTarget* pRenderTarget = NULL;
 	ID2D1SolidColorBrush* pSolidBrush = NULL;
 
+	std::map<void*, ID3D11ShaderResourceView*> mapDevSharedSRVs;
+
 	ID3D11Texture2D* pTex2DRT = NULL; // do not release this!
 
 	void ReleaseD2DRes() {
 		VMSAFE_RELEASE(pSolidBrush);
 		VMSAFE_RELEASE(pRenderTarget);
 		VMSAFE_RELEASE(pDxgiSurface);
+
+		for (auto& kv : mapDevSharedSRVs) {
+			VMSAFE_RELEASE(kv.second);
+		}
+		mapDevSharedSRVs.clear();
 	}
 };
 map<int, D2DRes> g_d2dResMap;
@@ -398,7 +405,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		else {
 			res2d = &it->second;
 			if (res2d->pTex2DRT != rtTex2D) {
-				res2d->ReleaseD2DRes();
+				res2d->ReleaseD2DRes(); // clean also shared res views
 				reGenRes = true;
 			}
 		}
@@ -519,7 +526,8 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		}
 		/**/
 
-		RenderOut();
+		bool isSkipSysFbBupdate = _fncontainer.fnParams.GetParam("_bool_SkipSysFBUpdate", false);
+		if (!isSkipSysFbBupdate) RenderOut();
 	}
 
 	g_dProgress = 100;
@@ -616,4 +624,79 @@ void InteropCustomWork(fncontainer::VmFnContainer& _fncontainer)
 		g_pCGpuManager = new VmGpuManager(GpuSdkTypeDX11, __DLLNAME);
 	_fncontainer.fnParams.SetParam("_string_CoreVersion", string(__VERSION));
 	_fncontainer.fnParams.SetParam("_VmGpuManager*_", g_pCGpuManager);
+}
+
+bool GetSharedShaderResView(const int iobjId, const void* dx11devPtr, void** sharedSRV)
+{
+	*sharedSRV = nullptr;
+
+	if (g_pCGpuManager == NULL) {
+		vmlog::LogErr("No GPU Manager is assigned!");
+		return false;
+	}
+
+	GpuRes gres_fb;
+	gres_fb.vm_src_id = iobjId;
+	gres_fb.res_name = "RENDER_OUT_RGBA_0";
+	if (!g_pCGpuManager->UpdateGpuResource(gres_fb)) {
+		vmlog::LogErr("No GPU Rendertarget is assigned! (" + std::to_string(iobjId) + ")");
+		return false;
+	}
+
+	ID3D11Texture2D* rtTex2D = (ID3D11Texture2D*)gres_fb.alloc_res_ptrs[DTYPE_RES];
+
+	ID3D11ShaderResourceView** ppsharedSRV = NULL;
+	D2DRes* res2d = NULL;
+	auto it = g_d2dResMap.find(iobjId);
+	if (it == g_d2dResMap.end()) {
+		vmlog::LogErr("No GPU Rendering is called! (" + std::to_string(iobjId) + ")");
+		return false;
+	}
+	else {
+		res2d = &it->second;
+
+		auto it = res2d->mapDevSharedSRVs.find((void*)dx11devPtr);
+		if (it != res2d->mapDevSharedSRVs.end()) {
+			*sharedSRV = it->second;
+			return true;
+		}
+
+		ppsharedSRV = &res2d->mapDevSharedSRVs[(void*)dx11devPtr];
+	}
+
+	// QI IDXGIResource interface to synchronized shared surface.
+	IDXGIResource* pDXGIResource = NULL;
+	rtTex2D->QueryInterface(__uuidof(IDXGIResource), (LPVOID*)&pDXGIResource);
+
+	// obtain handle to IDXGIResource object.
+	HANDLE sharedHandle;
+	// this code snippet is only for dx11.0
+	// for dx11.1 or higher, refer to
+	// https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgiresource-getsharedhandle
+	pDXGIResource->GetSharedHandle(&sharedHandle);
+	pDXGIResource->Release();
+
+	ID3D11Device* pdx11AnotherDev = (ID3D11Device*)dx11devPtr;
+
+	if (sharedHandle == NULL) {
+		vmlog::LogErr("Not Allowed for Shared Resource! (" + std::to_string(iobjId) + ")");
+		return false;
+	}
+
+	ID3D11Texture2D* rtTex2;
+	pdx11AnotherDev->OpenSharedResource(sharedHandle, __uuidof(ID3D11Texture2D), (LPVOID*)&rtTex2);
+
+	// Create texture view
+	D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
+	ZeroMemory(&srvDesc, sizeof(srvDesc));
+	srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+	srvDesc.Texture2D.MipLevels = 1;
+	srvDesc.Texture2D.MostDetailedMip = 0;
+
+	pdx11AnotherDev->CreateShaderResourceView(rtTex2, &srvDesc, ppsharedSRV);
+	rtTex2->Release();
+
+	*sharedSRV = *ppsharedSRV;
+	return true;
 }

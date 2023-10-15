@@ -626,8 +626,8 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		D3D11_TEXTURE2D_DESC descTex2D;
 		ZeroMemory(&descTex2D, sizeof(D3D11_TEXTURE2D_DESC));
 		descTex2D.Width = gres.res_values.GetParam("WIDTH", (uint)0);
-		descTex2D.Height = gres.res_values.GetParam("HEIGHT", (uint)0); 
-		descTex2D.MipLevels = gres.options["MIP_GEN"] == 1? 0 : 1;
+		descTex2D.Height = gres.res_values.GetParam("HEIGHT", (uint)0);
+		descTex2D.MipLevels = gres.options["MIP_GEN"] == 1 ? 0 : 1;
 		descTex2D.ArraySize = max(gres.res_values.GetParam("DEPTH", (uint)0), (uint)1);
 		descTex2D.Format = (DXGI_FORMAT)GetOption("FORMAT");
 		descTex2D.SampleDesc.Count = 1;
@@ -636,6 +636,7 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		descTex2D.BindFlags = GetOption("BIND_FLAG");
 		descTex2D.CPUAccessFlags = GetOption("CPU_ACCESS_FLAG");
 		descTex2D.MiscFlags = gres.options["MIP_GEN"] == 1 ? D3D11_RESOURCE_MISC_GENERATE_MIPS : NULL;
+		descTex2D.MiscFlags |= D3D11_RESOURCE_MISC_SHARED;
 
 		//if (gres.options["MIP_GEN"] == 1)
 		//	int gg = 0;
