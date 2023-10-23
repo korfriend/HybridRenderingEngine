@@ -661,8 +661,9 @@ namespace grd_helper
 		uint		tmap_size_x;
 		float		mapping_v_min; 
 
-		float		mapping_v_max; 
-		uint		tm_dummy_0;
+		float		mapping_v_max;
+		// 1st bit set, then color clip
+		uint		flag;	
 		uint		tm_dummy_1;
 		uint		tm_dummy_2;
 

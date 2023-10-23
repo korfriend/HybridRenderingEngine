@@ -694,22 +694,26 @@ float3 ComputeDeviation(float3 pos, float3 nrl)
     }
 
 
-    float3 fColor = float3(1, 1, 1);// input.f3Custom;
+    float3 fColor = g_cbPobj.Kd;
 
-    float minMapping = -10;// g_cbTmap.mapping_v_min;
-    float maxMapping = 10;// g_cbTmap.mapping_v_max;
+    float minMapping = g_cbTmap.mapping_v_min;
+    float maxMapping = g_cbTmap.mapping_v_max;
 
     //devMin = abs(devMin);
     //if (devMin > minMapping && devMin < maxMapping)
     //if (devMin > 0 && devMin < maxMapping)
     {
-        float mapValue = saturate((devMin - minMapping)
-            / (maxMapping - minMapping));
+        float mapValue = ((devMin - minMapping) / (maxMapping - minMapping));
 
-        fColor = g_f4bufOTF[(int)(mapValue * (g_cbTmap.tmap_size_x - 1))].rgb;
-        //fColor = g_f4bufOTF[1700].rgb;
-        //if (distMin > 5)
-        //    fColor = float3(1, 1, 0);
+        if (BitCheck(g_cbTmap.flag, 0)) {
+            fColor = g_f4bufOTF[(int)(saturate(mapValue) * (g_cbTmap.tmap_size_x - 1))].rgb;
+        }
+        else
+        {
+            if (mapValue >= 0 && mapValue <= 1.f) {
+                fColor = g_f4bufOTF[(int)((mapValue) * (g_cbTmap.tmap_size_x - 1))].rgb;
+            }
+        }
     }
 
     return fColor;

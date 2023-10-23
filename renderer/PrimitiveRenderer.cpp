@@ -1616,11 +1616,13 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 #endif
 
-	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
-	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV], clr_float_fltmax_4);
-	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
-	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_singlelayer_tempDepth.alloc_res_ptrs[DTYPE_RTV], clr_float_fltmax_4);
-
+	if (!is_picking_routine)
+	{
+		dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
+		dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV], clr_float_fltmax_4);
+		dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
+		dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_singlelayer_tempDepth.alloc_res_ptrs[DTYPE_RTV], clr_float_fltmax_4);
+	}
 	dx11CommonParams->GpuProfile("Clear for Render1 - SR", true);
 #pragma endregion 
 
@@ -1700,13 +1702,25 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 			bool force_to_pointsetrender = actor->GetParam("_bool_ForceToPointsetRender", false);
 			bool is_wireframe = actor->GetParam("_bool_IsWireframe", false);
-			bool is_volume_dist_map = actor->GetParam("_bool_IsVolumeDistMap", false);
+
+			float cmap_vmin = actor->GetParam("_float_ColorMapVMin", 0.f);
+			float cmap_vmax = actor->GetParam("_float_ColorMapVMax", 1.f);
+			bool cmap_clip = actor->GetParam("_bool_ColorMapClip", false);
+			//float isoValueVolumeActor = actor->GetParam("_float_ColorMapVolumeIsoValue", -1.f);
+			VmActor* actorDistTo = actor->GetParam("_VmActor*_DistToActor", (VmActor*)NULL);
+			VmObject* actorDistGeoRes = actorDistTo? actorDistTo->GetGeometryRes() : NULL;
+			int distanceMapMode = 0; // 0 : none, 1 : to volume, 2 : to mesh
 #pragma endregion
 
 #pragma region GPU resource updates
 			VmObject* tobj_otf = (VmObject*)actor->GetAssociateRes("OTF");
 			VmObject* tobj_maptable = (VmObject*)actor->GetAssociateRes("MAPTABLE"); // single one
 			VmVObjectVolume* vobj = (VmVObjectVolume*)actor->GetAssociateRes("VOLUME");
+			if (actorDistGeoRes) {
+				if (vobj == actorDistGeoRes) distanceMapMode = 1;
+
+				// todo : actorDistGeoRes is mesh
+			}
 
 			if (vobj) {
 				GpuRes gres_vol;
@@ -1739,6 +1753,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 				CB_TMAP cbTmap;
 				grd_helper::SetCb_TMap(cbTmap, tobj_maptable);
+				cbTmap.mapping_v_min = cmap_vmin;
+				cbTmap.mapping_v_max = cmap_vmax;
+				cbTmap.flag |= (int)cmap_clip;
 				D3D11_MAPPED_SUBRESOURCE mappedResTmap;
 				dx11DeviceImmContext->Map(cbuf_tmap, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResTmap);
 				CB_TMAP* cbTmapData = (CB_TMAP*)mappedResTmap.pData;
@@ -1800,9 +1817,17 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			cbPolygonObj.tex_map_enum = tex_map_enum;
 			cbPolygonObj.pobj_dummy_0 = actor->actorId;// pobj->GetObjectID(); // used for picking
 			grd_helper::SetCb_PolygonObj(cbPolygonObj, pobj, actor, matWS2SS, matWS2PS, is_annotation_obj, use_vertex_color);
-			if (is_volume_dist_map && tobj_otf && !is_picking_routine) {
-				MapTable* tobj_data = tobj_otf->GetObjParamPtr<MapTable>("_TableMap_OTF");
-				float fisoValue = (float)tobj_data->valid_min_idx.x / (float)tobj_data->array_lengths.x;
+			if (distanceMapMode == 1 && vobj && !is_picking_routine) {
+				VolumeData* volData = vobj->GetVolumeData();
+				float vtypemax = 1.f;
+				if (volData->store_dtype == data_type::dtype<byte>()) vtypemax = 255.f;
+				else if (volData->store_dtype == data_type::dtype<ushort>()) vtypemax = 65535.f;
+				else assert(0);
+				float fisoValue = 0;// isoValueVolumeActor / vtypemax;
+				if (tobj_otf) { // && isoValueVolumeActor < 0) {
+					MapTable* tobj_data = tobj_otf->GetObjParamPtr<MapTable>("_TableMap_OTF");
+					fisoValue = (float)tobj_data->valid_min_idx.x / (float)tobj_data->array_lengths.x;
+				}
 				cbPolygonObj.pobj_dummy_0 = *(uint*)&fisoValue;
 			}
 			if (use_vertex_color) {
@@ -1945,10 +1970,10 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					}
 					else if (vobj && tobj_maptable) {
 #ifdef DX10_0
-						dx11PS_Target = is_volume_dist_map? GETPS(SR_BASIC_VOLUME_DIST_MAP_ps_4_0) : GETPS(SR_BASIC_VOLUMEMAP_ps_4_0); // render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES
+						dx11PS_Target = distanceMapMode == 1 ? GETPS(SR_BASIC_VOLUME_DIST_MAP_ps_4_0) : GETPS(SR_BASIC_VOLUMEMAP_ps_4_0); // render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES
 #else
 						if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
-							dx11PS_Target = is_volume_dist_map? GETPS(SR_BASIC_VOLUME_DIST_MAP_ps_5_0) : GETPS(SR_BASIC_VOLUMEMAP_ps_5_0);
+							dx11PS_Target = distanceMapMode == 1 ? GETPS(SR_BASIC_VOLUME_DIST_MAP_ps_5_0) : GETPS(SR_BASIC_VOLUMEMAP_ps_5_0);
 						}
 						else {
 							assert(mode_OIT == MFR_MODE::DYNAMIC_FB);
@@ -1956,7 +1981,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 								dx11PS_Target = GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0);
 							} 
 							else {
-								dx11PS_Target = is_volume_dist_map ? GETPS(SR_OIT_ABUFFER_VOLUME_DIST_MAP_ps_5_0) : GETPS(SR_OIT_ABUFFER_VOLUMEMAP_ps_5_0);
+								dx11PS_Target = distanceMapMode == 1 ? GETPS(SR_OIT_ABUFFER_VOLUME_DIST_MAP_ps_5_0) : GETPS(SR_OIT_ABUFFER_VOLUMEMAP_ps_5_0);
 							}
 						}
 #endif

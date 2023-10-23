@@ -238,7 +238,8 @@ struct HxCB_TMAP
 	float mapping_v_min;
 
 	float mapping_v_max;
-	uint tm_dummy_0;
+	// 1st bit set, then color clip
+	uint flag;
 	uint tm_dummy_1;
 	uint tm_dummy_2;
 };

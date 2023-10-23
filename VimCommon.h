@@ -168,6 +168,7 @@
 
 namespace vmlog {
 	__vmstatic void InitLog(const std::string& coreName, const std::string& logFileName);
+	__vmstatic void GetLoggerPtr(std::shared_ptr<void>& logger);
 	__vmstatic void SetLogLevel(const int logLevel);
 	__vmstatic void LogInfo(std::string str);
 	__vmstatic void LogWarn(std::string str);
