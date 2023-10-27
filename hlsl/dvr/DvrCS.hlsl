@@ -1188,8 +1188,10 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 		Fragment f; 
 		f.i_vis = ConvertFloat4ToUInt(prev_vis);
 		f.z = prev_depthcs;
-		//f.zthick = g_cbVobj.sample_dist;
-		//f.opacity_sum = prev_vis.a;
+#if FRAG_MERGING == 1
+		f.zthick = g_cbVobj.sample_dist;
+		f.opacity_sum = prev_vis.a;
+#endif
 		fs[0] = f;
 	}
 	fs[num_frags] = (Fragment)0;

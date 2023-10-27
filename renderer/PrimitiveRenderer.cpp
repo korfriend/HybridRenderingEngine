@@ -1706,6 +1706,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			float cmap_vmin = actor->GetParam("_float_ColorMapVMin", 0.f);
 			float cmap_vmax = actor->GetParam("_float_ColorMapVMax", 1.f);
 			bool cmap_clip = actor->GetParam("_bool_ColorMapClip", false);
+
+			bool cmap_windowing = actor->GetParam("_bool_ColorMapAsWindowing", false);
 			//float isoValueVolumeActor = actor->GetParam("_float_ColorMapVolumeIsoValue", -1.f);
 			VmActor* actorDistTo = actor->GetParam("_VmActor*_DistToActor", (VmActor*)NULL);
 			VmObject* actorDistGeoRes = actorDistTo? actorDistTo->GetGeometryRes() : NULL;
@@ -1734,7 +1736,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					dx11DeviceImmContext->PSSetShaderResources(2, 1, (ID3D11ShaderResourceView**)&gres_volblk_otf.alloc_res_ptrs[DTYPE_SRV]);
 				}
 
-				vmmat44f matGeoOS2VolOS = actor->GetParam("_matrix44f_GeoOS2VolOS", vmmat44f());
+				vmmat44f matGeoOS2VolOS = actor->GetParam("_matrix44f_GeoOS2VolOS", vmmat44f(1));
 				CB_VolumeObject cbVolumeObj;
 				grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, matGeoOS2VolOS, gres_vol, 0, 65535.f, 1.f, false);
 				cbVolumeObj.pb_shading_factor = material_phongCoeffs;
@@ -1817,6 +1819,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			cbPolygonObj.tex_map_enum = tex_map_enum;
 			cbPolygonObj.pobj_dummy_0 = actor->actorId;// pobj->GetObjectID(); // used for picking
 			grd_helper::SetCb_PolygonObj(cbPolygonObj, pobj, actor, matWS2SS, matWS2PS, is_annotation_obj, use_vertex_color);
+			cbPolygonObj.pobj_flag |= (int)cmap_windowing << 7;
+			
 			if (distanceMapMode == 1 && vobj && !is_picking_routine) {
 				VolumeData* volData = vobj->GetVolumeData();
 				float vtypemax = 1.f;

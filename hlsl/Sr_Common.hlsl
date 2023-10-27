@@ -805,8 +805,16 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     //float3 tt = (posTS + (float3)1.0f) * 0.5f;
     float sample_v = g_tex3DVolume.SampleLevel(g_samplerLinear_clamp, posTS, 0).r;
     float4 colorMap = g_f4bufOTF[(int)(sample_v * (g_cbTmap.tmap_size_x - 1))];// g_cbTmap.tmap_size_x];
-    if (colorMap.a > 0)
-        v_rgba = colorMap;
+
+    if (BitCheck(g_cbPobj.pobj_flag, 7)) 
+    {
+        v_rgba.rgb = colorMap.rgb * colorMap.a;
+        // preserving v_rgba.a
+    }
+    else {
+        if (colorMap.a > 0)
+            v_rgba = colorMap;
+    }
 
     if (nor_len > 0)
     {

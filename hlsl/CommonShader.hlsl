@@ -131,6 +131,7 @@ struct HxCB_PolygonObject
 	// 4th bit : 0 (Set texture0 to texture0) 1 (Set global_color to texture0)
 	// 6th bit : 0 (Diffuse abs) 1 (Diffuse max)
 	// 7th bit : 0 (slicer with solid filling) 1 (slicer does not fill)
+	// 8th bit : 0 (normal color map) 1 (for windowing slice)
 	// 10th bit : 0 (No XFlip) 1 (XFlip)
 	// 11th bit : 0 (No XFlip) 1 (YFlip)
 	// 20th bit : 0 (No Dashed Line) 1 (Dashed Line)

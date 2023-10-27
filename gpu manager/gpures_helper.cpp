@@ -2373,13 +2373,13 @@ void grd_helper::SetCb_ClipInfo(CB_ClipInfo& cb_clip, VmVObject* obj, VmActor* a
 	}
 	if (cb_clip.clip_flag & 0x2)
 	{
-		cb_clip.mat_clipbox_ws2bs = TRANSPOSE(actor->GetParam("_matrix44f_MatrixClipWS2BS", vmmat44f()));
+		cb_clip.mat_clipbox_ws2bs = TRANSPOSE(actor->GetParam("_matrix44f_MatrixClipWS2BS", vmmat44f(1)));
 	}
 }
 
 void grd_helper::SetCb_HotspotMask(CB_HotspotMask& cb_hsmask, VmFnContainer* _fncontainer, const vmmat44f& matWS2SS)
 {
-	vmfloat3 pos_3dtip_ws = _fncontainer->fnParams.GetParam("_float3_3DTipPos", vmdouble3());
+	vmfloat3 pos_3dtip_ws = _fncontainer->fnParams.GetParam("_float3_3DTipPos", vmdouble3(0));
 	bool use_mask_3dtip = _fncontainer->fnParams.GetParam("_bool_UseMask3DTip", false);
 
 	vmdouble4 mask_center_rs_0 = _fncontainer->fnParams.GetParam("_float4_MaskCenterRadius0", vmdouble4(150, 150, 200, 0.5f));
