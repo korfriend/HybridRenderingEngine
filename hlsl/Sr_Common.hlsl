@@ -271,7 +271,7 @@ float4 OutlineTest_old(const in int2 tex2d_xy, const in float depth_c, const in 
     return vout;
 }
 
-float4 OutlineTest(const in int2 tex2d_xy, inout float depth_c, const in float discont_depth_criterion, const in float3 edge_color, const in int thick)
+float4 OutlineTest(const in int2 tex2d_xy, inout float depth_c, const in float discont_depth_criterion, const in float3 edge_color, const in int thick, const in bool fadeMode)
 {
     float2 min_rect = (float2)0;
     float2 max_rect = float2(g_cbCamState.rt_width - 1, g_cbCamState.rt_height - 1);
@@ -306,7 +306,7 @@ float4 OutlineTest(const in int2 tex2d_xy, inout float depth_c, const in float d
 #if DX10_0 == 1
             vout = float4(edge_color, 1);
 #else
-            if (BitCheck(g_cbCamState.cam_flag, 9)) {
+            if (fadeMode) {
                 float w = 2 * thick + 1;
                 float alpha = min((float)count / (w * w / 2.f), 1.f);
                 //alpha *= alpha;

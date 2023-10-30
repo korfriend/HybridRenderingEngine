@@ -17,18 +17,34 @@ PS_FILL_OUTPUT BasicShader4(__VS_OUT input)
     if (v_rgba.a <= 0.01) clip(-1);
     v_rgba.a = 1.f;
 #endif
-#else
+#else // __RENDERING_MODE == 100
     int2 tex2d_xy = int2(input.f4PosSS.xy);
     z_depth = sr_fragment_zdepth[tex2d_xy];
-
-    int outlinePPack = g_cbCamState.iSrCamDummy__1;
-    float3 outline_color = float3(((outlinePPack >> 16) & 0xFF) / 255.f, ((outlinePPack >> 8) & 0xFF) / 255.f, (outlinePPack & 0xFF) / 255.f);
-#if DX10_0 == 1
+    
+    float3 outline_color = (float3)1.f;
     int pixThickness = 1;
-#else
-    int pixThickness = (outlinePPack >> 24) & 0xFF;
+    bool fadeMode = false;
+    
+    if (g_cbPobj.pobj_dummy_1 == 0) {
+        // group silhouette
+        int outlinePPack = g_cbCamState.iSrCamDummy__1;
+        outline_color = float3(((outlinePPack >> 16) & 0xFF) / 255.f, ((outlinePPack >> 8) & 0xFF) / 255.f, (outlinePPack & 0xFF) / 255.f);
+#if DX10_0 != 1
+        pixThickness = (outlinePPack >> 24) & 0xFF;
+        fadeMode = BitCheck(g_cbCamState.cam_flag, 9);
 #endif
-    v_rgba = OutlineTest(tex2d_xy, z_depth, 10000.f, outline_color, pixThickness);
+    }
+    else {
+        // g_cbPobj.Ns is used for z_criterion
+        // individual silhouette
+        outline_color = g_cbPobj.Kd;
+#if DX10_0 != 1
+        pixThickness = g_cbPobj.pobj_dummy_1;
+        fadeMode = (bool)g_cbPobj.pobj_dummy_0;
+#endif
+    }
+
+    v_rgba = OutlineTest(tex2d_xy, z_depth, 10000.f, outline_color, pixThickness, fadeMode);
     if (v_rgba.a <= 0.01) clip(-1);
 
 #if DX10_0 == 1

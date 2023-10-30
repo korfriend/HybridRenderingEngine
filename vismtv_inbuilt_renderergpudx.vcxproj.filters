@@ -56,9 +56,6 @@
     <None Include="hlsl\moment\MomentOIT.hlsli">
       <Filter>hlsl source code\Moment</Filter>
     </None>
-    <None Include="ShaderCompile.bat">
-      <Filter>bat</Filter>
-    </None>
     <None Include="ex_ShaderCompile.bat">
       <Filter>bat</Filter>
     </None>
@@ -66,6 +63,9 @@
       <Filter>hlsl source code\Moment</Filter>
     </None>
     <None Include="ShaderCompile_4_0.bat">
+      <Filter>bat</Filter>
+    </None>
+    <None Include="ShaderCompile.bat">
       <Filter>bat</Filter>
     </None>
   </ItemGroup>
