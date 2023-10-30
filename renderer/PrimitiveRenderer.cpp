@@ -1972,7 +1972,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 						}
 #endif
 					}
-					else if (vobj && tobj_maptable) {
+					else if (vobj && tobj_maptable && render_pass != RENDER_GEOPASS::PASS_SILHOUETTE) {
 #ifdef DX10_0
 						dx11PS_Target = distanceMapMode == 1 ? GETPS(SR_BASIC_VOLUME_DIST_MAP_ps_4_0) : GETPS(SR_BASIC_VOLUMEMAP_ps_4_0); // render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES
 #else

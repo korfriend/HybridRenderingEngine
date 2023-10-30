@@ -834,7 +834,9 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
 
     if (nor_len > 0)
     {
-        float3 Ka = v_rgba.rgb * g_cbPobj.Ka * 1.15, Kd = v_rgba.rgb * g_cbPobj.Kd * 1.15, Ks = v_rgba.rgb * g_cbPobj.Ks * 1.15;
+        float3 Ka = v_rgba.rgb * g_cbPobj.Ka;// *1.15;
+        float3 Kd = v_rgba.rgb * g_cbPobj.Kd;// * 1.15;
+        float3 Ks = v_rgba.rgb * g_cbPobj.Ks;// * 1.15;
         Ka *= g_cbEnv.ltint_ambient.rgb;
         Kd *= g_cbEnv.ltint_diffuse.rgb;
         Ks *= g_cbEnv.ltint_spec.rgb;
