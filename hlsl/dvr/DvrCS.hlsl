@@ -739,7 +739,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #endif
 	
 #if VR_MODE == 1
-	float4 vis_otf = (float4) 0;
+	float4 vis_otf = (float4) 0; // note the otf result is the pre-multiplied color
 	if (Vis_Volume_And_Check(vis_otf, sample_v, pos_ray_start_ts)) {
 		float depth_sample = depth_hit;
 		float3 grad = GRAD_VOL(pos_ray_start_ts);
@@ -752,6 +752,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 		//float4 vis_sample = float4(shade * vis_otf.rgb, vis_otf.a);
 		float4 vis_sample = float4(shade * vis_otf.rgb, 1.f);
+		vis_sample.rgb = saturate(vis_sample.rgb);
 
 #if FRAG_MERGING == 1
 		INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, sampleThickness, fs, merging_beta);
@@ -854,8 +855,9 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 					float3 nrl = GRAD_NRL_VOL(pos_sample_blk_ts, dir_sample_ws, grad_len);
 #endif
 					float shade = 1.f;
-					if (grad_len > 0)
-						shade = PhongBlinnVr(view_dir, g_cbVobj.pb_shading_factor, light_dirinv, nrl, true);
+					if (grad_len > 0) {
+						shade = saturate(PhongBlinnVr(view_dir, g_cbVobj.pb_shading_factor, light_dirinv, nrl, true));
+					}
 
 					float4 vis_sample = float4(shade * vis_otf.rgb, vis_otf.a);
 					float depth_sample = depth_hit + (float)(i + j) * sample_dist;
@@ -1584,7 +1586,7 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 					float shade = 1.f;
 #if VR_MODE != 2
 					if (grad_len > 0)
-						shade = PhongBlinnVr(view_dir, g_cbVobj.pb_shading_factor, light_dirinv, nrl, true);
+						shade = saturate(PhongBlinnVr(view_dir, g_cbVobj.pb_shading_factor, light_dirinv, nrl, true));
 #endif
 					
 					float4 vis_sample = float4(shade * vis_otf.rgb, vis_otf.a);
