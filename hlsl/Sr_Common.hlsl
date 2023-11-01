@@ -694,7 +694,7 @@ float3 ComputeDeviation(float3 pos, float3 nrl)
     }
 
 
-    float3 fColor = g_cbPobj.Kd;
+    float3 fColor = (float3)1;// g_cbPobj.Kd;
 
     float minMapping = g_cbTmap.mapping_v_min;
     float maxMapping = g_cbTmap.mapping_v_max;
@@ -827,14 +827,14 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     }
 #elif __RENDERING_MODE == 6
     if (nor_len > 0)
-        v_rgba.rgb = ComputeDeviation(input.f3PosWS, nor);
+        v_rgba.rgb = ComputeDeviation(input.f3PosWS, nor); // note the color is suppposed to be multiplied by g_cbPobj.Kd, Ka, and Ks
     else
         v_rgba.rgb = (float3)1;
     v_rgba.a = g_cbPobj.alpha;
 
     if (nor_len > 0)
     {
-        float3 Ka = v_rgba.rgb * g_cbPobj.Ka;// *1.15;
+        float3 Ka = v_rgba.rgb * g_cbPobj.Ka;// * 1.15;
         float3 Kd = v_rgba.rgb * g_cbPobj.Kd;// * 1.15;
         float3 Ks = v_rgba.rgb * g_cbPobj.Ks;// * 1.15;
         Ka *= g_cbEnv.ltint_ambient.rgb;
@@ -856,7 +856,9 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     else
     {
         // note g_cbPobj's Ka, Kd, and Ks has already been multiplied by pb_shading_factor.xyz
-        Ka = g_cbPobj.Ka, Kd = g_cbPobj.Kd, Ks = g_cbPobj.Ks;
+        Ka = g_cbPobj.Ka;
+        Kd = g_cbPobj.Kd;
+        Ks = g_cbPobj.Ks;
     }
     if (nor_len > 0)
     {
@@ -868,6 +870,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     else {
         v_rgba.rgb = Kd;
     }
+    //v_rgba.rgb = float3(1, 0, 0);
 
 #endif
 
