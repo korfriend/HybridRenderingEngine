@@ -639,7 +639,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	bool reload_hlsl_objs = _fncontainer->fnParams.GetParam("_bool_ReloadHLSLObjFiles", false);
 
 	int __BLOCKSIZE = _fncontainer->fnParams.GetParam("_int_GpuThreadBlockSize", (int)4);
-	float v_thickness = 0;// _fncontainer->fnParams.GetParam("_float_VZThickness", 0.0f);
+	float v_thickness =  _fncontainer->fnParams.GetParam("_float_VZThickness", 0.0f);
 	//if (v_thickness > 0) {
 	//	vmlog::LogInfo("vzthickness : " + std::to_string(v_thickness));
 	//}
