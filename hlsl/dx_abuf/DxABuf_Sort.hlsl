@@ -179,7 +179,8 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 			fragments[num_valid_fs++] = f;
 		}
 	}
-
+	//fragment_blendout[nDTid.xy] = float4(1, 1, 1, 1);
+	//return;
 	//if (num_valid_fs == 0) fragment_blendout[nDTid.xy] = float4(1, 1, 1, 1);
 	//else if (num_valid_fs == 1) fragment_blendout[nDTid.xy] = float4(1, 0, 0, 1);
 	//else if (num_valid_fs == 2) fragment_blendout[nDTid.xy] = float4(0, 1, 0, 1);

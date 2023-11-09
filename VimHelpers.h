@@ -486,7 +486,7 @@ namespace vmmath {
 	inline void MatrixPS2SS(d44p mat, const double w, const double h)
 	{
 		using namespace glm;
-		dmat4x4 matTranslate, matScale, matTransform, matTranslateSampleModel;
+		dmat4x4 matTranslate, matScale, matTranslateSampleModel;
 		matTranslate = glm::translate(dvec3(1., -1., 0.));
 		matScale = glm::scale(dvec3(w * 0.5, h * 0.5, 1.));
 		matTranslateSampleModel = glm::translate(dvec3(-0.5, 0.5, 0.));

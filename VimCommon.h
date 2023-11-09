@@ -112,56 +112,56 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
-	typedef struct color4 {
-		union { struct { byte r, g, b, a; }; struct { byte x, y, z, w; }; };
-		color4() { r = g = b = a = (byte)0; };
-		color4(byte _r, byte _g, byte _b, byte _a) { r = _r; g = _g; b = _b; a = _a; };
-	} vmbyte4;
-	typedef struct color3 {
-		union { struct { byte r, g, b; }; struct { byte x, y, z; }; };
-		color3() { r = g = b = (byte)0; };
-		color3(byte _r, byte _g, byte _b) { r = _r; g = _g; b = _b; };
-	} vmbyte3;
-	typedef struct char2 {
-		char x, y; char2() { x = y = 0; }
-		char2(char _x, char _y) { x = _x; y = _y; }
-	} vmchar2;
-	typedef struct byte2 {
-		byte x, y; byte2() { x = y = (byte)0; }
-		byte2(byte _x, byte _y) { x = _x; y = _y; }
-	} vmbyte2;
-	typedef struct short2 {
-		short x, y; short2() { x = y = 0; }
-		short2(short _x, short _y) { x = _x; y = _y; }
-	} vmshort2;
-	typedef struct ushort2 {
-		ushort x, y; ushort2() { x = y = 0; }
-		ushort2(ushort _x, ushort _y) { x = _x; y = _y; }
-	} vmushort2;
-	typedef struct short3 {
-		short x, y, z; short3() { x = y = z = 0; }
-		short3(short _x, short _y, short _z) {
-			x = _x; y = _y; z = _z;
-		}
-	} vmshort3;
-	typedef struct ushort3 {
-		ushort x, y, z; ushort3() { x = y = z = 0; }
-		ushort3(ushort _x, ushort _y, ushort _z) { x = _x; y = _y; z = _z; }
-	} vmushort3;
-	typedef glm::ivec2 vmint2;
-	typedef glm::ivec3 vmint3;
-	typedef glm::ivec4 vmint4;
-	typedef glm::uvec2 vmuint2;
-	typedef glm::uvec3 vmuint3;
-	typedef glm::uvec4 vmuint4;
-	typedef glm::dvec2 vmdouble2;
-	typedef glm::dvec3 vmdouble3;
-	typedef glm::dvec4 vmdouble4;
-	typedef glm::fvec2 vmfloat2;
-	typedef glm::fvec3 vmfloat3;
-	typedef glm::fvec4 vmfloat4;
-	typedef glm::dmat4x4 vmmat44;
-	typedef glm::fmat4x4 vmmat44f;
+typedef struct color4 {
+	union { struct { byte r, g, b, a; }; struct { byte x, y, z, w; }; };
+	color4() { r = g = b = a = (byte)0; };
+	color4(byte _r, byte _g, byte _b, byte _a) { r = _r; g = _g; b = _b; a = _a; };
+} vmbyte4;
+typedef struct color3 {
+	union { struct { byte r, g, b; }; struct { byte x, y, z; }; };
+	color3() { r = g = b = (byte)0; };
+	color3(byte _r, byte _g, byte _b) { r = _r; g = _g; b = _b; };
+} vmbyte3;
+typedef struct char2 {
+	char x, y; char2() { x = y = 0; }
+	char2(char _x, char _y) { x = _x; y = _y; }
+} vmchar2;
+typedef struct byte2 {
+	byte x, y; byte2() { x = y = (byte)0; }
+	byte2(byte _x, byte _y) { x = _x; y = _y; }
+} vmbyte2;
+typedef struct short2 {
+	short x, y; short2() { x = y = 0; }
+	short2(short _x, short _y) { x = _x; y = _y; }
+} vmshort2;
+typedef struct ushort2 {
+	ushort x, y; ushort2() { x = y = 0; }
+	ushort2(ushort _x, ushort _y) { x = _x; y = _y; }
+} vmushort2;
+typedef struct short3 {
+	short x, y, z; short3() { x = y = z = 0; }
+	short3(short _x, short _y, short _z) {
+		x = _x; y = _y; z = _z;
+	}
+} vmshort3;
+typedef struct ushort3 {
+	ushort x, y, z; ushort3() { x = y = z = 0; }
+	ushort3(ushort _x, ushort _y, ushort _z) { x = _x; y = _y; z = _z; }
+} vmushort3;
+typedef glm::ivec2 vmint2;
+typedef glm::ivec3 vmint3;
+typedef glm::ivec4 vmint4;
+typedef glm::uvec2 vmuint2;
+typedef glm::uvec3 vmuint3;
+typedef glm::uvec4 vmuint4;
+typedef glm::dvec2 vmdouble2;
+typedef glm::dvec3 vmdouble3;
+typedef glm::dvec4 vmdouble4;
+typedef glm::fvec2 vmfloat2;
+typedef glm::fvec3 vmfloat3;
+typedef glm::fvec4 vmfloat4;
+typedef glm::dmat4x4 vmmat44;
+typedef glm::fmat4x4 vmmat44f;
 
 #define __VMCVT3__(d, s, t3, tt) d=t3((tt)s.x, (tt)s.y, (tt)s.z)
 #define __OPS__(d, s, op) d=op(d, s)
@@ -1546,6 +1546,7 @@ namespace vmobjects
 		 */
 		void GetCameraIntState(vmdouble2* ipsize_cs, double* near_p, double* far_p, vmint2* wh_ss, vmdouble2* fit_ipsize = NULL, double* fit_fovy = NULL);
 		void GetCameraIntStateAR(double* fx, double* fy, double* sc, double* cx, double* cy, double* near_p, double* far_p);
+		bool IsArIntrinsics();
 		/*!
 		 * @brief WS 상에서 정의된 카메라 state를 설정하는 함수
 		 * @param pos [in] \n double 3 \n WS 상의 카메라 위치가 정의된 포인터

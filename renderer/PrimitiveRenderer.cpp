@@ -639,7 +639,10 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	bool reload_hlsl_objs = _fncontainer->fnParams.GetParam("_bool_ReloadHLSLObjFiles", false);
 
 	int __BLOCKSIZE = _fncontainer->fnParams.GetParam("_int_GpuThreadBlockSize", (int)4);
-	float v_thickness = _fncontainer->fnParams.GetParam("_float_VZThickness", 0.0f);
+	float v_thickness = 0;// _fncontainer->fnParams.GetParam("_float_VZThickness", 0.0f);
+	//if (v_thickness > 0) {
+	//	vmlog::LogInfo("vzthickness : " + std::to_string(v_thickness));
+	//}
 	float gi_v_thickness = _fncontainer->fnParams.GetParam("_float_GIVZThickness", v_thickness);
 	float scale_z_res = _fncontainer->fnParams.GetParam("_float_zResScale", 1.0f);
 
@@ -1391,7 +1394,10 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		cb_moment.overestimation = 0.25f;
 		cb_moment.moment_bias = 0.0025f;
 		double np, fp;
-		cam_obj->GetCameraIntState(NULL, &np, &fp, NULL);
+		if (cam_obj->IsArIntrinsics())
+			cam_obj->GetCameraIntStateAR(NULL, NULL, NULL, NULL, NULL, &np, &fp);
+		else
+			cam_obj->GetCameraIntState(NULL, &np, &fp, NULL);
 		mot_nf = _fncontainer->fnParams.GetParam("_float2_MotNearFar", vmdouble2(np, fp));
 		cb_moment.warp_nf = mot_nf;
 		switch (num_moments)

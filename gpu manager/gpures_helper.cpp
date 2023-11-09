@@ -2022,7 +2022,11 @@ void grd_helper::SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, 
 	cb_cam.cam_vz_thickness = vz_thickness;
 
 	double np, fp;
-	ccobj->GetCameraIntState(NULL, &np, &fp, NULL);
+	if (ccobj->IsArIntrinsics())
+		ccobj->GetCameraIntStateAR(NULL, NULL, NULL, NULL, NULL, &np, &fp);
+	else
+		ccobj->GetCameraIntState(NULL, &np, &fp, NULL);
+
 	cb_cam.near_plane = (float)np;
 	cb_cam.far_plane = (float)fp;
 }
