@@ -709,13 +709,13 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			if (tobj_windowing) 
 				tobj_otf = tobj_windowing;
 		}
-		MapTable* tmap_data = tobj_otf->GetObjParamPtr<MapTable>("_TableMap_OTF");
-
 		if (tobj_otf == NULL)
 		{
 			VMERRORMESSAGE("NOT ASSIGNED OTF");
 			continue;
 		}
+
+		MapTable* tmap_data = tobj_otf->GetObjParamPtr<MapTable>("_TableMap_OTF");
 
 		VmVObjectVolume* mask_vol_obj = (VmVObjectVolume*)actor->GetAssociateRes("MASKVOLUME");
 

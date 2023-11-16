@@ -15,7 +15,7 @@ using namespace vmgpuinterface;
 using namespace DirectX;
 
 #define VMSAFE_RELEASE(p) if(p) { (p)->Release(); (p)=NULL; }
-#define VMERRORMESSAGE(a) {vmlog::LogErr(a); assert(0);}
+#define VMERRORMESSAGE(a) {vmlog::LogErr(a);}
 
 enum class GpuhelperResType {
 	VERTEX_SHADER = 0,
