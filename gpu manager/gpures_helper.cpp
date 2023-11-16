@@ -1,6 +1,7 @@
 #include "gpures_helper.h"
 #include "D3DCompiler.h"
 #include <iostream>
+#include <fstream>
 
 using namespace grd_helper;
 
@@ -2619,5 +2620,32 @@ bool grd_helper::CollisionCheck(const vmmat44f& matWS2OS, const AaBbMinMax& aabb
 	float fDist = 0;
 	if (dxAabb.aabox.Intersects(dxRay.origin, dxRay.direction, fDist))
 		return true;
+	return false;
+}
+
+bool grd_helper::GetEnginePath(std::string& enginePath)
+{
+	using namespace std;
+	char ownPth[2048];
+	GetModuleFileNameA(NULL, ownPth, (sizeof(ownPth)));
+	string exe_path = ownPth;
+	string exe_path_;
+	size_t pos = 0;
+	std::string token;
+	string delimiter = "\\";
+	while ((pos = exe_path.find(delimiter)) != std::string::npos) {
+		token = exe_path.substr(0, pos);
+		if (token.find(".exe") != std::string::npos) break;
+		exe_path += token + "\\";
+		exe_path_ += token + "\\";
+		exe_path.erase(0, pos + delimiter.length());
+	}
+
+	ifstream file(exe_path + "..\\engine_module_path.txt");
+	if (file.is_open()) {
+		getline(file, enginePath);
+		file.close();
+		return true;
+	}
 	return false;
 }

@@ -631,7 +631,9 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		descTex2D.ArraySize = max(gres.res_values.GetParam("DEPTH", (uint)0), (uint)1);
 		descTex2D.Format = (DXGI_FORMAT)GetOption("FORMAT");
 		descTex2D.SampleDesc.Count = 1;
-		descTex2D.SampleDesc.Quality = 0;
+		//uint m4xMsaaQuality;
+		//g_pdx11Device->CheckMultisampleQualityLevels(descTex2D.Format, descTex2D.SampleDesc.Count, &m4xMsaaQuality);
+		descTex2D.SampleDesc.Quality = 0;// m4xMsaaQuality - 1;
 		descTex2D.Usage = (D3D11_USAGE)GetOption("USAGE");
 		descTex2D.BindFlags = GetOption("BIND_FLAG");
 		descTex2D.CPUAccessFlags = GetOption("CPU_ACCESS_FLAG");
@@ -640,6 +642,8 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 
 		//if (gres.options["MIP_GEN"] == 1)
 		//	int gg = 0;
+		
+		// https://walbourn.github.io/
 		ID3D11Texture2D* pdx11TX2D = NULL;
 		g_pdx11Device->CreateTexture2D(&descTex2D, NULL, &pdx11TX2D);
 		if (pdx11TX2D == NULL)

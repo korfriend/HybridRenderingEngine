@@ -606,9 +606,9 @@ void DeInitModule(fncontainer::VmFnContainer& _fncontainer)
 	VMSAFE_DELETE(g_pCGpuManager);
 }
 
-double GetProgress()
+int GetProgress(std::string& progressTag)
 {
-	return (double)((int)g_dProgress % 100);
+	return ((int)g_dProgress % 100);
 }
 
 void GetModuleSpecification(std::vector<std::string>& requirements)

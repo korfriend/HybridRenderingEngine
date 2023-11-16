@@ -759,6 +759,7 @@ namespace grd_helper
 	void __TestOutErrors();
 
 	bool CollisionCheck(const vmmat44f& matWS2OS, const AaBbMinMax& aabb_os, const vmfloat3& ray_origin_ws, const vmfloat3& ray_dir_ws);
+	bool GetEnginePath(std::string& enginePath);
 }
 
 #define GETVS(NAME) dx11CommonParams->get_vshader(#NAME)

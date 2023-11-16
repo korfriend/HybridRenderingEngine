@@ -903,6 +903,10 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		//hlslobj_path += "..\\..\\VmModuleProjects\\hybrid_rendering_engine\\";
 		hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\";
 
+		string enginePath;
+		if (grd_helper::GetEnginePath(enginePath)) {
+			hlslobj_path = enginePath;
+		}
 		string hlslobj_path_4_0 = hlslobj_path + "shader_compiled_objs_4_0\\";
 		//cout << hlslobj_path << endl;
 

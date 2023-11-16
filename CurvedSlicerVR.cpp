@@ -103,6 +103,10 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		//hlslobj_path += "..\\..\\VmModuleProjects\\plugin_gpudx11_renderer\\shader_compiled_objs\\";
 		hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\";
 		//cout << hlslobj_path << endl;
+		string enginePath;
+		if (grd_helper::GetEnginePath(enginePath)) {
+			hlslobj_path = enginePath;
+		}
 		string hlslobj_path_4_0 = hlslobj_path + "shader_compiled_objs_4_0\\";
 
 #ifdef DX10_0
