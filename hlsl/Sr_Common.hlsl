@@ -803,7 +803,14 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     float3 posTS = TransformPoint(posOS, g_cbVobj.mat_ws2ts);
     //float sample_v = g_tex3DVolume.SampleLevel(g_samplerLinear_clamp, posTS, 0).r;
     //float3 tt = (posTS + (float3)1.0f) * 0.5f;
-    float sample_v = g_tex3DVolume.SampleLevel(g_samplerLinear_clamp, posTS, 0).r;
+    float sample_v = g_tex3DVolume.SampleLevel(g_samplerLinear, posTS, 0).r;
+
+    float3 posVS = posTS * g_cbVobj.vol_size;
+    if (posVS.x <= 1 || posVS.x >= g_cbVobj.vol_size.x - 1
+        || posVS.y <= 1 || posVS.y >= g_cbVobj.vol_size.y - 1
+        || posVS.z <= 1 || posVS.z >= g_cbVobj.vol_size.z - 1)
+        sample_v = -1;
+
     float4 colorMap = g_f4bufOTF[(int)(sample_v * (g_cbTmap.tmap_size_x - 1))];// g_cbTmap.tmap_size_x];
 
     if (BitCheck(g_cbPobj.pobj_flag, 7)) 
@@ -818,7 +825,13 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
 
     if (nor_len > 0)
     {
-        float3 Ka = v_rgba.rgb * g_cbPobj.Ka * 1.15, Kd = v_rgba.rgb * g_cbPobj.Kd * 1.15, Ks = v_rgba.rgb * g_cbPobj.Ks * 1.15;
+        //float3 Ka = v_rgba.rgb * g_cbPobj.Ka, Kd = v_rgba.rgb * g_cbPobj.Kd, Ks = v_rgba.rgb * g_cbPobj.Ks;
+        float3 Ka = v_rgba.rgb * 0.9, Kd = v_rgba.rgb * 0.2, Ks = v_rgba.rgb;
+        if (colorMap.a == 0) 
+        {
+            Ka = g_cbPobj.Ka, Kd = g_cbPobj.Kd, Ks = g_cbPobj.Ks;
+        }
+
         Ka *= g_cbEnv.ltint_ambient.rgb;
         Kd *= g_cbEnv.ltint_diffuse.rgb;
         Ks *= g_cbEnv.ltint_spec.rgb;

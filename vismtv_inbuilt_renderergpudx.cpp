@@ -348,6 +348,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 
 
 				int buf_row_pitch = mappedResSysRGBA.RowPitch / 4;
+				//is_rgba = is_rgba | !is_final_renderer;
 #ifdef PPL_USE
 				int count = fb_size_cur.y;
 				parallel_for(int(0), count, [&](int i) // is_rgba, fb_size_cur, rgba_sys_buf, depth_sys_buf, rgba_gpu_buf, depth_gpu_buf, buf_row_pitch
