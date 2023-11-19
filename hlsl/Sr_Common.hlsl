@@ -820,7 +820,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     }
     else {
         if (colorMap.a > 0)
-            v_rgba = colorMap;
+            v_rgba.rgb = colorMap.rgb * colorMap.a;
     }
 
     if (nor_len > 0)
