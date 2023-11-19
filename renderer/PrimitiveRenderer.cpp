@@ -1195,7 +1195,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		grd_helper::UpdateFrameBuffer(gres_picking_system_GSO_buffer, iobj, "SYSTEM_OUT_RW_PICKING_GSO_BUF", RTYPE_BUFFER,
 			NULL, DXGI_FORMAT_R32G32B32A32_FLOAT, UPFB_SYSOUT | UPFB_NFPP_BUFFERSIZE, max_picking_layers);
 
-		std::vector<uint> clearDataUnit(max_picking_layers * 3, 0);//make sure that this thing is aligned
+		std::vector<uint> clearDataUnit(max_picking_layers * 4, 0);//make sure that this thing is aligned
 		dx11CommonParams->dx11DeviceImmContext->UpdateSubresource(
 			pickPrimitive? (ID3D11Buffer*)gres_picking_GSO_buffer.alloc_res_ptrs[DTYPE_RES] : (ID3D11Buffer*)gres_picking_buffer.alloc_res_ptrs[DTYPE_RES]
 			, 0, NULL, &clearDataUnit[0], sizeof(uint) * clearDataUnit.size(), sizeof(uint) * clearDataUnit.size());
