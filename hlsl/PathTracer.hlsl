@@ -978,6 +978,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		if (hitTriIdx >= 0) {
 			bool localInside = dot(trinormal, test_raydir.xyz) > 0;
 			isInsideOnPlane = localInside;
+
 			float3 posHitOS = test_rayorig.xyz + hitDistance * test_raydir.xyz;
 #if CURVEDPLANE == 0
 			float3 posHitSS = TransformPoint(posHitOS, mat_os2ss);
@@ -997,7 +998,11 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 
 		if (hitTriIdx >= 0) {
 			bool localInside = dot(trinormal, test_raydir.xyz) > 0;
+#if PICKING == 1 
+			isInsideOnPlane = localInside || isInsideOnPlane;
+#else
 			isInsideOnPlane = localInside && isInsideOnPlane;
+#endif
 
 			float3 posHitOS = test_rayorig.xyz + hitDistance * test_raydir.xyz;
 #if CURVEDPLANE == 0
@@ -1027,7 +1032,11 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		intersectBVHandTriangles(test_rayorig, test_raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
 		if (hitTriIdx >= 0) {
 			bool localInside = dot(trinormal, test_raydir.xyz) > 0;
+#if PICKING == 1 
+			isInsideOnPlane = localInside || isInsideOnPlane;
+#else
 			isInsideOnPlane = localInside && isInsideOnPlane;
+#endif
 
 			float3 posHitOS = test_rayorig.xyz + hitDistance * test_raydir.xyz;
 #if CURVEDPLANE == 0
@@ -1048,7 +1057,11 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 
 		if (hitTriIdx >= 0) {
 			bool localInside = dot(trinormal, test_raydir.xyz) > 0;
+#if PICKING == 1 
+			isInsideOnPlane = localInside || isInsideOnPlane;
+#else
 			isInsideOnPlane = localInside && isInsideOnPlane;
+#endif
 
 			float3 posHitOS = test_rayorig.xyz + hitDistance * test_raydir.xyz;
 #if CURVEDPLANE == 0
@@ -1065,6 +1078,17 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		}
 	}
 
+#if PICKING == 1 
+	if (planeThickness == 0) {
+		if (minDistOnPlane < 2.5 || isInsideOnPlane) {
+			uint fc = 0;
+			InterlockedAdd(fragment_counter[ss_xy], 1, fc);
+			picking_buf[2 * fc + 0] = g_cbPobj.pobj_dummy_0;
+			picking_buf[2 * fc + 1] = asuint(0.f);
+			return;
+		}
+	}
+#else
 	if (planeThickness == 0) {
 #if DX10_0
 		out_ps.depthcs = minDistOnPlane;
@@ -1073,6 +1097,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 #endif
 		//EXIT;
 	}
+#endif
 
 	float4 rayorig = float4(ray_orig_os, ray_tmin);
 	float4 raydir = float4(ray_dir_unit_os, ray_tmax);
