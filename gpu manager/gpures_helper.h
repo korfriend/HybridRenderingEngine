@@ -556,7 +556,7 @@ namespace grd_helper
 		float dash_interval;
 		float depth_thres;	// for outline!
 
-		float pix_thickness; // 1) for POINT and LINE TOPOLOGY,
+		float pix_thickness; // 1) for POINT and LINE TOPOLOGY, 2) slicer's cutting outline thickness
 		float vz_thickness;
 		uint pobj_dummy_0; // 1) actor_id used for picking, 2) outline color, 3) iso_value for difference map
 		uint pobj_dummy_1;

@@ -1236,6 +1236,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	uint num_grid_x = __BLOCKSIZE == 1 ? fb_size_cur.x : (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
 	uint num_grid_y = __BLOCKSIZE == 1 ? fb_size_cur.y : (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
 
+	float detaultOutlinePixelThickness = 1.5f;
 	bool curved_slicer = _fncontainer->fnParams.GetParam("_bool_IsNonlinear", false);
 	if (curved_slicer) {
 		vector<vmfloat3>& vtrCurveInterpolations = *_fncontainer->fnParams.GetParamPtr<vector<vmfloat3>>("_vlist_FLOAT3_CurveInterpolations");
@@ -1259,6 +1260,9 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		memcpy(cbCurvedSlicerData, &cbCurvedSlicer, sizeof(CB_CurvedSlicer));
 		dx11DeviceImmContext->Unmap(cbuf_curvedslicer, 0);
 		SET_CBUFFERS(10, 1, &cbuf_curvedslicer);
+
+		planeThickness = cbCurvedSlicer.thicknessPlane;
+		detaultOutlinePixelThickness = 1.2f;
 	}
 
 #pragma region // Camera & Light Setting
@@ -1584,7 +1588,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		&cbuf_cam_state, &cbuf_env_state, &cbuf_clip, &cbuf_pobj, &cbuf_vobj, &cbuf_reffect, &cbuf_tmap, &cbuf_hsmask,
 		&num_grid_x, &num_grid_y, &matWS2PS, &matWS2SS, &matSS2WS,
 		&light_src, &default_phong_lighting_coeff, &default_point_thickness, &default_surfel_size, &default_line_thickness, &default_color_cmmobj, &use_spinlock_pixsynch, &use_blending_option_MomentOIT,
-		&count_call_render, &progress, &cam_obj, &planeThickness, 
+		&count_call_render, &progress, &cam_obj, &planeThickness, & detaultOutlinePixelThickness, 
 #ifdef DX10_0
 		&matQaudWS2PS_T, 
 #endif
@@ -1683,6 +1687,10 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			bool noSlicerFill = actor->GetParam("_bool_DisableSolidFillOnSlicer", false);
 			cbPolygonObj.pobj_flag |= (int)noSlicerFill << 6;
 			
+			//if (planeThickness == 0) {
+				cbPolygonObj.pix_thickness = actor->GetParam("_float_OutlinePixThickness", detaultOutlinePixelThickness);
+			//}
+			
 			D3D11_MAPPED_SUBRESOURCE mappedResPobjData;
 			dx11DeviceImmContext->Map(cbuf_pobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResPobjData);
 			CB_PolygonObject* cbPolygonObjData = (CB_PolygonObject*)mappedResPobjData.pData;
@@ -1731,6 +1739,8 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 				SET_SHADER_RES(3, 1, (ID3D11ShaderResourceView**)&bvhIndice.alloc_res_ptrs[DTYPE_SRV]);
 
 				// test //
+//#define __TEST___RHIT
+#ifdef __TEST___RHIT
 				if(0)
 				{
 					// mat_ss2ws
@@ -1795,9 +1805,8 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 
 					DEBUGintersectBVHandTriangles(rayorig, raydir, (float4*)nodePtr, (float4*)triWoopPtr, (float4*)triDebugPtr, cpuTriIndicesPtr, bestTriIdx, hitDistance, debugbingo, trinormal, false);
 					//int num_frags = intersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, bestTriIdx, hitDistance, debugbingo, trinormal, false);
-
-					int gg = 0;
 				}
+#endif
 
 #ifdef DX10_0
 #else

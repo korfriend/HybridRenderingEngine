@@ -1100,6 +1100,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 			rayorig.xyz = posHitOS + 0.0001f * ray_dir_unit_os;
 		}
 	}
+
 	if (hitCount == 0) {
 		//fragment_vis[ss_xy] = float4(1, 0, 0, 1);
 		// note ... when ray passes through a triangle edge or vertex, hit may not be detected
@@ -1360,7 +1361,7 @@ float TestAlpha(float v) {
 	if (wildcard_v == WILDCARD_DEPTH_OUTLINE || wildcard_v == OUTSIDE_PLANE)
 		return 0;
 
-	const float lingThres = 1.5f;
+	const float lingThres = g_cbPobj.pix_thickness;
 	float distAbs = abs(v);
 	if (distAbs >= lingThres)
 		return 0;
