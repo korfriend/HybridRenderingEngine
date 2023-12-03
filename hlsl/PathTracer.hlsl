@@ -1080,7 +1080,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 
 #if PICKING == 1 
 	if (planeThickness == 0) {
-		if (minDistOnPlane < 2.5 || isInsideOnPlane) {
+		if (minDistOnPlane < 4.5 || isInsideOnPlane) {
 			uint fc = 0;
 			InterlockedAdd(fragment_counter[ss_xy], 1, fc);
 			picking_buf[2 * fc + 0] = g_cbPobj.pobj_dummy_0;

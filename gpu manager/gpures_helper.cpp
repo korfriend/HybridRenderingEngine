@@ -2189,8 +2189,14 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 {
 	PrimitiveData* pobj_data = pobj->GetPrimitiveData();
 
-	cb_polygon.mat_os2ws = TRANSPOSE(actor->matOS2WS);
-	cb_polygon.mat_ws2os = TRANSPOSE(actor->matWS2OS);
+	vmmat44f matPivot = (actor->GetParam("_matrix44f_Pivot", vmmat44f(1)));
+	vmmat44f matPivotInv = (actor->GetParam("_matrix44f_PivotInv", vmmat44f(1)));
+
+	vmmat44f matRS2WS = matPivot * actor->matOS2WS;
+	vmmat44f matWS2RS = actor->matWS2OS * matPivotInv;
+
+	cb_polygon.mat_os2ws = TRANSPOSE(matRS2WS);
+	cb_polygon.mat_ws2os = TRANSPOSE(matWS2RS);
 
 	if (is_annotation_obj)// && prim_data->texture_res)
 	{
@@ -2200,7 +2206,7 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 		{
 			vmfloat3* pos_vtx = pobj_data->GetVerticeDefinition("POSITION");
 			vmfloat3 f3Pos0SS, f3Pos1SS, f3Pos2SS;
-			vmmat44f matOS2SS = actor->matOS2WS * matWS2SS;
+			vmmat44f matOS2SS = matRS2WS * matWS2SS;
 
 			vmfloat3 pos_vtx_0_ss, pos_vtx_1_ss, pos_vtx_2_ss;
 			fTransformPoint(&pos_vtx_0_ss, &pos_vtx[0], &matOS2SS);
@@ -2270,8 +2276,8 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 				cb_polygon.pobj_flag |= (0x1 << 20);
 
 			vmfloat3 pos_max_ws, pos_min_ws;
-			fTransformPoint(&pos_max_ws, &vmfloat3(pobj_data->aabb_os.pos_max), &actor->matOS2WS);
-			fTransformPoint(&pos_min_ws, &vmfloat3(pobj_data->aabb_os.pos_min), &actor->matOS2WS);
+			fTransformPoint(&pos_max_ws, &vmfloat3(pobj_data->aabb_os.pos_max), &matRS2WS);
+			fTransformPoint(&pos_min_ws, &vmfloat3(pobj_data->aabb_os.pos_min), &matRS2WS);
 			vmfloat3 diff = pos_max_ws - pos_min_ws;
 			diff.x = fabs(diff.x);
 			diff.y = fabs(diff.y);
@@ -2288,7 +2294,7 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 
 	cb_polygon.vz_thickness = actor->GetParam("_float_VZThickness", 0.f);
 
-	vmmat44f matOS2PS = actor->matOS2WS * matWS2PS;
+	vmmat44f matOS2PS = matRS2WS * matWS2PS;
 	cb_polygon.mat_os2ps = TRANSPOSE(matOS2PS);
 
 	bool force_to_pointsetrender = actor->GetParam("_bool_ForceToPointsetRender", false);
@@ -2299,8 +2305,8 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 		if (fPointThickness <= 0)
 		{
 			vmfloat3 pos_max_ws, pos_min_ws;
-			fTransformPoint(&pos_max_ws, &((vmfloat3)pobj_data->aabb_os.pos_max), &actor->matOS2WS);
-			fTransformPoint(&pos_min_ws, &((vmfloat3)pobj_data->aabb_os.pos_min), &actor->matOS2WS);
+			fTransformPoint(&pos_max_ws, &((vmfloat3)pobj_data->aabb_os.pos_max), &matRS2WS);
+			fTransformPoint(&pos_min_ws, &((vmfloat3)pobj_data->aabb_os.pos_min), &matRS2WS);
 			fPointThickness = fLengthVector(&(pos_max_ws - pos_min_ws)) * 0.002f;
 		}
 		cb_polygon.pix_thickness = (float)(fPointThickness / 2.);

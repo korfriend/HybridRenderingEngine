@@ -1509,7 +1509,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			continue;
 		}
 
-		vmmat44f matOS2SS = actor->matOS2WS * matWS2SS;
+		vmmat44f matPivot = (actor->GetParam("_matrix44f_Pivot", vmmat44f(1)));
+		vmmat44f matOS2SS = matPivot * actor->matOS2WS * matWS2SS;
 		int w, h;
 		__compute_computespace_screen(w, h, matOS2SS, prim_data->aabb_os);
 		bool is_wildcard_Candidate = w * h < minimum_oit_area;
