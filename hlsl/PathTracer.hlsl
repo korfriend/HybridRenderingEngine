@@ -939,6 +939,9 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	//if (ray_dir_unit_os.x == 0) ray_dir_unit_os.x = 0.00001234f; // trick... for avoiding zero block skipping error
 
 	bool isInsideOnPlane = false;
+	int checkCountInsideHorizon = 0;
+	int checkCountInsideVertical = 0;
+
 	float minDistOnPlane = FLT_MAX;
 #if CURVEDPLANE == 0
 	float4x4 mat_os2ss = mul(g_cbCamState.mat_ws2ss, g_cbPobj.mat_os2ws);
@@ -978,6 +981,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		if (hitTriIdx >= 0) {
 			bool localInside = dot(trinormal, test_raydir.xyz) > 0;
 			isInsideOnPlane = localInside;
+			checkCountInsideVertical++;
 
 			float3 posHitOS = test_rayorig.xyz + hitDistance * test_raydir.xyz;
 #if CURVEDPLANE == 0
@@ -999,7 +1003,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		if (hitTriIdx >= 0) {
 			bool localInside = dot(trinormal, test_raydir.xyz) > 0;
 #if PICKING == 1 
-			isInsideOnPlane = localInside || isInsideOnPlane;
+			checkCountInsideVertical++;
 #else
 			isInsideOnPlane = localInside && isInsideOnPlane;
 #endif
@@ -1033,7 +1037,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		if (hitTriIdx >= 0) {
 			bool localInside = dot(trinormal, test_raydir.xyz) > 0;
 #if PICKING == 1 
-			isInsideOnPlane = localInside || isInsideOnPlane;
+			checkCountInsideHorizon++;
 #else
 			isInsideOnPlane = localInside && isInsideOnPlane;
 #endif
@@ -1058,7 +1062,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		if (hitTriIdx >= 0) {
 			bool localInside = dot(trinormal, test_raydir.xyz) > 0;
 #if PICKING == 1 
-			isInsideOnPlane = localInside || isInsideOnPlane;
+			checkCountInsideHorizon++;
 #else
 			isInsideOnPlane = localInside && isInsideOnPlane;
 #endif
@@ -1080,7 +1084,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 
 #if PICKING == 1 
 	if (planeThickness == 0) {
-		if (minDistOnPlane < 4.5 || isInsideOnPlane) {
+		if (minDistOnPlane < 4.5 || checkCountInsideHorizon == 2 || checkCountInsideVertical == 2) {
 			uint fc = 0;
 			InterlockedAdd(fragment_counter[ss_xy], 1, fc);
 			picking_buf[2 * fc + 0] = g_cbPobj.pobj_dummy_0;
