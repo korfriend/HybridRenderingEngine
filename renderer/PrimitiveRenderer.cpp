@@ -33,7 +33,7 @@ namespace moment_lib
 	}
 	float saturate(float v)
 	{
-		return max(min(1.f, v), 0);
+		return max(min(1.f, v), 0.f);
 	}
 
 	/*! Given coefficients of a quadratic polynomial A*x^2+B*x+C, this function

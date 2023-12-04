@@ -293,6 +293,7 @@ namespace vmhelpers {
 
 #define __WINDOWS
 #ifdef __WINDOWS
+#define NOMINMAX
 #include <windows.h>
 #endif
 

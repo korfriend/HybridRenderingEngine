@@ -279,10 +279,10 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		VmVObjectVolume* volobj = (VmVObjectVolume*)geo_obj;
 		VolumeData* vol_data = volobj->GetVolumeData();
 
-		min_pitch = min(min(
-			min(vol_data->vox_pitch.x, vol_data->vox_pitch.y),
+		min_pitch = (float)std::min(std::min(
+			std::min(vol_data->vox_pitch.x, vol_data->vox_pitch.y),
 			vol_data->vox_pitch.z),
-			min_pitch);
+			(double)min_pitch);
 	}
 #pragma endregion 
 

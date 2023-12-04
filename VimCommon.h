@@ -52,6 +52,7 @@
 #define __FILEMAP
 #ifdef __WINDOWS
 
+#define NOMINMAX
 #include <windows.h>
 #endif
 
