@@ -1152,7 +1152,7 @@ bool grd_helper::UpdateVolumeModel(GpuRes& gres, VmVObjectVolume* vobj, const bo
 		gres.options["FORMAT"] = DXGI_FORMAT_R16_UNORM;
 	else
 	{
-		::MessageBoxA(NULL, "Not supported Data Type", NULL, MB_OK);
+		vmlog::LogErr("Not supported Data Type");
 		return false;
 	}
 
@@ -1941,7 +1941,7 @@ bool grd_helper::UpdateFrameBuffer(GpuRes& gres,
 		if (fb_flag & UPFB_HALF) gres.options["HALF_GEN"] = 1;
 		break;
 	default:
-		::MessageBoxA(NULL, "Not supported Data Type", NULL, MB_OK);
+		vmlog::LogErr("Not supported Data Type");
 		return false;
 	}
 
