@@ -980,9 +980,12 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		intersectBVHandTriangles(test_rayorig, test_raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
 		if (hitTriIdx >= 0) {
 			bool localInside = dot(trinormal, test_raydir.xyz) > 0;
+#if PICKING == 1 
+			if (localInside) checkCountInsideVertical++;
+#else
 			isInsideOnPlane = localInside;
-			checkCountInsideVertical++;
-
+#endif
+			
 			float3 posHitOS = test_rayorig.xyz + hitDistance * test_raydir.xyz;
 #if CURVEDPLANE == 0
 			float3 posHitSS = TransformPoint(posHitOS, mat_os2ss);
@@ -1003,7 +1006,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		if (hitTriIdx >= 0) {
 			bool localInside = dot(trinormal, test_raydir.xyz) > 0;
 #if PICKING == 1 
-			checkCountInsideVertical++;
+			if (localInside) checkCountInsideVertical++;
 #else
 			isInsideOnPlane = localInside && isInsideOnPlane;
 #endif
@@ -1037,7 +1040,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		if (hitTriIdx >= 0) {
 			bool localInside = dot(trinormal, test_raydir.xyz) > 0;
 #if PICKING == 1 
-			checkCountInsideHorizon++;
+			if (localInside) checkCountInsideHorizon++;
 #else
 			isInsideOnPlane = localInside && isInsideOnPlane;
 #endif
@@ -1062,7 +1065,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		if (hitTriIdx >= 0) {
 			bool localInside = dot(trinormal, test_raydir.xyz) > 0;
 #if PICKING == 1 
-			checkCountInsideHorizon++;
+			if (localInside) checkCountInsideHorizon++;
 #else
 			isInsideOnPlane = localInside && isInsideOnPlane;
 #endif
@@ -1084,13 +1087,15 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 
 #if PICKING == 1 
 	if (planeThickness == 0) {
-		if (minDistOnPlane < 4.5 || checkCountInsideHorizon == 2 || checkCountInsideVertical == 2) {
+		if (minDistOnPlane * minDistOnPlane < 4.5 * 4.5 || checkCountInsideHorizon == 2 || checkCountInsideVertical == 2)
+		{
+			uint iii = (checkCountInsideHorizon == 2 ? 10 : 1) + (checkCountInsideVertical == 2 ? 1000 : 100);
 			uint fc = 0;
 			InterlockedAdd(fragment_counter[ss_xy], 1, fc);
 			picking_buf[2 * fc + 0] = g_cbPobj.pobj_dummy_0;
 			picking_buf[2 * fc + 1] = asuint(0.f);
-			return;
 		}
+		return;
 	}
 #else
 	if (planeThickness == 0) {

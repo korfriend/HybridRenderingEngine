@@ -2647,7 +2647,7 @@ bool grd_helper::GetEnginePath(std::string& enginePath)
 		exe_path.erase(0, pos + delimiter.length());
 	}
 
-	ifstream file(exe_path + "..\\engine_module_path.txt");
+	ifstream file(exe_path_ + "..\\engine_module_path.txt");
 	if (file.is_open()) {
 		getline(file, enginePath);
 		file.close();
