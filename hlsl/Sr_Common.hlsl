@@ -771,7 +771,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
             float3 Ka = clr_map.rgb * g_cbEnv.ltint_ambient.rgb * g_cbPobj.Ka;
             float3 Kd = clr_map.rgb * g_cbEnv.ltint_diffuse.rgb * g_cbPobj.Kd;
             float3 Ks = clr_map.rgb * g_cbEnv.ltint_spec.rgb * g_cbPobj.Ks;
-            float Ns = g_cbPobj.Ns * g_cbPobj.Ns;
+            float Ns = g_cbPobj.Ns;
             ComputeColor(v_rgba.rgb, Ka, Kd, Ks, Ns, 1.0, input.f3PosWS, view_dir, nor, nor_len);
         }
         v_rgba.a *= clr_map.a;

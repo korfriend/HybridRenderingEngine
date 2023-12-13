@@ -161,7 +161,7 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 			f.z = asfloat(LOAD1_UBKB(2 * (offset + i) + 1));
 			fragments[num_valid_fs++] = f;
 		}
-	};
+	}
 
 	if (additionalLayers)
 	{

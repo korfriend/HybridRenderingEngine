@@ -739,6 +739,16 @@ namespace grd_helper
 		uint testD;
 	};
 
+	struct CB_Particle_Blob
+	{
+		vmfloat4 xyzr_spheres[4];
+		vmint4 color_spheres;
+		float smoothCoeff;
+		uint dummy0;
+		uint dummy1;
+		uint dummy2;
+	};
+
 	// Compute Constant Buffers //
 	// global 
 	void SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, const vmmat44f& matSS2WS, VmCObject* ccobj, const vmint2& fb_size, const int k_value, const float vz_thickness);

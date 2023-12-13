@@ -109,6 +109,9 @@
     <Filter Include="hlsl source code\shader4">
       <UniqueIdentifier>{6b6fc4a1-b178-4cb2-a58b-bb96d48d7619}</UniqueIdentifier>
     </Filter>
+    <Filter Include="hlsl source code\Particle">
+      <UniqueIdentifier>{2a3608ee-3797-4766-bf5d-4698ea5c9a7f}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="vismtv_inbuilt_renderergpudx.rc">
@@ -163,6 +166,9 @@
     </FxCompile>
     <FxCompile Include="hlsl\shader4\BasicShader2.hlsl">
       <Filter>hlsl source code\shader4</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\particle\Particle.hlsl">
+      <Filter>hlsl source code\Particle</Filter>
     </FxCompile>
   </ItemGroup>
 </Project>

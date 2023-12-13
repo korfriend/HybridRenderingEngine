@@ -242,6 +242,8 @@
 #define IDR_RCDATA90042					  90042
 #define IDR_RCDATA90043					  90043
 
+#define IDR_RCDATA71000					  71000
+
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED

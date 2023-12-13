@@ -757,7 +757,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #define VS_NUM 5
 #define GS_NUM 3
 #define PS_NUM 80
-#define CS_NUM 27
+#define CS_NUM 28
 #endif
 
 #ifdef DX10_0
@@ -1043,6 +1043,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			  ,"SR_OIT_ABUFFER_OffsetTable_cs_5_0"
 			  ,"SR_OIT_ABUFFER_SORT2SENDER_cs_5_0"
 			  ,"SR_OIT_ABUFFER_SORT2SENDER_SFM_cs_5_0"
+			  ,"PCE_BlobRayMarching_cs_5_0"
 			  ,"KB_SSAO_cs_5_0"
 			  ,"KB_SSAO_BLUR_cs_5_0"
 			  ,"KB_TO_TEXTURE_cs_5_0"
@@ -1481,6 +1482,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	vector<VmActor*> general_oit_routine_objs;
 	vector<VmActor*> single_layer_routine_group_objs; // e.g., individual silhouette 
 	vector<VmActor*> single_layer_routine_objs; // e.g. group silhouette
+#ifndef DX10_0
+	vector<VmActor*> particle_layer_objs; // e.g., particle effect
+#endif
 	vector<VmActor*> foremost_opaque_surfaces_routine_objs; // for performance //
 	int minimum_oit_area = _fncontainer->fnParams.GetParam("_int_MinimumOitArea", (int)1000); // 0 means turn-off the wildcard case
 	int _w_max = 0;
@@ -1489,6 +1493,15 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	for (auto& actorPair : _fncontainer->sceneActors)
 	{
 		VmActor* actor = get<1>(actorPair);
+
+#ifndef DX10_0
+		bool isParticleActor = actor->GetParam("_bool_IsParticleActor", false);
+		if (isParticleActor) {
+			particle_layer_objs.push_back(actor);
+			continue;
+		}
+#endif
+
 		VmVObject* geo_obj = actor->GetGeometryRes();
 		if (geo_obj == NULL ||
 			geo_obj->GetObjectType() != ObjectTypePRIMITIVE ||
@@ -1589,6 +1602,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		cout << "  ** general_oit_routine_objs    : " << general_oit_routine_objs.size() << endl;
 		cout << "  ** special_effect_routine_objs : " << single_layer_routine_objs.size() << endl;
 		cout << "  ** single_layer_routine_group_objs : " << single_layer_routine_group_objs.size() << endl;
+#ifndef DX10_0
+		cout << "  ** particle_layer_objs : " << particle_layer_objs.size() << endl;
+#endif
 		cout << "  ** foremost_sr_routine_objs : " << foremost_opaque_surfaces_routine_objs.size() << endl;
 	}
 #pragma endregion 
@@ -2829,6 +2845,97 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			}
 		}
 
+#ifndef DX10_0
+		// test version
+		if (particle_layer_objs.size() > 0) {
+			dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
+
+			ID3D11UnorderedAccessView* dx11UAVs[3] = {
+					(ID3D11UnorderedAccessView*)gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_UAV]
+					, (ID3D11UnorderedAccessView*)gres_fb_singlelayer_depthcs.alloc_res_ptrs[DTYPE_UAV]
+					, (ID3D11UnorderedAccessView*)gres_fb_singlelayer_tempDepth.alloc_res_ptrs[DTYPE_UAV]
+			};
+
+			dx11DeviceImmContext->CSSetShader(GETCS(PCE_BlobRayMarching_cs_5_0), NULL, 0);
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 3, dx11UAVs, (UINT*)(&dx11UAVs));
+
+			ID3D11Buffer* cbuf_particleblob = dx11CommonParams->get_cbuf("CB_Particle_Blob");
+			dx11DeviceImmContext->CSSetConstantBuffers(11, 1, &cbuf_particleblob);
+
+			{
+				VmActor* actor = particle_layer_objs[0];
+
+
+				vmfloat4 material_phongCoeffs = actor->GetParam("_float4_PhongCoeffs", default_phong_lighting_coeff);
+
+				CB_PolygonObject cbPolygonObj;
+				{
+					vmmat44f matPivot = (actor->GetParam("_matrix44f_Pivot", vmmat44f(1)));
+					vmmat44f matPivotInv = (actor->GetParam("_matrix44f_PivotInv", vmmat44f(1)));
+					vmmat44f matRS2WS = matPivot * actor->matOS2WS;
+					vmmat44f matWS2RS = actor->matWS2OS * matPivotInv;
+					cbPolygonObj.mat_os2ws = TRANSPOSE(matRS2WS); // not used
+					cbPolygonObj.mat_ws2os = TRANSPOSE(matWS2RS); // not used
+					cbPolygonObj.pobj_dummy_0 = actor->actorId; // used for picking
+
+					vmfloat3 illum_model = actor->GetParam("_float3_IllumWavefront", vmfloat3(1));
+					// material setting
+					cbPolygonObj.alpha = actor->color.a;
+					cbPolygonObj.Ka = actor->GetParam("_float3_Ka", vmfloat3(actor->color)) * illum_model.x;
+					cbPolygonObj.Kd = actor->GetParam("_float3_Kd", vmfloat3(actor->color)) * illum_model.y;
+					cbPolygonObj.Ks = actor->GetParam("_float3_Ks", vmfloat3(actor->color)) * illum_model.z;
+					cbPolygonObj.Ns = actor->GetParam("_float_Ns", (float)1.f);;
+				}
+
+				cbPolygonObj.Ka *= material_phongCoeffs.x;
+				cbPolygonObj.Kd *= material_phongCoeffs.y;
+				cbPolygonObj.Ks *= material_phongCoeffs.z;
+				cbPolygonObj.Ns *= material_phongCoeffs.w;
+
+				if (default_color_cmmobj.x >= 0 && default_color_cmmobj.y >= 0 && default_color_cmmobj.z >= 0)
+					cbPolygonObj.Ka = cbPolygonObj.Kd = cbPolygonObj.Ks = default_color_cmmobj;
+
+				D3D11_MAPPED_SUBRESOURCE mappedResPobjData;
+				dx11DeviceImmContext->Map(cbuf_pobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResPobjData);
+				CB_PolygonObject* cbPolygonObjData = (CB_PolygonObject*)mappedResPobjData.pData;
+				memcpy(cbPolygonObjData, &cbPolygonObj, sizeof(CB_PolygonObject));
+				dx11DeviceImmContext->Unmap(cbuf_pobj, 0);
+
+				dx11DeviceImmContext->CSSetConstantBuffers(1, 1, &cbuf_pobj); // for silhouette or A-buffer test
+
+				D3D11_MAPPED_SUBRESOURCE mappedResPclBlob;
+				dx11DeviceImmContext->Map(cbuf_particleblob, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResPclBlob);
+				CB_Particle_Blob* cbPclBlobData = (CB_Particle_Blob*)mappedResPclBlob.pData;
+
+				float smoothCoeff = actor->GetParam("_float_Smoothness", 10.f);
+				//vzm::SetActorParams(aidBlobParticle, apParticleActor);
+				std::vector<glm::fvec3>* centerSpheres = actor->GetParamPtr<std::vector<glm::fvec3>>("_vector<fvec3>_SphereCenter");
+				std::vector<glm::fvec4>* colorSpheres = actor->GetParamPtr<std::vector<glm::fvec4>>("_vector<fvec4>_SphereColor");
+				std::vector<float>* radiusSpheres = actor->GetParamPtr<std::vector<float>>("_vector<float>_SphereRadius");
+				if (centerSpheres == NULL || colorSpheres == NULL || radiusSpheres == NULL) {
+					vmlog::LogErr(actor->name + " has no sphere data!!");
+				}
+				else {
+					for (int i = 0; i < (int)centerSpheres->size(); i++) {
+						vmfloat3 xyz = centerSpheres->at(i);
+						cbPclBlobData->xyzr_spheres[i] = vmfloat4(xyz, radiusSpheres->at(i));
+						vmfloat4 color = colorSpheres->at(i);
+						int iColor = (int)(color.r * 255.f) | (int)(color.g * 255.f) << 8 | (int)(color.b * 255.f) << 16 | (int)(color.a * 255.f) << 24;
+						//cbPclBlobData->color_spheres = vmint4(iColor);
+						memcpy(&((int*)&cbPclBlobData->color_spheres)[i], &iColor, sizeof(int));
+					}
+					cbPclBlobData->smoothCoeff = smoothCoeff;
+				}
+				dx11DeviceImmContext->Unmap(cbuf_particleblob, 0);
+
+				dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+			}
+
+			// Set NULL States //
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 3, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+		}
+#endif
+
 		if (general_oit_routine_objs.size() > 0) {
 #ifdef DX10_0
 			assert(0);
@@ -3074,8 +3181,12 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
 		};
 
-		int additionalKLayerForMFB = (int)(foremost_opaque_surfaces_routine_objs.size() > 0 || single_layer_routine_objs.size() > 0);
-		cbCamState.cam_flag |= (additionalKLayerForMFB << 8);
+		bool additionalKLayerForMFB = foremost_opaque_surfaces_routine_objs.size() > 0 || single_layer_routine_objs.size() > 0;
+#ifndef DX10_0
+		additionalKLayerForMFB = additionalKLayerForMFB || particle_layer_objs.size() > 0;
+#endif // !DX10_0
+
+		cbCamState.cam_flag |= ((int)additionalKLayerForMFB << 8);
 		int storeKBuf = (int)(!is_final_renderer || check_pixel_transmittance
 			|| cbEnvState.r_kernel_ao > 0
 			|| (cbEnvState.dof_lens_r > 0 && cam_obj->IsPerspective()));
@@ -3084,7 +3195,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		cbCamState.cam_flag |= (storeKBuf << 3);
 		SetCamConstBuf(cbCamState);
 
-		if (general_oit_routine_objs.size() + single_layer_routine_objs.size() > 0
+		if (general_oit_routine_objs.size() + single_layer_routine_objs.size() > 0 || particle_layer_objs.size() > 0
 			|| storeKBuf) 
 		{
 			dx11CommonParams->GpuProfile("Resolve Pass");
