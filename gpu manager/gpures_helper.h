@@ -744,9 +744,9 @@ namespace grd_helper
 		vmfloat4 xyzr_spheres[4];
 		vmint4 color_spheres;
 		float smoothCoeff;
-		uint dummy0;
+		vmfloat3 minRoiCube;
 		uint dummy1;
-		uint dummy2;
+		vmfloat3 maxRoiCube;
 	};
 
 	// Compute Constant Buffers //

@@ -6,9 +6,9 @@ struct HxCB_Particle_Blob
 	float4 xyzr_spheres[4];
 	int4 color_spheres;
     float smoothCoeff;
-    uint dummy0;
+    float3 minRoiCube;
     uint dummy1;
-    uint dummy2;
+    float3 maxRoiCube;
 };
 
 cbuffer cbGlobalParams : register(b11)
@@ -135,7 +135,7 @@ void RayMarchingDistanceMap( uint3 DTid : SV_DispatchThreadID )
         dir_ray_unit_ws = pos_ip_ws - g_cbCamState.pos_cam_ws;
     dir_ray_unit_ws = normalize(dir_ray_unit_ws);
 
-    const float3 cubePosMin = float3(-50, -50, -50), cubePosMax = float3(50, 50, 50);
+    const float3 cubePosMin = g_cbPclBlob.minRoiCube, cubePosMax = g_cbPclBlob.maxRoiCube;
     const float smthCoef = g_cbPclBlob.smoothCoeff;
     float2 t = ComputeAABBHits(pos_ip_ws, cubePosMin, cubePosMax, dir_ray_unit_ws);
 

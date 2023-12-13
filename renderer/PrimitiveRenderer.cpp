@@ -2908,6 +2908,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				CB_Particle_Blob* cbPclBlobData = (CB_Particle_Blob*)mappedResPclBlob.pData;
 
 				float smoothCoeff = actor->GetParam("_float_Smoothness", 10.f);
+				glm::fvec3 minRoiCube = actor->GetParam("_fvec3_MinRoiCube", glm::fvec3(-50.f));
+				glm::fvec3 maxRoiCube = actor->GetParam("_fvec3_MaxRoiCube", glm::fvec3(50.f));
 				//vzm::SetActorParams(aidBlobParticle, apParticleActor);
 				std::vector<glm::fvec3>* centerSpheres = actor->GetParamPtr<std::vector<glm::fvec3>>("_vector<fvec3>_SphereCenter");
 				std::vector<glm::fvec4>* colorSpheres = actor->GetParamPtr<std::vector<glm::fvec4>>("_vector<fvec4>_SphereColor");
@@ -2925,6 +2927,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 						memcpy(&((int*)&cbPclBlobData->color_spheres)[i], &iColor, sizeof(int));
 					}
 					cbPclBlobData->smoothCoeff = smoothCoeff;
+					cbPclBlobData->minRoiCube = minRoiCube;
+					cbPclBlobData->maxRoiCube = maxRoiCube;
 				}
 				dx11DeviceImmContext->Unmap(cbuf_particleblob, 0);
 
