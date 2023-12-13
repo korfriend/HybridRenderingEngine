@@ -203,3 +203,6 @@ fxc /E RayCasting /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/VR_
 
 fxc /E GS_PickingPoint /T gs_4_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs_4_0/GS_PickingBasic_gs_4_0 
 fxc /E GS_MeshCutLines /T gs_4_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs_4_0/GS_MeshCutLines_gs_4_0 
+
+
+fxc /E RayMarchingDistanceMap /T cs_5_0 ./hlsl/particle/Particle.hlsl /Fo ./shader_compiled_objs/PCE_BlobRayMarching_cs_5_0

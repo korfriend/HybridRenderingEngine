@@ -322,6 +322,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		CREATE_AND_SET(CB_HotspotMask);
 		CREATE_AND_SET(CB_CurvedSlicer);
 		CREATE_AND_SET(CB_TestBuffer);
+		CREATE_AND_SET(CB_Particle_Blob);
 	}
 	if (hr != S_OK)
 	{
@@ -585,7 +586,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11103), "SR_OIT_ABUFFER_OffsetTable_cs_5_0", "cs_5_0"), SR_OIT_ABUFFER_OffsetTable_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11104), "SR_OIT_ABUFFER_SORT2SENDER_cs_5_0", "cs_5_0"), SR_OIT_ABUFFER_SORT2SENDER_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11105), "SR_OIT_ABUFFER_SORT2SENDER_SFM_cs_5_0", "cs_5_0"), SR_OIT_ABUFFER_SORT2SENDER_SFM_cs_5_0);
-
+		
 		{
 			if (g_pvmCommonParams->dx11_featureLevel > (D3D_FEATURE_LEVEL)0xb100) {
 				VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11030), "SR_MOMENT_GEN_ps_5_0", "ps_5_0"), SR_MOMENT_GEN_ps_5_0);
@@ -683,6 +684,11 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60102), "SliceOutline_cs_5_0", "cs_5_0"), SliceOutline_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60103), "PickingThickSlice_cs_5_0", "cs_5_0"), PickingThickSlice_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60104), "PickingCurvedThickSlice_cs_5_0", "cs_5_0"), PickingCurvedThickSlice_cs_5_0);
+
+#pragma region Particle
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA71000), "PCE_BlobRayMarching_cs_5_0", "cs_5_0"), PCE_BlobRayMarching_cs_5_0);
+#pragma endregion
+
 #endif
 	}
 
