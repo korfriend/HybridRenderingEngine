@@ -149,33 +149,78 @@ void RayMarchingDistanceMap( uint3 DTid : SV_DispatchThreadID )
 
     float rd = t.x;
     bool isHit = false;
+    const float minDist = 0.2f;
+    float3 surf_pos = pos_ip_ws;
+
+//#define __NO_RAY_SURF_REFINEMENT
+    int debug_ray = 0;
 #define MAX_LOOP 100
+#define SURF_REFINEMENT 5
     [loop]
     for (int step = 0; step < MAX_LOOP; step++) {
 
         float3 ray_pos = pos_ip_ws + dir_ray_unit_ws * rd;
         float d = GetDist(ray_pos, smthCoef);
-        if (d <= 0.0001) {
+
+        if (d <= 0) {
+#ifdef __NO_RAY_SURF_REFINEMENT
+            surf_pos = ray_pos;
+#else
+            // note that if d < 0, then previous step size musy be minDist
+            // now surface refinement!
+            float t0 = 0, t1 = 1;
+            float3 ray_pos_bis_s = ray_pos - dir_ray_unit_ws * minDist;
+            float3 ray_pos_bis_e = ray_pos;
+            [loop]
+            for (int j = 0; j < SURF_REFINEMENT; j++)
+            {
+                float3 ray_pos_bisection = (ray_pos_bis_s + ray_pos_bis_e) * 0.5f;
+                float t = (t0 + t1) * 0.5f;
+                float d_bisection = GetDist(ray_pos_bisection, smthCoef);
+                if (d_bisection < 0)
+                {
+                    ray_pos_bis_e = ray_pos_bisection;
+                    t1 = t;
+                }
+                else
+                {
+                    ray_pos_bis_s = ray_pos_bisection;
+                    t0 = t;
+                }
+            }
+            surf_pos = ray_pos + dir_ray_unit_ws * (t1 - 1.f);
+#endif
+            rd = length(surf_pos - pos_ip_ws);
             isHit = true;
+            debug_ray = 2;
             break;
         }
         else if (rd >= t.y) {
+            debug_ray = 1;
             break;
         }
+
+#ifdef __NO_RAY_SURF_REFINEMENT
         rd += d;
+#else
+        rd += max(d, minDist);
+#endif
     }
 
     float4 color = (float4)0.f;
     float s_depth = FLT_MAX;
     if (isHit) {
-        s_depth = rd;
-        float3 p_surf = pos_ip_ws + dir_ray_unit_ws * rd;
-        color = GetColor(p_surf, smthCoef);
-        float3 n = GetNormal(p_surf, smthCoef);
+        s_depth = rd; 
+        color = GetColor(surf_pos, smthCoef);
+        float3 n = GetNormal(surf_pos, smthCoef);
 
         // (float3 color, float3 p, float3 v, float3 n)
-        color.rgb = PhongLighting(color.rgb, p_surf, dir_ray_unit_ws, n);
+        color.rgb = PhongLighting(color.rgb, surf_pos, dir_ray_unit_ws, n);
     }
+
+    //if (debug_ray == 0) color = float4(0, 1, 0, 1);
+    //else if (debug_ray == 1) color = float4(0, 0, 1, 1);
+    //else color = float4(1, 0, 0, 1);
 
     fragment_rgba_singleLayer[DTid.xy] = color;
     fragment_zdepth_singleLayer[DTid.xy] = s_depth;

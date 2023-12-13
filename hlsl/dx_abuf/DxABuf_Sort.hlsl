@@ -134,8 +134,8 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 	if (nThreadNum == 0) // we used 0th pixel for temporal synch //
 		return;
 
-	fragment_blendout[nDTid.xy] = fragment_rgba_singleLayer[nDTid.xy];
-	return;
+	//fragment_blendout[nDTid.xy] = fragment_rgba_singleLayer[nDTid.xy];
+	//return;
 	
 	uint N = (uint)fragment_counter[nDTid.xy];
 	bool additionalLayers = BitCheck(g_cbCamState.cam_flag, 8);
