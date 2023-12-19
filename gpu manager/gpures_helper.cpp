@@ -688,6 +688,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 #pragma region Particle
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA71000), "PCE_BlobRayMarching_cs_5_0", "cs_5_0"), PCE_BlobRayMarching_cs_5_0);
 #pragma endregion
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA72000), "CS_Blend2ndLayer_cs_5_0", "cs_5_0"), CS_Blend2ndLayer_cs_5_0);
 
 #endif
 	}

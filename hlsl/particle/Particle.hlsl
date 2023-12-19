@@ -25,13 +25,33 @@ float SmoothMin2(float a, float b, float k) {
     return lerp(a, b, h) - k * h * (1.0 - h);
 }
 
+float SmoothMinN(float values[4], int n, float k)
+{
+    float sum = 0.0f;
+    for (int i = 0; i < n; i++)
+    {
+        sum += exp(-k * values[i]);
+    }
+    return -log(sum) / k;
+}
+
+float SmoothMax(float a, float b, float k)
+{
+    return log(exp(k * a) + exp(k * b)) / k;
+}
+
+float SmoothMin1(float a, float b, float k)
+{
+    return -SmoothMax(-a, -b, k);
+}
+
 float GetDist(float3 p, float smthCoef)
 {
     float4 xyzr = g_cbPclBlob.xyzr_spheres[0];
     float d = length(p - xyzr.xyz) - xyzr.w;
 
     for (int i = 1; i < 4; i++) {
-        float4 xyzr = g_cbPclBlob.xyzr_spheres[i];
+        xyzr = g_cbPclBlob.xyzr_spheres[i];
         float newDist = length(p - xyzr.xyz) - xyzr.w;
         d = SmoothMin2(newDist, d, smthCoef);
     }
@@ -42,7 +62,7 @@ float GetDist(float3 p, float smthCoef)
 float3 GetNormal(float3 p, float smthCoef)
 {
     float d = GetDist(p, smthCoef); // Distance
-    float2 e = float2(.01, 0); // Epsilon
+    float2 e = float2(.1, 0); // Epsilon
 
     float3 n = d - float3(
         GetDist(p - e.xyy, smthCoef),  // e.xyy is the same as vec3(.01,0,0). The x of e is .01. this is called a swizzle
@@ -56,16 +76,25 @@ float4 GetColor(float3 p, float smthCoef)
 {
     float4 xyzr = g_cbPclBlob.xyzr_spheres[0];
     float4 rgba = ConvertUIntToFloat4(g_cbPclBlob.color_spheres[0]);
+    rgba.rgb *= rgba.a;
     float d = length(p - xyzr.xyz) - xyzr.w;
 
+    //float prevAlphaW = rgba.a;
     for (int i = 1; i < 4; i++) {
         xyzr = g_cbPclBlob.xyzr_spheres[i];
         float newDist = length(p - xyzr.xyz) - xyzr.w;
+        float4 newColor = ConvertUIntToFloat4(g_cbPclBlob.color_spheres[i]);
+        newColor.rgb *= newColor.a;
 
-        float h = clamp(0.5 + 0.5 * (d - newDist) / smthCoef, 0.0, 1.0);
-        rgba = lerp(rgba, ConvertUIntToFloat4(g_cbPclBlob.color_spheres[i]), h);
+        float h = clamp(0.5 + 0.5 * (newDist - d) / smthCoef, 0.0, 1.0);
 
-        d = SmoothMin2(newDist, d, smthCoef);
+        //rgba = MixOpt(rgba, prevAlphaW * h, newColor, newColor.a * (1.0 - h));
+        //prevAlphaW = prevAlphaW * h + newColor.a * (1.0 - h);
+        //prevAlphaW += prevAlphaW * (1 - h);
+
+        rgba = lerp(newColor, rgba, h);
+
+        d = lerp(newDist, d, h);
     }
 
     //rgba.a = 1;
@@ -136,7 +165,7 @@ void RayMarchingDistanceMap( uint3 DTid : SV_DispatchThreadID )
     dir_ray_unit_ws = normalize(dir_ray_unit_ws);
 
     const float3 cubePosMin = g_cbPclBlob.minRoiCube, cubePosMax = g_cbPclBlob.maxRoiCube;
-    const float smthCoef = g_cbPclBlob.smoothCoeff;
+    const float smthCoef = max(g_cbPclBlob.smoothCoeff, 0.001);
     float2 t = ComputeAABBHits(pos_ip_ws, cubePosMin, cubePosMax, dir_ray_unit_ws);
 
 
@@ -154,41 +183,35 @@ void RayMarchingDistanceMap( uint3 DTid : SV_DispatchThreadID )
 
 //#define __NO_RAY_SURF_REFINEMENT
     int debug_ray = 0;
+    float prev_d = 0, d = 0;
 #define MAX_LOOP 100
 #define SURF_REFINEMENT 5
     [loop]
     for (int step = 0; step < MAX_LOOP; step++) {
 
         float3 ray_pos = pos_ip_ws + dir_ray_unit_ws * rd;
-        float d = GetDist(ray_pos, smthCoef);
+        prev_d = d;
+        d = GetDist(ray_pos, smthCoef);
 
-        if (d <= 0) {
+        if (d < 0) {
 #ifdef __NO_RAY_SURF_REFINEMENT
             surf_pos = ray_pos;
 #else
             // note that if d < 0, then previous step size musy be minDist
             // now surface refinement!
-            float t0 = 0, t1 = 1;
             float3 ray_pos_bis_s = ray_pos - dir_ray_unit_ws * minDist;
             float3 ray_pos_bis_e = ray_pos;
             [loop]
             for (int j = 0; j < SURF_REFINEMENT; j++)
             {
                 float3 ray_pos_bisection = (ray_pos_bis_s + ray_pos_bis_e) * 0.5f;
-                float t = (t0 + t1) * 0.5f;
                 float d_bisection = GetDist(ray_pos_bisection, smthCoef);
                 if (d_bisection < 0)
-                {
                     ray_pos_bis_e = ray_pos_bisection;
-                    t1 = t;
-                }
                 else
-                {
                     ray_pos_bis_s = ray_pos_bisection;
-                    t0 = t;
-                }
             }
-            surf_pos = ray_pos + dir_ray_unit_ws * (t1 - 1.f);
+            surf_pos = (ray_pos_bis_s + ray_pos_bis_e) * 0.5f;
 #endif
             rd = length(surf_pos - pos_ip_ws);
             isHit = true;
@@ -221,6 +244,7 @@ void RayMarchingDistanceMap( uint3 DTid : SV_DispatchThreadID )
     //if (debug_ray == 0) color = float4(0, 1, 0, 1);
     //else if (debug_ray == 1) color = float4(0, 0, 1, 1);
     //else color = float4(1, 0, 0, 1);
+    if (debug_ray == 3) color = float4(0, 1, 1, 1);
 
     fragment_rgba_singleLayer[DTid.xy] = color;
     fragment_zdepth_singleLayer[DTid.xy] = s_depth;

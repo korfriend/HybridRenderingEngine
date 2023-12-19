@@ -243,6 +243,7 @@
 #define IDR_RCDATA90043					  90043
 
 #define IDR_RCDATA71000					  71000
+#define IDR_RCDATA72000					  72000
 
 // Next default values for new objects
 // 

@@ -585,6 +585,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 #pragma region // Parameter Setting //
 	VmIObject* iobj = _fncontainer->fnParams.GetParam("_VmIObject*_RenderOut", (VmIObject*)NULL);
+	iobj->SetObjParam("NUM_SECOND_LAYER_OBJECTS", (int)0);
 
 	int k_value_old = iobj->GetObjParam("_int_NumK", (int)8);
 	int k_value = _fncontainer->fnParams.GetParam("_int_NumK", k_value_old);
@@ -757,7 +758,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #define VS_NUM 5
 #define GS_NUM 3
 #define PS_NUM 80
-#define CS_NUM 28
+#define CS_NUM 29
 #endif
 
 #ifdef DX10_0
@@ -1044,6 +1045,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			  ,"SR_OIT_ABUFFER_SORT2SENDER_cs_5_0"
 			  ,"SR_OIT_ABUFFER_SORT2SENDER_SFM_cs_5_0"
 			  ,"PCE_BlobRayMarching_cs_5_0"
+			  ,"CS_Blend2ndLayer_cs_5_0"
 			  ,"KB_SSAO_cs_5_0"
 			  ,"KB_SSAO_BLUR_cs_5_0"
 			  ,"KB_TO_TEXTURE_cs_5_0"
@@ -1484,6 +1486,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	vector<VmActor*> single_layer_routine_objs; // e.g. group silhouette
 #ifndef DX10_0
 	vector<VmActor*> particle_layer_objs; // e.g., particle effect
+	vector<VmActor*> second_layer_objs;
 #endif
 	vector<VmActor*> foremost_opaque_surfaces_routine_objs; // for performance //
 	int minimum_oit_area = _fncontainer->fnParams.GetParam("_int_MinimumOitArea", (int)1000); // 0 means turn-off the wildcard case
@@ -1559,6 +1562,14 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		if (showGroupOutline) {
 			single_layer_routine_group_objs.push_back(actor);
 		}
+
+#ifndef DX10_0
+		bool isSecondLayerActor = actor->GetParam("_bool_IsSecondLayerActor", false);
+		if (isSecondLayerActor) {
+			second_layer_objs.push_back(actor);
+			continue;
+		}
+#endif
 
 		VmObject* imgObj = actor->GetAssociateRes("TEXTURE2DIMAGE");
 		if (imgObj && is_foremost_surfaces) {
@@ -1710,7 +1721,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		vector<VmActor*>& actor_list,
 		const MFR_MODE mode_OIT, const RENDER_GEOPASS render_pass, const bool is_frag_counter_buffer,
 		const bool is_ghost_mode, const PICKING_TYPE pickType, const bool apply_fragmerge,
-		const bool is_MOMENT_gen_buffer, const bool is_group_silhouette)
+		const bool is_MOMENT_gen_buffer, const bool is_group_silhouette, const bool is_2ndlayer)
 	{
 
 		// main geometry rendering process
@@ -2396,6 +2407,10 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			ID3D11RenderTargetView* dx11RTVs[2] = {
 				(ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV],
 				(ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV] };
+			if (is_2ndlayer) {
+				dx11RTVs[0] = (ID3D11RenderTargetView*)gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_RTV];
+				dx11RTVs[1] = (ID3D11RenderTargetView*)gres_fb_singlelayer_depthcs.alloc_res_ptrs[DTYPE_RTV];
+			}
 
 #ifdef DX10_0
 			if (render_pass == RENDER_GEOPASS::PASS_SILHOUETTE) {
@@ -2650,7 +2665,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				, false // is_frag_counter_buffer
 				, false
 				, PICKING_TYPE::PICK_ON_GS
-				, true, false, false);
+				, true, false, false, false);
 
 			ID3D11Buffer* bufNull = NULL;
 			dx11DeviceImmContext->SOSetTargets(1, (ID3D11Buffer**)&bufNull, offset);
@@ -2669,7 +2684,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				, false // is_frag_counter_buffer
 				, false
 				, PICKING_TYPE::PICK_ON_SCREEN
-				, false, false, false);
+				, false, false, false, false);
 
 			dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_picking_system_buffer.alloc_res_ptrs[DTYPE_RES],
 				(ID3D11Buffer*)gres_picking_buffer.alloc_res_ptrs[DTYPE_RES]);
@@ -2758,7 +2773,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			dx11CommonParams->GpuProfile("Opaque Surface");
 			// Opaque Foremost Rendering ==> to Render Target Textures (gres_fb_rgba and gres_fb_depthcs)
 			RenderStage1(foremost_opaque_surfaces_routine_objs, MFR_MODE::NONE, RENDER_GEOPASS::PASS_OPAQUESURFACES
-				, false /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false, false);
+				, false /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false, false, false);
 			dx11CommonParams->GpuProfile("Opaque Surface", true);
 		}
 
@@ -2770,7 +2785,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			// Single Layer Effect (outline) Rendering 
 			// ==> to a Temporary Render Target Texture (gres_fb_singlelayer_depthcs)
 			RenderStage1(single_layer_routine_objs, MFR_MODE::NONE, RENDER_GEOPASS::PASS_SILHOUETTE
-				, false /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false, false);
+				, false /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false, false, false);
 			dx11CommonParams->GpuProfile("Single Layer Pass", true);
 		}
 
@@ -2781,7 +2796,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			// Single Layer Effect (outline) Rendering 
 			// ==> to a Temporary Render Target Texture (gres_fb_singlelayer_depthcs)
 			RenderStage1(single_layer_routine_group_objs, MFR_MODE::NONE, RENDER_GEOPASS::PASS_SILHOUETTE
-				, false /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false, true);
+				, false /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false, true, false);
 			dx11CommonParams->GpuProfile("Group Single Layer Pass", true);
 
 			GpuRes gres_quad;
@@ -2949,7 +2964,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 				dx11CommonParams->GpuProfile("Fragment Count");
 				RenderStage1(general_oit_routine_objs, mode_OIT, RENDER_GEOPASS::PASS_OIT
-					, true /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false, false);
+					, true /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false, false, false);
 				dx11CommonParams->GpuProfile("Fragment Count", true);
 
 				dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
@@ -3119,18 +3134,13 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			dx11CommonParams->GpuProfile("Geometry for OIT");
 			// buffer filling
 			RenderStage1(general_oit_routine_objs, mode_OIT, RENDER_GEOPASS::PASS_OIT
-				, false /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false, false);
+				, false /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false, false, false);
 			dx11CommonParams->GpuProfile("Geometry for OIT", true);
 #endif
 		}
 
 
-#ifdef DX10_0
-		///. TO DO //
-		//not allocate gres_fb_spinlock, gres_fb_counter, gres_fb_k_buffer, gres_fb_ubk_buffer...
-
-#else
-
+#ifndef DX10_0
 		auto ResolvePass = [&dx11CommonParams, &dx11DeviceImmContext, &dx11RTVsNULL, &dx11DSVNULL, &dx11UAVs_NULL, &dx11SRVs_NULL,
 			&gres_fb_k_buffer, &gres_fb_counter, &gres_fb_rgba, &gres_fb_depthcs, &gres_fb_ubk_buffer, &gres_fb_ref_pidx,
 			&gres_fb_singlelayer_rgba, &gres_fb_singlelayer_depthcs,
@@ -3185,10 +3195,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
 		};
 
-		bool additionalKLayerForMFB = foremost_opaque_surfaces_routine_objs.size() > 0 || single_layer_routine_objs.size() > 0;
-#ifndef DX10_0
-		additionalKLayerForMFB = additionalKLayerForMFB || particle_layer_objs.size() > 0;
-#endif // !DX10_0
+		bool additionalKLayerForMFB = foremost_opaque_surfaces_routine_objs.size() > 0 
+			|| single_layer_routine_objs.size() > 0 
+			|| particle_layer_objs.size() > 0;
 
 		cbCamState.cam_flag |= ((int)additionalKLayerForMFB << 8);
 		int storeKBuf = (int)(!is_final_renderer || check_pixel_transmittance
@@ -3235,6 +3244,17 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				dx11CommonParams->GpuProfile("SSDOF", true);
 			}
 		}
+
+		if (second_layer_objs.size() > 0) {
+			// DOJO TO DO : RENDER_OUT_RGBA_1, RENDER_OUT_DEPTH_1, DEPTH_STENCIL
+			dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
+			dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+			dx11CommonParams->GpuProfile("Second Layer Surface");
+			RenderStage1(second_layer_objs, MFR_MODE::NONE, RENDER_GEOPASS::PASS_OPAQUESURFACES
+				, false /*is_frag_counter_buffer*/, false/*is_ghost_mode*/, PICKING_TYPE::NONE, false/*apply_fragmerge*/, false, false, true);
+			dx11CommonParams->GpuProfile("Second Layer Surface", true);
+			iobj->SetObjParam("NUM_SECOND_LAYER_OBJECTS", (int)second_layer_objs.size());
+		}
 #endif
 
 		// Set NULL States //
@@ -3249,13 +3269,13 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		SetCamConstBuf(cbCamState);
 
 		RenderStage1(general_oit_routine_objs, MFR_MODE::MOMENT, RENDER_GEOPASS::PASS_OIT // moment generation
-			, false /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, true /*is_MOMENT_gen_buffer*/, false);
+			, false /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, true /*is_MOMENT_gen_buffer*/, false, false);
 
 		dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
 		dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 
 		RenderStage1(general_oit_routine_objs, MFR_MODE::MOMENT, RENDER_GEOPASS::PASS_OIT // moment generation
-			, false /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false /*is_MOMENT_gen_buffer*/, false);
+			, false /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false /*is_MOMENT_gen_buffer*/, false, false);
 #endif
 	}
 

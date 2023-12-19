@@ -193,10 +193,10 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	bool curved_slicer = _fncontainer.fnParams.GetParam("_bool_IsNonlinear", false);
 	string strRendererSource = _fncontainer.fnParams.GetParam("_string_RenderingSourceType", string("MESH"));
 	bool is_sectional = strRendererSource == "SECTIONAL_MESH" || strRendererSource == "SECTIONAL_VOLUME";
-	bool is_system_out = false;
+	bool is_final_render_out = false;
 	float planeThickness = _fncontainer.fnParams.GetParam("_float_PlaneThickness", -1.f);
 	bool is_picking_routine = _fncontainer.fnParams.GetParam("_bool_IsPickingRoutine", false);
-	bool is_final_renderer = _fncontainer.fnParams.GetParam("_bool_IsFinalRenderer", true);
+	bool is_last_renderer = _fncontainer.fnParams.GetParam("_bool_IsFinalRenderer", true);
 	g_vmCommonParams.gpu_profile = _fncontainer.fnParams.GetParam("_bool_GpuProfile", false);
 	map<string, vmint2>& profile_map = g_vmCommonParams.profile_map;
 	if (g_vmCommonParams.gpu_profile)
@@ -219,7 +219,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		double dRuntime = 0;
 		RenderVrDLS(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
 		g_dRunTimeVRs += dRuntime;
-		is_system_out = true;
+		is_final_render_out = true;
 		is_vr = true;
 	}
 	else if (strRendererSource == "MESH")
@@ -227,7 +227,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		double dRuntime = 0;
 		RenderSrOIT(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
 		g_dRunTimeVRs += dRuntime;
-		if (is_final_renderer) is_system_out = true;
+		if (is_last_renderer) is_final_render_out = true;
 	}
 	else if (strRendererSource == "SECTIONAL_VOLUME")
 	{
@@ -235,7 +235,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		double dRuntime = 0;
 		RenderVrCurvedSlicer(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
 		g_dRunTimeVRs += dRuntime;
-		is_system_out = true;
+		is_final_render_out = true;
 		is_vr = true;
 	}
 	else if (strRendererSource == "SECTIONAL_MESH")
@@ -243,10 +243,10 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		double dRuntime = 0;
 		RenderSrSlicer(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
 		g_dRunTimeVRs += dRuntime;
-		if (is_final_renderer || planeThickness <= 0.f) is_system_out = true;
+		if (is_last_renderer || planeThickness <= 0.f) is_final_render_out = true;
 	}
 
-	auto RenderOut = [&iobj, &is_final_renderer, &planeThickness, &_fncontainer, &is_vr]() {
+	auto RenderOut = [&iobj, &is_last_renderer, &planeThickness, &_fncontainer, &is_vr]() {
 
 		g_vmCommonParams.GpuProfile("Copyback");
 
@@ -277,7 +277,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		grd_helper::UpdateFrameBuffer(gres_fb_sys_rgba, iobj, "SYSTEM_OUT_RGBA", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_SYSOUT);
 		grd_helper::UpdateFrameBuffer(gres_fb_sys_depthcs, iobj, "SYSTEM_OUT_DEPTH", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R32_FLOAT, UPFB_SYSOUT);
 
-		if (hWnd && is_final_renderer)
+		if (hWnd && is_last_renderer)
 		{
 			// APPLY HWND MODE
 			ID3D11Texture2D* pTex2dHwndRT = NULL;
@@ -288,7 +288,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		}
 		else {
 			if (hWnd) gpu_manager->ReleaseDXGI(hWnd);
-			int outIndex = planeThickness == 0.f && !is_final_renderer ? 1 : 0; // just for SlicerSR combined with CPU MPR
+			int outIndex = planeThickness == 0.f && !is_last_renderer ? 1 : 0; // just for SlicerSR combined with CPU MPR
 			FrameBuffer* fb_rout = (FrameBuffer*)iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, outIndex);
 			FrameBuffer* fb_dout = (FrameBuffer*)iobj->GetFrameBuffer(FrameBufferUsageDEPTH, 0);
 
@@ -387,11 +387,69 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		g_vmCommonParams.GpuProfile("Copyback", true);
 	};
 
-	if (is_system_out && !is_picking_routine)
+	if (is_final_render_out && !is_picking_routine)
 	{
+		const uint rtbind = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 		GpuRes gres_fb_rgba;
-		grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D,
-			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+		grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+
+#ifndef DX10_0
+		// DOJO TO DO...
+		// 1. rendering 2nd layer rendering... in RenderSrOIT .. (changes .. name...)
+		// (^^) change the path-tracing name to ray-caster ... (volume rendering.. ray-marching... actually, ray-marching is a sort of ray-casting)
+		// 2. here, compose the 2nd layer rendering target texture onto the final render out texture... 
+		auto Blend2ndLayer = [&gres_fb_rgba, &iobj, &_fncontainer, &rtbind]() {
+
+			vmint2 fb_size_cur;
+			iobj->GetFrameBufferInfo(&fb_size_cur);
+
+			GpuRes gres_fb_depthcs;
+			grd_helper::UpdateFrameBuffer(gres_fb_depthcs, iobj, "RENDER_OUT_DEPTH_0", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
+
+			GpuRes gres_fb_2ndlayer_rgba, gres_fb_2ndlayer_depthcs;
+			grd_helper::UpdateFrameBuffer(gres_fb_2ndlayer_rgba, iobj, "RENDER_OUT_RGBA_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+			grd_helper::UpdateFrameBuffer(gres_fb_2ndlayer_depthcs, iobj, "RENDER_OUT_DEPTH_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+
+			ID3D11UnorderedAccessView* dx11UAVs[4] = {
+					(ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
+					, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
+					, (ID3D11UnorderedAccessView*)gres_fb_2ndlayer_rgba.alloc_res_ptrs[DTYPE_UAV]
+					, (ID3D11UnorderedAccessView*)gres_fb_2ndlayer_depthcs.alloc_res_ptrs[DTYPE_UAV]
+			};
+
+			__ID3D11Device* dx11Device = g_vmCommonParams.dx11Device;
+			__ID3D11DeviceContext* dx11DeviceImmContext = g_vmCommonParams.dx11DeviceImmContext;
+
+			ID3D11Buffer* cbuf_cam_state = g_vmCommonParams.get_cbuf("CB_CameraState");
+			D3D11_MAPPED_SUBRESOURCE mappedResCamState;
+			dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
+			CB_CameraState* cbCamStateData = (CB_CameraState*)mappedResCamState.pData;
+			cbCamStateData->rt_width = fb_size_cur.x;
+			cbCamStateData->rt_height = fb_size_cur.y;
+			cbCamStateData->cam_flag = 1;
+			dx11DeviceImmContext->Unmap(cbuf_cam_state, 0);
+			dx11DeviceImmContext->CSSetConstantBuffers(0, 1, &cbuf_cam_state);
+
+			ID3D11ComputeShader* dx11CShader = g_vmCommonParams.get_cshader("CS_Blend2ndLayer_cs_5_0");
+			dx11DeviceImmContext->CSSetShader(dx11CShader, NULL, 0);
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 4, dx11UAVs, (UINT*)(&dx11UAVs));
+
+			int __BLOCKSIZE = _fncontainer.fnParams.GetParam("_int_GpuThreadBlockSize", (int)4);
+			uint num_grid_x = (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
+			uint num_grid_y = (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
+			dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+
+			// Set NULL States //
+			ID3D11UnorderedAccessView* dx11UAVs_NULL[7] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL };
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 4, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+		};
+
+		if (iobj->GetObjParam("NUM_SECOND_LAYER_OBJECTS", (int)0) > 0) {
+			Blend2ndLayer();
+		}
+
+#endif
+
 		ID3D11Texture2D* rtTex2D = (ID3D11Texture2D*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RES];
 
 		// check release or not

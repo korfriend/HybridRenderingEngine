@@ -206,3 +206,4 @@ fxc /E GS_MeshCutLines /T gs_4_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_co
 
 
 fxc /E RayMarchingDistanceMap /T cs_5_0 ./hlsl/particle/Particle.hlsl /Fo ./shader_compiled_objs/PCE_BlobRayMarching_cs_5_0
+fxc /E Blend2ndLayer /T cs_5_0 ./hlsl/SecondLayerBlend.hlsl /Fo ./shader_compiled_objs/CS_Blend2ndLayer_cs_5_0

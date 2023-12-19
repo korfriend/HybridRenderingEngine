@@ -164,11 +164,12 @@
     <FxCompile Include="hlsl\shader4\BasicShader.hlsl">
       <Filter>hlsl source code\shader4</Filter>
     </FxCompile>
-    <FxCompile Include="hlsl\shader4\BasicShader2.hlsl">
-      <Filter>hlsl source code\shader4</Filter>
-    </FxCompile>
     <FxCompile Include="hlsl\particle\Particle.hlsl">
       <Filter>hlsl source code\Particle</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\shader4\SecondLayerBlend.hlsl" />
+    <FxCompile Include="hlsl\SecondLayerBlend.hlsl">
+      <Filter>hlsl source code</Filter>
     </FxCompile>
   </ItemGroup>
 </Project>
