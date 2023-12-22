@@ -749,6 +749,26 @@ namespace grd_helper
 		vmfloat3 maxRoiCube;
 	};
 
+	// CS ¿¡¼­ Particle Buffer Update (https://github.com/turanszkij/WickedEngine/blob/2f5631e46aed3e278377a678b9e49714bfd33968/WickedEngine/shaders/emittedparticle_emitCS.hlsl )
+	// VS (rendering ¿ë)
+	struct CB_Particle
+	{
+		uint frame = 0;
+	};
+
+	struct StB_Particle
+	{
+		vmfloat3 position = vmfloat3(0.0f);
+		float mass = 1.0f;
+		vmfloat3 force = vmfloat3(0.0f);
+		float rotationalVelocity = 0.0f;
+		vmfloat3 velocity = vmfloat3(0.0f);
+		float maxLife = 1.0f;
+		vmfloat2 sizeBeginEnd = vmfloat2(1.0f);
+		float life = maxLife;
+		uint color = 0xFFFFFFFF;
+	};
+
 	// Compute Constant Buffers //
 	// global 
 	void SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, const vmmat44f& matSS2WS, VmCObject* ccobj, const vmint2& fb_size, const int k_value, const float vz_thickness);

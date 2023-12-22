@@ -178,7 +178,7 @@ void RayMarchingDistanceMap( uint3 DTid : SV_DispatchThreadID )
 
     float rd = t.x;
     bool isHit = false;
-    const float minDist = 0.2f;
+    const float minDist = 1.0f;
     float3 surf_pos = pos_ip_ws;
 
 //#define __NO_RAY_SURF_REFINEMENT
@@ -186,9 +186,10 @@ void RayMarchingDistanceMap( uint3 DTid : SV_DispatchThreadID )
     float prev_d = 0, d = 0;
 #define MAX_LOOP 100
 #define SURF_REFINEMENT 5
+
     [loop]
     for (int step = 0; step < MAX_LOOP; step++) {
-
+        debug_ray++;
         float3 ray_pos = pos_ip_ws + dir_ray_unit_ws * rd;
         prev_d = d;
         d = GetDist(ray_pos, smthCoef);

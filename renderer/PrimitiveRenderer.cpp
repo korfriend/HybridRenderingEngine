@@ -2409,7 +2409,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				(ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV] };
 			if (is_2ndlayer) {
 				dx11RTVs[0] = (ID3D11RenderTargetView*)gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_RTV];
-				dx11RTVs[1] = (ID3D11RenderTargetView*)gres_fb_singlelayer_depthcs.alloc_res_ptrs[DTYPE_RTV];
+				dx11RTVs[1] = (ID3D11RenderTargetView*)gres_fb_singlelayer_tempDepth.alloc_res_ptrs[DTYPE_RTV];
 			}
 
 #ifdef DX10_0
@@ -3246,7 +3246,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		}
 
 		if (second_layer_objs.size() > 0) {
-			// DOJO TO DO : RENDER_OUT_RGBA_1, RENDER_OUT_DEPTH_1, DEPTH_STENCIL
 			dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
 			dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
 			dx11CommonParams->GpuProfile("Second Layer Surface");

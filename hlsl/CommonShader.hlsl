@@ -408,7 +408,7 @@ bool IsInsideClipBox(const in float3 pos_target, const in float4x4 mat_2_bs)
 	//return true;
 }
 
-float2 ComputeAaBbHits(const in float3 pos_start, in float3 pos_min, const in float3 pos_max, const in float3 vec_dir)
+float2 ComputeAaBbHits(const float3 pos_start, float3 pos_min, const float3 pos_max, const float3 vec_dir)
 {
 	// intersect ray with a box
 	// http://www.siggraph.org/education/materials/HyperGraph/raytrace/rtinter3.htm
@@ -429,7 +429,7 @@ float2 ComputeAaBbHits(const in float3 pos_start, in float3 pos_min, const in fl
 	return float2(tnear, tfar);
 }
 
-float2 ComputeClipBoxHits(const in float3 pos_start, const in float3 vec_dir, const in float4x4 mat_vbox_2bs)
+float2 ComputeClipBoxHits(const float3 pos_start, const float3 vec_dir, const float4x4 mat_vbox_2bs)
 {
 	float3 pos_src_bs = TransformPoint(pos_start, mat_vbox_2bs);
 	//float3 pos_max_bs = TransformPoint(pos_vbox_max, mat_vbox_2bs);

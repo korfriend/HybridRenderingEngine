@@ -408,7 +408,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 
 			GpuRes gres_fb_2ndlayer_rgba, gres_fb_2ndlayer_depthcs;
 			grd_helper::UpdateFrameBuffer(gres_fb_2ndlayer_rgba, iobj, "RENDER_OUT_RGBA_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
-			grd_helper::UpdateFrameBuffer(gres_fb_2ndlayer_depthcs, iobj, "RENDER_OUT_DEPTH_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+			grd_helper::UpdateFrameBuffer(gres_fb_2ndlayer_depthcs, iobj, "RENDER_OUT_DEPTH_2", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
 
 			ID3D11UnorderedAccessView* dx11UAVs[4] = {
 					(ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
