@@ -30,6 +30,11 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	float v_thickness = (float)_fncontainer->fnParams.GetParam("_float_VZThickness", 0.f);
 	bool check_pixel_transmittance = _fncontainer->fnParams.GetParam("_bool_PixelTransmittance", false);
 
+	int camClipMode = _fncontainer->fnParams.GetParam("_int_ClippingMode", (int)0);
+	vmfloat3 camClipPlanePos = _fncontainer->fnParams.GetParam("_float3_PosClipPlaneWS", vmfloat3(0));
+	vmfloat3 camClipPlaneDir = _fncontainer->fnParams.GetParam("_float3_VecClipPlaneWS", vmfloat3(0));
+	vmmat44f camClipMatWS2BS = _fncontainer->fnParams.GetParam("_matrix44f_MatrixClipWS2BS", vmmat44f(1));
+
 	float merging_beta = (float)_fncontainer->fnParams.GetParam("_float_MergingBeta", 0.5f);
 	bool is_rgba = _fncontainer->fnParams.GetParam("_bool_IsRGBA", false); // false means bgra
 	bool is_ghost_mode = _fncontainer->fnParams.GetParam("_bool_GhostEffect", false);
@@ -841,7 +846,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		SET_CBUFFERS(4, 1, &cbuf_vobj);
 
 		CB_ClipInfo cbClipInfo;
-		grd_helper::SetCb_ClipInfo(cbClipInfo, vobj, actor);
+		grd_helper::SetCb_ClipInfo(cbClipInfo, vobj, actor, camClipMode, camClipMatWS2BS, camClipPlanePos, camClipPlaneDir);
 		D3D11_MAPPED_SUBRESOURCE mappedResClipInfo;
 		dx11DeviceImmContext->Map(cbuf_clip, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResClipInfo);
 		CB_ClipInfo* cbClipInfoData = (CB_ClipInfo*)mappedResClipInfo.pData;

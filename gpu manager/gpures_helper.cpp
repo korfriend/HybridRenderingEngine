@@ -2372,26 +2372,46 @@ void grd_helper::SetCb_VolumeRenderingEffect(CB_VolumeMaterial& cb_vreffect, VmV
 	cb_vreffect.flag = (int)jitteringSample;
 }
 
-void grd_helper::SetCb_ClipInfo(CB_ClipInfo& cb_clip, VmVObject* obj, VmActor* actor)
+void grd_helper::SetCb_ClipInfo(CB_ClipInfo& cb_clip, VmVObject* obj, VmActor* actor, const int camClipMode, 
+	const vmmat44f& matCamClipWS2BS, const vmfloat3& matCamClipPlanePos, const vmfloat3& matCamClipPlaneDir)
 {
 	const int obj_id = obj->GetObjectID();
 	bool is_clip_free = obj->GetObjParam("_bool_ClipFree", false);
+	is_clip_free |= actor->GetParam("_bool_ClipFree", false);
 
+	cb_clip.clip_flag = 0;
 	if (!is_clip_free)
 	{
 		// CLIPBOX / CLIPPLANE / BOTH //
-		int clip_mode = actor->GetParam("_int_ClippingMode", (int)0);	// 0 : No, 1 : CLIPPLANE, 2 : CLIPBOX, 3 : BOTH
-		cb_clip.clip_flag = clip_mode & 0x3;
+
+		if (camClipMode == 0) {
+			int clip_mode = actor->GetParam("_int_ClippingMode", (int)0);	// 0 : No, 1 : CLIPPLANE, 2 : CLIPBOX, 3 : BOTH
+			cb_clip.clip_flag = clip_mode & 0x3;
+		}
+		else {
+			cb_clip.clip_flag = camClipMode & 0x3;
+		}
 	}
 
 	if (cb_clip.clip_flag & 0x1)
 	{
-		cb_clip.pos_clipplane = actor->GetParam("_float3_PosClipPlaneWS", (vmfloat3)0);
-		cb_clip.vec_clipplane = actor->GetParam("_float3_VecClipPlaneWS", (vmfloat3)0);
+		if (camClipMode == 0) {
+			cb_clip.pos_clipplane = actor->GetParam("_float3_PosClipPlaneWS", (vmfloat3)0);
+			cb_clip.vec_clipplane = actor->GetParam("_float3_VecClipPlaneWS", (vmfloat3)0);
+		}
+		else {
+			cb_clip.pos_clipplane = matCamClipPlanePos;
+			cb_clip.vec_clipplane = matCamClipPlaneDir;
+		}
 	}
 	if (cb_clip.clip_flag & 0x2)
 	{
-		cb_clip.mat_clipbox_ws2bs = TRANSPOSE(actor->GetParam("_matrix44f_MatrixClipWS2BS", vmmat44f(1)));
+		if (camClipMode == 0) {
+			cb_clip.mat_clipbox_ws2bs = TRANSPOSE(actor->GetParam("_matrix44f_MatrixClipWS2BS", vmmat44f(1)));
+		}
+		else {
+			cb_clip.mat_clipbox_ws2bs = TRANSPOSE(matCamClipWS2BS);
+		}
 	}
 }
 

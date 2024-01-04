@@ -622,6 +622,11 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	bool is_ghost_mode = _fncontainer->fnParams.GetParam("_bool_GhostEffect", false);
 	bool is_rgba = _fncontainer->fnParams.GetParam("_bool_IsRGBA", false); // false means bgra
 
+	int camClipMode = _fncontainer->fnParams.GetParam("_int_ClippingMode", (int)0);
+	vmfloat3 camClipPlanePos = _fncontainer->fnParams.GetParam("_float3_PosClipPlaneWS", vmfloat3(0));
+	vmfloat3 camClipPlaneDir = _fncontainer->fnParams.GetParam("_float3_VecClipPlaneWS", vmfloat3(0));
+	vmmat44f camClipMatWS2BS = _fncontainer->fnParams.GetParam("_matrix44f_MatrixClipWS2BS", vmmat44f(1));
+
 	bool is_system_out = false;
 	if (is_final_renderer) is_system_out = true;
 
@@ -1914,7 +1919,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			dx11DeviceImmContext->Unmap(cbuf_pobj, 0);
 
 			CB_ClipInfo cbClipInfo;
-			grd_helper::SetCb_ClipInfo(cbClipInfo, pobj, actor);
+			grd_helper::SetCb_ClipInfo(cbClipInfo, pobj, actor, camClipMode, camClipMatWS2BS, camClipPlanePos, camClipPlaneDir);
 			D3D11_MAPPED_SUBRESOURCE mappedResClipInfo;
 			dx11DeviceImmContext->Map(cbuf_clip, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResClipInfo);
 			CB_ClipInfo* cbClipInfoData = (CB_ClipInfo*)mappedResClipInfo.pData;
