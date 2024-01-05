@@ -1013,7 +1013,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 #ifdef DX10_0
 	output.color = vis_out;
-	output.depthcs = depth_out;
+	output.depthcs = min(depth_out, fs[0].z);
 	return output;
 #else
 	//if (count == 0) vis_otf = float4(1, 1, 0, 1);
@@ -1021,7 +1021,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	//vis_out = float4(TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts), 1);
 	vis_out = saturate(vis_out);
     fragment_vis[tex2d_xy] = vis_out;
-    fragment_zdepth[tex2d_xy] = depth_out;
+	fragment_zdepth[tex2d_xy] = min(depth_out, fs[0].z);
 	//fragment_counter[DTid.xy] = num_frags + 1;
 
 
