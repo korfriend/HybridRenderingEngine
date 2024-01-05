@@ -1,6 +1,6 @@
 #include "../Sr_Common.hlsl"
 
-[earlydepthstencil]// ==> shader model 5
+//[earlydepthstencil]// ==> shader model 5
 PS_FILL_OUTPUT BasicShader4(__VS_OUT input)
 {
 	PS_FILL_OUTPUT out_ps;
