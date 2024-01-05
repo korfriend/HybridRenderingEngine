@@ -36,6 +36,7 @@
 #define _HAS_STD_BYTE 0
 
 #include <map>
+#include <unordered_map>
 #include <vector>
 #include <set>
 #include <string>
@@ -307,10 +308,10 @@ namespace vmobjects
 	//=========================
 	// Object Structures
 	//=========================
-	template <typename NAME, typename T> struct VmMap {
+	template <typename NAME, typename T, class HASH_COMP = std::hash<NAME>> struct VmMap {
 	private:
-		std::string __PM_VERSION = "LIBI_1.3";
-		std::map<NAME, T> __params;
+		std::string __PM_VERSION = "LIBI_1.4";
+		std::unordered_map<NAME, T, HASH_COMP> __params;
 	public:
 		bool GetParamCheck(const NAME& param_name, T& param) {
 			auto it = __params.find(param_name);
@@ -358,7 +359,7 @@ namespace vmobjects
 			return __PM_VERSION;
 		}
 
-		typedef std::map<NAME, T> MapType;
+		typedef std::unordered_map<NAME, T> MapType;
 		typename typedef MapType::iterator iterator;
 		typename typedef MapType::const_iterator const_iterator;
 		typename typedef MapType::reference reference;
@@ -370,8 +371,8 @@ namespace vmobjects
 
 	template <typename NAME, typename ANY> struct VmParamMap {
 	private:
-		std::string __PM_VERSION = "LIBI_1.3";
-		std::map<NAME, ANY> __params;
+		std::string __PM_VERSION = "LIBI_1.4";
+		std::unordered_map<NAME, ANY> __params;
 	public:
 		template <typename SRCV> bool GetParamCheck(const NAME& param_name, SRCV& param) {
 			auto it = __params.find(param_name);
@@ -419,7 +420,7 @@ namespace vmobjects
 			return __PM_VERSION;
 		}
 
-		typedef std::map<NAME, ANY> MapType;
+		typedef std::unordered_map<NAME, ANY> MapType;
 		typename typedef MapType::iterator iterator;
 		typename typedef MapType::const_iterator const_iterator;
 		typename typedef MapType::reference reference;
