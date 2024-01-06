@@ -658,6 +658,29 @@ int LoadMaxValueInt(float3 pos_ts, float3 size_tex3d, const int scale, Texture3D
 	return (int)(max_v * scale + 0.5f);
 }
 
+float LoadBinaryValue(float3 pos_ts, float3 size_tex3d, Texture3D tex3d_data)
+{
+	float3 pos_vs = float3(pos_ts.x * size_tex3d.x - 0.5f, pos_ts.y * size_tex3d.y - 0.5f, pos_ts.z * size_tex3d.z - 0.5f);
+	int3 idx_vs = int3(pos_vs);
+
+	float samples[8];
+	samples[0] = tex3d_data.Load(int4(idx_vs, 0)).r;
+	samples[1] = tex3d_data.Load(int4(idx_vs + int3(1, 0, 0), 0)).r;
+	samples[2] = tex3d_data.Load(int4(idx_vs + int3(0, 1, 0), 0)).r;
+	samples[3] = tex3d_data.Load(int4(idx_vs + int3(1, 1, 0), 0)).r;
+	samples[4] = tex3d_data.Load(int4(idx_vs + int3(0, 0, 1), 0)).r;
+	samples[5] = tex3d_data.Load(int4(idx_vs + int3(1, 0, 1), 0)).r;
+	samples[6] = tex3d_data.Load(int4(idx_vs + int3(0, 1, 1), 0)).r;
+	samples[7] = tex3d_data.Load(int4(idx_vs + int3(1, 1, 1), 0)).r;
+
+	float v = 0;
+	for (int i = 0; i < 8; i++)
+	{
+		if (samples[i] > 0) v += 1.f;
+	}
+	return v / 8.f;
+}
+
 struct BlockSkip
 {
 	float blk_value;
@@ -698,12 +721,42 @@ float3 GradientVolume(const in float3 pos_sample_ts, const in float3 vec_x, cons
 	return float3(fGx, fGy, fGz);
 }
 
+float3 GradientBinVolume(const in float3 pos_sample_ts, const in float3 vec_x, const in float3 vec_y, const in float3 vec_z, Texture3D tex3d_data)
+{
+	// float LoadBinaryValue(float3 pos_ts, float3 size_tex3d, Texture3D tex3d_data)
+	float fGx = LoadBinaryValue(pos_sample_ts + vec_x, g_cbVobj.vol_size, tex3d_data)
+		- LoadBinaryValue(pos_sample_ts - vec_x, g_cbVobj.vol_size, tex3d_data);
+	float fGy = LoadBinaryValue(pos_sample_ts + vec_y, g_cbVobj.vol_size, tex3d_data)
+		- LoadBinaryValue(pos_sample_ts - vec_y, g_cbVobj.vol_size, tex3d_data);
+	float fGz = LoadBinaryValue(pos_sample_ts + vec_z, g_cbVobj.vol_size, tex3d_data)
+		- LoadBinaryValue(pos_sample_ts - vec_z, g_cbVobj.vol_size, tex3d_data);
+	return -float3(fGx, fGy, fGz);
+}
+
 float3 GradientVolume2(const in float sampleV, const in float3 pos_sample_ts, const in float3 vec_x, const in float3 vec_y, const in float3 vec_z, Texture3D tex3d_data)
 {
 	float fGx = tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts + 2.f * vec_x, 0).r;
 	float fGy = tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts + 2.f * vec_y, 0).r;
 	float fGz = tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts + 2.f * vec_z, 0).r;
 	return float3(fGx, fGy, fGz) - float3(sampleV, sampleV, sampleV);
+}
+
+float3 GradientVolume3(const float sampleV, const float samplePreV, const float3 pos_sample_ts,
+	const float3 vec_v, const float3 vec_u, const float3 vec_r, // TS from WS
+	const float3 uvec_v, const float3 uvec_u, const float3 uvec_r,
+	Texture3D tex3d_data)
+{
+	// note v, u, r are orthogonal for each other
+	// vec_u and vec_r are defined in TS, and each length is sample distance
+	// uvec_v, uvec_u, and uvec_r are unit vectors defined in WS
+	float dv = tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts - 2 * vec_v, 0).r - sampleV;
+	float du = tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts - 2 * vec_u, 0).r - sampleV;
+	float dr = tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts - 2 * vec_r, 0).r - sampleV;
+
+	float3 v_v = uvec_v * dv;
+	float3 v_u = uvec_u * du;
+	float3 v_r = uvec_r * dr;
+	return normalize(v_v + v_u + v_r);
 }
 
 float3 GradientNormalVolume(inout float leng, const in float3 pos_sample_ts, const in float3 pos_view_ws, const in float3 vec_x, const in float3 vec_y, const in float3 vec_z, Texture3D tex3d_data)
