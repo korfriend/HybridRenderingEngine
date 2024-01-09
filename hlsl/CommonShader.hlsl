@@ -756,7 +756,7 @@ float3 GradientVolume3(const float sampleV, const float samplePreV, const float3
 	float3 v_v = uvec_v * dv;
 	float3 v_u = uvec_u * du;
 	float3 v_r = uvec_r * dr;
-	return normalize(v_v + v_u + v_r);
+	return v_v + v_u + v_r;
 }
 
 float3 GradientNormalVolume(inout float leng, const in float3 pos_sample_ts, const in float3 pos_view_ws, const in float3 vec_x, const in float3 vec_y, const in float3 vec_z, Texture3D tex3d_data)
