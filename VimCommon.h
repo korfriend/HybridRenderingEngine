@@ -715,7 +715,7 @@ namespace vmobjects
 
 		/// constructor, 모두 0 (NULL or false)으로 초기화
 		PrimitiveData() {
-			is_ccw = false; num_prims = 0; num_vtx = 0;
+			is_ccw = true; num_prims = 0; num_vtx = 0;
 			idx_stride = num_vidx = 0;
 			ptype = PrimitiveTypeUNDEFINED;
 			is_stripe = false;

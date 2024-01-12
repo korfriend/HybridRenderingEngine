@@ -729,8 +729,9 @@ int intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 							// compute normal vector by taking the cross product of two edge vectors
 							// because of Woop transformation, only one set of vectors works
 
-							// assume... CW 
-							trinormal = cross(float3(v22.x, v22.y, v22.z), float3(v11.x, v11.y, v11.z));  // works
+							// assume... CCW 
+							//trinormal = cross(float3(v22.x, v22.y, v22.z), float3(v11.x, v11.y, v11.z));  // works
+							trinormal = cross(float3(v11.x, v11.y, v11.z), float3(v22.x, v22.y, v22.z));  // works
 							//trinormal = float3(100, 100, 100);
 						}
 					}

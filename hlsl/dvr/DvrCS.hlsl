@@ -56,6 +56,7 @@ float4 VrOutlineTest(const in int2 tex2d_xy, inout float depth_c, const in float
 	float2 max_rect = float2(g_cbCamState.rt_width - 1, g_cbCamState.rt_height - 1);
 
 	float4 vout = (float4) 0;
+	[branch]
 	if (depth_c > 100000)
 	{
 		int count = 0;
@@ -300,6 +301,7 @@ void Find1stSampleHit(inout int step, const float3 pos_ray_start_ws, const float
     float3 dir_sample_ts = TransformVector(dir_sample_ws, g_cbVobj.mat_ws2ts);
     
 	int min_valid_v = g_cbTmap.first_nonzeroalpha_index;
+	[branch]
     if (Sample_Volume_And_Check(sample_v, pos_ray_start_ts, min_valid_v))
     {
         step = 0;
@@ -312,13 +314,15 @@ void Find1stSampleHit(inout int step, const float3 pos_ray_start_ws, const float
         float3 pos_sample_ts = pos_ray_start_ts + dir_sample_ts * (float) i;
 
         LOAD_BLOCK_INFO(blkSkip, pos_sample_ts, dir_sample_ts, num_ray_samples, i)
-
+			
+		[branch]
         if (blkSkip.blk_value > 0)
         {
 	        [loop]
             for (int k = 0; k <= blkSkip.num_skip_steps; k++)
             {
                 float3 pos_sample_blk_ts = pos_ray_start_ts + dir_sample_ts * (float) (i + k);
+				[branch]
                 if (Sample_Volume_And_Check(sample_v, pos_sample_blk_ts, min_valid_v))
                 {
 					step = i + k;

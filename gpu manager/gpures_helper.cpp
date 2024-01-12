@@ -1379,7 +1379,7 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 			gres_vtx.options["USAGE"] = D3D11_USAGE_DEFAULT;
 			gres_vtx.options["CPU_ACCESS_FLAG"] = NULL; // D3D11_CPU_ACCESS_WRITE;// | D3D11_CPU_ACCESS_READ;
 			gres_vtx.options["BIND_FLAG"] = D3D11_BIND_VERTEX_BUFFER;
-			gres_vtx.options["FORMAT"] = DXGI_FORMAT_R32G32B32_FLOAT;
+			//gres_vtx.options["FORMAT"] = DXGI_FORMAT_R32G32B32_FLOAT; // buffer does not need the specific format except UNKNOWN (used for STRUCTURED buffer)
 			gres_vtx.res_values.SetParam("NUM_ELEMENTS", (uint)prim_data->num_vtx);
 			gres_vtx.res_values.SetParam("STRIDE_BYTES", (uint)stride_bytes);
 

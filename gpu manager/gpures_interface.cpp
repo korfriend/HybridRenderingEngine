@@ -539,10 +539,10 @@ int __UpdateGpuResourcesBySrcID(const int src_id, vector<GpuRes>& gres_list)
 
 bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 {
-	auto GetOption = [&](const std::string& flag_name) -> uint
+	auto GetOption = [&](const std::string& flag_name, const int falseRetV = 0) -> uint
 	{
 		auto it = gres.options.find(flag_name);
-		if (it == gres.options.end()) return 0;
+		if (it == gres.options.end()) return falseRetV;
 		return it->second;
 	};
 
@@ -595,7 +595,7 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		desc_buf.CPUAccessFlags = GetOption("CPU_ACCESS_FLAG");
 		desc_buf.MiscFlags = NULL;
 		desc_buf.StructureByteStride = stride_bytes;
-		desc_buf.MiscFlags = (DXGI_FORMAT)GetOption("FORMAT") == DXGI_FORMAT_UNKNOWN ? D3D11_RESOURCE_MISC_BUFFER_STRUCTURED : NULL;
+		desc_buf.MiscFlags = (DXGI_FORMAT)GetOption("FORMAT", -1) == DXGI_FORMAT_UNKNOWN ? D3D11_RESOURCE_MISC_BUFFER_STRUCTURED : NULL;
 		ID3D11Buffer* pdx11Buffer = NULL;
 		if (GetOption("RAW_ACCESS") & 0x1)
 		{

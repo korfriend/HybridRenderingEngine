@@ -2882,12 +2882,11 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			ID3D11Buffer* cbuf_particleblob = dx11CommonParams->get_cbuf("CB_Particle_Blob");
 			dx11DeviceImmContext->CSSetConstantBuffers(11, 1, &cbuf_particleblob);
 
+			for (int i = 0; i < (int)particle_layer_objs.size(); i++)
 			{
-				VmActor* actor = particle_layer_objs[0];
-
+				VmActor* actor = particle_layer_objs[i];
 
 				vmfloat4 material_phongCoeffs = actor->GetParam("_float4_PhongCoeffs", default_phong_lighting_coeff);
-
 				CB_PolygonObject cbPolygonObj;
 				{
 					vmmat44f matPivot = (actor->GetParam("_matrix44f_Pivot", vmmat44f(1)));
@@ -2921,38 +2920,102 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				memcpy(cbPolygonObjData, &cbPolygonObj, sizeof(CB_PolygonObject));
 				dx11DeviceImmContext->Unmap(cbuf_pobj, 0);
 
-				dx11DeviceImmContext->CSSetConstantBuffers(1, 1, &cbuf_pobj); // for silhouette or A-buffer test
+				dx11DeviceImmContext->CSSetConstantBuffers(1, 1, &cbuf_pobj);
 
-				D3D11_MAPPED_SUBRESOURCE mappedResPclBlob;
-				dx11DeviceImmContext->Map(cbuf_particleblob, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResPclBlob);
-				CB_Particle_Blob* cbPclBlobData = (CB_Particle_Blob*)mappedResPclBlob.pData;
+				std::string PARTICLE_TYPE = actor->GetParam("_string_ParticleSysType", "METABALL");
+				if (PARTICLE_TYPE == "METABALL") {
+					D3D11_MAPPED_SUBRESOURCE mappedResPclBlob;
+					dx11DeviceImmContext->Map(cbuf_particleblob, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResPclBlob);
+					CB_Particle_Blob* cbPclBlobData = (CB_Particle_Blob*)mappedResPclBlob.pData;
 
-				float smoothCoeff = actor->GetParam("_float_Smoothness", 10.f);
-				glm::fvec3 minRoiCube = actor->GetParam("_fvec3_MinRoiCube", glm::fvec3(-50.f));
-				glm::fvec3 maxRoiCube = actor->GetParam("_fvec3_MaxRoiCube", glm::fvec3(50.f));
-				//vzm::SetActorParams(aidBlobParticle, apParticleActor);
-				std::vector<glm::fvec3>* centerSpheres = actor->GetParamPtr<std::vector<glm::fvec3>>("_vector<fvec3>_SphereCenter");
-				std::vector<glm::fvec4>* colorSpheres = actor->GetParamPtr<std::vector<glm::fvec4>>("_vector<fvec4>_SphereColor");
-				std::vector<float>* radiusSpheres = actor->GetParamPtr<std::vector<float>>("_vector<float>_SphereRadius");
-				if (centerSpheres == NULL || colorSpheres == NULL || radiusSpheres == NULL) {
-					vmlog::LogErr(actor->name + " has no sphere data!!");
-				}
-				else {
-					for (int i = 0; i < (int)centerSpheres->size(); i++) {
-						vmfloat3 xyz = centerSpheres->at(i);
-						cbPclBlobData->xyzr_spheres[i] = vmfloat4(xyz, radiusSpheres->at(i));
-						vmfloat4 color = colorSpheres->at(i);
-						int iColor = (int)(color.r * 255.f) | (int)(color.g * 255.f) << 8 | (int)(color.b * 255.f) << 16 | (int)(color.a * 255.f) << 24;
-						//cbPclBlobData->color_spheres = vmint4(iColor);
-						memcpy(&((int*)&cbPclBlobData->color_spheres)[i], &iColor, sizeof(int));
+					float smoothCoeff = actor->GetParam("_float_Smoothness", 10.f);
+					glm::fvec3 minRoiCube = actor->GetParam("_fvec3_MinRoiCube", glm::fvec3(-50.f));
+					glm::fvec3 maxRoiCube = actor->GetParam("_fvec3_MaxRoiCube", glm::fvec3(50.f));
+					//vzm::SetActorParams(aidBlobParticle, apParticleActor);
+					std::vector<glm::fvec3>* centerSpheres = actor->GetParamPtr<std::vector<glm::fvec3>>("_vector<fvec3>_SphereCenter");
+					std::vector<glm::fvec4>* colorSpheres = actor->GetParamPtr<std::vector<glm::fvec4>>("_vector<fvec4>_SphereColor");
+					std::vector<float>* radiusSpheres = actor->GetParamPtr<std::vector<float>>("_vector<float>_SphereRadius");
+					if (centerSpheres == NULL || colorSpheres == NULL || radiusSpheres == NULL) {
+						vmlog::LogErr(actor->name + " has no sphere data!!");
 					}
-					cbPclBlobData->smoothCoeff = smoothCoeff;
-					cbPclBlobData->minRoiCube = minRoiCube;
-					cbPclBlobData->maxRoiCube = maxRoiCube;
-				}
-				dx11DeviceImmContext->Unmap(cbuf_particleblob, 0);
+					else {
+						for (int i = 0; i < (int)centerSpheres->size(); i++) {
+							vmfloat3 xyz = centerSpheres->at(i);
+							cbPclBlobData->xyzr_spheres[i] = vmfloat4(xyz, radiusSpheres->at(i));
+							vmfloat4 color = colorSpheres->at(i);
+							int iColor = (int)(color.r * 255.f) | (int)(color.g * 255.f) << 8 | (int)(color.b * 255.f) << 16 | (int)(color.a * 255.f) << 24;
+							//cbPclBlobData->color_spheres = vmint4(iColor);
+							memcpy(&((int*)&cbPclBlobData->color_spheres)[i], &iColor, sizeof(int));
+						}
+						cbPclBlobData->smoothCoeff = smoothCoeff;
+						cbPclBlobData->minRoiCube = minRoiCube;
+						cbPclBlobData->maxRoiCube = maxRoiCube;
+					}
+					dx11DeviceImmContext->Unmap(cbuf_particleblob, 0);
 
-				dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+					dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+				}
+				else if (PARTICLE_TYPE == "NORMAL") {
+					const int MAX_PARTICLES = 1000;
+					VmVObjectPrimitive* pobj = (VmVObjectPrimitive*)actor->GetGeometryRes();
+					GpuRes gres_emitter;
+					gres_emitter.vm_src_id = pobj->GetObjectID();
+					gres_emitter.res_name = string("PARTICLE_EMITTER");
+					if (!gpu_manager->UpdateGpuResource(gres_emitter)) {
+						gres_emitter.rtype = RTYPE_BUFFER;
+						gres_emitter.options["USAGE"] = D3D11_USAGE_DEFAULT;
+						gres_emitter.options["CPU_ACCESS_FLAG"] = 0;
+						gres_emitter.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+						gres_emitter.options["FORMAT"] = DXGI_FORMAT_UNKNOWN;
+						gres_emitter.res_values.SetParam("NUM_ELEMENTS", (const uint)MAX_PARTICLES);
+						gres_emitter.res_values.SetParam("STRIDE_BYTES", (const uint)sizeof(Particle));
+						gpu_manager->GenerateGpuResource(gres_emitter);
+					}
+					GpuRes gres_aliveList0, gres_aliveList1, gres_deadList;
+					gres_aliveList0.vm_src_id = pobj->GetObjectID();
+					gres_aliveList0.res_name = string("PARTICLE_ALIVELIST0");
+					if (!gpu_manager->UpdateGpuResource(gres_aliveList0)) {
+						gres_aliveList0.rtype = RTYPE_BUFFER;
+						gres_aliveList0.options["USAGE"] = D3D11_USAGE_DEFAULT;
+						gres_aliveList0.options["CPU_ACCESS_FLAG"] = 0;
+						gres_aliveList0.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+						//gres_aliveList0.options["FORMAT"] = DXGI_FORMAT_R32_UINT;
+						gres_aliveList0.res_values.SetParam("NUM_ELEMENTS", (const uint)MAX_PARTICLES);
+						gres_aliveList0.res_values.SetParam("STRIDE_BYTES", (const uint)sizeof(int));
+						gpu_manager->GenerateGpuResource(gres_aliveList0);
+					}
+					gres_aliveList1 = gres_aliveList0;
+					gres_aliveList1.res_name = string("PARTICLE_ALIVELIST1");
+					if (!gpu_manager->UpdateGpuResource(gres_aliveList1)) {
+						gpu_manager->GenerateGpuResource(gres_aliveList1);
+					}
+					gres_deadList = gres_aliveList0;
+					gres_deadList.res_name = string("PARTICLE_DEADLIST");
+					if (!gpu_manager->UpdateGpuResource(gres_deadList)) {
+						gpu_manager->GenerateGpuResource(gres_deadList);
+
+						// Dead index list:
+						std::vector<uint> deadList(MAX_PARTICLES);
+						for (int i = 0; i < MAX_PARTICLES; i++) deadList[i] = i;
+
+						D3D11_SUBRESOURCE_DATA subres;
+						subres.pSysMem = &deadList[0];
+						subres.SysMemPitch = sizeof(uint) * MAX_PARTICLES;
+						subres.SysMemSlicePitch = 0; // only for 3D resource
+						dx11DeviceImmContext->UpdateSubresource((ID3D11Resource*)gres_deadList.alloc_res_ptrs[DesType::DTYPE_RES], 0, NULL, subres.pSysMem, subres.SysMemPitch, 0);
+					}
+
+					// particle update //
+					{
+						dx11DeviceImmContext->Dispatch(MAX_PARTICLES, 1, 1);
+
+					}
+
+					// particle rendering //
+					{
+
+					}
+				}
 			}
 
 			// Set NULL States //

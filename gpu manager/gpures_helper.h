@@ -309,6 +309,29 @@ namespace grd_helper
 		}
 	};
 
+	struct Particle
+	{
+		vmfloat3 position;
+		float mass;
+		vmfloat3 force;
+		float rotationalVelocity;
+		vmfloat3 velocity;
+		float maxLife;
+		vmfloat2 sizeBeginEnd;
+		float life;
+		uint color;
+	};
+
+	struct ParticleCounters
+	{
+		uint aliveCount;
+		uint deadCount;
+		uint realEmitCount;
+		uint aliveCount_afterSimulation;
+		uint culledCount;
+		uint cellAllocator;
+	};
+
 	int InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonParameters* gpu_params);
 	void DeinitializePresettings();
 
