@@ -220,6 +220,9 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_DX10.0|x64'">true</ExcludedFromBuild>
     </FxCompile>
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="DeprecatedShaders.txt" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{BD108E48-5831-4F89-8E39-5662EBDB276A}</ProjectGuid>
     <RootNamespace>VRGPUDX11Simple_Dojo</RootNamespace>

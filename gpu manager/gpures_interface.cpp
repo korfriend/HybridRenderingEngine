@@ -8,7 +8,7 @@
 #else
 #include <d3d11.h>
 #endif
-#define SDK_REDISTRIBUTE
+//#define SDK_REDISTRIBUTE
 
 //#define _DEBUG
 #if (defined(_DEBUG) || defined(DEBUG)) && !defined(SDK_REDISTRIBUTE)
@@ -595,7 +595,7 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		desc_buf.CPUAccessFlags = GetOption("CPU_ACCESS_FLAG");
 		desc_buf.MiscFlags = NULL;
 		desc_buf.StructureByteStride = stride_bytes;
-		desc_buf.MiscFlags = (DXGI_FORMAT)GetOption("FORMAT", -1) == DXGI_FORMAT_UNKNOWN ? D3D11_RESOURCE_MISC_BUFFER_STRUCTURED : NULL;
+		desc_buf.MiscFlags = GetOption("MISC"); // (DXGI_FORMAT)GetOption("MISC") == DXGI_FORMAT_UNKNOWN ? D3D11_RESOURCE_MISC_BUFFER_STRUCTURED : NULL;
 		ID3D11Buffer* pdx11Buffer = NULL;
 		if (GetOption("RAW_ACCESS") & 0x1)
 		{
@@ -607,7 +607,7 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		//	printf("LLLL\n");
 		if (g_pdx11Device->CreateBuffer(&desc_buf, NULL, &pdx11Buffer) != S_OK)
 		{
-			vmlog::LogErr("GGg_pdx11Device->CreateBuffer(&desc_buf, NULL, &pdx11Buffer) failed!");
+			vmlog::LogErr("g_pdx11Device->CreateBuffer(&desc_buf, NULL, &pdx11Buffer) failed!");
 			return false;
 		}
 
@@ -638,7 +638,8 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		descTex2D.BindFlags = GetOption("BIND_FLAG");
 		descTex2D.CPUAccessFlags = GetOption("CPU_ACCESS_FLAG");
 		descTex2D.MiscFlags = gres.options["MIP_GEN"] == 1 ? D3D11_RESOURCE_MISC_GENERATE_MIPS : NULL;
-		descTex2D.MiscFlags |= D3D11_RESOURCE_MISC_SHARED;
+		if (!(descTex2D.Usage & D3D11_USAGE_STAGING) && (descTex2D.BindFlags & D3D11_BIND_RENDER_TARGET))
+			descTex2D.MiscFlags |= D3D11_RESOURCE_MISC_SHARED;
 
 		//if (gres.options["MIP_GEN"] == 1)
 		//	int gg = 0;
@@ -740,6 +741,10 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 			descSRV.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
 			descSRV.BufferEx.FirstElement = 0;
 			descSRV.BufferEx.NumElements = gres.res_values.GetParam("NUM_ELEMENTS", (uint)0);
+
+			// DOJO TO DO // 
+			// RAW ADDRESSED BUFFER ... (with stride... vertex type...) NUM_ELEMENTS ?? BYTES or VERTEX?
+
 			if (GetOption("RAW_ACCESS") & 0x1) descSRV.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
 			break;
 		case RTYPE_TEXTURE2D:

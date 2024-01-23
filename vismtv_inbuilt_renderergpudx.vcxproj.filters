@@ -177,4 +177,9 @@
       <Filter>hlsl source code\Particle</Filter>
     </FxCompile>
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="DeprecatedShaders.txt">
+      <Filter>bat</Filter>
+    </Text>
+  </ItemGroup>
 </Project>

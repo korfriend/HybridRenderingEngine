@@ -61,11 +61,6 @@ PS_FILL_OUTPUT BasicShader4(__VS_OUT input)
 	return out_ps;
 }
 
-PS_FILL_OUTPUT OutlineShader(__VS_OUT input)
-{
-
-}
-
 // https://stackoverflow.com/questions/39404502/direct11-write-data-to-buffer-in-pixel-shader-like-ssbo-in-open
 // [earlydepthstencil] ==> shader model 5
 

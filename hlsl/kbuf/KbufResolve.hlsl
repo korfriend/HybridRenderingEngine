@@ -213,7 +213,7 @@ void OIT_RESOLVE_OLD(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, u
 			int idx = i;
 			fs[idx] = f_invalid; // when displaying layers for test, disable this.
 		}
-		/**/
+		*/
 	}
 
 	bool store_to_kbuf = BitCheck(g_cbCamState.cam_flag, 3);
@@ -363,7 +363,7 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 				}
 			}
 
-			/**/
+			*/
 	
 			// optional setting for manual z-thickness
 			f_k.zthick = max(f_k.zthick, GetVZThickness(f_k.z, vz_thickness));
@@ -541,7 +541,7 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 			int idx = i;
 			fs[idx] = f_invalid; // when displaying layers for test, disable this.
 		}
-		/**/
+		*/
 	}
 #if OLD_VER == 1
 #if FRAG_MERGING == 1

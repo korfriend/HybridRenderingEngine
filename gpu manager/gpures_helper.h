@@ -35,6 +35,17 @@ using namespace fncontainer;
 namespace grd_helper
 {
 	using namespace std;
+	
+	template<typename T>
+	constexpr T AlignTo(T value, T alignment)
+	{
+		return ((value + alignment - T(1)) / alignment) * alignment;
+	}
+	template<typename T>
+	constexpr bool IsAligned(T value, T alignment)
+	{
+		return value == AlignTo(value, alignment);
+	}
 
 #define NUM_MATERIALS 6
 	static string g_materials[NUM_MATERIALS] = { "MAP_KA", "MAP_KD", "MAP_KS", "MAP_NS", "MAP_BUMP", "MAP_D" };
@@ -330,6 +341,28 @@ namespace grd_helper
 		uint aliveCount_afterSimulation;
 		uint culledCount;
 		uint cellAllocator;
+	};
+
+	struct IndirectDrawArgsInstanced
+	{
+		uint VertexCountPerInstance;
+		uint InstanceCount;
+		uint StartVertexLocation;
+		uint StartInstanceLocation;
+	};
+	struct IndirectDrawArgsIndexedInstanced
+	{
+		uint IndexCountPerInstance;
+		uint InstanceCount;
+		uint StartIndexLocation;
+		int BaseVertexLocation;
+		uint StartInstanceLocation;
+	};
+	struct IndirectDispatchArgs
+	{
+		uint ThreadGroupCountX;
+		uint ThreadGroupCountY;
+		uint ThreadGroupCountZ;
 	};
 
 	int InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonParameters* gpu_params);
@@ -774,23 +807,75 @@ namespace grd_helper
 
 	// CS ¿¡¼­ Particle Buffer Update (https://github.com/turanszkij/WickedEngine/blob/2f5631e46aed3e278377a678b9e49714bfd33968/WickedEngine/shaders/emittedparticle_emitCS.hlsl )
 	// VS (rendering ¿ë)
-	struct CB_Particle
+	struct CB_Frame
 	{
-		uint frame = 0;
+		uint		options;					// renderer bool options packed into bitmask (OPTION_BIT_ values)
+		float		time;
+		float		time_previous;
+		float		delta_time;
+
+		uint		frame_count;
+		uint		temporalaa_samplerotation;
+
+		uint		forcefieldarray_offset;		// indexing into entity array
+		uint		forcefieldarray_count;		// indexing into entity array
 	};
 
-	struct StB_Particle
+	struct CB_Emitter
 	{
-		vmfloat3 position = vmfloat3(0.0f);
-		float mass = 1.0f;
-		vmfloat3 force = vmfloat3(0.0f);
-		float rotationalVelocity = 0.0f;
-		vmfloat3 velocity = vmfloat3(0.0f);
-		float maxLife = 1.0f;
-		vmfloat2 sizeBeginEnd = vmfloat2(1.0f);
-		float life = maxLife;
-		uint color = 0xFFFFFFFF;
+		vmmat44f	xEmitterTransform;
+		vmmat44f	xEmitterBaseMeshUnormRemap;
+
+		uint		xEmitCount;
+		float		xEmitterRandomness;
+		float		xParticleRandomColorFactor;
+		float		xParticleSize;
+
+		float		xParticleScaling;
+		float		xParticleRotation;
+		float		xParticleRandomFactor;
+		float		xParticleNormalFactor;
+
+		float		xParticleLifeSpan;
+		float		xParticleLifeSpanRandomness;
+		float		xParticleMass;
+		float		xParticleMotionBlurAmount;
+
+		uint		xEmitterMaxParticleCount;
+		uint		xEmitterInstanceIndex;
+		uint		xEmitterMeshGeometryOffset;
+		uint		xEmitterMeshGeometryCount;
+
+		vmuint2		xEmitterFramesXY;
+		uint		xEmitterFrameCount;
+		uint		xEmitterFrameStart;
+
+		vmfloat2		xEmitterTexMul;
+		float		xEmitterFrameRate;
+		uint		xEmitterLayerMask;
+
+		float		xSPH_h;					// smoothing radius
+		float		xSPH_h_rcp;				// 1.0f / smoothing radius
+		float		xSPH_h2;				// smoothing radius ^ 2
+		float		xSPH_h3;				// smoothing radius ^ 3
+
+		float		xSPH_poly6_constant;	// precomputed Poly6 kernel constant term
+		float		xSPH_spiky_constant;	// precomputed Spiky kernel function constant term
+		float		xSPH_visc_constant;	    // precomputed viscosity kernel function constant term
+		float		xSPH_K;					// pressure constant
+
+		float		xSPH_e;					// viscosity constant
+		float		xSPH_p0;				// reference density
+		uint		xEmitterOptions;
+		float		xEmitterFixedTimestep;	// we can force a fixed timestep (>0) onto the simulation to avoid blowing up
+
+		vmfloat3		xParticleGravity;
+		float		xEmitterRestitution;
+
+		vmfloat3		xParticleVelocity;
+		float		xParticleDrag;
 	};
+
 
 	// Compute Constant Buffers //
 	// global 

@@ -166,7 +166,7 @@ void OIT_A_BUFFER_FILL(__VS_OUT input)
 			if (v_rgba.a <= 0.01) clip(-1);
 		}
 	}
-	/**/
+	*/
 	// Atomically allocate space in the deep buffer
 	int2 tex2d_xy = int2(input.f4PosSS.xy);
 	uint fc = 0;

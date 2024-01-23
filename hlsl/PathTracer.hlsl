@@ -62,7 +62,7 @@ struct Sphere {
 	}
 };
 
-Sphere spheres[] = {
+static Sphere spheres[] = {
 	// sun
 	//{ 10000, { 50.0f, 40.8f, -1060 }, { 0.3, 0.3, 0.3 }, { 0.175f, 0.175f, 0.25f }, DIFF }, // sky   0.003, 0.003, 0.003	
 	//{ 4.5, { 0.0f, 12.5, 0 }, { 6, 4, 1 }, { .6f, .6f, 0.6f }, DIFF },  /// lightsource	
@@ -1488,4 +1488,48 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 	if (disableSolidFill)
 		Fill_kBuffer(ss_xy, g_cbCamState.k_value, outline_color, 0.01f, g_cbCamState.far_plane);
 #endif
+}
+
+
+PS_FILL_OUTPUT UndercutShader(__VS_OUT input)
+{
+	PS_FILL_OUTPUT out_ps;
+	out_ps.ds_z = 1.f; // remove???
+	out_ps.color = (float4)0;
+	out_ps.depthcs = FLT_MAX;
+
+	float4 v_rgba = (float4)0;
+	float z_depth = FLT_MAX;
+
+	BasicShader(input, v_rgba, z_depth);
+
+	const float3 coverDirWS = float3(g_cbPobj.dash_interval, g_cbPobj.depth_thres, g_cbPobj.pix_thickness);
+
+	int hitTriIdx = -1;
+	float hitDistance = 1e20;
+	float3 trinormal = float3(0, 0, 0);
+	float ray_tmin = 0.00001f;
+	float ray_tmax = 1e20; // use thickness!!
+
+	// intersect all triangles in the scene stored in BVH
+	int debugbingo = 0;
+
+	float3 ray_orig_os = TransformPoint(input.f3PosWS, g_cbPobj.mat_ws2os);
+	float3 ray_dir_os = TransformVector(-coverDirWS, g_cbPobj.mat_ws2os);
+	float4 rayorig = float4(ray_orig_os + ray_dir_os * 0.0001f, ray_tmin);
+	float4 raydir = float4(ray_dir_os, ray_tmax);
+	int hitCount = 0;
+	intersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
+	
+	if(hitTriIdx >= 0) {
+		int icolor = g_cbPobj.pobj_dummy_1;
+		v_rgba.rgb *= ConvertUIntToFloat4(icolor).rgb;
+	}
+	//v_rgba = float4(1, 1, 0, 1);
+
+	out_ps.ds_z = input.f4PosSS.z;
+	out_ps.color = v_rgba;
+	out_ps.depthcs = z_depth;
+
+	return out_ps;
 }

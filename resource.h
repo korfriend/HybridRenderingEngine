@@ -5,6 +5,7 @@
 #define IDR_RCDATA31010                   31010
 #define IDR_RCDATA31011                   31011
 #define IDR_RCDATA31020                   31020
+#define IDR_RCDATA31021                   31021
 #define IDR_RCDATA31030                   31030
 #define IDR_RCDATA31031                   31031
 
@@ -18,6 +19,7 @@
 #define IDR_RCDATA11003					  11003
 #define IDR_RCDATA11004					  11004
 #define IDR_RCDATA11005					  11005
+#define IDR_RCDATA11006					  11006
 
 #define IDR_RCDATA91001					  91001
 #define IDR_RCDATA91002					  91002
@@ -32,6 +34,9 @@
 #define IDR_RCDATA10105					  10105
 #define IDR_RCDATA10106					  10106
 #define IDR_RCDATA10107					  10107
+#define IDR_RCDATA10108					  10108
+
+#define IDR_RCDATA10201					  10201
 
 #define IDR_RCDATA90101					  90101
 #define IDR_RCDATA90102					  90102
@@ -243,6 +248,10 @@
 #define IDR_RCDATA90043					  90043
 
 #define IDR_RCDATA71000					  71000
+#define IDR_RCDATA71001					  71001
+#define IDR_RCDATA71002					  71002
+#define IDR_RCDATA71003					  71003
+
 #define IDR_RCDATA72000					  72000
 
 // Next default values for new objects

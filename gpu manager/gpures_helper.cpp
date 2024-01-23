@@ -61,7 +61,8 @@ HRESULT PresetCompiledShader(__ID3D11Device* pdx11Device, HMODULE hModule, LPCWS
 	}
 	else if (_strShaderProfile.compare(0, 2, "vs") == 0)
 	{
-		if (pdx11Device->CreateVertexShader(pdata, ullFileSize, NULL, (ID3D11VertexShader**)ppdx11Shader) != S_OK)
+		HRESULT hr = pdx11Device->CreateVertexShader(pdata, ullFileSize, NULL, (ID3D11VertexShader**)ppdx11Shader);
+		if (hr != S_OK)
 			goto ERROR_SHADER;
 
 		if (pInputLayoutDesc != NULL && num_elements > 0 && ppdx11LayoutInputVS != NULL)
@@ -323,6 +324,8 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		CREATE_AND_SET(CB_CurvedSlicer);
 		CREATE_AND_SET(CB_TestBuffer);
 		CREATE_AND_SET(CB_Particle_Blob);
+		CREATE_AND_SET(CB_Frame);
+		CREATE_AND_SET(CB_Emitter);
 	}
 	if (hr != S_OK)
 	{
@@ -361,6 +364,14 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 			{ "TEXCOORD", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 			{ "TEXCOORD", 1, DXGI_FORMAT_R32G32B32_FLOAT, 0, 24, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 			{ "TEXCOORD", 2, DXGI_FORMAT_R32G32B32_FLOAT, 0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		};
+
+		D3D11_INPUT_ELEMENT_DESC lotypeInputPosNTC[] =
+		{
+			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+			{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+			{ "TEXCOORD", 0, DXGI_FORMAT_R16G16_UNORM, 0, 24, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+			{ "COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, 28, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 		};
 
 		HMODULE hModule = GetModuleHandleA(__DLLNAME);
@@ -487,6 +498,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11003), "SR_OIT_PT_vs_5_0", "vs_5_0", "PT", lotypeInputPosTex, 2), SR_OIT_PT_vs_5_0);
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11004), "SR_OIT_PNT_vs_5_0", "vs_5_0", "PNT", lotypeInputPosNorTex, 3), SR_OIT_PNT_vs_5_0);
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11005), "SR_OIT_PTTT_vs_5_0", "vs_5_0", "PTTT", lotypeInputPosTTTex, 4), SR_OIT_PTTT_vs_5_0);
+		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11006), "SR_OIT_PNTC_vs_5_0", "vs_5_0", "PNTC", lotypeInputPosNTC, 4), SR_OIT_PNTC_vs_5_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10101), "SR_BASIC_PHONGBLINN_ps_5_0", "ps_5_0"), SR_BASIC_PHONGBLINN_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10102), "SR_BASIC_DASHEDLINE_ps_5_0", "ps_5_0"), SR_BASIC_DASHEDLINE_ps_5_0);
@@ -495,6 +507,9 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10105), "SR_BASIC_TEXTUREIMGMAP_ps_5_0", "ps_5_0"), SR_BASIC_TEXTUREIMGMAP_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10106), "SR_BASIC_VOLUMEMAP_ps_5_0", "ps_5_0"), SR_BASIC_VOLUMEMAP_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10107), "SR_BASIC_VOLUME_DIST_MAP_ps_5_0", "ps_5_0"), SR_BASIC_VOLUME_DIST_MAP_ps_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10108), "SR_UNDERCUT_ps_5_0", "ps_5_0"), SR_UNDERCUT_ps_5_0);
+
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10201), "PCE_ParticleRenderBasic_ps_5_0", "ps_5_0"), PCE_ParticleRenderBasic_ps_5_0);
 		
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10150), "SR_QUAD_OUTLINE_ps_5_0", "ps_5_0"), SR_QUAD_OUTLINE_ps_5_0);
 
@@ -638,6 +653,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31010), "GS_ThickPoints_gs_5_0", "gs_5_0"), GS_ThickPoints_gs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31011), "GS_SurfelPoints_gs_5_0", "gs_5_0"), GS_SurfelPoints_gs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31020), "GS_ThickLines_gs_5_0", "gs_5_0"), GS_ThickLines_gs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31021), "GS_TriNormal_gs_5_0", "gs_5_0"), GS_TriNormal);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50000), "VR_RAYMAX_cs_5_0", "cs_5_0"), VR_RAYMAX_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50001), "VR_RAYMIN_cs_5_0", "cs_5_0"), VR_RAYMIN_cs_5_0);
@@ -687,6 +703,9 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 
 #pragma region Particle
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA71000), "PCE_BlobRayMarching_cs_5_0", "cs_5_0"), PCE_BlobRayMarching_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA71001), "PCE_KickoffEmitterSystem_cs_5_0", "cs_5_0"), PCE_KickoffEmitterSystem_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA71002), "PCE_ParticleEmitter_cs_5_0", "cs_5_0"), PCE_ParticleEmitter_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA71003), "PCE_ParticleSimulation_cs_5_0", "cs_5_0"), PCE_ParticleSimulation_cs_5_0);
 #pragma endregion
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA72000), "CS_Blend2ndLayer_cs_5_0", "cs_5_0"), CS_Blend2ndLayer_cs_5_0);
 
@@ -856,6 +875,7 @@ bool grd_helper::UpdateOtfBlocks(GpuRes& gres, VmVObjectVolume* main_vobj, VmVOb
 	//}
 
 	if (sculpt_value > 0 && mask_vobj)
+	//if (0)
 	{
 		VolumeBlocks* sculpt_volblk = ((VmVObjectVolume*)mask_vobj)->GetVolumeBlock(blk_level);
 		if (sculpt_volblk == NULL)
@@ -1470,7 +1490,6 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 			gres_idx.res_values.SetParam("STRIDE_BYTES", (uint)sizeof(uint));
 
 			g_pCGpuManager->GenerateGpuResource(gres_idx);
-
 
 			//D3D11_MAPPED_SUBRESOURCE mappedRes;
 			//g_VmCommonParams.dx11DeviceImmContext->Map(pdx11bufidx, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedRes);

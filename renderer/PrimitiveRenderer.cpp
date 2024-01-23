@@ -760,10 +760,10 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #define GS_NUM 4
 #define PS_NUM 10
 #else
-#define VS_NUM 5
-#define GS_NUM 3
-#define PS_NUM 80
-#define CS_NUM 29
+#define VS_NUM 6
+#define GS_NUM 4
+#define PS_NUM 82
+#define CS_NUM 32
 #endif
 
 #ifdef DX10_0
@@ -781,6 +781,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			  ,"SR_OIT_PT_vs_5_0"
 			  ,"SR_OIT_PNT_vs_5_0"
 			  ,"SR_OIT_PTTT_vs_5_0"
+			  ,"SR_OIT_PNTC_vs_5_0"
 		};
 #endif
 
@@ -823,6 +824,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			   "GS_ThickPoints_gs_5_0"
 			  ,"GS_SurfelPoints_gs_5_0"
 			  ,"GS_ThickLines_gs_5_0"
+			  ,"GS_TriNormal_gs_5_0"
 		};
 #endif
 		int testNum = sizeof(strNames_GS) / sizeof(string);
@@ -965,6 +967,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			,"SR_BASIC_TEXTUREIMGMAP_ps_5_0"
 			,"SR_BASIC_VOLUMEMAP_ps_5_0"
 			,"SR_BASIC_VOLUME_DIST_MAP_ps_5_0"
+			,"SR_UNDERCUT_ps_5_0"
+			,"PCE_ParticleRenderBasic_ps_5_0"
 
 			,"SR_QUAD_OUTLINE_ps_5_0"
 			//,"SR_OIT_KDEPTH_NPRGHOST_ps_5_0"
@@ -1050,6 +1054,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			  ,"SR_OIT_ABUFFER_SORT2SENDER_cs_5_0"
 			  ,"SR_OIT_ABUFFER_SORT2SENDER_SFM_cs_5_0"
 			  ,"PCE_BlobRayMarching_cs_5_0"
+			  ,"PCE_KickoffEmitterSystem_cs_5_0"
+			  ,"PCE_ParticleEmitter_cs_5_0"
+			  ,"PCE_ParticleSimulation_cs_5_0"
 			  ,"CS_Blend2ndLayer_cs_5_0"
 			  ,"KB_SSAO_cs_5_0"
 			  ,"KB_SSAO_BLUR_cs_5_0"
@@ -1100,6 +1107,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	ID3D11InputLayout* dx11LI_PN = (ID3D11InputLayout*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "PN"));
 	ID3D11InputLayout* dx11LI_PT = (ID3D11InputLayout*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "PT"));
 	ID3D11InputLayout* dx11LI_PNT = (ID3D11InputLayout*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "PNT"));
+	ID3D11InputLayout* dx11LI_PNTC = (ID3D11InputLayout*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "PNTC"));
 	ID3D11InputLayout* dx11LI_PTTT = (ID3D11InputLayout*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "PTTT"));
 
 #ifdef DX10_0
@@ -1114,6 +1122,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	ID3D11VertexShader* dx11VShader_PT = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PT_vs_5_0"));
 	ID3D11VertexShader* dx11VShader_PNT = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PNT_vs_5_0"));
 	ID3D11VertexShader* dx11VShader_PTTT = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PTTT_vs_5_0"));
+	ID3D11VertexShader* dx11VShader_PNTC = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PNTC_vs_5_0"));
 #endif
 	ID3D11Buffer* cbuf_cam_state = dx11CommonParams->get_cbuf("CB_CameraState");
 	ID3D11Buffer* cbuf_env_state = dx11CommonParams->get_cbuf("CB_EnvState");
@@ -1707,9 +1716,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #pragma endregion 
 
 	ID3D11DepthStencilView* dx11DSVNULL = NULL;
-	ID3D11RenderTargetView* dx11RTVsNULL[2] = { NULL, NULL };
-	ID3D11UnorderedAccessView* dx11UAVs_NULL[7] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL };
-	ID3D11ShaderResourceView* dx11SRVs_NULL[7] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL };
+	ID3D11RenderTargetView* dx11RTVsNULL[20] = { };
+	ID3D11UnorderedAccessView* dx11UAVs_NULL[20] = { };
+	ID3D11ShaderResourceView* dx11SRVs_NULL[20] = { };
 	// For Each Primitive //
 	int count_call_render = 0;
 
@@ -1756,6 +1765,14 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			float cmap_vmin = actor->GetParam("_float_ColorMapVMin", 0.f);
 			float cmap_vmax = actor->GetParam("_float_ColorMapVMax", 1.f);
 			bool cmap_clip = actor->GetParam("_bool_ColorMapClip", false);
+			bool useTriNormal = actor->GetParam("_bool_UseTriNormal", false);
+			bool applyUndercut = actor->GetParam("_bool_ApplyUnderCut", false);
+			vmfloat3 undercutColor(1.f);
+			vmfloat3 undercutDir(0, 0, 1.f);
+			if (applyUndercut) {
+				undercutColor = actor->GetParam("_fvec3_UndercutColor", vmfloat3(1.f, 1.f, 0));
+				undercutDir = actor->GetParam("_fvec3_UndercutDir", vmfloat3(0, 0, 1.f));
+			}
 
 			bool cmap_windowing = actor->GetParam("_bool_ColorMapAsWindowing", false);
 			//float isoValueVolumeActor = actor->GetParam("_float_ColorMapVolumeIsoValue", -1.f);
@@ -1911,6 +1928,13 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				cbPolygonObj.pobj_flag |= (int)is_ghost_surface << 22;
 				cbPolygonObj.pobj_flag |= (int)is_only_hotspot_visible << 23;
 				//cout << "TEST : " << is_ghost_surface << ", " << is_only_hotspot_visible << endl;
+			}
+			if (applyUndercut)
+			{
+				cbPolygonObj.dash_interval = undercutDir.x;
+				cbPolygonObj.depth_thres = undercutDir.y;
+				cbPolygonObj.pix_thickness = undercutDir.z;
+				cbPolygonObj.pobj_dummy_1 = int(undercutColor.b * 255) | (int(undercutColor.g * 255) << 8) | (int(undercutColor.r * 255)) << 16;
 			}
 			D3D11_MAPPED_SUBRESOURCE mappedResPobjData;
 			dx11DeviceImmContext->Map(cbuf_pobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResPobjData);
@@ -2399,6 +2423,38 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 			dx11DeviceImmContext->IASetInputLayout(dx11InputLayer_Target);
 			dx11DeviceImmContext->VSSetShader(dx11VS_Target, NULL, 0);
+			if (!is_picking_routine) {
+				if (dx11GS_Target == NULL && useTriNormal) {
+					dx11GS_Target = GETGS(GS_TriNormal_gs_5_0);
+				}
+				if (dx11InputLayer_Target != dx11LI_PTTT && applyUndercut && render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
+
+					vmint4* nodePtr;
+					int nodeSize;
+					vmint4* triWoopPtr;
+					int triWoopSize;
+					vmint4* triDebugPtr;
+					int triDebugSize;
+					int* cpuTriIndicesPtr;
+					int triIndicesSize;
+					if (pobj->GetBVHTreeBuffers(&nodePtr, &nodeSize, &triWoopPtr, &triWoopSize,
+						&triDebugPtr, &triDebugSize, &cpuTriIndicesPtr, &triIndicesSize)) {
+
+						GpuRes bvhNode, bvhTriWoop, bvhTriDebug, bvhIndice;
+						grd_helper::UpdateCustomBuffer(bvhNode, pobj, "BvhNode", nodePtr, nodeSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4));
+						grd_helper::UpdateCustomBuffer(bvhTriWoop, pobj, "BvhTriWoop", triWoopPtr, triWoopSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4));
+						grd_helper::UpdateCustomBuffer(bvhTriDebug, pobj, "BvhTriDebug", triDebugPtr, triDebugSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4));
+						grd_helper::UpdateCustomBuffer(bvhIndice, pobj, "BvhIndice", cpuTriIndicesPtr, triIndicesSize, DXGI_FORMAT_R32_SINT, sizeof(int));
+
+						dx11DeviceImmContext->PSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&bvhNode.alloc_res_ptrs[DTYPE_SRV]);
+						dx11DeviceImmContext->PSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&bvhTriWoop.alloc_res_ptrs[DTYPE_SRV]);
+						dx11DeviceImmContext->PSSetShaderResources(2, 1, (ID3D11ShaderResourceView**)&bvhTriDebug.alloc_res_ptrs[DTYPE_SRV]);
+						dx11DeviceImmContext->PSSetShaderResources(3, 1, (ID3D11ShaderResourceView**)&bvhIndice.alloc_res_ptrs[DTYPE_SRV]);
+
+						dx11PS_Target = GETPS(SR_UNDERCUT_ps_5_0);
+					}
+				}
+			}
 			dx11DeviceImmContext->GSSetShader(dx11GS_Target, NULL, 0);
 			dx11DeviceImmContext->PSSetShader(dx11PS_Target, NULL, 0);
 			dx11DeviceImmContext->RSSetState(dx11RState_TargetObj);
@@ -2536,6 +2592,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
 
 			dx11DeviceImmContext->PSSetShaderResources(50, 1, dx11SRVs_NULL); // note that t50 is assigned for offsettable used in DKB and DFB 
+			dx11DeviceImmContext->PSSetShaderResources(0, 4, dx11SRVs_NULL); // note that t50 is assigned for offsettable used in DKB and DFB 
 #pragma endregion // GEO RENDERING PASS
 
 			if (render_pass == RENDER_GEOPASS::PASS_SILHOUETTE && !is_group_silhouette) {
@@ -2870,18 +2927,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		if (particle_layer_objs.size() > 0) {
 			dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
 
-			ID3D11UnorderedAccessView* dx11UAVs[3] = {
-					(ID3D11UnorderedAccessView*)gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_UAV]
-					, (ID3D11UnorderedAccessView*)gres_fb_singlelayer_depthcs.alloc_res_ptrs[DTYPE_UAV]
-					, (ID3D11UnorderedAccessView*)gres_fb_singlelayer_tempDepth.alloc_res_ptrs[DTYPE_UAV]
-			};
-
-			dx11DeviceImmContext->CSSetShader(GETCS(PCE_BlobRayMarching_cs_5_0), NULL, 0);
-			dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 3, dx11UAVs, (UINT*)(&dx11UAVs));
-
-			ID3D11Buffer* cbuf_particleblob = dx11CommonParams->get_cbuf("CB_Particle_Blob");
-			dx11DeviceImmContext->CSSetConstantBuffers(11, 1, &cbuf_particleblob);
-
 			for (int i = 0; i < (int)particle_layer_objs.size(); i++)
 			{
 				VmActor* actor = particle_layer_objs[i];
@@ -2922,8 +2967,13 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 				dx11DeviceImmContext->CSSetConstantBuffers(1, 1, &cbuf_pobj);
 
-				std::string PARTICLE_TYPE = actor->GetParam("_string_ParticleSysType", "METABALL");
+				//std::string PARTICLE_TYPE = actor->GetParam("_string_ParticleSysType", "METABALL");
+				std::string PARTICLE_TYPE = actor->GetParam("_string_ParticleSysType", "NORMAL");
 				if (PARTICLE_TYPE == "METABALL") {
+
+					ID3D11Buffer* cbuf_particleblob = dx11CommonParams->get_cbuf("CB_Particle_Blob");
+					dx11DeviceImmContext->CSSetConstantBuffers(11, 1, &cbuf_particleblob);
+
 					D3D11_MAPPED_SUBRESOURCE mappedResPclBlob;
 					dx11DeviceImmContext->Map(cbuf_particleblob, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResPclBlob);
 					CB_Particle_Blob* cbPclBlobData = (CB_Particle_Blob*)mappedResPclBlob.pData;
@@ -2953,43 +3003,118 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					}
 					dx11DeviceImmContext->Unmap(cbuf_particleblob, 0);
 
+
+					ID3D11UnorderedAccessView* dx11UAVs[3] = {
+							(ID3D11UnorderedAccessView*)gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_UAV]
+							, (ID3D11UnorderedAccessView*)gres_fb_singlelayer_depthcs.alloc_res_ptrs[DTYPE_UAV]
+							, (ID3D11UnorderedAccessView*)gres_fb_singlelayer_tempDepth.alloc_res_ptrs[DTYPE_UAV]
+					};
+
+					dx11DeviceImmContext->CSSetShader(GETCS(PCE_BlobRayMarching_cs_5_0), NULL, 0);
+					dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 3, dx11UAVs, (UINT*)(&dx11UAVs));
+
 					dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
 				}
 				else if (PARTICLE_TYPE == "NORMAL") {
 					const int MAX_PARTICLES = 1000;
 					VmVObjectPrimitive* pobj = (VmVObjectPrimitive*)actor->GetGeometryRes();
-					GpuRes gres_emitter;
-					gres_emitter.vm_src_id = pobj->GetObjectID();
-					gres_emitter.res_name = string("PARTICLE_EMITTER");
-					if (!gpu_manager->UpdateGpuResource(gres_emitter)) {
-						gres_emitter.rtype = RTYPE_BUFFER;
-						gres_emitter.options["USAGE"] = D3D11_USAGE_DEFAULT;
-						gres_emitter.options["CPU_ACCESS_FLAG"] = 0;
-						gres_emitter.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-						gres_emitter.options["FORMAT"] = DXGI_FORMAT_UNKNOWN;
-						gres_emitter.res_values.SetParam("NUM_ELEMENTS", (const uint)MAX_PARTICLES);
-						gres_emitter.res_values.SetParam("STRIDE_BYTES", (const uint)sizeof(Particle));
-						gpu_manager->GenerateGpuResource(gres_emitter);
+					int pobjId = pobj ? pobj->GetObjectID() : 1234567;
+
+					// rendering resources //
+					GpuRes gres_particle_vb, gres_particle_vb_idx;
+					{
+						gres_particle_vb.vm_src_id = pobjId;
+						gres_particle_vb.res_name = string("PARTICLE_VB");
+						if (!gpu_manager->UpdateGpuResource(gres_particle_vb)) {
+							uint stride_bytes = sizeof(vmfloat3) + sizeof(vmfloat3) + sizeof(ushort2) + sizeof(uint); // pos, nor, uvs, col
+							gres_particle_vb.rtype = RTYPE_BUFFER;
+							gres_particle_vb.options["USAGE"] = D3D11_USAGE_DEFAULT;
+							gres_particle_vb.options["CPU_ACCESS_FLAG"] = NULL;
+							gres_particle_vb.options["BIND_FLAG"] = D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+							//gres_particle_vb.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+							gres_particle_vb.options["FORMAT"] = DXGI_FORMAT_R32_TYPELESS;
+							gres_particle_vb.options["RAW_ACCESS"] = 1;
+							gres_particle_vb.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES * 4) );
+							gres_particle_vb.res_values.SetParam("STRIDE_BYTES", stride_bytes);
+
+							// D3D11_BIND_VERTEX_BUFFER 는 shader resource view 가 안 되는 것일까? 되네 :)
+							gpu_manager->GenerateGpuResource(gres_particle_vb);
+						}
+
+						gres_particle_vb_idx.vm_src_id = pobjId;
+						gres_particle_vb_idx.res_name = string("PARTICLE_VB_IDX");
+						if (!gpu_manager->UpdateGpuResource(gres_particle_vb_idx))
+						{
+							gres_particle_vb_idx.rtype = RTYPE_BUFFER;
+							gres_particle_vb_idx.options["USAGE"] = D3D11_USAGE_DEFAULT;
+							gres_particle_vb_idx.options["CPU_ACCESS_FLAG"] = NULL;
+							gres_particle_vb_idx.options["BIND_FLAG"] = D3D11_BIND_INDEX_BUFFER;
+							gres_particle_vb_idx.options["FORMAT"] = DXGI_FORMAT_R32_UINT;
+							gres_particle_vb_idx.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES * 6));
+							gres_particle_vb_idx.res_values.SetParam("STRIDE_BYTES", 4u);
+
+							gpu_manager->GenerateGpuResource(gres_particle_vb_idx);
+
+							std::vector<uint> indexBuffer(MAX_PARTICLES * 6);
+							for (int i = 0; i < MAX_PARTICLES; i++)
+							{
+								uint v0 = i * 4;
+								uint i0 = i * 6;
+								indexBuffer[i0 + 0] = v0 + 0;
+								indexBuffer[i0 + 1] = v0 + 1;
+								indexBuffer[i0 + 2] = v0 + 2;
+								indexBuffer[i0 + 3] = v0 + 2;
+								indexBuffer[i0 + 4] = v0 + 1;
+								indexBuffer[i0 + 5] = v0 + 3;
+							}
+
+							D3D11_SUBRESOURCE_DATA subres;
+							subres.pSysMem = &indexBuffer[0];
+							subres.SysMemPitch = sizeof(uint) * MAX_PARTICLES;
+							subres.SysMemSlicePitch = 0; // only for 3D resource
+							dx11DeviceImmContext->UpdateSubresource((ID3D11Resource*)gres_particle_vb_idx.alloc_res_ptrs[DesType::DTYPE_RES], 0, NULL, subres.pSysMem, subres.SysMemPitch, 0);
+						}
+
 					}
-					GpuRes gres_aliveList0, gres_aliveList1, gres_deadList;
-					gres_aliveList0.vm_src_id = pobj->GetObjectID();
+
+					GpuRes gres_particle;
+					gres_particle.vm_src_id = pobjId;
+					gres_particle.res_name = string("PARTICLE_EMITTER");
+					if (!gpu_manager->UpdateGpuResource(gres_particle)) {
+						gres_particle.rtype = RTYPE_BUFFER;
+						gres_particle.options["USAGE"] = D3D11_USAGE_DEFAULT;
+						gres_particle.options["CPU_ACCESS_FLAG"] = 0;
+						gres_particle.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+						gres_particle.options["FORMAT"] = DXGI_FORMAT_UNKNOWN;
+						gres_particle.options["MISC"] = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+						gres_particle.res_values.SetParam("NUM_ELEMENTS", (const uint)MAX_PARTICLES);
+						gres_particle.res_values.SetParam("STRIDE_BYTES", (const uint)sizeof(Particle));
+						gpu_manager->GenerateGpuResource(gres_particle);
+					}
+					GpuRes gres_aliveList0 = gres_particle;
 					gres_aliveList0.res_name = string("PARTICLE_ALIVELIST0");
 					if (!gpu_manager->UpdateGpuResource(gres_aliveList0)) {
-						gres_aliveList0.rtype = RTYPE_BUFFER;
-						gres_aliveList0.options["USAGE"] = D3D11_USAGE_DEFAULT;
-						gres_aliveList0.options["CPU_ACCESS_FLAG"] = 0;
-						gres_aliveList0.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-						//gres_aliveList0.options["FORMAT"] = DXGI_FORMAT_R32_UINT;
 						gres_aliveList0.res_values.SetParam("NUM_ELEMENTS", (const uint)MAX_PARTICLES);
-						gres_aliveList0.res_values.SetParam("STRIDE_BYTES", (const uint)sizeof(int));
+						gres_aliveList0.res_values.SetParam("STRIDE_BYTES", (const uint)sizeof(uint));
 						gpu_manager->GenerateGpuResource(gres_aliveList0);
 					}
-					gres_aliveList1 = gres_aliveList0;
+					GpuRes gres_aliveList1 = gres_aliveList0;
 					gres_aliveList1.res_name = string("PARTICLE_ALIVELIST1");
 					if (!gpu_manager->UpdateGpuResource(gres_aliveList1)) {
 						gpu_manager->GenerateGpuResource(gres_aliveList1);
 					}
-					gres_deadList = gres_aliveList0;
+					GpuRes gres_culledIndirect0 = gres_aliveList0;
+					gres_culledIndirect0.res_name = string("PARTICLE_CULLEDINDIRECT0");
+					if (!gpu_manager->UpdateGpuResource(gres_culledIndirect0)) {
+						gpu_manager->GenerateGpuResource(gres_culledIndirect0);
+					}
+					GpuRes gres_culledIndirect1 = gres_aliveList0;
+					gres_culledIndirect1.res_name = string("PARTICLE_CULLEDINDIRECT1");
+					if (!gpu_manager->UpdateGpuResource(gres_culledIndirect1)) {
+						gpu_manager->GenerateGpuResource(gres_culledIndirect1);
+					}
+
+					GpuRes gres_deadList = gres_aliveList0;
 					gres_deadList.res_name = string("PARTICLE_DEADLIST");
 					if (!gpu_manager->UpdateGpuResource(gres_deadList)) {
 						gpu_manager->GenerateGpuResource(gres_deadList);
@@ -3005,15 +3130,282 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 						dx11DeviceImmContext->UpdateSubresource((ID3D11Resource*)gres_deadList.alloc_res_ptrs[DesType::DTYPE_RES], 0, NULL, subres.pSysMem, subres.SysMemPitch, 0);
 					}
 
+					GpuRes gres_counter;
+					gres_counter.vm_src_id = pobjId;
+					gres_counter.res_name = string("PARTICLE_COUNTER");
+					if (!gpu_manager->UpdateGpuResource(gres_counter)) {
+						gres_counter.rtype = RTYPE_BUFFER;
+						gres_counter.options["USAGE"] = D3D11_USAGE_DEFAULT;
+						gres_counter.options["CPU_ACCESS_FLAG"] = 0;
+						gres_counter.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+						gres_counter.options["FORMAT"] = DXGI_FORMAT_R32_TYPELESS;
+						gres_counter.options["RAW_ACCESS"] = 1;
+						gres_counter.res_values.SetParam("NUM_ELEMENTS", (uint)(sizeof(ParticleCounters) / 4));
+						gres_counter.res_values.SetParam("STRIDE_BYTES", 4u);
+						gpu_manager->GenerateGpuResource(gres_counter);
+
+						ParticleCounters counters;
+						counters.aliveCount = 0;
+						counters.deadCount = MAX_PARTICLES;
+						counters.realEmitCount = 0;
+						counters.aliveCount_afterSimulation = 0;
+						counters.cellAllocator = 0;
+						
+						D3D11_SUBRESOURCE_DATA subres;
+						subres.pSysMem = &counters;
+						subres.SysMemPitch = sizeof(ParticleCounters);
+						subres.SysMemSlicePitch = 0; // only for 3D resource
+						dx11DeviceImmContext->UpdateSubresource((ID3D11Resource*)gres_counter.alloc_res_ptrs[DesType::DTYPE_RES], 0, NULL, subres.pSysMem, subres.SysMemPitch, 0);
+					}
+
+					GpuRes gres_indirect = gres_aliveList0;
+					gres_indirect.res_name = string("PARTICLE_INDIRECT");
+					if (!gpu_manager->UpdateGpuResource(gres_indirect)) {
+						
+						gres_indirect.rtype = RTYPE_BUFFER;
+						gres_indirect.options["USAGE"] = D3D11_USAGE_DEFAULT;
+						gres_indirect.options["CPU_ACCESS_FLAG"] = 0;
+						gres_indirect.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+						gres_indirect.options["FORMAT"] = DXGI_FORMAT_R32_TYPELESS;
+						gres_indirect.options["RAW_ACCESS"] = 1;
+						gres_indirect.options["MISC"] = D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
+						uint stride = AlignTo(sizeof(IndirectDispatchArgs), (uint64_t)4) +
+							AlignTo(sizeof(IndirectDispatchArgs), (uint64_t)4) +
+							AlignTo(sizeof(IndirectDrawArgsInstanced), (uint64_t)4);
+						gres_indirect.res_values.SetParam("NUM_ELEMENTS", stride / 4u);
+						gres_indirect.res_values.SetParam("STRIDE_BYTES", 4u);
+						gpu_manager->GenerateGpuResource(gres_indirect);
+					}
+
+					GpuRes gres_distance = gres_aliveList0;
+					gres_distance.res_name = string("PARTICLE_DISTANCE");
+					if (!gpu_manager->UpdateGpuResource(gres_distance)) {
+						gpu_manager->GenerateGpuResource(gres_distance);
+
+						// Dead index list:
+						std::vector<float> distList(MAX_PARTICLES, 0.f);
+						//for (int i = 0; i < MAX_PARTICLES; i++) distList[i] = 0.f;
+
+						D3D11_SUBRESOURCE_DATA subres;
+						subres.pSysMem = &distList[0];
+						subres.SysMemPitch = sizeof(float) * MAX_PARTICLES;
+						subres.SysMemSlicePitch = 0; // only for 3D resource
+						dx11DeviceImmContext->UpdateSubresource((ID3D11Resource*)gres_distance.alloc_res_ptrs[DesType::DTYPE_RES], 0, NULL, subres.pSysMem, subres.SysMemPitch, 0);
+					}
+
 					// particle update //
 					{
-						dx11DeviceImmContext->Dispatch(MAX_PARTICLES, 1, 1);
+						dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 20, dx11UAVs_NULL, NULL);
+						dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&gres_particle.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+						dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 1, (ID3D11UnorderedAccessView**)&gres_aliveList0.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+						dx11DeviceImmContext->CSSetUnorderedAccessViews(2, 1, (ID3D11UnorderedAccessView**)&gres_aliveList1.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+						dx11DeviceImmContext->CSSetUnorderedAccessViews(3, 1, (ID3D11UnorderedAccessView**)&gres_deadList.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+						dx11DeviceImmContext->CSSetUnorderedAccessViews(4, 1, (ID3D11UnorderedAccessView**)&gres_counter.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+						dx11DeviceImmContext->CSSetUnorderedAccessViews(5, 1, (ID3D11UnorderedAccessView**)&gres_indirect.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+						dx11DeviceImmContext->CSSetUnorderedAccessViews(6, 1, (ID3D11UnorderedAccessView**)&gres_distance.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
 
+						dx11DeviceImmContext->CSSetUnorderedAccessViews(7, 1, (ID3D11UnorderedAccessView**)&gres_particle_vb.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+
+						dx11DeviceImmContext->CSSetUnorderedAccessViews(11, 1, (ID3D11UnorderedAccessView**)&gres_culledIndirect0.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+						dx11DeviceImmContext->CSSetUnorderedAccessViews(12, 1, (ID3D11UnorderedAccessView**)&gres_culledIndirect1.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+
+						ID3D11Buffer* cbuf_Emitter = dx11CommonParams->get_cbuf("CB_Emitter");
+						dx11DeviceImmContext->CSSetConstantBuffers(11, 1, &cbuf_Emitter);
+						ID3D11Buffer* cbuf_Frame = dx11CommonParams->get_cbuf("CB_Frame");
+						dx11DeviceImmContext->CSSetConstantBuffers(12, 1, &cbuf_Frame);
+
+						CB_Frame cbFrame = {};
+						{
+							static uint frameCount = 0;
+							frameCount++;
+
+							static float time = 0, time_previous = 0;
+							static std::chrono::high_resolution_clock::time_point timestamp = std::chrono::high_resolution_clock::now();
+							auto timestamp2 = std::chrono::high_resolution_clock::now();
+							std::chrono::duration<double> time_span = std::chrono::duration_cast<std::chrono::duration<double>>(timestamp2 - timestamp);
+							auto elapsed = time_span.count();
+							timestamp = timestamp2;
+							time_previous = time;
+							time += cbFrame.delta_time;
+
+							cbFrame.frame_count = frameCount;
+							cbFrame.delta_time = (float)elapsed;
+							cbFrame.time = time;
+							cbFrame.time_previous = time_previous;
+						}
+						D3D11_MAPPED_SUBRESOURCE mappedResFrame;
+						dx11DeviceImmContext->Map(cbuf_Frame, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResFrame);
+						CB_Frame* cbGpuFrame = (CB_Frame*)mappedResFrame.pData;
+						memcpy(cbGpuFrame, &cbFrame, sizeof(CB_Frame));
+						dx11DeviceImmContext->Unmap(cbuf_Frame, 0);
+
+						CB_Emitter cbEmitter = {};
+						{
+							cbEmitter.xEmitterTransform = TRANSPOSE(actor->matOS2WS); // cbPolygonObj.mat_os2ws
+							//if (mesh == nullptr || !IsFormatUnorm(mesh->position_format) || mesh->so_pos.IsValid())
+							//{
+							//	cb.xEmitterBaseMeshUnormRemap.init();
+							//}
+							//else
+							//{
+							//	XMFLOAT4X4 unormRemap;
+							//	XMStoreFloat4x4(&unormRemap, mesh->aabb.getUnormRemapMatrix());
+							//	cb.xEmitterBaseMeshUnormRemap.Create(unormRemap);
+							//}
+							cbEmitter.xEmitCount = (uint32_t)actor->GetParam("_int_EmitCount", (int)0);
+							//if (mesh == nullptr)
+							{
+								cbEmitter.xEmitterMeshGeometryOffset = 0;
+								cbEmitter.xEmitterMeshGeometryCount = 0;
+							}
+							//else
+							//{
+							//	uint32_t first_subset = 0;
+							//	uint32_t last_subset = 0;
+							//	mesh->GetLODSubsetRange(0, first_subset, last_subset);
+							//	cb.xEmitterMeshGeometryOffset = mesh->geometryOffset + first_subset;
+							//	cb.xEmitterMeshGeometryCount = last_subset - first_subset;
+							//}
+							srand(time(NULL));
+							cbEmitter.xEmitterRandomness = (rand() % 100) * 0.01f;
+							cbEmitter.xParticleLifeSpan = actor->GetParam("_float_LifeSpan", (float)1.f);
+							cbEmitter.xParticleLifeSpanRandomness = actor->GetParam("_float_LifeSpanRandomness", (float)1.f);
+							cbEmitter.xParticleNormalFactor = actor->GetParam("_float_NormFactor", (float)1.f);
+							cbEmitter.xParticleRandomFactor = actor->GetParam("_float_RandomFactor", (float)1.f);
+							cbEmitter.xParticleScaling = actor->GetParam("_float_ScaleFactor", (float)1.f);
+							cbEmitter.xParticleSize = actor->GetParam("_float_ScaleSize", (float)1.f);
+							cbEmitter.xParticleMotionBlurAmount = actor->GetParam("_float_MotionBlurAmount", (float)0.f);
+							cbEmitter.xParticleRotation = actor->GetParam("_float_RotationDeg", (float)0.f) * VM_PI * 60.f;
+							cbEmitter.xParticleMass = actor->GetParam("_float_Mass", (float)1.f);
+							cbEmitter.xEmitterMaxParticleCount = MAX_PARTICLES;
+							cbEmitter.xEmitterFixedTimestep = actor->GetParam("_float_FixedTimeStep", (float)-1.f);
+							cbEmitter.xEmitterRestitution = actor->GetParam("_float_Restitution", (float)0.98f);
+							cbEmitter.xEmitterFramesXY = vmuint2(std::max(1u, (uint)actor->GetParam("_int_FramesX", (int)1)), 
+								std::max(1u, (uint)actor->GetParam("_int_FramesY", (int)1)));
+							cbEmitter.xEmitterFrameCount = std::max(1u, (uint)actor->GetParam("_int_FrameCount", (int)1));
+							cbEmitter.xEmitterFrameStart = (uint)actor->GetParam("_int_FrameStart", (int)0);
+							cbEmitter.xEmitterTexMul = vmfloat2(1.0f / (float)cbEmitter.xEmitterFramesXY.x, 1.0f / (float)cbEmitter.xEmitterFramesXY.y);
+							cbEmitter.xEmitterFrameRate = actor->GetParam("_float_FrameRate", (float)0.f);
+							cbEmitter.xParticleGravity = vmfloat3(0, 0, 0);
+							cbEmitter.xParticleDrag = actor->GetParam("_float_ParticleDrag", (float)1.f);
+							vmfloat3 velosity = actor->GetParam("_float3_Velocity", (vmfloat3)0.f);
+							vmmath::fTransformVector(&cbEmitter.xParticleVelocity, &velosity, &actor->matOS2WS);
+							cbEmitter.xParticleRandomColorFactor = (rand() % 100) * 0.01f;
+							cbEmitter.xEmitterLayerMask = ~0u;
+							cbEmitter.xEmitterInstanceIndex = 0;
+
+							cbEmitter.xEmitterOptions = 0;
+							//if (IsSPHEnabled())
+							//{
+							//	cb.xEmitterOptions |= EMITTER_OPTION_BIT_SPH_ENABLED;
+							//}
+							//if (IsFrameBlendingEnabled())
+							//{
+							//	cb.xEmitterOptions |= EMITTER_OPTION_BIT_FRAME_BLENDING_ENABLED;
+							//}
+							//if (ALLOW_MESH_SHADER && device->CheckCapability(GraphicsDeviceCapability::MESH_SHADER))
+							//{
+							//	cb.xEmitterOptions |= EMITTER_OPTION_BIT_MESH_SHADER_ENABLED;
+							//}
+							//if (IsCollidersDisabled())
+							//{
+							//	cb.xEmitterOptions |= EMITTER_OPTION_BIT_COLLIDERS_DISABLED;
+							//}
+							//if (_flags & FLAG_USE_RAIN_BLOCKER)
+							//{
+							//	cb.xEmitterOptions |= EMITTER_OPTION_BIT_USE_RAIN_BLOCKER;
+							//}
+							//if (IsTakeColorFromMesh())
+							//{
+							//	cb.xEmitterOptions |= EMITTER_OPTION_BIT_TAKE_COLOR_FROM_MESH;
+							//}
+
+							// SPH:
+							//cb.xSPH_h = SPH_h;
+							//cb.xSPH_h_rcp = 1.0f / SPH_h;
+							//cb.xSPH_h2 = SPH_h * SPH_h;
+							//cb.xSPH_h3 = cb.xSPH_h2 * SPH_h;
+							//const float h6 = cb.xSPH_h2 * cb.xSPH_h2 * cb.xSPH_h2;
+							//const float h9 = h6 * cb.xSPH_h3;
+							//cb.xSPH_poly6_constant = (315.0f / (64.0f * XM_PI * h9));
+							//cb.xSPH_spiky_constant = (-45.0f / (XM_PI * h6));
+							//cb.xSPH_visc_constant = (45.0f / (XM_PI * h6));
+							//cb.xSPH_K = SPH_K;
+							//cb.xSPH_p0 = SPH_p0;
+							//cb.xSPH_e = SPH_e;
+
+							//device->UpdateBuffer(&constantBuffer, &cb, cmd);
+							//{
+							//	GPUBarrier barriers[] = {
+							//		GPUBarrier::Buffer(&constantBuffer, ResourceState::COPY_DST, ResourceState::CONSTANT_BUFFER),
+							//	};
+							//	device->Barrier(barriers, arraysize(barriers), cmd);
+							//}
+						}
+						D3D11_MAPPED_SUBRESOURCE mappedResEmitter;
+						dx11DeviceImmContext->Map(cbuf_Emitter, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResEmitter);
+						CB_Emitter* cbGpuEmitter = (CB_Emitter*)mappedResEmitter.pData;
+						memcpy(cbGpuEmitter, &cbEmitter, sizeof(CB_Emitter));
+						dx11DeviceImmContext->Unmap(cbuf_Emitter, 0);
+
+						dx11DeviceImmContext->CSSetShader(GETCS(PCE_KickoffEmitterSystem_cs_5_0), NULL, 0);
+						dx11DeviceImmContext->Dispatch(1, 1, 1);
+
+						constexpr uint ARGUMENTBUFFER_OFFSET_DISPATCHEMIT = 0u;
+						dx11DeviceImmContext->CSSetShader(GETCS(PCE_ParticleEmitter_cs_5_0), NULL, 0);
+						dx11DeviceImmContext->DispatchIndirect((ID3D11Buffer*)gres_indirect.alloc_res_ptrs[DTYPE_RES], ARGUMENTBUFFER_OFFSET_DISPATCHEMIT);
+
+						constexpr uint ARGUMENTBUFFER_OFFSET_DISPATCHSIMULATION = 12u;
+						dx11DeviceImmContext->CSSetShader(GETCS(PCE_ParticleSimulation_cs_5_0), NULL, 0);
+						dx11DeviceImmContext->DispatchIndirect((ID3D11Buffer*)gres_indirect.alloc_res_ptrs[DTYPE_RES], ARGUMENTBUFFER_OFFSET_DISPATCHSIMULATION);
 					}
 
 					// particle rendering //
 					{
+						dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 10, dx11UAVs_NULL, NULL);
+					
+						ID3D11InputLayout* dx11InputLayer_Target = dx11LI_PNTC;
+						ID3D11VertexShader* dx11VS_Target = dx11VShader_PNTC;
+						ID3D11GeometryShader* dx11GS_Target = NULL;
+						ID3D11PixelShader* dx11PS_Target = GETPS(PCE_ParticleRenderBasic_ps_5_0);
+						ID3D11RasterizerState2* dx11RState_TargetObj = GETRASTER(SOLID_NONE); // blender state...
+						//ID3D11BlendState 
+						uint offset = 0;
+						D3D_PRIMITIVE_TOPOLOGY pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_POINTLIST;// D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+						
+						ID3D11Buffer* dx11BufferTargetPrim = (ID3D11Buffer*)gres_particle_vb.alloc_res_ptrs[DTYPE_RES];
+						ID3D11Buffer* dx11IndiceTargetPrim = NULL;
+						uint stride_inputlayer = gres_particle_vb.res_values.GetParam("STRIDE_BYTES", (uint)0);
+						dx11DeviceImmContext->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&dx11BufferTargetPrim, &stride_inputlayer, &offset);
 
+						dx11IndiceTargetPrim = (ID3D11Buffer*)gres_particle_vb_idx.alloc_res_ptrs[DTYPE_RES];
+						dx11DeviceImmContext->IASetIndexBuffer(dx11IndiceTargetPrim, DXGI_FORMAT_R32_UINT, 0);
+
+						dx11DeviceImmContext->IASetInputLayout(dx11InputLayer_Target);
+						dx11DeviceImmContext->VSSetShader(dx11VS_Target, NULL, 0);
+						dx11DeviceImmContext->GSSetShader(dx11GS_Target, NULL, 0);
+						dx11DeviceImmContext->PSSetShader(dx11PS_Target, NULL, 0);
+						dx11DeviceImmContext->RSSetState(dx11RState_TargetObj);
+						//dx11DeviceImmContext->
+						dx11DeviceImmContext->IASetPrimitiveTopology(pobj_topology_type);
+
+
+						ID3D11RenderTargetView* dx11RTVs[2] = {
+							(ID3D11RenderTargetView*)gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_RTV],
+							(ID3D11RenderTargetView*)gres_fb_singlelayer_depthcs.alloc_res_ptrs[DTYPE_RTV] };
+
+						dx11DeviceImmContext->PSSetShaderResources(20, 1, (ID3D11ShaderResourceView**)&gres_fb_k_buffer.alloc_res_ptrs[DTYPE_SRV]);
+						dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(ALWAYS), 0);
+						dx11DeviceImmContext->OMSetBlendState(dx11CommonParams->get_blender("ADD"), NULL, 0xffffffff);
+						dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVs, dx11DSV, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
+
+						if (pobj_topology_type == D3D11_PRIMITIVE_TOPOLOGY_POINTLIST)
+							dx11DeviceImmContext->Draw(MAX_PARTICLES * 4, 0);
+						else
+							dx11DeviceImmContext->DrawIndexed(MAX_PARTICLES * 6, 0, 0);
+
+						dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
+						dx11DeviceImmContext->PSSetShaderResources(20, 1, dx11SRVs_NULL);
 					}
 				}
 			}

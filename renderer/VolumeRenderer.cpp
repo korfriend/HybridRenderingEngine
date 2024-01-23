@@ -813,7 +813,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			//cbVolumeObj.vec_grad_z *= 2.f;
 		}
 		cbVolumeObj.pb_shading_factor = material_phongCoeffs;
-		cbVolumeObj.vobj_flag = (int)showOutline << 1;
+		cbVolumeObj.vobj_flag |= (int)showOutline << 1;
 		if (is_ghost_mode) {
 			bool is_ghost_surface = actor->GetParam("_bool_IsGhostSurface", false);
 			bool is_only_hotspot_visible = actor->GetParam("_bool_IsOnlyHotSpotVisible", false);

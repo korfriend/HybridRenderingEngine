@@ -60,7 +60,7 @@ void CreatePrefixSum_Pass1_CS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_Dispatch
 	}
 }
 #else
-groupshared int __offset = 0;
+//static groupshared int __offset = 0;
 //[numthreads(1, 1, 1)] 
 [numthreads(GRIDSIZE, GRIDSIZE, 1)]
 void CreateOffsetTable_CS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID, uint3 nGTid : SV_GroupThreadID)
@@ -370,7 +370,7 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 	nThreadNum += 1; // to reuse nThreadNum - 1
 
 #define blocksize 1
-	uint N2 = 1 << (int)(ceil(log2(N)));
+	uint N2 = 1u << (int)(ceil(log2(N)));
 
 #define MAX_SORT 512
 	int nIndex[MAX_SORT];
@@ -441,7 +441,7 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 			   deep_DxA_buf[2 * (nThreadNum * 8 + i) + 1] = fDepth[i]; //fDepth[nIndex[i]];
 			   deep_DxA_buf[2 * (nThreadNum * 8 + i) + 0] = color[nIndex[i]];
 		   }
-		/**/
+		*/
 
 		// Accumulate fragments into final result
 		float4 result = (float4) 0.0f;

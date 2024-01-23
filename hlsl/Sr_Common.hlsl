@@ -40,12 +40,29 @@ struct VS_INPUT_PNT
     float3 f3Custom : TEXCOORD0;
 };
 
+struct VS_INPUT_PNTC
+{
+    float3 f3PosOS : POSITION;
+    float3 f3VecNormalOS : NORMAL;
+    float3 f3UVS : TEXCOORD0;
+    float3 f3Color : COLOR;
+};
+
 struct VS_OUTPUT
 {
     float4 f4PosSS : SV_POSITION;
     float3 f3VecNormalWS : NORMAL;
     float3 f3PosWS : TEXCOORD0;
     float3 f3Custom : TEXCOORD1;
+};
+
+struct VS_OUTPUT_PNTC
+{
+    float4 f4PosSS : SV_POSITION;
+    float3 f3VecNormalWS : NORMAL;
+    float3 f3PosWS : TEXCOORD0;
+    float3 f3UVS : TEXCOORD1;
+    float3 f3Color : COLOR;
 };
 
 struct VS_OUTPUT_TTT
@@ -131,6 +148,18 @@ VS_OUTPUT_TTT CommonVS_PTTT(VS_INPUT_PTTT input)
     vout.f3Custom2.y *= -1;
     return vout;
 }
+
+VS_OUTPUT_PNTC CommonVS_PNTC(VS_INPUT_PNTC input)
+{
+    VS_OUTPUT_PNTC vout = (VS_OUTPUT_PNTC)0;
+    vout.f4PosSS = mul(g_cbPobj.mat_os2ps, float4(input.f3PosOS, 1.f));
+    vout.f3PosWS = TransformPoint(input.f3PosOS, g_cbPobj.mat_os2ws);
+    vout.f3VecNormalWS = normalize(TransformVector(input.f3VecNormalOS, g_cbPobj.mat_os2ws));
+    vout.f3UVS = input.f3UVS;
+    vout.f3Color = input.f3Color;
+    return vout;
+}
+
 
 #if __RENDERING_MODE == 2
 #define __VS_OUT VS_OUTPUT_TTT
@@ -621,7 +650,7 @@ float3 ComputeDeviation(float3 pos, float3 nrl)
             if (minSampleSteps == 100000000)
             {
                 devMin = -FLT_COMP_MAX;
-                minSampleSteps == 99999999;
+                minSampleSteps = 99999999;
             }
 
             //if (numSamples > 10)
@@ -954,6 +983,25 @@ static float fThickness = 0.01f;
 //	float3 f3PosWS : TEXCOORD0;
 //	float3 f3Custom : TEXCOORD1;
 //};
+
+[maxvertexcount(42)]
+void GS_TriNormal(triangle VS_OUTPUT input[3], inout TriangleStream<VS_OUTPUT> triangleStream)
+{
+    float3 pos0 = input[0].f3PosWS;
+    float3 pos1 = input[1].f3PosWS;
+    float3 pos2 = input[2].f3PosWS;
+
+    float3 normal = normalize(cross(pos1 - pos0, pos2 - pos0));
+
+    VS_OUTPUT output[3] = { input[0] , input[1] , input[2] };
+    for (uint i = 0; i < 3; i++) {
+        VS_OUTPUT output = input[i];
+        output.f3VecNormalWS = normal;
+        triangleStream.Append(output);
+    }
+    triangleStream.RestartStrip();
+}
+
 
 [maxvertexcount(42)]
 void GS_Surfels(point VS_OUTPUT input[1], inout TriangleStream<VS_OUTPUT> triangleStream)

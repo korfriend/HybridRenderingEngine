@@ -79,7 +79,7 @@ float4 VrOutlineTest(const in int2 tex2d_xy, inout float depth_c, const in float
 		}
 
 		float w = 2 * thick + 1;
-		float alpha = min((floaT)count / (w * w / 2.f), 1.f);
+		float alpha = min((float)count / (w * w / 2.f), 1.f);
 		//alpha *= alpha;
 
 		vout = float4(edge_color * alpha, alpha);
@@ -1070,7 +1070,7 @@ void FillDither(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	v_rgba /= count;
 	fragment_vis[tex2d_xy] = v_rgba;
 }
-/**/
+*/
 
 #if DX10_0 == 1
 #define __EXIT_VR_SURFACE return output
