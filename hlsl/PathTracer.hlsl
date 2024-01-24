@@ -1508,7 +1508,7 @@ PS_FILL_OUTPUT UndercutShader(__VS_OUT input)
 	int hitTriIdx = -1;
 	float hitDistance = 1e20;
 	float3 trinormal = float3(0, 0, 0);
-	float ray_tmin = 0.00001f;
+	float ray_tmin = 0.01;// .01f;// 0.00001f;
 	float ray_tmax = 1e20; // use thickness!!
 
 	// intersect all triangles in the scene stored in BVH
@@ -1516,7 +1516,7 @@ PS_FILL_OUTPUT UndercutShader(__VS_OUT input)
 
 	float3 ray_orig_os = TransformPoint(input.f3PosWS, g_cbPobj.mat_ws2os);
 	float3 ray_dir_os = TransformVector(-coverDirWS, g_cbPobj.mat_ws2os);
-	float4 rayorig = float4(ray_orig_os + ray_dir_os * 0.0001f, ray_tmin);
+	float4 rayorig = float4(ray_orig_os + ray_dir_os * 0.00f, ray_tmin);
 	float4 raydir = float4(ray_dir_os, ray_tmax);
 	int hitCount = 0;
 	intersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);

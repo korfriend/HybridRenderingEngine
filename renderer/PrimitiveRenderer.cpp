@@ -3021,39 +3021,46 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					int pobjId = pobj ? pobj->GetObjectID() : 1234567;
 
 					// rendering resources //
-					GpuRes gres_particle_vb, gres_particle_vb_idx;
+					GpuRes gres_vb_pos, gres_vb_nor, gres_vb_tex, gres_vb_color, gres_vb_idx;
 					{
-						gres_particle_vb.vm_src_id = pobjId;
-						gres_particle_vb.res_name = string("PARTICLE_VB");
-						if (!gpu_manager->UpdateGpuResource(gres_particle_vb)) {
-							uint stride_bytes = sizeof(vmfloat3) + sizeof(vmfloat3) + sizeof(ushort2) + sizeof(uint); // pos, nor, uvs, col
-							gres_particle_vb.rtype = RTYPE_BUFFER;
-							gres_particle_vb.options["USAGE"] = D3D11_USAGE_DEFAULT;
-							gres_particle_vb.options["CPU_ACCESS_FLAG"] = NULL;
-							gres_particle_vb.options["BIND_FLAG"] = D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-							//gres_particle_vb.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-							gres_particle_vb.options["FORMAT"] = DXGI_FORMAT_R32_TYPELESS;
-							gres_particle_vb.options["RAW_ACCESS"] = 1;
-							gres_particle_vb.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES * 4) );
-							gres_particle_vb.res_values.SetParam("STRIDE_BYTES", stride_bytes);
+						gres_vb_pos.vm_src_id = pobjId;
+						gres_vb_pos.res_name = string("gres_particle_vb_pos");
+						if (!gpu_manager->UpdateGpuResource(gres_vb_pos)) {
+							uint stride_bytes = sizeof(vmfloat3);
+							gres_vb_pos.rtype = RTYPE_BUFFER;
+							gres_vb_pos.options["USAGE"] = D3D11_USAGE_DEFAULT;
+							gres_vb_pos.options["CPU_ACCESS_FLAG"] = NULL;
+							gres_vb_pos.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+							gres_vb_pos.options["FORMAT"] = DXGI_FORMAT_R32_TYPELESS; // note RGB32F is not allowed for Views
+							gres_vb_pos.options["RAW_ACCESS"] = 1;
+							gres_vb_pos.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES * 4 * stride_bytes) );
+							gres_vb_pos.res_values.SetParam("STRIDE_BYTES", 4u);
 
 							// D3D11_BIND_VERTEX_BUFFER 는 shader resource view 가 안 되는 것일까? 되네 :)
-							gpu_manager->GenerateGpuResource(gres_particle_vb);
+							gpu_manager->GenerateGpuResource(gres_vb_pos);
+						}
+						gres_vb_nor = gres_vb_pos;
+						gres_vb_nor.res_name = string("gres_particle_vb_nor");
+						if (!gpu_manager->UpdateGpuResource(gres_vb_pos)) {
+
+							// D3D11_BIND_VERTEX_BUFFER 는 shader resource view 가 안 되는 것일까? 되네 :)
+							gpu_manager->GenerateGpuResource(gres_vb_pos);
 						}
 
-						gres_particle_vb_idx.vm_src_id = pobjId;
-						gres_particle_vb_idx.res_name = string("PARTICLE_VB_IDX");
-						if (!gpu_manager->UpdateGpuResource(gres_particle_vb_idx))
-						{
-							gres_particle_vb_idx.rtype = RTYPE_BUFFER;
-							gres_particle_vb_idx.options["USAGE"] = D3D11_USAGE_DEFAULT;
-							gres_particle_vb_idx.options["CPU_ACCESS_FLAG"] = NULL;
-							gres_particle_vb_idx.options["BIND_FLAG"] = D3D11_BIND_INDEX_BUFFER;
-							gres_particle_vb_idx.options["FORMAT"] = DXGI_FORMAT_R32_UINT;
-							gres_particle_vb_idx.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES * 6));
-							gres_particle_vb_idx.res_values.SetParam("STRIDE_BYTES", 4u);
 
-							gpu_manager->GenerateGpuResource(gres_particle_vb_idx);
+						gres_vb_idx.vm_src_id = pobjId;
+						gres_vb_idx.res_name = string("PARTICLE_VB_IDX");
+						if (!gpu_manager->UpdateGpuResource(gres_vb_idx))
+						{
+							gres_vb_idx.rtype = RTYPE_BUFFER;
+							gres_vb_idx.options["USAGE"] = D3D11_USAGE_DEFAULT;
+							gres_vb_idx.options["CPU_ACCESS_FLAG"] = NULL;
+							gres_vb_idx.options["BIND_FLAG"] = D3D11_BIND_INDEX_BUFFER;
+							gres_vb_idx.options["FORMAT"] = DXGI_FORMAT_R32_UINT;
+							gres_vb_idx.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES * 6));
+							gres_vb_idx.res_values.SetParam("STRIDE_BYTES", 4u);
+
+							gpu_manager->GenerateGpuResource(gres_vb_idx);
 
 							std::vector<uint> indexBuffer(MAX_PARTICLES * 6);
 							for (int i = 0; i < MAX_PARTICLES; i++)
@@ -3072,7 +3079,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 							subres.pSysMem = &indexBuffer[0];
 							subres.SysMemPitch = sizeof(uint) * MAX_PARTICLES;
 							subres.SysMemSlicePitch = 0; // only for 3D resource
-							dx11DeviceImmContext->UpdateSubresource((ID3D11Resource*)gres_particle_vb_idx.alloc_res_ptrs[DesType::DTYPE_RES], 0, NULL, subres.pSysMem, subres.SysMemPitch, 0);
+							dx11DeviceImmContext->UpdateSubresource((ID3D11Resource*)gres_vb_idx.alloc_res_ptrs[DesType::DTYPE_RES], 0, NULL, subres.pSysMem, subres.SysMemPitch, 0);
 						}
 
 					}
@@ -3204,7 +3211,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 						dx11DeviceImmContext->CSSetUnorderedAccessViews(5, 1, (ID3D11UnorderedAccessView**)&gres_indirect.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
 						dx11DeviceImmContext->CSSetUnorderedAccessViews(6, 1, (ID3D11UnorderedAccessView**)&gres_distance.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
 
-						dx11DeviceImmContext->CSSetUnorderedAccessViews(7, 1, (ID3D11UnorderedAccessView**)&gres_particle_vb.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+						dx11DeviceImmContext->CSSetUnorderedAccessViews(7, 1, (ID3D11UnorderedAccessView**)&gres_vb_pos.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
 
 						dx11DeviceImmContext->CSSetUnorderedAccessViews(11, 1, (ID3D11UnorderedAccessView**)&gres_culledIndirect0.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
 						dx11DeviceImmContext->CSSetUnorderedAccessViews(12, 1, (ID3D11UnorderedAccessView**)&gres_culledIndirect1.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
@@ -3373,12 +3380,12 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 						uint offset = 0;
 						D3D_PRIMITIVE_TOPOLOGY pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_POINTLIST;// D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 						
-						ID3D11Buffer* dx11BufferTargetPrim = (ID3D11Buffer*)gres_particle_vb.alloc_res_ptrs[DTYPE_RES];
+						ID3D11Buffer* dx11BufferTargetPrim = (ID3D11Buffer*)gres_vb_pos.alloc_res_ptrs[DTYPE_RES];
 						ID3D11Buffer* dx11IndiceTargetPrim = NULL;
-						uint stride_inputlayer = gres_particle_vb.res_values.GetParam("STRIDE_BYTES", (uint)0);
+						uint stride_inputlayer = gres_vb_pos.res_values.GetParam("STRIDE_BYTES", (uint)0);
 						dx11DeviceImmContext->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&dx11BufferTargetPrim, &stride_inputlayer, &offset);
 
-						dx11IndiceTargetPrim = (ID3D11Buffer*)gres_particle_vb_idx.alloc_res_ptrs[DTYPE_RES];
+						dx11IndiceTargetPrim = (ID3D11Buffer*)gres_vb_idx.alloc_res_ptrs[DTYPE_RES];
 						dx11DeviceImmContext->IASetIndexBuffer(dx11IndiceTargetPrim, DXGI_FORMAT_R32_UINT, 0);
 
 						dx11DeviceImmContext->IASetInputLayout(dx11InputLayer_Target);
