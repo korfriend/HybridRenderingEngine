@@ -925,6 +925,14 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		//return;
 	}
 
+	// clipping //
+	if (g_cbClipInfo.clip_flag & 0x1) {
+		if (dot(g_cbClipInfo.vec_clipplane, pos_ip_ws - g_cbClipInfo.pos_clipplane) > 0) __EXIT;
+	}
+	if (g_cbClipInfo.clip_flag & 0x2) {
+		if (!IsInsideClipBox(pos_ip_ws, g_cbClipInfo.mat_clipbox_ws2bs)) __EXIT;
+	}
+
 	//pos_ip_ws = float3(0, 0, 0);
 	//ray_dir_unit_ws = float3(0, 1, 0);
 	float3 ray_orig_os = TransformPoint(pos_ip_ws, g_cbPobj.mat_ws2os);
