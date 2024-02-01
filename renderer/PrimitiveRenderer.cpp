@@ -673,6 +673,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 	int i_test_shader = (int)_fncontainer->fnParams.GetParam("_int_ShaderTest", (int)0);
 
+	int forcedMaterialColorMode = (int)_fncontainer->fnParams.GetParam("_int_ForcedMaterialColorMode", (int)0);
+
 	VmLight* light = _fncontainer->fnParams.GetParam("_VmLight*_LightSource", (VmLight*)NULL);
 	VmLens* lens = _fncontainer->fnParams.GetParam("_VmLens*_CamLens", (VmLens*)NULL);
 	LightSource light_src;
@@ -762,7 +764,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #else
 #define VS_NUM 6
 #define GS_NUM 4
-#define PS_NUM 82
+#define PS_NUM 83
 #define CS_NUM 32
 #endif
 
@@ -982,6 +984,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			,"SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0"
 			,"SR_OIT_ABUFFER_VOLUMEMAP_ps_5_0"
 			,"SR_OIT_ABUFFER_VOLUME_DIST_MAP_ps_5_0"
+			,"SR_OIT_ABUFFER_UNDERCUT_ps_5_0"
 
 			,"SR_MOMENT_GEN_ps_5_0"
 			,"SR_MOMENT_GEN_TEXT_ps_5_0"
@@ -1770,8 +1773,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			vmfloat3 undercutColor(1.f);
 			vmfloat3 undercutDir(0, 0, 1.f);
 			if (applyUndercut) {
-				undercutColor = actor->GetParam("_fvec3_UndercutColor", vmfloat3(1.f, 1.f, 0));
-				undercutDir = actor->GetParam("_fvec3_UndercutDir", vmfloat3(0, 0, 1.f));
+				undercutColor = actor->GetParam("_float3_UndercutColor", vmfloat3(1.f, 1.f, 0));
+				undercutDir = actor->GetParam("_float3_UndercutDir", vmfloat3(0, 0, 1.f));
+				vmmath::fNormalizeVector(&undercutDir, &undercutDir);
 			}
 
 			bool cmap_windowing = actor->GetParam("_bool_ColorMapAsWindowing", false);
@@ -1847,7 +1851,15 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			VmObject* imgObj = actor->GetAssociateRes("TEXTURE2DIMAGE");
 			bool has_texture_img = false;
 			grd_helper::UpdatePrimitiveModel(gres_vtx, gres_idx, map_gres_texs, pobj, imgObj, &has_texture_img);
+
+			if (forcedMaterialColorMode > 0) {
+				has_texture_img = false;
+				if (forcedMaterialColorMode == 1)
+					use_vertex_color = false;
+			}
+
 			use_vertex_color &= !has_texture_img;
+
 			int tex_map_enum = 0;
 			bool is_annotation_obj = pobj->GetObjParam("_bool_IsAnnotationObj", false) && prim_data->texture_res_info.size() > 0;
 			if (is_annotation_obj)
@@ -2427,7 +2439,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				if (dx11GS_Target == NULL && useTriNormal) {
 					dx11GS_Target = GETGS(GS_TriNormal_gs_5_0);
 				}
-				if (dx11InputLayer_Target != dx11LI_PTTT && applyUndercut && render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
+				if (dx11InputLayer_Target != dx11LI_PTTT && applyUndercut)// && render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) 
+				{
 
 					vmint4* nodePtr;
 					int nodeSize;
@@ -2451,7 +2464,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 						dx11DeviceImmContext->PSSetShaderResources(2, 1, (ID3D11ShaderResourceView**)&bvhTriDebug.alloc_res_ptrs[DTYPE_SRV]);
 						dx11DeviceImmContext->PSSetShaderResources(3, 1, (ID3D11ShaderResourceView**)&bvhIndice.alloc_res_ptrs[DTYPE_SRV]);
 
-						dx11PS_Target = GETPS(SR_UNDERCUT_ps_5_0);
+						dx11PS_Target = render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES ? GETPS(SR_UNDERCUT_ps_5_0) : GETPS(SR_OIT_ABUFFER_UNDERCUT_ps_5_0);
 					}
 				}
 			}

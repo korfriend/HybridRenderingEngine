@@ -215,8 +215,8 @@ struct PS_FILL_OUTPUT
 #include "./kbuf/Sr_Kbuf.hlsl"
 
 #if PATHTR_USE_KBUF == 0
-RWTexture2D<uint> fragment_counter : register(u0);
-RWByteAddressBuffer deep_k_buf : register(u1);
+//RWTexture2D<uint> fragment_counter : register(u2);
+//RWByteAddressBuffer deep_k_buf : register(u4);
 #endif
 RWBuffer<uint> picking_buf : register(u2);
 RWTexture2D<unorm float4> fragment_vis : register(u3);
@@ -1498,6 +1498,31 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 #endif
 }
 
+void ApplyUndercutColor(inout float4 v_rgba, in float3 f3PosWS)
+{
+	const float3 coverDirWS = float3(g_cbPobj.dash_interval, g_cbPobj.depth_thres, g_cbPobj.pix_thickness);
+
+	int hitTriIdx = -1;
+	float hitDistance = 1e20;
+	float3 trinormal = float3(0, 0, 0);
+	float ray_tmin = 0.01;// .01f;// 0.00001f;
+	float ray_tmax = 1e20; // use thickness!!
+
+	// intersect all triangles in the scene stored in BVH
+	int debugbingo = 0;
+
+	float3 ray_orig_os = TransformPoint(f3PosWS, g_cbPobj.mat_ws2os);
+	float3 ray_dir_os = TransformVector(-coverDirWS, g_cbPobj.mat_ws2os);
+	float4 rayorig = float4(ray_orig_os + ray_dir_os * 0.00f, ray_tmin);
+	float4 raydir = float4(ray_dir_os, ray_tmax);
+	int hitCount = 0;
+	intersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
+
+	if (hitTriIdx >= 0) {
+		int icolor = g_cbPobj.pobj_dummy_1;
+		v_rgba.rgb *= ConvertUIntToFloat4(icolor).rgb;
+	}
+}
 
 PS_FILL_OUTPUT UndercutShader(__VS_OUT input)
 {
@@ -1511,28 +1536,8 @@ PS_FILL_OUTPUT UndercutShader(__VS_OUT input)
 
 	BasicShader(input, v_rgba, z_depth);
 
-	const float3 coverDirWS = float3(g_cbPobj.dash_interval, g_cbPobj.depth_thres, g_cbPobj.pix_thickness);
+	ApplyUndercutColor(v_rgba, input.f3PosWS);
 
-	int hitTriIdx = -1;
-	float hitDistance = 1e20;
-	float3 trinormal = float3(0, 0, 0);
-	float ray_tmin = 0.01;// .01f;// 0.00001f;
-	float ray_tmax = 1e20; // use thickness!!
-
-	// intersect all triangles in the scene stored in BVH
-	int debugbingo = 0;
-
-	float3 ray_orig_os = TransformPoint(input.f3PosWS, g_cbPobj.mat_ws2os);
-	float3 ray_dir_os = TransformVector(-coverDirWS, g_cbPobj.mat_ws2os);
-	float4 rayorig = float4(ray_orig_os + ray_dir_os * 0.00f, ray_tmin);
-	float4 raydir = float4(ray_dir_os, ray_tmax);
-	int hitCount = 0;
-	intersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
-	
-	if(hitTriIdx >= 0) {
-		int icolor = g_cbPobj.pobj_dummy_1;
-		v_rgba.rgb *= ConvertUIntToFloat4(icolor).rgb;
-	}
 	//v_rgba = float4(1, 1, 0, 1);
 
 	out_ps.ds_z = input.f4PosSS.z;
@@ -1540,4 +1545,42 @@ PS_FILL_OUTPUT UndercutShader(__VS_OUT input)
 	out_ps.depthcs = z_depth;
 
 	return out_ps;
+}
+
+Buffer<uint> sr_offsettable_buf : register(t50);
+#define STORE1_RBB(V, ADDR) deep_k_buf.Store((ADDR) * 4, V)
+
+
+[earlydepthstencil]
+void OIT_A_BUFFER_FILL_UNDERCUT(__VS_OUT input)
+{
+	float4 v_rgba = (float4)0;
+	float z_depth = FLT_MAX;
+
+	BasicShader(input, v_rgba, z_depth);
+
+	ApplyUndercutColor(v_rgba, input.f3PosWS);
+
+	// Atomically allocate space in the deep buffer
+	int2 tex2d_xy = int2(input.f4PosSS.xy);
+	uint fc = 0;
+	InterlockedAdd(fragment_counter[tex2d_xy], 1, fc);
+
+	uint offsettable_idx = tex2d_xy.y * g_cbCamState.rt_width + tex2d_xy.x;
+	uint nDeepBufferPos = 0;
+#if DX_11_STYLE == 1
+	if (offsettable_idx == 0)
+		nDeepBufferPos = fc;
+	else
+		nDeepBufferPos = sr_offsettable_buf[offsettable_idx - 1] + fc;
+#else
+	if (offsettable_idx == 0) clip(-1);
+	else nDeepBufferPos = sr_offsettable_buf[offsettable_idx] + fc;
+#endif
+
+	// Store fragment data into the allocated space
+	//deep_ubk_buf[2 * nDeepBufferPos + 0] = ConvertFloat4ToUInt(v_rgba);
+	//deep_ubk_buf[2 * nDeepBufferPos + 1] = asuint(z_depth);
+	STORE1_RBB(ConvertFloat4ToUInt(v_rgba), 2 * nDeepBufferPos + 0);
+	STORE1_RBB(asuint(z_depth), 2 * nDeepBufferPos + 1);
 }
