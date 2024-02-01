@@ -781,7 +781,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			  ,"SR_OIT_PT_vs_5_0"
 			  ,"SR_OIT_PNT_vs_5_0"
 			  ,"SR_OIT_PTTT_vs_5_0"
-			  ,"SR_OIT_PNTC_vs_5_0"
+			  ,"SR_OIT_IDX_vs_5_0"
 		};
 #endif
 
@@ -1107,7 +1107,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	ID3D11InputLayout* dx11LI_PN = (ID3D11InputLayout*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "PN"));
 	ID3D11InputLayout* dx11LI_PT = (ID3D11InputLayout*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "PT"));
 	ID3D11InputLayout* dx11LI_PNT = (ID3D11InputLayout*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "PNT"));
-	ID3D11InputLayout* dx11LI_PNTC = (ID3D11InputLayout*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "PNTC"));
+	//ID3D11InputLayout* dx11LI_PNTC = (ID3D11InputLayout*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "PNTC"));
 	ID3D11InputLayout* dx11LI_PTTT = (ID3D11InputLayout*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "PTTT"));
 
 #ifdef DX10_0
@@ -1122,7 +1122,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	ID3D11VertexShader* dx11VShader_PT = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PT_vs_5_0"));
 	ID3D11VertexShader* dx11VShader_PNT = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PNT_vs_5_0"));
 	ID3D11VertexShader* dx11VShader_PTTT = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PTTT_vs_5_0"));
-	ID3D11VertexShader* dx11VShader_PNTC = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PNTC_vs_5_0"));
+	ID3D11VertexShader* dx11VShader_IDX = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_IDX_vs_5_0"));
 #endif
 	ID3D11Buffer* cbuf_cam_state = dx11CommonParams->get_cbuf("CB_CameraState");
 	ID3D11Buffer* cbuf_env_state = dx11CommonParams->get_cbuf("CB_EnvState");
@@ -3026,14 +3026,13 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 						gres_vb_pos.vm_src_id = pobjId;
 						gres_vb_pos.res_name = string("gres_particle_vb_pos");
 						if (!gpu_manager->UpdateGpuResource(gres_vb_pos)) {
-							uint stride_bytes = sizeof(vmfloat3);
 							gres_vb_pos.rtype = RTYPE_BUFFER;
 							gres_vb_pos.options["USAGE"] = D3D11_USAGE_DEFAULT;
 							gres_vb_pos.options["CPU_ACCESS_FLAG"] = NULL;
 							gres_vb_pos.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 							gres_vb_pos.options["FORMAT"] = DXGI_FORMAT_R32_TYPELESS; // note RGB32F is not allowed for Views
 							gres_vb_pos.options["RAW_ACCESS"] = 1;
-							gres_vb_pos.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES * 4 * stride_bytes) );
+							gres_vb_pos.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES * 4 * 3) );
 							gres_vb_pos.res_values.SetParam("STRIDE_BYTES", 4u);
 
 							// D3D11_BIND_VERTEX_BUFFER 는 shader resource view 가 안 되는 것일까? 되네 :)
@@ -3047,6 +3046,37 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 							gpu_manager->GenerateGpuResource(gres_vb_pos);
 						}
 
+						gres_vb_tex = gres_vb_pos;
+						gres_vb_tex.res_name = string("gres_particle_vb_tex");
+						if (!gpu_manager->UpdateGpuResource(gres_vb_tex)) {
+							gres_vb_tex.rtype = RTYPE_BUFFER;
+							gres_vb_tex.options["USAGE"] = D3D11_USAGE_DEFAULT;
+							gres_vb_tex.options["CPU_ACCESS_FLAG"] = NULL;
+							gres_vb_tex.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+							gres_vb_tex.options["FORMAT"] = DXGI_FORMAT_R16G16_UNORM; 
+							gres_vb_tex.options["RAW_ACCESS"] = 0;
+							gres_vb_tex.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES * 4));
+							gres_vb_tex.res_values.SetParam("STRIDE_BYTES", 4u);
+
+							// D3D11_BIND_VERTEX_BUFFER 는 shader resource view 가 안 되는 것일까? 되네 :)
+							gpu_manager->GenerateGpuResource(gres_vb_tex);
+						}
+
+						gres_vb_color= gres_vb_pos;
+						gres_vb_color.res_name = string("gres_particle_vb_color");
+						if (!gpu_manager->UpdateGpuResource(gres_vb_color)) {
+							gres_vb_color.rtype = RTYPE_BUFFER;
+							gres_vb_color.options["USAGE"] = D3D11_USAGE_DEFAULT;
+							gres_vb_color.options["CPU_ACCESS_FLAG"] = NULL;
+							gres_vb_color.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+							gres_vb_color.options["FORMAT"] = DXGI_FORMAT_R8G8B8A8_UNORM;
+							gres_vb_color.options["RAW_ACCESS"] = 0;
+							gres_vb_color.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES * 4));
+							gres_vb_color.res_values.SetParam("STRIDE_BYTES", 4u);
+
+							// D3D11_BIND_VERTEX_BUFFER 는 shader resource view 가 안 되는 것일까? 되네 :)
+							gpu_manager->GenerateGpuResource(gres_vb_color);
+						}
 
 						gres_vb_idx.vm_src_id = pobjId;
 						gres_vb_idx.res_name = string("PARTICLE_VB_IDX");
@@ -3212,6 +3242,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 						dx11DeviceImmContext->CSSetUnorderedAccessViews(6, 1, (ID3D11UnorderedAccessView**)&gres_distance.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
 
 						dx11DeviceImmContext->CSSetUnorderedAccessViews(7, 1, (ID3D11UnorderedAccessView**)&gres_vb_pos.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+						dx11DeviceImmContext->CSSetUnorderedAccessViews(8, 1, (ID3D11UnorderedAccessView**)&gres_vb_nor.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+						dx11DeviceImmContext->CSSetUnorderedAccessViews(9, 1, (ID3D11UnorderedAccessView**)&gres_vb_tex.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+						dx11DeviceImmContext->CSSetUnorderedAccessViews(10, 1, (ID3D11UnorderedAccessView**)&gres_vb_color.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
 
 						dx11DeviceImmContext->CSSetUnorderedAccessViews(11, 1, (ID3D11UnorderedAccessView**)&gres_culledIndirect0.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
 						dx11DeviceImmContext->CSSetUnorderedAccessViews(12, 1, (ID3D11UnorderedAccessView**)&gres_culledIndirect1.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
@@ -3369,26 +3402,23 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 					// particle rendering //
 					{
-						dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 10, dx11UAVs_NULL, NULL);
+						dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 12, dx11UAVs_NULL, NULL);
 					
-						ID3D11InputLayout* dx11InputLayer_Target = dx11LI_PNTC;
-						ID3D11VertexShader* dx11VS_Target = dx11VShader_PNTC;
+						//ID3D11InputLayout* dx11InputLayer_Target = dx11LI_PNTC;
+						ID3D11VertexShader* dx11VS_Target = dx11VShader_IDX;
 						ID3D11GeometryShader* dx11GS_Target = NULL;
 						ID3D11PixelShader* dx11PS_Target = GETPS(PCE_ParticleRenderBasic_ps_5_0);
 						ID3D11RasterizerState2* dx11RState_TargetObj = GETRASTER(SOLID_NONE); // blender state...
 						//ID3D11BlendState 
-						uint offset = 0;
+						uint stride_inputlayer = 0u, offset = 0u;
 						D3D_PRIMITIVE_TOPOLOGY pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_POINTLIST;// D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 						
-						ID3D11Buffer* dx11BufferTargetPrim = (ID3D11Buffer*)gres_vb_pos.alloc_res_ptrs[DTYPE_RES];
-						ID3D11Buffer* dx11IndiceTargetPrim = NULL;
-						uint stride_inputlayer = gres_vb_pos.res_values.GetParam("STRIDE_BYTES", (uint)0);
-						dx11DeviceImmContext->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&dx11BufferTargetPrim, &stride_inputlayer, &offset);
+						dx11DeviceImmContext->IASetVertexBuffers(0, 1, NULL, &stride_inputlayer, &offset);
+						dx11DeviceImmContext->IASetIndexBuffer(
+							(ID3D11Buffer*)gres_vb_idx.alloc_res_ptrs[DTYPE_RES], 
+							DXGI_FORMAT_R32_UINT, 0);
+						dx11DeviceImmContext->IASetInputLayout(NULL); // using idx buffer and access SRV of VB
 
-						dx11IndiceTargetPrim = (ID3D11Buffer*)gres_vb_idx.alloc_res_ptrs[DTYPE_RES];
-						dx11DeviceImmContext->IASetIndexBuffer(dx11IndiceTargetPrim, DXGI_FORMAT_R32_UINT, 0);
-
-						dx11DeviceImmContext->IASetInputLayout(dx11InputLayer_Target);
 						dx11DeviceImmContext->VSSetShader(dx11VS_Target, NULL, 0);
 						dx11DeviceImmContext->GSSetShader(dx11GS_Target, NULL, 0);
 						dx11DeviceImmContext->PSSetShader(dx11PS_Target, NULL, 0);
@@ -3406,10 +3436,12 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 						dx11DeviceImmContext->OMSetBlendState(dx11CommonParams->get_blender("ADD"), NULL, 0xffffffff);
 						dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVs, dx11DSV, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
 
-						if (pobj_topology_type == D3D11_PRIMITIVE_TOPOLOGY_POINTLIST)
-							dx11DeviceImmContext->Draw(MAX_PARTICLES * 4, 0);
-						else
-							dx11DeviceImmContext->DrawIndexed(MAX_PARTICLES * 6, 0, 0);
+
+						//dx11DeviceImmContext->DrawInstancedIndirect();//
+						//if (pobj_topology_type == D3D11_PRIMITIVE_TOPOLOGY_POINTLIST)
+						//	dx11DeviceImmContext->Draw(MAX_PARTICLES * 4, 0);
+						//else
+						//	dx11DeviceImmContext->DrawIndexed(MAX_PARTICLES * 6, 0, 0);
 
 						dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
 						dx11DeviceImmContext->PSSetShaderResources(20, 1, dx11SRVs_NULL);

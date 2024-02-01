@@ -149,18 +149,6 @@ VS_OUTPUT_TTT CommonVS_PTTT(VS_INPUT_PTTT input)
     return vout;
 }
 
-VS_OUTPUT_PNTC CommonVS_PNTC(VS_INPUT_PNTC input)
-{
-    VS_OUTPUT_PNTC vout = (VS_OUTPUT_PNTC)0;
-    vout.f4PosSS = mul(g_cbPobj.mat_os2ps, float4(input.f3PosOS, 1.f));
-    vout.f3PosWS = TransformPoint(input.f3PosOS, g_cbPobj.mat_os2ws);
-    vout.f3VecNormalWS = normalize(TransformVector(input.f3VecNormalOS, g_cbPobj.mat_os2ws));
-    vout.f3UVS = input.f3UVS;
-    vout.f3Color = input.f3Color;
-    return vout;
-}
-
-
 #if __RENDERING_MODE == 2
 #define __VS_OUT VS_OUTPUT_TTT
 #else

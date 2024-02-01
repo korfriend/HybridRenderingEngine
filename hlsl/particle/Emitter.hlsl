@@ -62,19 +62,6 @@ struct RNG
 	}
 };
 
-struct Particle
-{
-	float3 position;
-	float mass;
-	float3 force;
-	float rotationalVelocity;
-	float3 velocity;
-	float maxLife;
-	float2 sizeBeginEnd;
-	float life;
-	uint color;
-};
-
 struct ParticleCounters
 {
 	uint aliveCount;
@@ -175,11 +162,10 @@ RWStructuredBuffer<uint> deadBuffer : register(u3);
 RWByteAddressBuffer counterBuffer : register(u4);
 RWByteAddressBuffer indirectBuffers : register(u5);
 RWStructuredBuffer<float> distanceBuffer : register(u6);
-RWByteAddressBuffer vertexBuffer_PNTC : register(u7);
-//RWByteAddressBuffer vertexBuffer_POS : register(u7);
-//RWBuffer<float4> vertexBuffer_NOR : register(u8);
-//RWBuffer<float4> vertexBuffer_UVS : register(u9);
-//RWBuffer<float4> vertexBuffer_COL : register(u10);
+RWByteAddressBuffer vertexBuffer_POS : register(u7);
+RWByteAddressBuffer vertexBuffer_NOR : register(u8);
+RWBuffer<float2> vertexBuffer_UVS : register(u9);
+RWBuffer<float4> vertexBuffer_COL : register(u10);
 RWStructuredBuffer<uint> culledIndirectionBuffer : register(u11);
 RWStructuredBuffer<uint> culledIndirectionBuffer2 : register(u12);
 
@@ -349,6 +335,40 @@ void ParticleEmitter(uint3 DTid : SV_DispatchThreadID)
 	aliveBuffer_CURRENT[aliveCount] = newParticleIndex;
 }
 
+[numthreads(1, 1, 1)]
+void ParticleUpdateFinish(uint3 DTid : SV_DispatchThreadID)
+{
+	uint particleCount = counterBuffer.Load(PARTICLECOUNTER_OFFSET_CULLEDCOUNT);
+
+	if (xEmitterOptions & EMITTER_OPTION_BIT_MESH_SHADER_ENABLED)
+	{
+		// Create DispatchMesh argument buffer:
+		IndirectDispatchArgs args;
+		args.ThreadGroupCountX = (particleCount + 31) / 32;
+		args.ThreadGroupCountY = 1;
+		args.ThreadGroupCountZ = 1;
+#ifdef __PSSL__
+		indirectBuffers.TypedStore<IndirectDispatchArgs>(ARGUMENTBUFFER_OFFSET_DRAWPARTICLES, args);
+#else
+		indirectBuffers.Store<IndirectDispatchArgs>(ARGUMENTBUFFER_OFFSET_DRAWPARTICLES, args);
+#endif // __PSSL__
+	}
+	else
+	{
+		// Create draw argument buffer
+		IndirectDrawArgsInstanced args;
+		args.VertexCountPerInstance = 4;
+		args.InstanceCount = particleCount;
+		args.StartVertexLocation = 0;
+		args.StartInstanceLocation = 0;
+#ifdef __PSSL__
+		indirectBuffers.TypedStore<IndirectDrawArgsInstanced>(ARGUMENTBUFFER_OFFSET_DRAWPARTICLES, args);
+#else
+		indirectBuffers.Store<IndirectDrawArgsInstanced>(ARGUMENTBUFFER_OFFSET_DRAWPARTICLES, args);
+#endif // __PSSL__
+	}
+}
+
 [numthreads(THREADCOUNT_SIMULATION, 1, 1)]
 void ParticleSimulation(uint3 DTid : SV_DispatchThreadID, uint Gid : SV_GroupIndex)
 {
@@ -487,20 +507,21 @@ void ParticleSimulation(uint3 DTid : SV_DispatchThreadID, uint Gid : SV_GroupInd
 			//vertexBuffer_POS.Store<float3>((v0 + vertexID) * sizeof(float3), particle.position + quadPos);
 			float3 p_vtx = particle.position + quadPos;
 			uint3 p_asuint = uint3(asuint(p_vtx.x), asuint(p_vtx.y), asuint(p_vtx.z));
-			//vertexBuffer_POS.Store3((v0 + vertexID) * 12, p_asuint);
-			//
-			//vertexBuffer_NOR[v0 + vertexID] = float4(normalize(-g_cbCamState.dir_view_ws), 0);
-			//vertexBuffer_UVS[v0 + vertexID] = float4(uv, uv2);
-			//vertexBuffer_COL[v0 + vertexID] = particleColor;
+			vertexBuffer_POS.Store3((v0 + vertexID) * 12, p_asuint);
+
+			uint3 n_asuint = uint3(asuint(g_cbCamState.dir_view_ws.x), asuint(g_cbCamState.dir_view_ws.y), asuint(g_cbCamState.dir_view_ws.z));
+			vertexBuffer_NOR.Store3((v0 + vertexID) * 12, n_asuint); //[v0 + vertexID] = float4(normalize(-g_cbCamState.dir_view_ws), 0);
+			vertexBuffer_UVS[v0 + vertexID] = uv;// float4(uv, uv2);
+			vertexBuffer_COL[v0 + vertexID] = particleColor;
 
 			// sizeof(vmfloat3) + sizeof(vmfloat3) + sizeof(ushort2) + sizeof(uint); // pos, nor, uvs, col
-			uint vid = v0 + vertexID;
-			vertexBuffer_PNTC.Store3(vid * 32, p_asuint);
-			float3 n_vtx = -g_cbCamState.dir_view_ws;
-			uint3 n_asuint = uint3(asuint(n_vtx.x), asuint(n_vtx.y), asuint(n_vtx.z));
-			vertexBuffer_PNTC.Store3(vid * 32 + 12, n_asuint);
-			uint2 uvCol_asuint = uint2(((uint)(uv.y * 65535) << 16) | (uint)(uv.x * 65535), pack_rgba(particleColor));
-			vertexBuffer_PNTC.Store2(vid * 32 + 24, n_asuint);
+			//uint vid = v0 + vertexID;
+			//vertexBuffer_PNTC.Store3(vid * 32, p_asuint);
+			//float3 n_vtx = -g_cbCamState.dir_view_ws;
+			//uint3 n_asuint = uint3(asuint(n_vtx.x), asuint(n_vtx.y), asuint(n_vtx.z));
+			//vertexBuffer_PNTC.Store3(vid * 32 + 12, n_asuint);
+			//uint2 uvCol_asuint = uint2(((uint)(uv.y * 65535) << 16) | (uint)(uv.x * 65535), pack_rgba(particleColor));
+			//vertexBuffer_PNTC.Store2(vid * 32 + 24, n_asuint);
 		}
 
 		// Frustum culling:
@@ -513,7 +534,7 @@ void ParticleSimulation(uint3 DTid : SV_DispatchThreadID, uint Gid : SV_GroupInd
 			uint prevCount;
 			counterBuffer.InterlockedAdd(PARTICLECOUNTER_OFFSET_CULLEDCOUNT, 1, prevCount);
 
-			culledIndirectionBuffer[prevCount] = prevCount;
+			culledIndirectionBuffer[prevCount] = prevCount; // ????
 			culledIndirectionBuffer2[prevCount] = particleIndex;
 
 #ifdef SORTING
@@ -532,13 +553,13 @@ void ParticleSimulation(uint3 DTid : SV_DispatchThreadID, uint Gid : SV_GroupInd
 		counterBuffer.InterlockedAdd(PARTICLECOUNTER_OFFSET_DEADCOUNT, 1, deadIndex);
 		deadBuffer[deadIndex] = particleIndex;
 
-		//vertexBuffer_POS.Store3((v0 + 0) * 12, 0);
-		//vertexBuffer_POS.Store3((v0 + 1) * 12, 0);
-		//vertexBuffer_POS.Store3((v0 + 2) * 12, 0);
-		//vertexBuffer_POS.Store3((v0 + 3) * 12, 0);
-		vertexBuffer_PNTC.Store3((v0 + 0) * 32, (uint3)0);
-		vertexBuffer_PNTC.Store3((v0 + 1) * 32, (uint3)0);
-		vertexBuffer_PNTC.Store3((v0 + 2) * 32, (uint3)0);
-		vertexBuffer_PNTC.Store3((v0 + 3) * 32, (uint3)0);
+		vertexBuffer_POS.Store3((v0 + 0) * 12, 0);
+		vertexBuffer_POS.Store3((v0 + 1) * 12, 0);
+		vertexBuffer_POS.Store3((v0 + 2) * 12, 0);
+		vertexBuffer_POS.Store3((v0 + 3) * 12, 0);
+		//vertexBuffer_PNTC.Store3((v0 + 0) * 32, (uint3)0);
+		//vertexBuffer_PNTC.Store3((v0 + 1) * 32, (uint3)0);
+		//vertexBuffer_PNTC.Store3((v0 + 2) * 32, (uint3)0);
+		//vertexBuffer_PNTC.Store3((v0 + 3) * 32, (uint3)0);
 	}
 }

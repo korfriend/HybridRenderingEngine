@@ -295,6 +295,18 @@ struct HxCB_CurvedSlicer
 	uint flag; // 1st bit : isRightSide
 };
 
+struct Particle
+{
+	float3 position;
+	float mass;
+	float3 force;
+	float rotationalVelocity;
+	float3 velocity;
+	float maxLife;
+	float2 sizeBeginEnd;
+	float life;
+	uint color;
+};
 //=====================
 // Constant Buffers
 //=====================

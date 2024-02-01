@@ -387,7 +387,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 				VMSAFE_RELEASE(vshader);
 				return E_FAIL;
 			}
-			if(in_layout)
+			if(in_layout && name_layer != "")
 				g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, name_layer), in_layout);
 			g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, name_shader), vshader);
 			return S_OK;
@@ -498,7 +498,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11003), "SR_OIT_PT_vs_5_0", "vs_5_0", "PT", lotypeInputPosTex, 2), SR_OIT_PT_vs_5_0);
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11004), "SR_OIT_PNT_vs_5_0", "vs_5_0", "PNT", lotypeInputPosNorTex, 3), SR_OIT_PNT_vs_5_0);
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11005), "SR_OIT_PTTT_vs_5_0", "vs_5_0", "PTTT", lotypeInputPosTTTex, 4), SR_OIT_PTTT_vs_5_0);
-		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11006), "SR_OIT_PNTC_vs_5_0", "vs_5_0", "PNTC", lotypeInputPosNTC, 4), SR_OIT_PNTC_vs_5_0);
+		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11006), "SR_OIT_IDX_vs_5_0", "vs_5_0", "", NULL, 4), SR_OIT_IDX_vs_5_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10101), "SR_BASIC_PHONGBLINN_ps_5_0", "ps_5_0"), SR_BASIC_PHONGBLINN_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10102), "SR_BASIC_DASHEDLINE_ps_5_0", "ps_5_0"), SR_BASIC_DASHEDLINE_ps_5_0);
