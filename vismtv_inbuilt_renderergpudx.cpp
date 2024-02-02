@@ -45,7 +45,7 @@ map<int, D2DRes> g_d2dResMap;
 map<string, ID2D1StrokeStyle*> g_d2dStrokeStyleMap;
 map<string, IDWriteTextFormat*> g_d2dTextFormatMap;
 
-
+//std::atomic_int g_state = 0;
 bool CheckModuleParameters(fncontainer::VmFnContainer& _fncontainer)
 {
 	/////////////////////////////////////////////////
@@ -221,9 +221,11 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		g_dRunTimeVRs += dRuntime;
 		is_final_render_out = true;
 		is_vr = true;
+		//g_state = 1;
 	}
 	else if (strRendererSource == "MESH")
 	{
+		//g_state = 0;
 		double dRuntime = 0;
 		RenderSrOIT(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
 		g_dRunTimeVRs += dRuntime;
@@ -687,6 +689,8 @@ void InteropCustomWork(fncontainer::VmFnContainer& _fncontainer)
 
 bool GetSharedShaderResView(const int iobjId, const void* dx11devPtr, void** sharedSRV)
 {
+	//if (g_state != 1) 
+	//	assert(0);
 	*sharedSRV = nullptr;
 
 	if (g_pCGpuManager == NULL) {

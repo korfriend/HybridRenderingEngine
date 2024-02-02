@@ -1169,8 +1169,10 @@ bool grd_helper::UpdateVolumeModel(GpuRes& gres, VmVObjectVolume* vobj, const bo
 	}
 
 	gres.rtype = RTYPE_TEXTURE3D;
-	gres.options["USAGE"] = D3D11_USAGE_DYNAMIC;
-	gres.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
+	gres.options["USAGE"] = D3D11_USAGE_IMMUTABLE; // D3D11_USAGE_DYNAMIC
+	gres.options["CPU_ACCESS_FLAG"] = 0;// D3D11_CPU_ACCESS_WRITE;
+	//gres.options["USAGE"] = D3D11_USAGE_DYNAMIC;
+	//gres.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
 	gres.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
 
 	const VolumeData* vol_data = ((VmVObjectVolume*)vobj)->GetVolumeData();
@@ -1255,12 +1257,56 @@ RETRY:
 
 	//cout << "************offset*>> " << sample_offset.x << ", " << sample_offset.y << ", " << sample_offset.z << endl;
 
+	bool is_downscaled = sample_offset.x > 1.f || sample_offset.y > 1.f || sample_offset.z > 1.f;
+	//vmint2 gpu_row_depth_pitch = 0;
+	D3D11_SUBRESOURCE_DATA subRes;
+	subRes.pSysMem = NULL;
+	subRes.SysMemPitch = vol_size_x;
+	subRes.SysMemSlicePitch = vol_size_x * vol_size_y;
+	switch (gres.options["FORMAT"])
+	{
+	case DXGI_FORMAT_R8_UNORM:
+		subRes.pSysMem = new byte[vol_size_x * vol_size_y * vol_size_z];
+		__FillVolumeValues((byte*)subRes.pSysMem, (const byte**)vol_data->vol_slices, is_downscaled, is_nearest_max_vol, 0,
+			vol_data->vol_size, vmint3(vol_size_x, vol_size_y, vol_size_z), vol_data->bnd_size, vmint2(subRes.SysMemPitch, subRes.SysMemSlicePitch), progress);
+		break;
+	case DXGI_FORMAT_R16_UNORM:
+		subRes.pSysMem = new ushort[vol_size_x * vol_size_y * vol_size_z];
+		__FillVolumeValues((ushort*)subRes.pSysMem, (const ushort**)vol_data->vol_slices, is_downscaled, is_nearest_max_vol, 0,
+			vol_data->vol_size, vmint3(vol_size_x, vol_size_y, vol_size_z), vol_data->bnd_size, vmint2(subRes.SysMemPitch, subRes.SysMemSlicePitch), progress);
+		subRes.SysMemPitch *= 2;
+		subRes.SysMemSlicePitch *= 2;
+		break;
+	default:
+		break;
+	}
+	
+	gres.res_values.SetParam("SUB_RESOURCE", subRes);
 	g_pCGpuManager->GenerateGpuResource(gres);
+	delete[] subRes.pSysMem;// (gres.options["FORMAT"] == DXGI_FORMAT_R8_UNORM ? (byte*)subRes.pSysMem : (ushort*)subRes.pSysMem);
+
+	//switch (gres.options["FORMAT"])
+	//{
+	//case DXGI_FORMAT_R8_UNORM:
+	//	delete[] (byte*)subRes.pSysMem;
+	//	break;
+	//case DXGI_FORMAT_R16_UNORM:
+	//	delete[] (ushort*)subRes.pSysMem;
+	//	break;
+	//default:
+	//	break;
+	//}
+
+	return true;
+
+	//===================
+	// the following code is for 
+	//		gres.options["USAGE"] = D3D11_USAGE_DYNAMIC;
+	//		gres.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
 
 	ID3D11Texture3D* pdx11tx3d_volume = (ID3D11Texture3D*)gres.alloc_res_ptrs[DTYPE_RES];
 	D3D11_MAPPED_SUBRESOURCE d11MappedRes;
 	HRESULT hr = g_pvmCommonParams->dx11DeviceImmContext->Map(pdx11tx3d_volume, 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes);
-	bool is_downscaled = sample_offset.x > 1.f || sample_offset.y > 1.f || sample_offset.z > 1.f;
 	vmint2 gpu_row_depth_pitch = vmint2(d11MappedRes.RowPitch, d11MappedRes.DepthPitch);
 	switch (gres.options["FORMAT"])
 	{

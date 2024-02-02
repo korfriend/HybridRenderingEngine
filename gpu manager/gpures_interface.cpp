@@ -669,7 +669,14 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		descTex3D.CPUAccessFlags = GetOption("CPU_ACCESS_FLAG");
 
 		ID3D11Texture3D* pdx11TX3D = NULL;
-		g_pdx11Device->CreateTexture3D(&descTex3D, NULL, &pdx11TX3D);
+
+		if (gres.options["USAGE"] == D3D11_USAGE_IMMUTABLE) {
+			D3D11_SUBRESOURCE_DATA subRes = gres.res_values.GetParam("SUB_RESOURCE", D3D11_SUBRESOURCE_DATA());
+			g_pdx11Device->CreateTexture3D(&descTex3D, &subRes, &pdx11TX3D);
+		}
+		else {
+			g_pdx11Device->CreateTexture3D(&descTex3D, NULL, &pdx11TX3D);
+		}
 
 		gres.alloc_res_ptrs[DTYPE_RES] = (void*)pdx11TX3D;
 		gres.res_values.SetParam("RES_SIZE_BYTES", (ullong)(descTex3D.Width* descTex3D.Height* descTex3D.Depth* GetSizeFormat(descTex3D.Format)));
