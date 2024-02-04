@@ -11,7 +11,7 @@ fxc /E BasicShader4 /T ps_5_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compi
 fxc /E BasicShader4 /T ps_5_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs/SR_BASIC_TEXTUREIMGMAP_ps_5_0 /D __RENDERING_MODE=4 
 fxc /E BasicShader4 /T ps_5_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs/SR_BASIC_VOLUMEMAP_ps_5_0 /D __RENDERING_MODE=5 
 fxc /E BasicShader4 /T ps_5_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs/SR_BASIC_VOLUME_DIST_MAP_ps_5_0 /D __RENDERING_MODE=6 
-fxc /E UndercutShader /T ps_5_0 ./hlsl/PathTracer.hlsl /Fo ./shader_compiled_objs/SR_UNDERCUT_ps_5_0 /D __RENDERING_MODE=0 /D PATHTR_USE_KBUF=1
+fxc /E UndercutShader /T ps_5_0 ./hlsl/RayProcessing.hlsl /Fo ./shader_compiled_objs/SR_UNDERCUT_ps_5_0 /D __RENDERING_MODE=0 /D PATHTR_USE_KBUF=1
 
 fxc /E BasicShader4 /T ps_5_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs/SR_QUAD_OUTLINE_ps_5_0 /D __RENDERING_MODE=100 
 
@@ -21,9 +21,8 @@ fxc /E SINGLE_LAYER /T ps_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/S
 
 fxc /E OIT_RESOLVE /T cs_5_0 ./hlsl/kbuf/KbufResolve.hlsl /Fo ./shader_compiled_objs/OIT_SKBZ_RESOLVE_cs_5_0 /D FRAG_MERGING=1 /D DYNAMIC_K_MODE=0 
 
-//fxc /E DFB_PRESET /T cs_5_0 ./hlsl/dx_abuf/DxABuf.hlsl /Fo ./shader_compiled_objs/SR_SINGLE_LAYER_TO_DFB_cs_5_0 
 fxc /E SortAndRenderCS /T cs_5_0 ./hlsl/dx_abuf/DxABuf_Sort.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_SORT2SENDER_cs_5_0 /D DX_11_STYLE=0 /D FRAG_MERGING=0
-fxc /E SortAndRenderCS /T cs_5_0 ./hlsl/dx_abuf/DxABuf_Sort.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_SORT2SENDER_SFM_cs_5_0 /D DX_11_STYLE=0 /D FRAG_MERGING=1
+fxc /E SortAndRenderCS /T cs_5_0 ./hlsl/dx_abuf/DxABuf_Sort.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_SORT2SENDER_SFM_cs_5_0 /D DX_11_STYLE=0 /D FRAG_MERGING=1 /D LINEAR_MODE=1
 fxc /E OIT_A_BUFFER_CNF_FRAGS /T ps_5_0 ./hlsl/dx_abuf/DxABuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_FRAGCOUNTER_ps_5_0 /D DX_11_STYLE=0 
 fxc /E OIT_A_BUFFER_CNF_FRAGS /T ps_5_0 ./hlsl/dx_abuf/DxABuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_FRAGCOUNTER_MTT_ps_5_0 /D DX_11_STYLE=0 /D __RENDERING_MODE=2
 fxc /E OIT_A_BUFFER_FILL /T ps_5_0 ./hlsl/dx_abuf/DxABuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_PHONGBLINN_ps_5_0 /D __RENDERING_MODE=0 /D DX_11_STYLE=0
@@ -33,11 +32,11 @@ fxc /E OIT_A_BUFFER_FILL /T ps_5_0 ./hlsl/dx_abuf/DxABuf.hlsl /Fo ./shader_compi
 fxc /E OIT_A_BUFFER_FILL /T ps_5_0 ./hlsl/dx_abuf/DxABuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0 /D __RENDERING_MODE=4 /D DX_11_STYLE=0
 fxc /E OIT_A_BUFFER_FILL /T ps_5_0 ./hlsl/dx_abuf/DxABuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_VOLUMEMAP_ps_5_0 /D __RENDERING_MODE=5 /D DX_11_STYLE=0
 fxc /E OIT_A_BUFFER_FILL /T ps_5_0 ./hlsl/dx_abuf/DxABuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_VOLUME_DIST_MAP_ps_5_0 /D __RENDERING_MODE=6 /D DX_11_STYLE=0
-fxc /E OIT_A_BUFFER_FILL_UNDERCUT /T ps_5_0 ./hlsl/PathTracer.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_UNDERCUT_ps_5_0 /D __RENDERING_MODE=0 /D DX_11_STYLE=0
+fxc /E OIT_A_BUFFER_FILL_UNDERCUT /T ps_5_0 ./hlsl/RayProcessing.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_UNDERCUT_ps_5_0 /D __RENDERING_MODE=0 /D DX_11_STYLE=0
 
 fxc /E CreatePrefixSum_Pass0_CS /T cs_5_0 ./hlsl/dx_abuf/DxABuf_Sort.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_PREFIX_0_cs_5_0 /D DX_11_STYLE=1
 fxc /E CreatePrefixSum_Pass1_CS /T cs_5_0 ./hlsl/dx_abuf/DxABuf_Sort.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_PREFIX_1_cs_5_0 /D DX_11_STYLE=1
-fxc /E CreateOffsetTable_CS /T cs_5_0 ./hlsl/dx_abuf/DxABuf_Sort.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_OffsetTable_cs_5_0
+fxc /E CreateOffsetTable_CS /T cs_5_0 ./hlsl/dx_abuf/DxABuf_Sort.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_OffsetTable_cs_5_0 /D DX_11_STYLE=0
 
 fxc /E PICKING_A_BUFFER_FILL /T ps_5_0 ./hlsl/dx_abuf/DxABuf.hlsl /Fo ./shader_compiled_objs/PICKING_ABUFFER_PHONGBLINN_ps_5_0 /D __RENDERING_MODE=0 /D DX_11_STYLE=0
 fxc /E PICKING_A_BUFFER_FILL /T ps_5_0 ./hlsl/dx_abuf/DxABuf.hlsl /Fo ./shader_compiled_objs/PICKING_ABUFFER_DASHEDLINE_ps_5_0 /D __RENDERING_MODE=1 /D DX_11_STYLE=0
@@ -82,13 +81,13 @@ fxc /E CurvedSlicer /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/P
 fxc /E CurvedSlicer /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/PanoVR_MULTIOTF_DEFAULT_cs_5_0 /D RAYMODE=0 /D OTF_MASK=1 /D VR_MODE=0 /D FRAG_MERGING=1 /D DYNAMIC_K_MODE=0 /D LINEAR_MODE=1
 fxc /E CurvedSlicer /T cs_5_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs/PanoVR_MULTIOTF_MODULATE_cs_5_0 /D RAYMODE=0 /D OTF_MASK=1 /D VR_MODE=2 /D FRAG_MERGING=1 /D DYNAMIC_K_MODE=0 /D LINEAR_MODE=1
 
-fxc /E ThickSlicePathTracer /T cs_5_0 ./hlsl/PathTracer.hlsl /Fo ./shader_compiled_objs/ThickSlicePathTracer_cs_5_0 /D FRAG_MERGING=1 /D CURVEDPLANE=0 /D PATHTR_USE_KBUF=1 /D USE_ROV=0 /D TAIL_HANDLING=1 /D DO_NOT_USE_DISCARD=1
-fxc /E ThickSlicePathTracer /T cs_5_0 ./hlsl/PathTracer.hlsl /Fo ./shader_compiled_objs/CurvedThickSlicePathTracer_cs_5_0 /D FRAG_MERGING=1 /D CURVEDPLANE=1 /D PATHTR_USE_KBUF=1 /D USE_ROV=0 /D TAIL_HANDLING=1 /D DO_NOT_USE_DISCARD=1
+fxc /E ThickSlicePathTracer /T cs_5_0 ./hlsl/RayProcessing.hlsl /Fo ./shader_compiled_objs/ThickSlicePathTracer_cs_5_0 /D FRAG_MERGING=1 /D CURVEDPLANE=0 /D PATHTR_USE_KBUF=1 /D USE_ROV=0 /D TAIL_HANDLING=1 /D DO_NOT_USE_DISCARD=1
+fxc /E ThickSlicePathTracer /T cs_5_0 ./hlsl/RayProcessing.hlsl /Fo ./shader_compiled_objs/CurvedThickSlicePathTracer_cs_5_0 /D FRAG_MERGING=1 /D CURVEDPLANE=1 /D PATHTR_USE_KBUF=1 /D USE_ROV=0 /D TAIL_HANDLING=1 /D DO_NOT_USE_DISCARD=1
 
-fxc /E ThickSlicePathTracer /T cs_5_0 ./hlsl/PathTracer.hlsl /Fo ./shader_compiled_objs/PickingThickSlice_cs_5_0 /D FRAG_MERGING=1 /D CURVEDPLANE=0 /D PICKING=1 /D PATHTR_USE_KBUF=1 
-fxc /E ThickSlicePathTracer /T cs_5_0 ./hlsl/PathTracer.hlsl /Fo ./shader_compiled_objs/PickingCurvedThickSlice_cs_5_0 /D FRAG_MERGING=1 /D CURVEDPLANE=1 /D PICKING=1 /D PATHTR_USE_KBUF=1 
+fxc /E ThickSlicePathTracer /T cs_5_0 ./hlsl/RayProcessing.hlsl /Fo ./shader_compiled_objs/PickingThickSlice_cs_5_0 /D FRAG_MERGING=1 /D CURVEDPLANE=0 /D PICKING=1 /D PATHTR_USE_KBUF=1 
+fxc /E ThickSlicePathTracer /T cs_5_0 ./hlsl/RayProcessing.hlsl /Fo ./shader_compiled_objs/PickingCurvedThickSlice_cs_5_0 /D FRAG_MERGING=1 /D CURVEDPLANE=1 /D PICKING=1 /D PATHTR_USE_KBUF=1 
 
-fxc /E Outline2D /T cs_5_0 ./hlsl/PathTracer.hlsl /Fo ./shader_compiled_objs/SliceOutline_cs_5_0 /D PATHTR_USE_KBUF=1 /D FRAG_MERGING=1 /D DO_NOT_USE_DISCARD=1 /D USE_ROV=0 /D TAIL_HANDLING=1
+fxc /E Outline2D /T cs_5_0 ./hlsl/RayProcessing.hlsl /Fo ./shader_compiled_objs/SliceOutline_cs_5_0 /D PATHTR_USE_KBUF=1 /D FRAG_MERGING=1 /D DO_NOT_USE_DISCARD=1 /D USE_ROV=0 /D TAIL_HANDLING=1
 
 fxc /E GS_PickingPoint /T gs_4_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs_4_0/GS_PickingBasic_gs_4_0 
 fxc /E GS_MeshCutLines /T gs_4_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs_4_0/GS_MeshCutLines_gs_4_0 

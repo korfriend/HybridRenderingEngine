@@ -17,7 +17,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	
 #pragma region // Parameter Setting //
 	VmIObject* iobj = _fncontainer->fnParams.GetParam("_VmIObject*_RenderOut", (VmIObject*)NULL);
-	int k_value_old = iobj->GetObjParam("_int_NumK", (int)8);
+	int k_value_old = iobj->GetObjParam("_int_NumK", (int)1);
 	int k_value = _fncontainer->fnParams.GetParam("_int_NumK", k_value_old);
 	iobj->SetObjParam("_int_NumK", k_value);
 
@@ -256,7 +256,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 
 	GpuRes gres_fb_k_buffer, gres_fb_counter;
 	grd_helper::UpdateFrameBuffer(gres_fb_counter, iobj, "RW_COUNTER", RTYPE_TEXTURE2D, D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
-	const int num_frags_perpixel = k_value * 4;
+	const int num_frags_perpixel = k_value * 3;
 	grd_helper::UpdateFrameBuffer(gres_fb_k_buffer, iobj, "BUFFER_RW_K_BUF", RTYPE_BUFFER, D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, num_frags_perpixel);
 #endif
 #pragma endregion 

@@ -768,6 +768,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
 #elif __RENDERING_MODE == 3
     TextMapping(v_rgba, z_depth, input.f3Custom.xy, g_cbPobj.pobj_flag & (0x1 << 9), g_cbPobj.pobj_flag & (0x1 << 10));
     if (v_rgba.a <= 0.01) clip(-1);
+    //v_rgba.a = 1;
 #elif __RENDERING_MODE == 4
     if (g_cbPobj.tex_map_enum == 1)
     {
@@ -929,6 +930,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
                 v_rgba.rgba *= mask_weight;
             if (v_rgba.a <= 0.01) clip(-1);
         }
+        //v_rgba = float4(1, 1, 0, 1);
     }
 #endif
 

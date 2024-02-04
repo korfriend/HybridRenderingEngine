@@ -1802,7 +1802,9 @@ namespace fncontainer
 	struct VmLight {
 		vmfloat3 pos = vmfloat3(0), dir = vmfloat3(0, 0, -1), up = vmfloat3(0, 1, 0); // Local coordinates
 		bool is_pointlight = false; // 'true' uses pos_light, 'false' uses dir_light
-		bool is_on_camera = true; // 'true' sets cam params to light source. in this case, it is unnecessary to set pos, dir, and up (ignore these)
+		bool is_on_camera = true; // 'true' sets cam params to light source. in this case, it is unnecessary to set pos, dir, and up (ignore these)		
+		ullong timeStamp = 0ull; // will be automatically set 
+
 		//vmfloat3 ambient_color = vmfloat3(1.f);
 		//vmfloat3 diffuse_color = vmfloat3(1.f);
 		//vmfloat3 specular_color = vmfloat3(1.f);

@@ -10,7 +10,7 @@
 RWTexture2D<uint> fragment_counter : register(u0);
 Buffer<float> g_bufHotSpotMask : register(t50);
 
-RWByteAddressBuffer deep_k_buf : register(u1);
+RWByteAddressBuffer deep_dynK_buf : register(u1);
 RWTexture2D<unorm float4> fragment_blendout : register(u2);
 RWTexture2D<float> fragment_zdepth : register(u3);
 #if DYNAMIC_K_MODE == 1

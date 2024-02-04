@@ -397,17 +397,20 @@
 
 #define BitCheck(BITS, IDX) (BITS & (0x1 << IDX))
 
-#define LOAD4_KBUF(V, F_ADDR, K) V = deep_k_buf.Load4(F_ADDR + (K) * 4 * 4)
-#define STORE4_KBUF(V, F_ADDR, K) deep_k_buf.Store4(F_ADDR + (K) * 4 * 4, V)
+#define LOAD4_KBUF(V, F_ADDR, K) V = deep_dynK_buf.Load4(F_ADDR + (K) * 4 * 4)
+#define STORE4_KBUF(V, F_ADDR, K) deep_dynK_buf.Store4(F_ADDR + (K) * 4 * 4, V)
 
-#define LOAD2_KBUF(V, F_ADDR, K) V = deep_k_buf.Load2(F_ADDR + (K) * 2 * 4)
-#define STORE2_KBUF(V, F_ADDR, K) deep_k_buf.Store2(F_ADDR + (K) * 2 * 4, V)
+#define LOAD3_KBUF(V, F_ADDR, K) V = deep_dynK_buf.Load3(F_ADDR + (K) * 3 * 4)
+#define STORE3_KBUF(V, F_ADDR, K) deep_dynK_buf.Store3(F_ADDR + (K) * 3 * 4, V)
+
+#define LOAD2_KBUF(V, F_ADDR, K) V = deep_dynK_buf.Load2(F_ADDR + (K) * 2 * 4)
+#define STORE2_KBUF(V, F_ADDR, K) deep_dynK_buf.Store2(F_ADDR + (K) * 2 * 4, V)
 
 #if !defined(FRAG_MERGING) || FRAG_MERGING == 1
-#define NUM_ELES_PER_FRAG 4
-#define GET_FRAG(F, F_ADDR, K) {uint4 rb; LOAD4_KBUF(rb, F_ADDR, K); F.i_vis = rb.x; F.z = asfloat(rb.y); F.zthick = asfloat(rb.z); F.opacity_sum = asfloat(rb.w);}
-#define SET_FRAG(F_ADDR, K, F) {uint4 rb = uint4(F.i_vis, asuint(F.z), asuint(F.zthick), asuint(F.opacity_sum)); STORE4_KBUF(rb, F_ADDR, K);}
-#define SET_ZEROFRAG(F_ADDR, K) {STORE4_KBUF(0, F_ADDR, K);}
+#define NUM_ELES_PER_FRAG 3
+#define GET_FRAG(F, F_ADDR, K) {uint3 rb; LOAD3_KBUF(rb, F_ADDR, K); F.i_vis = rb.x; F.z = asfloat(rb.y); F.zthick = f16tof32(rb.z & 0xFFFF); F.opacity_sum = f16tof32(rb.z >> 16);}
+#define SET_FRAG(F_ADDR, K, F) {uint3 rb = uint3(F.i_vis, asuint(F.z), f32tof16(F.zthick)); rb.z |= (f32tof16(F.opacity_sum) << 16); STORE3_KBUF(rb, F_ADDR, K);}
+#define SET_ZEROFRAG(F_ADDR, K) {STORE3_KBUF(0, F_ADDR, K);}
 #else
 #define NUM_ELES_PER_FRAG 2
 #define GET_FRAG(F, F_ADDR, K) {uint2 rb; LOAD2_KBUF(rb, F_ADDR, K); F.i_vis = rb.x; F.z = asfloat(rb.y);}

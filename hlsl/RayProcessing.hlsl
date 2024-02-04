@@ -1548,7 +1548,7 @@ PS_FILL_OUTPUT UndercutShader(__VS_OUT input)
 }
 
 Buffer<uint> sr_offsettable_buf : register(t50);
-#define STORE1_RBB(V, ADDR) deep_k_buf.Store((ADDR) * 4, V)
+#define STORE1_RBB(V, ADDR) deep_dynK_buf.Store((ADDR) * 4, V)
 
 
 [earlydepthstencil]

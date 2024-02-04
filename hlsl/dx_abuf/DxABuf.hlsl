@@ -30,165 +30,33 @@ void OIT_A_BUFFER_FILL(__VS_OUT input)
 {
 	float4 v_rgba = (float4)0;
 	float z_depth = FLT_MAX;
+	int2 tex2d_xy = int2(input.f4PosSS.xy);
+
+	if (tex2d_xy.x + tex2d_xy.y == 0) clip(-1);
 
 	BasicShader(input, v_rgba, z_depth);
 
-	/*
-	POBJ_PRE_CONTEXT;
-
-	float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
-	float3 nor = (float3) 0;
-	float nor_len = 0;
-
-#if __RENDERING_MODE != 1 && __RENDERING_MODE != 2 && __RENDERING_MODE != 3
-	nor = input.f3VecNormalWS;
-	nor_len = length(nor);
-#endif
-
-#if __RENDERING_MODE == 1
-	DashedLine(v_rgba, z_depth, input.f3Custom.x, g_cbPobj.dash_interval, g_cbPobj.pobj_flag & (0x1 << 19), g_cbPobj.pobj_flag & (0x1 << 20));
-	if (v_rgba.a <= 0.01) clip(-1);
-#elif __RENDERING_MODE == 2
-	MultiTextMapping(v_rgba, z_depth, input.f3Custom0.xy, (int)(input.f3Custom0.z + 0.5f), input.f3Custom1, input.f3Custom2);
-	if (v_rgba.a <= 0.01) clip(-1);
-#elif __RENDERING_MODE == 3
-	TextMapping(v_rgba, z_depth, input.f3Custom.xy, g_cbPobj.pobj_flag & (0x1 << 9), g_cbPobj.pobj_flag & (0x1 << 10));
-	if (v_rgba.a <= 0.01) clip(-1);
-#elif __RENDERING_MODE == 4
-	if (g_cbPobj.tex_map_enum == 1)
-	{
-		float4 clr_map;
-		TextureImgMap(clr_map, input.f3Custom);
-		if (clr_map.a == 0)
-		{
-			//v_rgba = (float4) 0;
-			//z_depth = FLT_MAX;
-			clip(-1);
-		}
-		else
-		{
-			//float3 mat_shading = float3(g_cbEnv.ltint_ambient.w, g_cbEnv.ltint_diffuse.w, g_cbEnv.ltint_spec.w);
-			float3 Ka = clr_map.rgb * g_cbEnv.ltint_ambient.rgb * g_cbPobj.Ka;
-			float3 Kd = clr_map.rgb * g_cbEnv.ltint_diffuse.rgb * g_cbPobj.Kd;
-			float3 Ks = clr_map.rgb * g_cbEnv.ltint_spec.rgb * g_cbPobj.Ks;
-			float Ns = g_cbPobj.Ns * g_cbPobj.Ns;
-			ComputeColor(v_rgba.rgb, Ka, Kd, Ks, Ns, 1.0, input.f3PosWS, view_dir, nor, nor_len);
-			v_rgba.a *= clr_map.a;
-		}
-		//v_rgba = clr_map;// float4(input.f3Custom, 1);
-		//v_rgba.rgb = float3(1, 0, 0);
-	}
-	else
-	{
-		float3 Ka = g_cbPobj.Ka, Kd = g_cbPobj.Kd, Ks = g_cbPobj.Ks;
-		float Ns = g_cbPobj.Ns, d = 1.0, bump = 1.0;
-		TextureMaterialMap(Ka, Kd, Ks, Ns, bump, d, input.f3Custom, g_cbPobj.tex_map_enum);
-		if (Ns >= 0)
-		{
-			Ka *= g_cbEnv.ltint_ambient.rgb;
-			Kd *= g_cbEnv.ltint_diffuse.rgb;
-			Ks *= g_cbEnv.ltint_spec.rgb;
-			ComputeColor(v_rgba.rgb, Ka, Kd, Ks, Ns, bump, input.f3PosWS, view_dir, nor, nor_len);
-			//v_rgba.rgb = Ks;
-		}
-		else // illumination model 0
-			v_rgba.rgb = Kd;
-		if (d <= 0.01) clip(-1);
-		v_rgba.a *= d;
-	}
-#elif __RENDERING_MODE == 5
-	// note g_cbVolObj.mat_ws2ts represents SrcOS2DstTS
-	//float4x4 matSrcWS2DstTS = g_cbVobj.mat_ws2ts * g_cbPobj.mat_ws2os; // use mul instructor!! 	col major 
-	float3 posOS = TransformPoint(input.f3PosWS, g_cbPobj.mat_ws2os);
-	float3 posTS = TransformPoint(posOS, g_cbVobj.mat_ws2ts);
-	//float sample_v = g_tex3DVolume.SampleLevel(g_samplerLinear_clamp, posTS, 0).r;
-	//float3 tt = (posTS + (float3)1.0f) * 0.5f;
-	float sample_v = g_tex3DVolume.SampleLevel(g_samplerLinear_clamp, posTS, 0).r;
-	float4 colorMap = g_f4bufOTF[(int)(sample_v * g_cbTmap.tmap_size_x)];// g_cbTmap.tmap_size_x];
-	if (colorMap.a > 0)
-		v_rgba = colorMap;
-
-	if (nor_len > 0)
-	{
-		float3 Ka = v_rgba.rgb * g_cbPobj.Ka * 1.15, Kd = v_rgba.rgb * g_cbPobj.Kd * 1.15, Ks = v_rgba.rgb * g_cbPobj.Ks * 1.15;
-		Ka *= g_cbEnv.ltint_ambient.rgb;
-		Kd *= g_cbEnv.ltint_diffuse.rgb;
-		Ks *= g_cbEnv.ltint_spec.rgb;
-		float Ns = g_cbPobj.Ns;
-		ComputeColor(v_rgba.rgb, Ka, Kd, Ks, Ns, 1.0, input.f3PosWS, view_dir, nor, nor_len);
-	}
-#else
-	float3 Ka, Kd, Ks;
-	float Ns = g_cbPobj.Ns;
-	if ((g_cbPobj.pobj_flag & (0x1 << 3)) == 0)
-	{
-		Ka = input.f3Custom;
-		Kd = input.f3Custom;
-		Ks = input.f3Custom;
-	}
-	else
-	{
-		Ka = g_cbPobj.Ka, Kd = g_cbPobj.Kd, Ks = g_cbPobj.Ks;
-	}
-	if (nor_len > 0)
-	{
-		Ka *= g_cbEnv.ltint_ambient.rgb;
-		Kd *= g_cbEnv.ltint_diffuse.rgb;
-		Ks *= g_cbEnv.ltint_spec.rgb;
-		ComputeColor(v_rgba.rgb, Ka, Kd, Ks, Ns, 1.0, input.f3PosWS, view_dir, nor, nor_len);
-	}
-	else
-		v_rgba.rgb = Kd;
-
-#endif
-
-	// make it as an associated color.
-	// as a color component is stored into 8 bit channel, the alpha-multiplied precision must be determined in this stage.
-	// unless, noise dots appear.
-	v_rgba.rgb *= v_rgba.a;
-
-	int2 tex2d_xy = int2(input.f4PosSS.xy);
-	// dynamic opacity modulation
-	bool is_dynamic_transparency = BitCheck(g_cbPobj.pobj_flag, 22);
-	bool is_mask_transparency = BitCheck(g_cbPobj.pobj_flag, 23);
-	if (is_dynamic_transparency || is_mask_transparency)
-	{
-		float mask_weight = 1, dynamic_alpha_weight = 1;
-		int out_lined = GhostedEffect(mask_weight, dynamic_alpha_weight, input.f3PosWS, view_dir, nor, nor_len, is_dynamic_transparency);
-		if (out_lined > 0)
-			v_rgba = float4(1, 1, 0, 1);
-		else
-		{
-			if (is_dynamic_transparency)
-				v_rgba.rgba *= dynamic_alpha_weight;
-			if (is_mask_transparency)
-				v_rgba.rgba *= mask_weight;
-			if (v_rgba.a <= 0.01) clip(-1);
-		}
-	}
-	*/
 	// Atomically allocate space in the deep buffer
-	int2 tex2d_xy = int2(input.f4PosSS.xy);
 	uint fc = 0;
 	InterlockedAdd(fragment_counter[tex2d_xy], 1, fc);
 
 	uint offsettable_idx = tex2d_xy.y * g_cbCamState.rt_width + tex2d_xy.x;
-	uint nDeepBufferPos = 0;
+	uint addrBase = 0;
 #if DX_11_STYLE == 1
 	if (offsettable_idx == 0)
-		nDeepBufferPos = fc;
+		addrBase = fc;
 	else
-		nDeepBufferPos = sr_offsettable_buf[offsettable_idx - 1] + fc;
+		addrBase = sr_offsettable_buf[offsettable_idx - 1] + fc;
 #else
 	if (offsettable_idx == 0) clip(-1);
-	else nDeepBufferPos = sr_offsettable_buf[offsettable_idx] + fc;
+	else addrBase = sr_offsettable_buf[offsettable_idx] + fc;
 #endif
 
 	// Store fragment data into the allocated space
-	//deep_ubk_buf[2 * nDeepBufferPos + 0] = ConvertFloat4ToUInt(v_rgba);
-	//deep_ubk_buf[2 * nDeepBufferPos + 1] = asuint(z_depth);
-	STORE1_RBB(ConvertFloat4ToUInt(v_rgba), 2 * nDeepBufferPos + 0);
-	STORE1_RBB(asuint(z_depth), 2 * nDeepBufferPos + 1);
+	//deep_ubk_buf[2 * addrBase + 0] = ConvertFloat4ToUInt(v_rgba);
+	//deep_ubk_buf[2 * addrBase + 1] = asuint(z_depth);
+	STORE1_RBB(ConvertFloat4ToUInt(v_rgba), 2 * addrBase + 0);
+	STORE1_RBB(asuint(z_depth), 2 * addrBase + 1);
 }
 
 [earlydepthstencil]

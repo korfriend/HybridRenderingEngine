@@ -20,7 +20,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	
 #pragma region // Parameter Setting //
 	VmIObject* iobj = _fncontainer->fnParams.GetParam("_VmIObject*_RenderOut", (VmIObject*)NULL);
-	int k_value_old = iobj->GetObjParam("_int_NumK", (int)8);
+	bool isSlicer = _fncontainer->fnParams.GetParam("_bool_IsSlicer", false);
+	int k_value_old = iobj->GetObjParam("_int_NumK", isSlicer? (int)1 : (int)8);
 	int k_value = _fncontainer->fnParams.GetParam("_int_NumK", k_value_old);
 	iobj->SetObjParam("_int_NumK", k_value);
 
@@ -48,7 +49,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	};
 
 	bool apply_fragmerge = _fncontainer->fnParams.GetParam("_bool_ApplyFragMerge", true);
-	MFR_MODE mode_OIT = (MFR_MODE)_fncontainer->fnParams.GetParam("_int_OitMode", (int)1); // 1
+	MFR_MODE mode_OIT = (MFR_MODE)_fncontainer->fnParams.GetParam("_int_OitMode", (int)MFR_MODE::DYNAMIC_FB); // 1
 	mode_OIT = (MFR_MODE)min((int)mode_OIT, (int)MFR_MODE::MOMENT);
 #ifdef DX10_0
 	mode_OIT = MFR_MODE::NONE;
@@ -348,7 +349,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	GpuRes gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex;
 	GpuRes gres_fb_ref_pidx;
 
-	const int num_frags_perpixel = k_value * 4 * buffer_ex;
+	const int num_frags_perpixel = k_value * 3 * buffer_ex;
 	grd_helper::UpdateFrameBuffer(gres_fb_k_buffer, iobj, "BUFFER_RW_K_BUF", RTYPE_BUFFER,
 		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, num_frags_perpixel);
 
@@ -1010,8 +1011,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		};
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs, (UINT*)(&dx11UAVs));
 
-		if ((mode_OIT == MFR_MODE::DYNAMIC_FB && !apply_fragmerge) || mode_OIT == MFR_MODE::DYNAMIC_KB) // filling
-			SET_SHADER_RES(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]); // search why this does not work
+		SET_SHADER_RES(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]); // search why this does not work
 #endif
 
 		if(ray_cast_type != __RM_RAYMIN

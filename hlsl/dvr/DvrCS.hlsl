@@ -35,7 +35,7 @@ struct PS_FILL_OUTPUT_SURF
 };
 #else
 RWTexture2D<uint> fragment_counter : register(u0);
-RWByteAddressBuffer deep_k_buf : register(u1);
+RWByteAddressBuffer deep_dynK_buf : register(u1);
 RWTexture2D<unorm float4> fragment_vis : register(u2);
 RWTexture2D<float> fragment_zdepth : register(u3);
 RWTexture2D<float> vr_fragment_1sthit_write : register(u4);
@@ -91,12 +91,9 @@ float4 VrOutlineTest(const in int2 tex2d_xy, inout float depth_c, const in float
 	return vout;
 }
 
-#if DYNAMIC_K_MODE == 1
 Buffer<uint> sr_offsettable_buf : register(t50);// gres_fb_ref_pidx
-#define VR_MAX_LAYERS 400 
-#else
+
 #define VR_MAX_LAYERS 9 // SKBTZ, +1 for DVR 
-#endif
 
 #if MBT == 1
 #include "MomentMath.hlsli"
@@ -400,57 +397,6 @@ float PhongBlinnVr(const float3 cam_view, const in float4 shading_factors, const
 	return shading_factors.x + shading_factors.y * diff + shading_factors.z * reft;
 }
 
-#define __InsertLayerToSortedDeepLayers(vis_out, depth_out,	f_in, fs, addr_base, num_frags, k_value, merging_beta) {			 \
-	int inser_idx = 0;																											 \
-	[loop]																														 \
-	for (int i = 0; i <= num_frags; i++)																						 \
-	{																															 \
-		if (fs[i].z > f_in.z)																									 \
-		{																														 \
-			inser_idx = i;																										 \
-			break;																												 \
-		}																														 \
-	}																															 \
-																																 \
-	int offset = 0;																												 \
-	[loop]																														 \
-	for (i = num_frags - 1; i >= inser_idx; i--, offset++)																		 \
-	{																															 \
-		fs[num_frags - offset] = fs[i];																							 \
-	}																															 \
-	fs[inser_idx] = f_in;																										 \
-	/*merge self-overlapping surfaces to thickness surfaces*/																	 \
-	float4 blendout = (float4) 0;																								 \
-	int num_frags_new = num_frags + 1;																							 \
-	int cnt_sorted_ztsurf = 0;																									 \
-	[loop]																														 \
-	for (i = 0; i < num_frags_new; i++)																							 \
-	{																															 \
-		Fragment f_ith = fs[i];																									 \
-		if (f_ith.i_vis > 0)																									 \
-		{																														 \
-			for (int j = i + 1; j < num_frags_new; j++)																			 \
-			{																													 \
-				Fragment f_next = fs[j];																						 \
-				if (f_next.i_vis > 0)																							 \
-				{																												 \
-					Fragment_OUT fs_out = MergeFrags(f_ith, f_next, merging_beta);												 \
-					f_ith = fs_out.f_prior;																						 \
-					fs[j] = fs_out.f_posterior;																					 \
-				}																												 \
-			}																													 \
-			if ((f_ith.i_vis >> 24) > 0) /*always.. (just for safe-check)*/														 \
-			{																													 \
-				fs[cnt_sorted_ztsurf] = f_ith;																					 \
-				cnt_sorted_ztsurf++;																							 \
-				blendout += ConvertUIntToFloat4(f_ith.i_vis) * (1.f - blendout.a);												 \
-			}																													 \
-		} /*if (rs_ith.zthick >= FLT_MIN__)*/																					 \
-	}																															 \
-	vis_out = blendout;																											 \
-	depth_out = fs[0].z;																										 \
-}
-
 #if DX10_0 == 1
 #define __EXIT_VR_RayCasting return output
 [earlydepthstencil]
@@ -503,22 +449,19 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
     if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
         return;
 
-	const uint k_value = g_cbCamState.k_value;
-	uint bytes_per_frag = 4 * NUM_ELES_PER_FRAG;
-	uint pixel_id = tex2d_xy.y * g_cbCamState.rt_width + tex2d_xy.x;
-#if DYNAMIC_K_MODE == 1
-	if (pixel_id == 0) return;
-	uint pixel_offset = sr_offsettable_buf[pixel_id];
-	uint addr_base = pixel_offset * bytes_per_frag;
-#else
-	uint bytes_frags_per_pixel = k_value * bytes_per_frag;
-	uint addr_base = pixel_id * bytes_frags_per_pixel;
-#endif
+    // consider the deep-layers are sored in order
+	Fragment fs[VR_MAX_LAYERS];
+
+	float aos[AO_MAX_LAYERS] = {0, 0, 0, 0, 0, 0, 0, 0};
+	float ao_vr = 0;
+	if (g_cbEnv.r_kernel_ao > 0)
+	{
+		for (int k = 0; k < AO_MAX_LAYERS; k++) aos[k] = ao_textures[int3(DTid.xy, k)];
+		ao_vr = ao_vr_texture[DTid.xy];
+	}
 
 	uint num_frags = fragment_counter[DTid.xy];
-
 	uint vr_hit_enc = num_frags >> 24;
-	num_frags = num_frags & 0xFFF;
 
 	bool isDither = BitCheck(g_cbCamState.cam_flag, 8);
 	if (isDither) {
@@ -531,21 +474,23 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 				return;
 			}
 		}
-
 		//fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
 		//return;
 	}
 
-    // consider the deep-layers are sored in order
-	Fragment fs[VR_MAX_LAYERS];
+	num_frags = num_frags & 0xFFF;
 
-	float aos[AO_MAX_LAYERS] = {0, 0, 0, 0, 0, 0, 0, 0};
-	float ao_vr = 0;
-	if (g_cbEnv.r_kernel_ao > 0)
-	{
-		for (int k = 0; k < AO_MAX_LAYERS; k++) aos[k] = ao_textures[int3(DTid.xy, k)];
-		ao_vr = ao_vr_texture[DTid.xy];
-	}
+	uint pixel_id = tex2d_xy.y * g_cbCamState.rt_width + tex2d_xy.x;
+	//uint nThreadNum = nDTid.y * g_cbCamState.rt_width + nDTid.x; // pixel_id
+//#if DYNAMIC_K_MODE == 1
+//	if (pixel_id == 0) return;
+//	uint pixel_offset = sr_offsettable_buf[pixel_id];
+//	uint addr_base = pixel_offset * 4 * 2;
+//#else
+	if (pixel_id == 0) return;
+	uint pixel_offset = sr_offsettable_buf[pixel_id];
+	uint addr_base = pixel_offset * 4 * 2;
+//#endif
 
 	[loop]
     for (int i = 0; i < (int)num_frags; i++)
@@ -554,11 +499,11 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		Fragment f;
 		GET_FRAG(f, addr_base, i); // from K-buffer
         float4 vis_in = ConvertUIntToFloat4(f.i_vis);
-		if (g_cbEnv.r_kernel_ao > 0)
-		{
-			vis_in.rgb *= 1.f - aos[i];
-			f.i_vis = ConvertFloat4ToUInt(vis_in);
-		}
+		//if (g_cbEnv.r_kernel_ao > 0)
+		//{
+		//	vis_in.rgb *= 1.f - aos[i];
+		//	f.i_vis = ConvertFloat4ToUInt(vis_in);
+		//}
         if (vis_in.a > 0)
         {
             vis_out += vis_in * (1.f - vis_out.a);
@@ -567,11 +512,12 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
     }
 
 	//fragment_vis[tex2d_xy] = float4(1, 1, 0, 1);
-	//if(num_frags > 0)
-	//	//fragment_vis[tex2d_xy] = ConvertUIntToFloat4(fs[0].i_vis);
-	//	fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
+	if(num_frags > 0)
+		fragment_vis[tex2d_xy] = ConvertUIntToFloat4(fs[0].i_vis);
+		//fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
 	//return;
 
+	//fragment_vis[DTid.xy] = float4(1, 0, 0, 1);
 	//return;
 	//if (num_frags == 0)
 	//	fragment_vis[tex2d_xy] = float4(0, 0, 0, 1);

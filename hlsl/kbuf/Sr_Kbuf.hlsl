@@ -93,7 +93,7 @@ Buffer<uint> sr_offsettable_buf : register(t50);// gres_fb_ref_pidx
 #endif
 TEX2D_COUNTER<uint> fragment_counter : register(u2);
 //RWTexture2D<uint> fragment_counter_test : register(u10); // for experiments
-RWByteAddressBuffer deep_k_buf : register(u4);
+RWByteAddressBuffer deep_dynK_buf : register(u4);
 
 void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4 v_rgba, const in float z_depth, const in float z_thickness)
 {
@@ -160,7 +160,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 	{
 		GET_FRAG(frag_tail, addr_base, k_value - 1);
 #if FRAG_MERGING == 0 && TAIL_HANDLING == 1
-		tail_opacity_sum = asfloat(deep_k_buf.Load(addr_tail));
+		tail_opacity_sum = asfloat(deep_dynK_buf.Load(addr_tail));
 #endif
 	}
 	else
@@ -329,7 +329,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 
 #if FRAG_MERGING == 0 && TAIL_HANDLING == 1
 		if (store_index == (int)k_value - 1)
-			deep_k_buf.Store(addr_tail, asuint(tail_opacity_sum));
+			deep_dynK_buf.Store(addr_tail, asuint(tail_opacity_sum));
 #endif
 	}
 
@@ -337,7 +337,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 	{
 		SET_FRAG(addr_base, k_value - 1, frag_tail);
 #if FRAG_MERGING == 0 && TAIL_HANDLING == 1
-		deep_k_buf.Store(addr_tail, asuint(tail_opacity_sum));
+		deep_dynK_buf.Store(addr_tail, asuint(tail_opacity_sum));
 #endif
 	}
 
@@ -351,13 +351,13 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 
 #if PATHTR_USE_KBUF == 1
 RWTexture2D<uint> fragment_counter : register(u0);
-RWByteAddressBuffer deep_k_buf : register(u1);
+RWByteAddressBuffer deep_dynK_buf : register(u1);
 #else
 RWTexture2D<uint> fragment_counter : register(u2);
-RWByteAddressBuffer deep_k_buf : register(u4);
+RWByteAddressBuffer deep_dynK_buf : register(u4);
 #endif
 RWTexture2D<uint> fragment_spinlock : register(u3);
-//RWBuffer<uint> deep_k_buf : register(u4);
+//RWBuffer<uint> deep_dynK_buf : register(u4);
 
 void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4 v_rgba, const in float z_depth, const in float z_thickness)
 {
@@ -396,7 +396,7 @@ void Fill_kBuffer(const in int2 tex2d_xy, const in uint k_value, const in float4
 #endif
 
 #if STRICT_LOCKED == 1
-#define __IES(_ADDR, I, V) deep_k_buf.InterlockedExchange(_ADDR + I * 4, V, __dummy)
+#define __IES(_ADDR, I, V) deep_dynK_buf.InterlockedExchange(_ADDR + I * 4, V, __dummy)
 #if FRAG_MERGING == 1
 #define __SET_ZEROFRAG(ADDR, K) {__IES(ADDR + (K) * NUM_ELES_PER_FRAG * 4, 0, 0); \
 __IES(ADDR + (K) * NUM_ELES_PER_FRAG * 4, 1, 0); \
@@ -429,7 +429,7 @@ __IES(ADDR + (K) * NUM_ELES_PER_FRAG * 4, 1, asuint(F.z)); }
 #define __ADD_COUNT(CNT) { fragment_counter[tex2d_xy] = CNT + 1; }
 
 #if TAIL_HANDLING == 1
-#define __SET_TAIL(OPA_SUM) deep_k_buf.Store(addr_tail, asuint(OPA_SUM))
+#define __SET_TAIL(OPA_SUM) deep_dynK_buf.Store(addr_tail, asuint(OPA_SUM))
 #endif
 #endif
 #if PIXEL_SYNCH == 1
@@ -470,7 +470,7 @@ __IES(ADDR + (K) * NUM_ELES_PER_FRAG * 4, 1, asuint(F.z)); }
 				{
 					GET_FRAG(frag_tail, addr_base, k_value - 1);
 #if FRAG_MERGING == 0 && TAIL_HANDLING == 1
-					tail_opacity_sum = asfloat(deep_k_buf.Load(addr_tail));
+					tail_opacity_sum = asfloat(deep_dynK_buf.Load(addr_tail));
 #endif
 				}
 				else

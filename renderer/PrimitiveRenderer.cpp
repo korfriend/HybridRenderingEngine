@@ -1181,7 +1181,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #else
 	const uint rtbind = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 	GpuRes gres_fb_counter, gres_fb_spinlock;
-	GpuRes gres_fb_k_buffer, gres_fb_ubk_buffer;
+	GpuRes gres_fb_dynK_buffer, gres_fb_moment_buffer;
 	//GpuRes gres_fb_mip_a_halftexs[2], gres_fb_mip_z_halftexs[2]; // deprecated
 	GpuRes gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex;
 	GpuRes gres_fb_ref_pidx;
@@ -1230,15 +1230,15 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		grd_helper::UpdateFrameBuffer(gres_fb_spinlock, iobj, "RW_SPINLOCK", RTYPE_TEXTURE2D,
 			D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
 
-	if (mode_OIT == MFR_MODE::MOMENT)
+	if (mode_OIT == MFR_MODE::MOMENT) {
 		grd_helper::UpdateFrameBuffer(gres_fb_moment_rgba, iobj, "RENDER_MOMENT_RGBA", RTYPE_TEXTURE2D,
 			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32G32B32A32_FLOAT, 0);
-
-	const int num_frags_perpixel = k_value * 4 * buffer_ex;
-	grd_helper::UpdateFrameBuffer(gres_fb_k_buffer, iobj, "BUFFER_RW_K_BUF", RTYPE_BUFFER,
+		grd_helper::UpdateFrameBuffer(gres_fb_moment_buffer, iobj, "BUFFER_RW_UBK_BUF", RTYPE_BUFFER, // here, ubk refers to UnBounded-K
+			D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, k_value * 2 * 8);
+	}
+	const int num_frags_perpixel = k_value * 3 * buffer_ex;
+	grd_helper::UpdateFrameBuffer(gres_fb_dynK_buffer, iobj, "BUFFER_RW_K_BUF", RTYPE_BUFFER,
 		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, num_frags_perpixel);
-	grd_helper::UpdateFrameBuffer(gres_fb_ubk_buffer, iobj, "BUFFER_RW_UBK_BUF", RTYPE_BUFFER, // here, ubk refers to UnBounded-K
-		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, k_value * 2 * 8);
 
 	// SSAO
 	{
@@ -1388,7 +1388,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	}
 
 
-	CB_EnvState cbEnvState;
+	CB_EnvState cbEnvState = {};
 	grd_helper::SetCb_Env(cbEnvState, cam_obj, light_src, global_lighting, lens_effect);
 	cbEnvState.num_safe_loopexit = num_safe_loopexit;
 	cbEnvState.env_dummy_2 = i_test_shader;
@@ -2498,7 +2498,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			ID3D11UnorderedAccessView* dx11UAVs_1st_pass[NUM_UAVs_1ST] = {
 					(ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV]
 					, use_spinlock_pixsynch ? (ID3D11UnorderedAccessView*)gres_fb_spinlock.alloc_res_ptrs[DTYPE_UAV] : NULL
-					, mode_OIT == MFR_MODE::DYNAMIC_FB ? (ID3D11UnorderedAccessView*)gres_fb_ubk_buffer.alloc_res_ptrs[DTYPE_UAV] : (ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]
+					, (ID3D11UnorderedAccessView*)gres_fb_dynK_buffer.alloc_res_ptrs[DTYPE_UAV]
 					, is_picking_routine ? (ID3D11UnorderedAccessView*)gres_picking_buffer.alloc_res_ptrs[DTYPE_UAV] : NULL
 			};
 
@@ -2510,7 +2510,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				}
 				else // if (!is_MOMENT_gen_buffer), which means the main geometry pass
 				{
-					dx11DeviceImmContext->PSSetShaderResources(20, 1, (ID3D11ShaderResourceView**)&gres_fb_k_buffer.alloc_res_ptrs[DTYPE_SRV]);
+					dx11DeviceImmContext->PSSetShaderResources(20, 1, (ID3D11ShaderResourceView**)&gres_fb_dynK_buffer.alloc_res_ptrs[DTYPE_SRV]);
 
 					// to do //
 					switch (render_pass)
@@ -2605,7 +2605,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
 
 			dx11DeviceImmContext->PSSetShaderResources(50, 1, dx11SRVs_NULL); // note that t50 is assigned for offsettable used in DKB and DFB 
-			dx11DeviceImmContext->PSSetShaderResources(0, 4, dx11SRVs_NULL); // note that t50 is assigned for offsettable used in DKB and DFB 
+			dx11DeviceImmContext->PSSetShaderResources(0, 20, dx11SRVs_NULL); // note that t50 is assigned for offsettable used in DKB and DFB 
 #pragma endregion // GEO RENDERING PASS
 
 			if (render_pass == RENDER_GEOPASS::PASS_SILHOUETTE && !is_group_silhouette) {
@@ -3444,7 +3444,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 							(ID3D11RenderTargetView*)gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_RTV],
 							(ID3D11RenderTargetView*)gres_fb_singlelayer_depthcs.alloc_res_ptrs[DTYPE_RTV] };
 
-						dx11DeviceImmContext->PSSetShaderResources(20, 1, (ID3D11ShaderResourceView**)&gres_fb_k_buffer.alloc_res_ptrs[DTYPE_SRV]);
+						dx11DeviceImmContext->PSSetShaderResources(20, 1, (ID3D11ShaderResourceView**)&gres_fb_dynK_buffer.alloc_res_ptrs[DTYPE_SRV]);
 						dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(ALWAYS), 0);
 						dx11DeviceImmContext->OMSetBlendState(dx11CommonParams->get_blender("ADD"), NULL, 0xffffffff);
 						dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVs, dx11DSV, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
@@ -3467,6 +3467,19 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		}
 #endif
 
+		bool additionalKLayerForMFB = foremost_opaque_surfaces_routine_objs.size() > 0
+			|| single_layer_routine_objs.size() > 0
+			|| particle_layer_objs.size() > 0;
+
+		cbCamState.cam_flag |= ((int)additionalKLayerForMFB << 8);
+		int storeKBuf = (int)(!is_final_renderer || check_pixel_transmittance
+			|| cbEnvState.r_kernel_ao > 0
+			|| (cbEnvState.dof_lens_r > 0 && cam_obj->IsPerspective()));
+		// which means the k-buffer will be used for the following renderer
+		// stores the fragments into the k-buffer and do not store the rendering result into RT
+		cbCamState.cam_flag |= (storeKBuf << 3);
+		SetCamConstBuf(cbCamState);
+
 		if (general_oit_routine_objs.size() > 0) {
 #ifdef DX10_0
 			assert(0);
@@ -3482,30 +3495,39 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
 
 				if (mode_OIT == MFR_MODE::DYNAMIC_FB) {
+
 					dx11CommonParams->GpuProfile("Offset Table Generation");
 #pragma region table offset
-					ID3D11UnorderedAccessView* dx11UAVs_2nd_pass[NUM_UAVs_2ND] = {
-							  (ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]
-							, (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
-							, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
-							, (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV]
-							, NULL // (ID3D11UnorderedAccessView*)gres_fb_ubk_buffer.alloc_res_ptrs[DTYPE_UAV]
-					};
+					//ID3D11UnorderedAccessView* dx11UAVs_offset_table_pass[5] = {
+					//		(ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV]
+					//		, NULL // (ID3D11UnorderedAccessView*)gres_fb_dynK_buffer.alloc_res_ptrs[DTYPE_UAV]
+					//		, NULL // (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
+					//		, NULL // (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
+					//		, (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV]
+					//};
 					UINT UAVInitialCounts = 0;
 					dx11DeviceImmContext->CSSetShader(GETCS(SR_OIT_ABUFFER_OffsetTable_cs_5_0), NULL, 0);
 
 					// for detailed description, refer to 
 					// "Memory-Efficient Order-Independent Transparency with Dynamic Fragment Buffer"
 					// here, we use more efficient implementation for constructing the index table by using 'atomic add' operation.
-					dx11DeviceImmContext->CSSetUnorderedAccessViews(1, NUM_UAVs_2ND, dx11UAVs_2nd_pass, (UINT*)(&dx11UAVs_2nd_pass));
-					dx11DeviceImmContext->CSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_SRV]);
-					//dx11DeviceImmContext->Flush();
+					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], &UAVInitialCounts);
+					dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 1, (ID3D11UnorderedAccessView**)&gres_fb_dynK_buffer.alloc_res_ptrs[DTYPE_UAV], &UAVInitialCounts);
+					dx11DeviceImmContext->CSSetUnorderedAccessViews(4, 1, (ID3D11UnorderedAccessView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV], &UAVInitialCounts);
+
+					dx11DeviceImmContext->CSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_SRV]);
+					dx11DeviceImmContext->CSSetShaderResources(2, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_depthcs.alloc_res_ptrs[DTYPE_SRV]);
+					dx11DeviceImmContext->CSSetShaderResources(3, 1, (ID3D11ShaderResourceView**)&gres_fb_rgba.alloc_res_ptrs[DTYPE_SRV]);
+					dx11DeviceImmContext->CSSetShaderResources(4, 1, (ID3D11ShaderResourceView**)&gres_fb_depthcs.alloc_res_ptrs[DTYPE_SRV]);
+					dx11DeviceImmContext->Flush();
 
 					dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
 					//dx11DeviceImmContext->Dispatch(fb_size_cur.x, fb_size_cur.y, 1);
+					dx11DeviceImmContext->Flush();
 
-					dx11DeviceImmContext->CSSetUnorderedAccessViews(1, NUM_UAVs_2ND, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-					dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
+					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 20, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+					dx11DeviceImmContext->CSSetShaderResources(0, 20, dx11SRVs_NULL);
+
 #pragma endregion table offset
 					dx11CommonParams->GpuProfile("Offset Table Generation", true);
 				}
@@ -3640,7 +3662,8 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					dx11CommonParams->GpuProfile("Offset Table Generation & K-Determination (Histogram-based)", true);
 				}
 				// used for the increment of the fragments (index)
-				dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
+				// gres_fb_counter is initialized in [SR_OIT_ABUFFER_OffsetTable_cs_5_0]
+				//dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 			}
 
 			dx11CommonParams->GpuProfile("Geometry for OIT");
@@ -3651,10 +3674,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 #endif
 		}
 
-
 #ifndef DX10_0
 		auto ResolvePass = [&dx11CommonParams, &dx11DeviceImmContext, &dx11RTVsNULL, &dx11DSVNULL, &dx11UAVs_NULL, &dx11SRVs_NULL,
-			&gres_fb_k_buffer, &gres_fb_counter, &gres_fb_rgba, &gres_fb_depthcs, &gres_fb_ubk_buffer, &gres_fb_ref_pidx,
+			&gres_fb_dynK_buffer, &gres_fb_counter, &gres_fb_rgba, &gres_fb_depthcs, &gres_fb_moment_buffer, &gres_fb_ref_pidx,
 			&gres_fb_singlelayer_rgba, &gres_fb_singlelayer_depthcs,
 			&num_grid_x, &num_grid_y]
 			(const MFR_MODE mode_OIT, const bool apply_fragmerge) {
@@ -3665,17 +3687,17 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			UINT UAVInitialCounts = 0;
 
 			ID3D11UnorderedAccessView* dx11UAVs_2nd_pass[NUM_UAVs_2ND] = {
-					(ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]
+					(ID3D11UnorderedAccessView*)gres_fb_dynK_buffer.alloc_res_ptrs[DTYPE_UAV]
 					, (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
 					, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
 					, NULL//mode_OIT == MFR_MODE::DXAB ? (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV] : NULL
-					, mode_OIT == MFR_MODE::DYNAMIC_FB ? (ID3D11UnorderedAccessView*)gres_fb_ubk_buffer.alloc_res_ptrs[DTYPE_UAV] : NULL
+					, NULL
 			};
 
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], 0); // trimming may occur 
 
-			dx11DeviceImmContext->CSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_SRV]);
-			dx11DeviceImmContext->CSSetShaderResources(2, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_depthcs.alloc_res_ptrs[DTYPE_SRV]);
+			//dx11DeviceImmContext->CSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_SRV]);
+			//dx11DeviceImmContext->CSSetShaderResources(2, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_depthcs.alloc_res_ptrs[DTYPE_SRV]);
 
 			switch (mode_OIT)
 			{
@@ -3707,19 +3729,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 			dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
 		};
 
-		bool additionalKLayerForMFB = foremost_opaque_surfaces_routine_objs.size() > 0 
-			|| single_layer_routine_objs.size() > 0 
-			|| particle_layer_objs.size() > 0;
-
-		cbCamState.cam_flag |= ((int)additionalKLayerForMFB << 8);
-		int storeKBuf = (int)(!is_final_renderer || check_pixel_transmittance
-			|| cbEnvState.r_kernel_ao > 0
-			|| (cbEnvState.dof_lens_r > 0 && cam_obj->IsPerspective()));
-		// which means the k-buffer will be used for the following renderer
-		// stores the fragments into the k-buffer and do not store the rendering result into RT
-		cbCamState.cam_flag |= (storeKBuf << 3);
-		SetCamConstBuf(cbCamState);
-
 		if (general_oit_routine_objs.size() + single_layer_routine_objs.size() > 0 || particle_layer_objs.size() > 0
 			|| storeKBuf) 
 		{
@@ -3742,7 +3751,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				dx11CommonParams->GpuProfile("SSAO");
 				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs_2ND, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 				ComputeSSAO(dx11DeviceImmContext, dx11CommonParams, iobj, num_grid_x, num_grid_y,
-					gres_fb_counter, gres_fb_k_buffer, gres_fb_rgba, blur_SSAO,
+					gres_fb_counter, gres_fb_dynK_buffer, gres_fb_rgba, blur_SSAO,
 					gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex, false, apply_fragmerge);
 				dx11CommonParams->GpuProfile("SSAO", true);
 			}
@@ -3750,7 +3759,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				dx11CommonParams->GpuProfile("SSDOF");
 				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs_2ND, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 				ComputeDOF(dx11DeviceImmContext, dx11CommonParams, iobj, num_grid_x, num_grid_y,
-					gres_fb_counter, gres_fb_k_buffer, gres_fb_rgba, cbEnvState.r_kernel_ao > 0, blur_SSAO, apply_fragmerge,
+					gres_fb_counter, gres_fb_dynK_buffer, gres_fb_rgba, cbEnvState.r_kernel_ao > 0, blur_SSAO, apply_fragmerge,
 					gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex,
 					cbCamState, cbuf_cam_state, __BLOCKSIZE, false);
 				dx11CommonParams->GpuProfile("SSDOF", true);
@@ -3836,7 +3845,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		cout << "interval : " << tr_interval << endl;
 
 		dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_fb_sys_deep_k.alloc_res_ptrs[DTYPE_RES],
-			(ID3D11Buffer*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_RES]);
+			(ID3D11Buffer*)gres_fb_dynK_buffer.alloc_res_ptrs[DTYPE_RES]);
 
 		string __METHODS[3] = { "SKB" , "DFB" , "MOMENT" };// , "DKBTZ", "DKBT"};
 		if (mode_OIT == MFR_MODE::MOMENT)
