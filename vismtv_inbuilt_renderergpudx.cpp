@@ -196,6 +196,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	bool is_final_render_out = false;
 	float planeThickness = _fncontainer.fnParams.GetParam("_float_PlaneThickness", -1.f);
 	bool is_picking_routine = _fncontainer.fnParams.GetParam("_bool_IsPickingRoutine", false);
+	bool is_first_renderer = _fncontainer.fnParams.GetParam("_bool_IsFirstRenderer", true);
 	bool is_last_renderer = _fncontainer.fnParams.GetParam("_bool_IsFinalRenderer", true);
 	g_vmCommonParams.gpu_profile = _fncontainer.fnParams.GetParam("_bool_GpuProfile", false);
 	map<string, vmint2>& profile_map = g_vmCommonParams.profile_map;
@@ -214,6 +215,14 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		strRendererSource = "VOLUME";
 	
 	bool is_vr = false;
+
+	if (is_first_renderer) 
+	{
+		g_vmCommonParams.dx11DeviceImmContext->Begin(g_vmCommonParams.dx11qr_disjoint);
+		//g_vmCommonParams.dx11DeviceImmContext->End(g_vmCommonParams.dx11qr_timestamps[0]);
+	}
+
+
 	if (strRendererSource == "VOLUME")
 	{
 		double dRuntime = 0;
@@ -247,6 +256,9 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		g_dRunTimeVRs += dRuntime;
 		if (is_last_renderer || planeThickness <= 0.f) is_final_render_out = true;
 	}
+
+
+
 
 	auto RenderOut = [&iobj, &is_last_renderer, &planeThickness, &_fncontainer, &is_vr]() {
 
@@ -589,6 +601,72 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 
 		bool isSkipSysFbBupdate = _fncontainer.fnParams.GetParam("_bool_SkipSysFBUpdate", false);
 		if (!isSkipSysFbBupdate) RenderOut();
+	}
+
+
+	if (is_last_renderer) 
+	{
+		//g_vmCommonParams.dx11DeviceImmContext->End(g_vmCommonParams.dx11qr_timestamps[1]);
+		g_vmCommonParams.dx11DeviceImmContext->End(g_vmCommonParams.dx11qr_disjoint);
+
+		// Wait for data to be available
+		static int testConsoleOut = 0;
+		testConsoleOut++;
+		int sleepCount = 0;
+
+		while (g_vmCommonParams.dx11DeviceImmContext->GetData(g_vmCommonParams.dx11qr_disjoint, NULL, 0, 0) == S_FALSE)
+		{
+			Sleep(1);       // Wait a bit, but give other threads a chance to run
+			//sleepCount++;
+		}
+
+		if (testConsoleOut % 100 == 0)
+		{
+			//vmlog::LogInfo("Sleep Count : " + std::to_string(sleepCount));
+
+
+			// Check whether timestamps were disjoint during the last frame
+			D3D10_QUERY_DATA_TIMESTAMP_DISJOINT tsDisjoint;
+			g_vmCommonParams.dx11DeviceImmContext->GetData(g_vmCommonParams.dx11qr_disjoint, &tsDisjoint, sizeof(tsDisjoint), 0);
+			if (!tsDisjoint.Disjoint)
+			{
+				/*
+				auto DisplayDuration = [&tsDisjoint](UINT64 tsS, UINT64 tsE, const string& _test)
+				{
+					if (tsS == 0 || tsE == 0) return;
+					cout << _test << " : " << float(tsE - tsS) / float(tsDisjoint.Frequency) * 1000.0f << " ms" << endl;
+					cout << _test << "ts : " << tsS << endl;
+					cout << _test << "te : " << tsE << endl;
+				};
+				UINT64 ts, te;
+
+				while (g_vmCommonParams.dx11DeviceImmContext->GetData(g_vmCommonParams.dx11qr_timestamps[0], &ts, sizeof(UINT64), 0) == S_FALSE)
+				{
+					Sleep(1);       // Wait a bit, but give other threads a chance to run
+					sleepCount++;
+				}
+
+				while (g_vmCommonParams.dx11DeviceImmContext->GetData(g_vmCommonParams.dx11qr_timestamps[1], &te, sizeof(UINT64), 0) == S_FALSE)
+				{
+					Sleep(1);       // Wait a bit, but give other threads a chance dx11qr_timestamps[0]to run
+					sleepCount++;
+				}
+
+				vmlog::LogInfo("Sleep Count2 : " + std::to_string(sleepCount));
+
+
+
+				//g_vmCommonParams.dx11DeviceImmContext->GetData(g_vmCommonParams.dx11qr_timestamps[0], &ts, sizeof(UINT64), 0);
+				//g_vmCommonParams.dx11DeviceImmContext->GetData(g_vmCommonParams.dx11qr_timestamps[1], &te, sizeof(UINT64), 0);
+
+				DisplayDuration(ts, te, "TIME : ");
+				/**/
+
+			}
+			else {
+				vmlog::LogErr("ERROR for QUERY-based SYNCH");
+			}
+		}
 	}
 
 	g_dProgress = 100;

@@ -2110,9 +2110,12 @@ void grd_helper::SetCb_Env(CB_EnvState& cb_env, VmCObject* ccobj, const LightSou
 	vmfloat3 pos_cam, dir_cam;
 	ccobj->GetCameraExtStatef(&pos_cam, &dir_cam, NULL);
 
-	if (light_src.is_on_camera) {
+	if (light_src.is_on_camera) 
+	{
 		cb_env.dir_light_ws = dir_cam;
 		cb_env.pos_light_ws = pos_cam;
+
+		//vmlog::LogInfo(std::to_string(dir_cam.x) + ", " + std::to_string(dir_cam.y) + ", " + std::to_string(dir_cam.z));
 	}
 	else {
 		cb_env.dir_light_ws = light_src.light_dir;

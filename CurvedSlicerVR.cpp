@@ -55,7 +55,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 
 	float planeThickness = _fncontainer->fnParams.GetParam("_float_PlaneThickness", -1.f);
 
-	VmLight* light = _fncontainer->fnParams.GetParam("_VmLight*_LightSource", (VmLight*)NULL);
+	VmLight* light = _fncontainer->fnParams.GetParamPtr<VmLight>("_VmLight_LightSource");
 	VmLens* lens = _fncontainer->fnParams.GetParam("_VmLens*_CamLens", (VmLens*)NULL);
 	LightSource light_src;
 	GlobalLighting global_lighting;

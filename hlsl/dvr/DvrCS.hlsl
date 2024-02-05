@@ -520,7 +520,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	//fragment_vis[DTid.xy] = float4(1, 0, 0, 1);
 	//return;
 	//if (num_frags == 0)
-	//	fragment_vis[tex2d_xy] = float4(0, 0, 0, 1);
+	//	fragment_vis[tex2d_xy] = float4(0, 0.3, 0.2, 1);
 	//if (num_frags == 1)
 	//	fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
 	//if (num_frags == 2)

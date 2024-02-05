@@ -675,7 +675,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 	int forcedMaterialColorMode = (int)_fncontainer->fnParams.GetParam("_int_ForcedMaterialColorMode", (int)0);
 
-	VmLight* light = _fncontainer->fnParams.GetParam("_VmLight*_LightSource", (VmLight*)NULL);
+	VmLight* light = _fncontainer->fnParams.GetParamPtr<VmLight>("_VmLight_LightSource");
 	VmLens* lens = _fncontainer->fnParams.GetParam("_VmLens*_CamLens", (VmLens*)NULL);
 	LightSource light_src;
 	GlobalLighting global_lighting;
@@ -1103,7 +1103,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		}
 #endif
 		/**/
-		dx11CommonParams->dx11DeviceImmContext->Flush();
 	}
 
 	ID3D11InputLayout* dx11LI_P = (ID3D11InputLayout*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "P"));
@@ -1501,11 +1500,12 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	vector<VmActor*> general_oit_routine_objs;
 	vector<VmActor*> single_layer_routine_group_objs; // e.g., individual silhouette 
 	vector<VmActor*> single_layer_routine_objs; // e.g. group silhouette
-#ifndef DX10_0
+	vector<VmActor*> foremost_opaque_surfaces_routine_objs; // for performance //
+
+	// do not support in DX10.0
 	vector<VmActor*> particle_layer_objs; // e.g., particle effect
 	vector<VmActor*> second_layer_objs;
-#endif
-	vector<VmActor*> foremost_opaque_surfaces_routine_objs; // for performance //
+
 	int minimum_oit_area = _fncontainer->fnParams.GetParam("_int_MinimumOitArea", (int)1000); // 0 means turn-off the wildcard case
 	int _w_max = 0;
 	int _h_max = 0;
@@ -3480,9 +3480,10 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 		cbCamState.cam_flag |= (storeKBuf << 3);
 		SetCamConstBuf(cbCamState);
 
-		if (general_oit_routine_objs.size() > 0) {
+		if (general_oit_routine_objs.size() > 0 || storeKBuf != 0) {  
 #ifdef DX10_0
-			assert(0);
+			if (general_oit_routine_objs.size() > 0)
+				assert(0);
 #else
 			// pre-pass : Counting fragments
 			if (mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB) {
@@ -3498,13 +3499,6 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 
 					dx11CommonParams->GpuProfile("Offset Table Generation");
 #pragma region table offset
-					//ID3D11UnorderedAccessView* dx11UAVs_offset_table_pass[5] = {
-					//		(ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV]
-					//		, NULL // (ID3D11UnorderedAccessView*)gres_fb_dynK_buffer.alloc_res_ptrs[DTYPE_UAV]
-					//		, NULL // (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
-					//		, NULL // (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
-					//		, (ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV]
-					//};
 					UINT UAVInitialCounts = 0;
 					dx11DeviceImmContext->CSSetShader(GETCS(SR_OIT_ABUFFER_OffsetTable_cs_5_0), NULL, 0);
 
@@ -3519,11 +3513,9 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 					dx11DeviceImmContext->CSSetShaderResources(2, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_depthcs.alloc_res_ptrs[DTYPE_SRV]);
 					dx11DeviceImmContext->CSSetShaderResources(3, 1, (ID3D11ShaderResourceView**)&gres_fb_rgba.alloc_res_ptrs[DTYPE_SRV]);
 					dx11DeviceImmContext->CSSetShaderResources(4, 1, (ID3D11ShaderResourceView**)&gres_fb_depthcs.alloc_res_ptrs[DTYPE_SRV]);
-					dx11DeviceImmContext->Flush();
 
 					dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
 					//dx11DeviceImmContext->Dispatch(fb_size_cur.x, fb_size_cur.y, 1);
-					dx11DeviceImmContext->Flush();
 
 					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 20, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 					dx11DeviceImmContext->CSSetShaderResources(0, 20, dx11SRVs_NULL);
@@ -3666,11 +3658,14 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 				//dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 			}
 
-			dx11CommonParams->GpuProfile("Geometry for OIT");
-			// buffer filling
-			RenderStage1(general_oit_routine_objs, mode_OIT, RENDER_GEOPASS::PASS_OIT
-				, false /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false, false, false);
-			dx11CommonParams->GpuProfile("Geometry for OIT", true);
+			//if (general_oit_routine_objs.size() > 0) 
+			{
+				dx11CommonParams->GpuProfile("Geometry for OIT");
+				// buffer filling
+				RenderStage1(general_oit_routine_objs, mode_OIT, RENDER_GEOPASS::PASS_OIT
+					, false /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false, false, false);
+				dx11CommonParams->GpuProfile("Geometry for OIT", true);
+			}
 #endif
 		}
 

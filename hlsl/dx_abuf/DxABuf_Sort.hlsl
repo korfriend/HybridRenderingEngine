@@ -77,7 +77,7 @@ void CreateOffsetTable_CS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThre
 	uint nThreadId = nDTid.y * g_cbCamState.rt_width + nDTid.x;
 	uint num_frags = fragment_counter[nDTid.xy];
 
-	bool additionalLayers = false;// BitCheck(g_cbCamState.cam_flag, 8);
+	bool additionalLayers = BitCheck(g_cbCamState.cam_flag, 8);
 	float4 additional_rgba0 = 0, additional_rgba1 = 0;
 	if (additionalLayers) {
 		additional_rgba0 = srv_fragment_blendout[nDTid.xy];
@@ -174,6 +174,7 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 		return;
 
 	uint N = (uint)fragment_counter[nDTid.xy];
+
 	//bool additionalLayers = BitCheck(g_cbCamState.cam_flag, 8);
 	if (N == 0)// && !additionalLayers)
 		return;
@@ -230,7 +231,6 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 	//return;
 
 	sort(N, fragments, FragmentVD);
-
 
 	//if (num_valid_fs == 0) fragment_blendout[nDTid.xy] = float4(0.3, 0.2, 0.1, 1);
 	//else if (num_valid_fs == 1) fragment_blendout[nDTid.xy] = float4(1, 0, 0, 1);

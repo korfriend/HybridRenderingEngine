@@ -274,6 +274,27 @@ namespace grd_helper
 			}
 		};
 
+		int GpuQueryProfile(const string& profile_name, const bool is_closed = false) {
+			int stamp_idx = 0;
+			auto it = profile_map.find(profile_name);
+			if (it == profile_map.end()) {
+				assert(is_closed == false);
+				int gpu_profilecount = (int)profile_map.size() * 2;
+				profile_map[profile_name] = vmint2(gpu_profilecount, -1);
+				stamp_idx = gpu_profilecount;
+			}
+			else {
+				//assert(it->second.y == -1 && is_closed == true);
+				it->second.y = it->second.x + 1;
+				stamp_idx = it->second.y;
+			}
+
+			dx11DeviceImmContext->End(dx11qr_timestamps[stamp_idx]);
+			//gpu_profilecount++;
+
+			return stamp_idx;
+		};
+
 		void Delete()
 		{
 			for (auto it = dx11_cres.begin(); it != dx11_cres.end(); it++)
