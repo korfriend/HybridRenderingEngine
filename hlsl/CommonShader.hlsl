@@ -37,16 +37,17 @@ struct HxCB_CameraState // Hlsl dX Contant Buffer
 
 	float cam_vz_thickness;
 	uint k_value;
-	// 0- bit : 0 : (orthogonal), 1 : (perspective)
-	// 1- bit : for RT to k-buffer : 0 (just RT), 1 : (after silhouette processing)
-	// 2- bit : for dynamic K value // deprecated... (this will be treated as a separate shader
-	// 3- bit : for storing the final fragments to the k buffer, which is used for sequentially coming renderer (e.g., DVR) : 0 (skipping), 1 (storing)
-	// 4- bit : only for DFB without (S)FM. stores all fragments into the framebuffer (using offset table)
-	// 5- bit : 0 : (normal rendering), 1 : picking mode
-	// 6- bit : 0 : (stores the final RGBA and depth to RT), 1 : (does not store them) // will be deprecated
-	// 7- bit : 0 : full raycaster, 1 : half raycaster for 4x faster volume rendering (dither)
-	// 8- bit : 0 : only OIT fragments, 1 : foremostopaque or singlelayer effect ...
-	// 9- bit : 0 : outlint mode (solid), 1 : outlint mode (gradient alpha)
+	// 0-  bit : 0 : (orthogonal), 1 : (perspective)
+	// 1-  bit : for RT to k-buffer : 0 (just RT), 1 : (after silhouette processing)
+	// 2-  bit : for dynamic K value // deprecated... (this will be treated as a separate shader
+	// 3-  bit : for storing the final fragments to the k buffer, which is used for sequentially coming renderer (e.g., DVR) : 0 (skipping), 1 (storing)
+	// 4-  bit : only for DFB without (S)FM. stores all fragments into the framebuffer (using offset table)
+	// 5-  bit : 0 : (normal rendering), 1 : picking mode
+	// 6-  bit : 0 : (stores the final RGBA and depth to RT), 1 : (does not store them) // will be deprecated
+	// 7-  bit : 0 : full raycaster, 1 : half raycaster for 4x faster volume rendering (dither)
+	// 8-  bit : 0 : only OIT fragments, 1 : foremostopaque or singlelayer effect ...
+	// 9-  bit : 0 : outlint mode (solid), 1 : outlint mode (gradient alpha)
+	// 10- bit : 0 : 3D camera, 1 : Slicer
 	uint cam_flag;
 	// used for 1) A-Buffer prefix computations /*deprecated*/ or 2) beta (asfloat) for merging operation
 	uint iSrCamDummy__0;

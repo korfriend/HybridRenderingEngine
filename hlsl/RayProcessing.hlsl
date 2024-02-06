@@ -1336,20 +1336,34 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		float4 v_rgba0 = v_rgba, v_rgba1 = v_rgba;
 
 		// DOJO TO consider...
-		// preserve thr original alpha (i.e., v_rgba.a) or not..????
+		// preserve the original alpha (i.e., v_rgba.a) or not..????
 		v_rgba0.a *= min((planeThickness - zdepth0 + zThickness) / planeThickness + 0.1f, 1.0f);
 		v_rgba0.a *= v_rgba0.a;
 		v_rgba0.rgb *= v_rgba0.a;
 		//v_rgba0.a = v_rgba.a;
 		float vz_thickness = GetVZThickness(zdepth0, g_cbPobj.vz_thickness);
-		Fill_kBuffer(ss_xy, g_cbCamState.k_value, v_rgba0, zdepth0, vz_thickness);
+
+		//Fragment f_;
+		//v_rgba = float4(1, 1, 0, 1);
+		//f_.i_vis = ConvertFloat4ToUInt(v_rgba1);
+		//f_.opacity_sum = v_rgba1.a;
+		//f_.zthick = zThickness;
+		//f_.z = zdepth1;
+
+		//k_value
+		Fill_kBuffer(ss_xy, 2, v_rgba0, zdepth0, vz_thickness);
+		//SET_FRAG(addr_base, 0, f_);
+		//fragment_counter[ss_xy] = 1;
+
 
 		v_rgba1.a *= min((planeThickness - zdepth1 + zThickness) / planeThickness + 0.1f, 1.0f);
 		v_rgba1.a *= v_rgba1.a;
 		v_rgba1.rgb *= v_rgba1.a;
 		//v_rgba1.a = v_rgba.a;
 		vz_thickness = GetVZThickness(zdepth1, g_cbPobj.vz_thickness);
-		Fill_kBuffer(ss_xy, g_cbCamState.k_value, v_rgba1, zdepth1, vz_thickness);
+
+		//k_value
+		Fill_kBuffer(ss_xy, 2, v_rgba1, zdepth1, vz_thickness);
 	}
 
 	return;

@@ -17,6 +17,9 @@ using namespace DirectX;
 #define VMSAFE_RELEASE(p) if(p) { (p)->Release(); (p)=NULL; }
 #define VMERRORMESSAGE(a) {vmlog::LogErr(a);}
 
+#define K_NUM_SLICER 2
+#define K_NUM_3D 8
+
 enum class GpuhelperResType {
 	VERTEX_SHADER = 0,
 	PIXEL_SHADER,

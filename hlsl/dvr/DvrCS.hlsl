@@ -487,9 +487,17 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 //	uint pixel_offset = sr_offsettable_buf[pixel_id];
 //	uint addr_base = pixel_offset * 4 * 2;
 //#else
-	if (pixel_id == 0) return;
-	uint pixel_offset = sr_offsettable_buf[pixel_id];
-	uint addr_base = pixel_offset * 4 * 2;
+
+	bool isSlicer = BitCheck(g_cbCamState.cam_flag, 10);
+	uint addr_base = 0;
+	if (isSlicer) {
+		addr_base = pixel_id * 3 * 4 * 2; // 3: elements, 4: bytes, 2: k
+	}
+	else {
+		if (pixel_id == 0) return;
+		uint pixel_offset = sr_offsettable_buf[pixel_id];
+		addr_base = pixel_offset * 4 * 2;
+	}
 //#endif
 
 	[loop]
