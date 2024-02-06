@@ -790,7 +790,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 #pragma region // Parameter Setting //
 	VmIObject* iobj = _fncontainer->fnParams.GetParam("_VmIObject*_RenderOut", (VmIObject*)NULL);
 
-	int k_value_old = iobj->GetObjParam("_int_NumK", (int)1);
+	int k_value_old = iobj->GetObjParam("_int_NumK", (int)K_NUM_SLICER);
 	int k_value = _fncontainer->fnParams.GetParam("_int_NumK", k_value_old);
 	iobj->SetObjParam("_int_NumK", k_value);
 

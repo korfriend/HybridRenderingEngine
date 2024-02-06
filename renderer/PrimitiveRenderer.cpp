@@ -587,7 +587,7 @@ bool RenderSrOIT(VmFnContainer* _fncontainer,
 	VmIObject* iobj = _fncontainer->fnParams.GetParam("_VmIObject*_RenderOut", (VmIObject*)NULL);
 	iobj->SetObjParam("NUM_SECOND_LAYER_OBJECTS", (int)0);
 
-	int k_value_old = iobj->GetObjParam("_int_NumK", (int)8);
+	int k_value_old = iobj->GetObjParam("_int_NumK", (int)K_NUM_3D);
 	int k_value = _fncontainer->fnParams.GetParam("_int_NumK", k_value_old);
 	iobj->SetObjParam("_int_NumK", k_value);
 

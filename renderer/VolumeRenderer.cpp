@@ -21,7 +21,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #pragma region // Parameter Setting //
 	VmIObject* iobj = _fncontainer->fnParams.GetParam("_VmIObject*_RenderOut", (VmIObject*)NULL);
 	bool isSlicer = _fncontainer->fnParams.GetParam("_bool_IsSlicer", false);
-	int k_value_old = iobj->GetObjParam("_int_NumK", isSlicer? (int)1 : (int)8);
+	int k_value_old = iobj->GetObjParam("_int_NumK", isSlicer? (int)K_NUM_SLICER : (int)K_NUM_3D);
 	int k_value = _fncontainer->fnParams.GetParam("_int_NumK", k_value_old);
 	iobj->SetObjParam("_int_NumK", k_value);
 
@@ -572,6 +572,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	cbCamState.iSrCamDummy__1 = oulineiRGB | outline_thickness << 24;
 	//cbCamState.iSrCamDummy__2 = *(uint*)&scale_z_res;
 	cbCamState.cam_flag |= ((int)outline_fadeEffect << 9); //
+	if (isSlicer) cbCamState.cam_flag |= 0x1 << 10;
 	
 	D3D11_MAPPED_SUBRESOURCE mappedResCamState;
 	dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);

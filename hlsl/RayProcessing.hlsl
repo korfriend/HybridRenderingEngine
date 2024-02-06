@@ -909,16 +909,16 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	//float3 nextdir; // ray direction of next path segment
 	float3 trinormal = float3(0, 0, 0);
 	Refl_t refltype;
-	float ray_tmin = 0.00001f;
+	float ray_tmin = 0.0001f;
 	float ray_tmax = 1e20; // use thickness!!
-	float ray_tmin2 = 0.00001f;
+	float ray_tmin2 = 0.0001f;
 	float ray_tmax2 = 1e20; // use thickness!!
 
 	// intersect all triangles in the scene stored in BVH
 	int debugbingo = 0;
 	float planeThickness = g_cbCamState.far_plane;// g_cbCurvedSlicer.thicknessPlane;// g_cbCamState.far_plane;
 
-	if (disableSolidFill) {
+	if (disableSolidFill && planeThickness > 0) {
 		// planeThickness > 0
 		pos_ip_ws = pos_ip_ws + ray_dir_unit_ws * planeThickness * 0.5f;
 		planeThickness = 0;
@@ -946,7 +946,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	//if (ray_dir_unit_os.z == 0) ray_dir_unit_os.z = 0.00001234f; // trick... for avoiding zero block skipping error
 	//if (ray_dir_unit_os.y == 0) ray_dir_unit_os.y = 0.00001234f; // trick... for avoiding zero block skipping error
 	//if (ray_dir_unit_os.x == 0) ray_dir_unit_os.x = 0.00001234f; // trick... for avoiding zero block skipping error
-
+	
 	bool isInsideOnPlane = false;
 	int checkCountInsideHorizon = 0;
 	int checkCountInsideVertical = 0;
@@ -982,10 +982,12 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		float3 upPos1 = TransformPoint(float3(ss_xy + float2(0, -1), 0), g_cbCamState.mat_ss2ws);
 		float3 updir = normalize(TransformVector(upPos1 - upPos0, g_cbPobj.mat_ws2os));
 #else
+		//f3VecSampleUpWS
 		float3 updir = normalize(TransformVector(f3VecSampleUpWS, g_cbPobj.mat_ws2os));// / fPlanePitch; // unit vector
 #endif
 		float4 test_rayorig = float4(ray_orig_os, ray_tmin);
 		float4 test_raydir = float4(updir, ray_tmax);
+
 		intersectBVHandTriangles(test_rayorig, test_raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
 		if (hitTriIdx >= 0) {
 			bool localInside = dot(trinormal, test_raydir.xyz) > 0;
@@ -1017,7 +1019,8 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 #if PICKING == 1 
 			if (localInside) checkCountInsideVertical++;
 #else
-			isInsideOnPlane = localInside && isInsideOnPlane;
+			//isInsideOnPlane = localInside && isInsideOnPlane;
+			isInsideOnPlane = localInside || isInsideOnPlane;
 #endif
 
 			float3 posHitOS = test_rayorig.xyz + hitDistance * test_raydir.xyz;
@@ -1066,6 +1069,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 			if (minDistOnPlane * minDistOnPlane > hitDistSS * hitDistSS) {
 				minDistOnPlane = localInside ? -hitDistSS : hitDistSS;
 			}
+
 		}
 
 		test_raydir = float4(-rightdir, ray_tmax);
@@ -1076,7 +1080,8 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 #if PICKING == 1 
 			if (localInside) checkCountInsideHorizon++;
 #else
-			isInsideOnPlane = localInside && isInsideOnPlane;
+			//isInsideOnPlane = localInside && isInsideOnPlane;
+			isInsideOnPlane = localInside || isInsideOnPlane;
 #endif
 
 			float3 posHitOS = test_rayorig.xyz + hitDistance * test_raydir.xyz;
@@ -1091,8 +1096,10 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 			if (minDistOnPlane * minDistOnPlane > hitDistSS * hitDistSS) {
 				minDistOnPlane = localInside ? -hitDistSS : hitDistSS;
 			}
+
 		}
 	}
+
 
 #if PICKING == 1 
 	if (planeThickness == 0) {
@@ -1192,6 +1199,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		else { // planeThickness > 0
 			//float3 posFirstWS, posLastWS;
 			//posFirstWS = pos_ip_ws;
+
 			zdepth0 = 0;
 			[loop]
 			for (i = 0; i < hitCount; i++) {
@@ -1336,20 +1344,24 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		float4 v_rgba0 = v_rgba, v_rgba1 = v_rgba;
 
 		// DOJO TO consider...
-		// preserve thr original alpha (i.e., v_rgba.a) or not..????
+		// preserve the original alpha (i.e., v_rgba.a) or not..????
 		v_rgba0.a *= min((planeThickness - zdepth0 + zThickness) / planeThickness + 0.1f, 1.0f);
 		v_rgba0.a *= v_rgba0.a;
 		v_rgba0.rgb *= v_rgba0.a;
 		//v_rgba0.a = v_rgba.a;
 		float vz_thickness = GetVZThickness(zdepth0, g_cbPobj.vz_thickness);
-		Fill_kBuffer(ss_xy, g_cbCamState.k_value, v_rgba0, zdepth0, vz_thickness);
+		
+		//k_value
+		Fill_kBuffer(ss_xy, 2, v_rgba0, zdepth0, vz_thickness);
 
 		v_rgba1.a *= min((planeThickness - zdepth1 + zThickness) / planeThickness + 0.1f, 1.0f);
 		v_rgba1.a *= v_rgba1.a;
 		v_rgba1.rgb *= v_rgba1.a;
 		//v_rgba1.a = v_rgba.a;
 		vz_thickness = GetVZThickness(zdepth1, g_cbPobj.vz_thickness);
-		Fill_kBuffer(ss_xy, g_cbCamState.k_value, v_rgba1, zdepth1, vz_thickness);
+
+		//k_value
+		Fill_kBuffer(ss_xy, 2, v_rgba1, zdepth1, vz_thickness);
 	}
 
 	return;
