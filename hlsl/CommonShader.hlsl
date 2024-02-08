@@ -49,7 +49,9 @@ struct HxCB_CameraState // Hlsl dX Contant Buffer
 	// 9-  bit : 0 : outlint mode (solid), 1 : outlint mode (gradient alpha)
 	// 10- bit : 0 : 3D camera, 1 : Slicer
 	uint cam_flag;
-	// used for 1) A-Buffer prefix computations /*deprecated*/ or 2) beta (asfloat) for merging operation
+	// used for 
+	// 1) A-Buffer prefix computations /*deprecated*/ or 2) beta (asfloat) for merging operation
+	// 2) Second Layer Blending : 1st 8 bit for Pattern Interval (pixels), 2nd 8 bit for Blending
 	uint iSrCamDummy__0;
 
 	float near_plane;

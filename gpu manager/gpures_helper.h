@@ -527,6 +527,7 @@ namespace grd_helper
 		uint cam_flag;
 		// used for 
 		// 1) A-Buffer prefix computations /*deprecated*/ or 2) beta (asfloat) for merging operation
+		// 2) Second Layer Blending : 1st 8 bit for Pattern Interval (pixels), 2nd 8 bit for Blending
 		uint iSrCamDummy__0; 
 
 		float near_plane;

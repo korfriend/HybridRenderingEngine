@@ -236,7 +236,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	{
 		//g_state = 0;
 		double dRuntime = 0;
-		RenderSrOIT(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
+		RenderPrimitives(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
 		g_dRunTimeVRs += dRuntime;
 		if (is_last_renderer) is_final_render_out = true;
 	}
@@ -257,8 +257,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		if (is_last_renderer || planeThickness <= 0.f) is_final_render_out = true;
 	}
 
-
-
+	
 
 	auto RenderOut = [&iobj, &is_last_renderer, &planeThickness, &_fncontainer, &is_vr]() {
 
@@ -408,10 +407,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
 
 #ifndef DX10_0
-		// DOJO TO DO...
-		// 1. rendering 2nd layer rendering... in RenderSrOIT .. (changes .. name...)
-		// (^^) change the path-tracing name to ray-caster ... (volume rendering.. ray-marching... actually, ray-marching is a sort of ray-casting)
-		// 2. here, compose the 2nd layer rendering target texture onto the final render out texture... 
+		// here, compose the 2nd layer rendering target texture onto the final render out texture... 
 		auto Blend2ndLayer = [&gres_fb_rgba, &iobj, &_fncontainer, &rtbind]() {
 
 			vmint2 fb_size_cur;
@@ -434,13 +430,16 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 			__ID3D11Device* dx11Device = g_vmCommonParams.dx11Device;
 			__ID3D11DeviceContext* dx11DeviceImmContext = g_vmCommonParams.dx11DeviceImmContext;
 
+			int dotSize = _fncontainer.fnParams.GetParam("_int_2ndLayerPatternInterval", (int)3);
+			float blendingW = _fncontainer.fnParams.GetParam("_float_2ndLayerBlendingW", 0.8f);
+
 			ID3D11Buffer* cbuf_cam_state = g_vmCommonParams.get_cbuf("CB_CameraState");
 			D3D11_MAPPED_SUBRESOURCE mappedResCamState;
 			dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
 			CB_CameraState* cbCamStateData = (CB_CameraState*)mappedResCamState.pData;
 			cbCamStateData->rt_width = fb_size_cur.x;
 			cbCamStateData->rt_height = fb_size_cur.y;
-			cbCamStateData->cam_flag = 1;
+			cbCamStateData->iSrCamDummy__0 = dotSize | ((int)(blendingW * 100) << 8);
 			dx11DeviceImmContext->Unmap(cbuf_cam_state, 0);
 			dx11DeviceImmContext->CSSetConstantBuffers(0, 1, &cbuf_cam_state);
 

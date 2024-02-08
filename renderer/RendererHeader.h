@@ -34,7 +34,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	LocalProgress* progress,
 	double* run_time_ptr);
 
-bool RenderSrOIT(VmFnContainer* _fncontainer,
+bool RenderPrimitives(VmFnContainer* _fncontainer,
 	VmGpuManager* gpu_manager,
 	grd_helper::GpuDX11CommonParameters* dx11CommonParams,
 	LocalProgress* progress,

@@ -26,13 +26,14 @@ void Blend2ndLayer(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
-    const int dotSize = 2;
+    const uint dotSize = g_cbCamState.iSrCamDummy__0 & 0xFF;
+    bool showPattern = dotSize > 0;
     const int modSize = dotSize * 2;
     float rtDepth = fragment_zdepth_out[DTid.xy];
     bool isRtFront = rtDepth < secondLayerDepth;
-    if (g_cbCamState.cam_flag == 1 && isRtFront) 
+    if (showPattern && isRtFront)
     {
-        int modY = DTid.y % modSize;
+        uint modY = DTid.y % modSize;
         if (modY < dotSize) {
             if (DTid.x % modSize < dotSize) secondLayerVis.rgb = (float3)0;
         }
@@ -51,8 +52,10 @@ void Blend2ndLayer(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
-    frontVis.a *= 0.8f;
-    if (secondLayerVis.r + secondLayerVis.g + secondLayerVis.b == 0)
+    float blendingW = 1.f - ((g_cbCamState.iSrCamDummy__0 >> 8) & 0xFF) / 100.f;
+
+    frontVis.a *= blendingW;
+    if (secondLayerVis.r + secondLayerVis.g + secondLayerVis.b == 0 && showPattern)
         frontVis.a *= 0.5f;
     float4 finalVis = float4(frontVis.rgb * frontVis.a, frontVis.a) + float4(backVis.rgb * (1 - frontVis.a), (1 - frontVis.a));
 

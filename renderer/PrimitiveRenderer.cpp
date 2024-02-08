@@ -574,7 +574,7 @@ void computeWrappingZoneParameters(float p_out_wrapping_zone_parameters[4], floa
 	}
 }
 
-bool RenderSrOIT(VmFnContainer* _fncontainer,
+bool RenderPrimitives(VmFnContainer* _fncontainer,
 	VmGpuManager* gpu_manager,
 	grd_helper::GpuDX11CommonParameters* dx11CommonParams,
 	LocalProgress* progress,
