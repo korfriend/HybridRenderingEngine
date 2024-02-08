@@ -431,7 +431,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 			__ID3D11DeviceContext* dx11DeviceImmContext = g_vmCommonParams.dx11DeviceImmContext;
 
 			int dotSize = _fncontainer.fnParams.GetParam("_int_2ndLayerPatternInterval", (int)3);
-			float blendingW = _fncontainer.fnParams.GetParam("_float_2ndLayerBlendingW", 0.8f);
+			float blendingW = _fncontainer.fnParams.GetParam("_float_2ndLayerBlendingW", 0.2f);
 
 			ID3D11Buffer* cbuf_cam_state = g_vmCommonParams.get_cbuf("CB_CameraState");
 			D3D11_MAPPED_SUBRESOURCE mappedResCamState;
