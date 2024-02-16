@@ -27,6 +27,8 @@
 #define IDR_RCDATA91004					  91004
 #define IDR_RCDATA91005					  91005
 
+#define IDR_RCDATA10000					  10000
+
 #define IDR_RCDATA10101					  10101
 #define IDR_RCDATA10102					  10102
 #define IDR_RCDATA10103					  10103

@@ -1,7 +1,7 @@
 #include "../Sr_Common.hlsl"
 
 //[earlydepthstencil]// ==> shader model 5
-PS_FILL_OUTPUT BasicShader4(__VS_OUT input)
+PS_FILL_OUTPUT BasicShader4(__VS_OUT input) 
 {
 	PS_FILL_OUTPUT out_ps;
 	out_ps.ds_z = 1.f; // remove???
@@ -59,6 +59,14 @@ PS_FILL_OUTPUT BasicShader4(__VS_OUT input)
 	out_ps.depthcs = z_depth;
 
 	return out_ps;
+}
+
+[earlydepthstencil]
+float CastShadow(__VS_OUT input) : SV_TARGET0
+{
+    POBJ_PRE_CONTEXT
+
+    return z_depth + 0.1f; // offset
 }
 
 // https://stackoverflow.com/questions/39404502/direct11-write-data-to-buffer-in-pixel-shader-like-ssbo-in-open

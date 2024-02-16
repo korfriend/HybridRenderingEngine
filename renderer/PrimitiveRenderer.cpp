@@ -1,5 +1,6 @@
 #include "RendererHeader.h"
 
+#define GETDEPTHSTENTIL(NAME) dx11CommonParams->get_depthstencil(#NAME)
 //#include <opencv2/imgproc.hpp>
 //#include <opencv2/highgui.hpp>
 
@@ -764,7 +765,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 #else
 #define VS_NUM 6
 #define GS_NUM 4
-#define PS_NUM 83
+#define PS_NUM 84
 #define CS_NUM 32
 #endif
 
@@ -911,6 +912,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 		};
 #else
 		string strNames_PS[PS_NUM] = {
+			"SR_CAST_SHADOW_ps_5_0",
 			   "SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0"
 			  ,"SR_OIT_FILL_SKBTZ_DASHEDLINE_ps_5_0"
 			  ,"SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ps_5_0"
@@ -1196,7 +1198,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 	grd_helper::UpdateFrameBuffer(gres_fb_singlelayer_rgba, iobj, "RENDER_OUT_RGBA_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
 	grd_helper::UpdateFrameBuffer(gres_fb_singlelayer_depthcs, iobj, "RENDER_OUT_DEPTH_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
 	grd_helper::UpdateFrameBuffer(gres_fb_singlelayer_tempDepth, iobj, "RENDER_OUT_DEPTH_2", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
-	grd_helper::UpdateFrameBuffer(gres_fb_depthstencil, iobj, "DEPTH_STENCIL", RTYPE_TEXTURE2D, D3D11_BIND_DEPTH_STENCIL, DXGI_FORMAT_D32_FLOAT, false);
+	grd_helper::UpdateFrameBuffer(gres_fb_depthstencil, iobj, "DEPTH_STENCIL", RTYPE_TEXTURE2D, D3D11_BIND_DEPTH_STENCIL, DXGI_FORMAT_D32_FLOAT, 0);
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_rgba, iobj, "SYSTEM_OUT_RGBA", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_SYSOUT);
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_depthcs, iobj, "SYSTEM_OUT_DEPTH", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R32_FLOAT, UPFB_SYSOUT);
 
@@ -1509,6 +1511,8 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 	int minimum_oit_area = _fncontainer->fnParams.GetParam("_int_MinimumOitArea", (int)1000); // 0 means turn-off the wildcard case
 	int _w_max = 0;
 	int _h_max = 0;
+	bool cast_shadows = false;
+	bool receive_shadows = false;
 	// For Each Primitive //
 	for (auto& actorPair : _fncontainer->sceneActors)
 	{
@@ -1541,6 +1545,13 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			// NOTE THAT is_picking_routine allows only general_oit_routine_objs!!
 			continue;
 		}
+
+#ifndef DX10_0
+		bool castShadow = actor->GetParam("_bool_CastShadow", false);
+		bool receiveShadow = actor->GetParam("_bool_ReceiveShadow", false);
+		cast_shadows |= castShadow;
+		receive_shadows |= receiveShadow;
+#endif
 
 		vmmat44f matPivot = (actor->GetParam("_matrix44f_Pivot", vmmat44f(1)));
 		vmmat44f matOS2SS = matPivot * actor->matOS2WS * matWS2SS;
@@ -1610,6 +1621,11 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 #endif
 		}
 	}
+
+	// supposed to be updated in the separate shadow caster !!!
+	GpuRes gres_map_shadow; // just read
+	if (cast_shadows && receive_shadows)
+		grd_helper::UpdateFrameBuffer(gres_map_shadow, iobj, "SHADOW_MAP", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R32_FLOAT, 0);
 
 	for (VmActor& __actor : temperal_actors)
 		foremost_opaque_surfaces_routine_objs.push_back(&__actor);
@@ -1769,10 +1785,10 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			float cmap_vmax = actor->GetParam("_float_ColorMapVMax", 1.f);
 			bool cmap_clip = actor->GetParam("_bool_ColorMapClip", false);
 			bool useTriNormal = actor->GetParam("_bool_UseTriNormal", false);
-			bool applyUndercut = actor->GetParam("_bool_ApplyUnderCut", false);
+			int modeUndercut = actor->GetParam("_int_ApplyUnderCut", 0); // 0 : NONE, 1 : RAY_CASTER, 2 : UNDERCUT_MAP
 			vmfloat3 undercutColor(1.f);
 			vmfloat3 undercutDir(0, 0, 1.f);
-			if (applyUndercut) {
+			if (modeUndercut != 0) {
 				undercutColor = actor->GetParam("_float3_UndercutColor", vmfloat3(1.f, 1.f, 0));
 				undercutDir = actor->GetParam("_float3_UndercutDir", vmfloat3(0, 0, 1.f));
 				vmmath::fNormalizeVector(&undercutDir, &undercutDir);
@@ -1941,13 +1957,14 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 				cbPolygonObj.pobj_flag |= (int)is_only_hotspot_visible << 23;
 				//cout << "TEST : " << is_ghost_surface << ", " << is_only_hotspot_visible << endl;
 			}
-			if (applyUndercut)
+			if (modeUndercut != 0)
 			{
 				cbPolygonObj.dash_interval = undercutDir.x;
 				cbPolygonObj.depth_thres = undercutDir.y;
 				cbPolygonObj.pix_thickness = undercutDir.z;
-				cbPolygonObj.pobj_dummy_1 = int(undercutColor.b * 255) | (int(undercutColor.g * 255) << 8) | (int(undercutColor.r * 255)) << 16;
+				cbPolygonObj.pobj_dummy_1 = int(undercutColor.b * 255) | (int(undercutColor.g * 255) << 8) | (int(undercutColor.r * 255)) << 16 | (modeUndercut << 24);
 			}
+
 			D3D11_MAPPED_SUBRESOURCE mappedResPobjData;
 			dx11DeviceImmContext->Map(cbuf_pobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResPobjData);
 			CB_PolygonObject* cbPolygonObjData = (CB_PolygonObject*)mappedResPobjData.pData;
@@ -2358,7 +2375,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 				{
 
 					if (render_pass == RENDER_GEOPASS::PASS_SILHOUETTE || bf_cull_on) {
-						dx11RState_TargetObj = GETRASTER(SOLID_CW);
+						dx11RState_TargetObj = GETRASTER(SOLID_CULL_BACK);
 					}
 					else {
 						dx11RState_TargetObj = GETRASTER(SOLID_NONE);
@@ -2439,33 +2456,60 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 				if (dx11GS_Target == NULL && useTriNormal) {
 					dx11GS_Target = GETGS(GS_TriNormal_gs_5_0);
 				}
-				if (dx11InputLayer_Target != dx11LI_PTTT && applyUndercut)// && render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) 
+				if (dx11InputLayer_Target != dx11LI_PTTT && modeUndercut != 0)// && render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) 
 				{
+					const bool use_raycaster = modeUndercut == 1;
+					if (use_raycaster) {
+						vmint4* nodePtr;
+						int nodeSize;
+						vmint4* triWoopPtr;
+						int triWoopSize;
+						vmint4* triDebugPtr;
+						int triDebugSize;
+						int* cpuTriIndicesPtr;
+						int triIndicesSize;
+						if (pobj->GetBVHTreeBuffers(&nodePtr, &nodeSize, &triWoopPtr, &triWoopSize,
+							&triDebugPtr, &triDebugSize, &cpuTriIndicesPtr, &triIndicesSize)) {
 
-					vmint4* nodePtr;
-					int nodeSize;
-					vmint4* triWoopPtr;
-					int triWoopSize;
-					vmint4* triDebugPtr;
-					int triDebugSize;
-					int* cpuTriIndicesPtr;
-					int triIndicesSize;
-					if (pobj->GetBVHTreeBuffers(&nodePtr, &nodeSize, &triWoopPtr, &triWoopSize,
-						&triDebugPtr, &triDebugSize, &cpuTriIndicesPtr, &triIndicesSize)) {
+							GpuRes bvhNode, bvhTriWoop, bvhTriDebug, bvhIndice;
+							grd_helper::UpdateCustomBuffer(bvhNode, pobj, "BvhNode", nodePtr, nodeSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4));
+							grd_helper::UpdateCustomBuffer(bvhTriWoop, pobj, "BvhTriWoop", triWoopPtr, triWoopSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4));
+							grd_helper::UpdateCustomBuffer(bvhTriDebug, pobj, "BvhTriDebug", triDebugPtr, triDebugSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4));
+							grd_helper::UpdateCustomBuffer(bvhIndice, pobj, "BvhIndice", cpuTriIndicesPtr, triIndicesSize, DXGI_FORMAT_R32_SINT, sizeof(int));
 
-						GpuRes bvhNode, bvhTriWoop, bvhTriDebug, bvhIndice;
-						grd_helper::UpdateCustomBuffer(bvhNode, pobj, "BvhNode", nodePtr, nodeSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4));
-						grd_helper::UpdateCustomBuffer(bvhTriWoop, pobj, "BvhTriWoop", triWoopPtr, triWoopSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4));
-						grd_helper::UpdateCustomBuffer(bvhTriDebug, pobj, "BvhTriDebug", triDebugPtr, triDebugSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4));
-						grd_helper::UpdateCustomBuffer(bvhIndice, pobj, "BvhIndice", cpuTriIndicesPtr, triIndicesSize, DXGI_FORMAT_R32_SINT, sizeof(int));
-
-						dx11DeviceImmContext->PSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&bvhNode.alloc_res_ptrs[DTYPE_SRV]);
-						dx11DeviceImmContext->PSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&bvhTriWoop.alloc_res_ptrs[DTYPE_SRV]);
-						dx11DeviceImmContext->PSSetShaderResources(2, 1, (ID3D11ShaderResourceView**)&bvhTriDebug.alloc_res_ptrs[DTYPE_SRV]);
-						dx11DeviceImmContext->PSSetShaderResources(3, 1, (ID3D11ShaderResourceView**)&bvhIndice.alloc_res_ptrs[DTYPE_SRV]);
-
-						dx11PS_Target = render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES ? GETPS(SR_UNDERCUT_ps_5_0) : GETPS(SR_OIT_ABUFFER_UNDERCUT_ps_5_0);
+							dx11DeviceImmContext->PSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&bvhNode.alloc_res_ptrs[DTYPE_SRV]);
+							dx11DeviceImmContext->PSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&bvhTriWoop.alloc_res_ptrs[DTYPE_SRV]);
+							dx11DeviceImmContext->PSSetShaderResources(2, 1, (ID3D11ShaderResourceView**)&bvhTriDebug.alloc_res_ptrs[DTYPE_SRV]);
+							dx11DeviceImmContext->PSSetShaderResources(3, 1, (ID3D11ShaderResourceView**)&bvhIndice.alloc_res_ptrs[DTYPE_SRV]);
+						}
 					}
+					else {
+
+						// check the undercut direction is changed
+						const bool update_undercutMap = true;
+						if (update_undercutMap) {
+							GpuRes gres_map_undercut, gres_ds_undercut; 
+							grd_helper::UpdateFrameBuffer(gres_map_undercut, iobj, "UNDERCUT_MAP", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R32_FLOAT, 0);
+							grd_helper::UpdateFrameBuffer(gres_ds_undercut, iobj, "UNDERCUT_DS", RTYPE_TEXTURE2D, D3D11_BIND_DEPTH_STENCIL, DXGI_FORMAT_D32_FLOAT, 0);
+
+							dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_map_undercut.alloc_res_ptrs[DTYPE_RTV], clr_float_fltmax_4);
+							dx11DeviceImmContext->ClearDepthStencilView((ID3D11DepthStencilView*)gres_ds_undercut.alloc_res_ptrs[DTYPE_DSV], D3D11_CLEAR_DEPTH, 1.0f, 0);
+
+							dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(LESSEQUAL), 0);
+
+							dx11DeviceImmContext->PSSetShader(GETPS(SR_OIT_ABUFFER_FRAGCOUNTER_MTT_ps_5_0), NULL, 0);
+							dx11DeviceImmContext->RSSetState(GETRASTER(SOLID_CULL_BACK));
+							dx11DeviceImmContext->IASetPrimitiveTopology(pobj_topology_type);
+							dx11DeviceImmContext->OMSetRenderTargets(1, (ID3D11RenderTargetView**)&gres_map_undercut.alloc_res_ptrs[DTYPE_RTV], dx11DSV);
+
+							if (prim_data->is_stripe || pobj_topology_type == D3D11_PRIMITIVE_TOPOLOGY_POINTLIST)
+								dx11DeviceImmContext->Draw(prim_data->num_vtx, 0);
+							else
+								dx11DeviceImmContext->DrawIndexed(prim_data->num_vidx, 0, 0);
+						}
+					}
+
+					dx11PS_Target = render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES ? GETPS(SR_UNDERCUT_ps_5_0) : GETPS(SR_OIT_ABUFFER_UNDERCUT_ps_5_0);
 				}
 			}
 			dx11DeviceImmContext->GSSetShader(dx11GS_Target, NULL, 0);
@@ -2475,8 +2519,6 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 #pragma endregion 
 
 #pragma region // GEO RENDERING PASS
-
-#define GETDEPTHSTENTIL(NAME) dx11CommonParams->get_depthstencil(#NAME)
 
 			ID3D11RenderTargetView* dx11RTVs[2] = {
 				(ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV],

@@ -178,19 +178,19 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		descRaster.ConservativeRaster = D3D11_CONSERVATIVE_RASTERIZATION_MODE_OFF;
 #endif
 		hr |= g_pvmCommonParams->dx11Device->MyCreateRasterizerState(&descRaster, &raster_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "SOLID_CW"), raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "SOLID_CULL_BACK"), raster_state);
 		descRaster.AntialiasedLineEnable = true;
 		hr |= g_pvmCommonParams->dx11Device->MyCreateRasterizerState(&descRaster, &raster_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "AA_SOLID_CW"), raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "AA_SOLID_CULL_BACK"), raster_state);
 		descRaster.CullMode = D3D11_CULL_FRONT;
 		//descRaster.CullMode = D3D11_CULL_BACK; // ref FrontCounterClockwise
 		//descRaster.FrontCounterClockwise = TRUE;
 		descRaster.AntialiasedLineEnable = false;
 		hr |= g_pvmCommonParams->dx11Device->MyCreateRasterizerState(&descRaster, &raster_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "SOLID_CCW"), raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "SOLID_CULL_FRONT"), raster_state);
 		descRaster.AntialiasedLineEnable = true;
 		hr |= g_pvmCommonParams->dx11Device->MyCreateRasterizerState(&descRaster, &raster_state);
-		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "AA_SOLID_CCW"), raster_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "AA_SOLID_CULL_FRONT"), raster_state);
 		descRaster.CullMode = D3D11_CULL_NONE;
 		descRaster.AntialiasedLineEnable = false;
 		hr |= g_pvmCommonParams->dx11Device->MyCreateRasterizerState(&descRaster, &raster_state);
@@ -499,6 +499,8 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11004), "SR_OIT_PNT_vs_5_0", "vs_5_0", "PNT", lotypeInputPosNorTex, 3), SR_OIT_PNT_vs_5_0);
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11005), "SR_OIT_PTTT_vs_5_0", "vs_5_0", "PTTT", lotypeInputPosTTTex, 4), SR_OIT_PTTT_vs_5_0);
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11006), "SR_OIT_IDX_vs_5_0", "vs_5_0", "", NULL, 4), SR_OIT_IDX_vs_5_0);
+
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10000), "SR_CAST_SHADOW_ps_5_0", "ps_5_0"), SR_CAST_SHADOW_ps_5_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10101), "SR_BASIC_PHONGBLINN_ps_5_0", "ps_5_0"), SR_BASIC_PHONGBLINN_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10102), "SR_BASIC_DASHEDLINE_ps_5_0", "ps_5_0"), SR_BASIC_DASHEDLINE_ps_5_0);
