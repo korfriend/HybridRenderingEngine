@@ -560,8 +560,8 @@ namespace grd_helper
 		vmfloat4 ltint_diffuse;
 		vmfloat4 ltint_spec;
 
-		vmmat44f	mat_ws2ls_smap;	// for shadow : Sample Depth Map
-		vmmat44f	mat_ws2wls_smap;	// for shadow : Depth Comparison And Storage
+		vmmat44f	mat_ws2ls_smap;	// for shadow : Sample Depth Map (ws2ss)
+		vmmat44f	mat_ls2ws_smap;	// for shadow : Depth Comparison (ss2ws)
 
 		float r_kernel_ao;
 		int num_dirs;
@@ -825,6 +825,15 @@ namespace grd_helper
 		vmfloat3 minRoiCube;
 		uint dummy1;
 		vmfloat3 maxRoiCube;
+	};
+
+	struct CB_Undercut
+	{
+		vmmat44f	mat_ws2lss_udc_map;	
+		vmmat44f	mat_ws2lcs_udc_map;
+
+		vmfloat3	undercutDir;
+		uint		icolor;
 	};
 
 	// CS ¿¡¼­ Particle Buffer Update (https://github.com/turanszkij/WickedEngine/blob/2f5631e46aed3e278377a678b9e49714bfd33968/WickedEngine/shaders/emittedparticle_emitCS.hlsl )

@@ -1510,9 +1510,16 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 #endif
 }
 
+cbuffer cbGlobalParams : register(b8)
+{
+	HxCB_Undercut g_cbUndercut;
+}
+
+Texture2D undercutMap : register(t40);
+
 void ApplyUndercutColor(inout float4 v_rgba, in float3 f3PosWS)
 {
-	const float3 coverDirWS = float3(g_cbPobj.dash_interval, g_cbPobj.depth_thres, g_cbPobj.pix_thickness);
+	const float3 coverDirWS = g_cbUndercut.undercutDir;// float3(g_cbPobj.dash_interval, g_cbPobj.depth_thres, g_cbPobj.pix_thickness);
 
 	int hitTriIdx = -1;
 	float hitDistance = 1e20;
@@ -1531,11 +1538,64 @@ void ApplyUndercutColor(inout float4 v_rgba, in float3 f3PosWS)
 	intersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
 
 	if (hitTriIdx >= 0) {
-		int icolor = g_cbPobj.pobj_dummy_1;
-		v_rgba.rgb *= ConvertUIntToFloat4(icolor).rgb;
+		v_rgba.rgb *= ConvertUIntToFloat4(g_cbUndercut.icolor).rgb;
 	}
 }
 
+void ApplyUndercutColor2(inout float4 v_rgba, in float3 f3PosWS)
+{
+	float3 posMap = TransformPoint(f3PosWS, g_cbUndercut.mat_ws2lss_udc_map);
+
+	if (posMap.z <= 0) {
+		return;
+	}
+
+	float3 posLCS = TransformPoint(f3PosWS, g_cbUndercut.mat_ws2lcs_udc_map);
+	float mapDepth = abs(-posLCS.z);
+
+	float2 wh = float2(g_cbCamState.rt_width, g_cbCamState.rt_height);
+	//float2 uv = posMap.xy / wh;
+	float2 uv = float2(posMap.x / wh.x, posMap.y / wh.y);
+
+	//float storedMapDepth = undercutMap.SampleLevel(g_samplerLinear_wrap, uv, 0).r;
+
+	float sd0 = min(undercutMap[int2(posMap.xy)].r, undercutMap[int2(posMap.xy) + int2(1, 0)].r);
+	float sd1 = min(undercutMap[int2(posMap.xy) + int2(1, 1)].r, undercutMap[int2(posMap.xy) + int2(0, 1)].r);
+	float storedMapDepth = min(sd0, sd1);
+
+	if (mapDepth > storedMapDepth - 0.001) {
+		v_rgba.rgb *= ConvertUIntToFloat4(g_cbUndercut.icolor).rgb;
+	}
+}
+
+/*
+void ApplyUndercutColorOld(inout float4 v_rgba, in float3 f3PosWS)
+{
+	float3 posMap = TransformPoint(f3PosWS, g_cbUndercut.mat_ws2ss_udc_map);
+
+	if (posMap.z <= 0) {
+		v_rgba.rgb = float3(0, 0, 1);
+		return;
+	}
+
+	posMap.z = 0;
+	float3 pos_map_ws = TransformPoint(posMap, g_cbUndercut.mat_ss2ws_udc_map);
+	float3 vec_pos_map2frag = f3PosWS - pos_map_ws;
+	float mapDepth = length(vec_pos_map2frag);
+
+	float2 wh = float2(g_cbCamState.rt_width, g_cbCamState.rt_height);
+	//float2 uv = posMap.xy / wh;
+	float2 uv = float2(posMap.x / wh.x, posMap.y / wh.y);
+
+	float storedMapDepth = undercutMap.SampleLevel(g_samplerLinear_wrap, uv, 0).r;// +0.01f;
+
+	//v_rgba.rgb = float3(uv, 0);
+	if (mapDepth > storedMapDepth) {
+		v_rgba.rgb *= ConvertUIntToFloat4(g_cbUndercut.icolor).rgb;
+	}
+}
+
+/**/
 PS_FILL_OUTPUT UndercutShader(__VS_OUT input)
 {
 	PS_FILL_OUTPUT out_ps;
@@ -1548,8 +1608,10 @@ PS_FILL_OUTPUT UndercutShader(__VS_OUT input)
 
 	BasicShader(input, v_rgba, z_depth);
 
-	ApplyUndercutColor(v_rgba, input.f3PosWS);
-
+	if ((g_cbUndercut.icolor >> 24) == 1)
+		ApplyUndercutColor(v_rgba, input.f3PosWS);
+	else
+		ApplyUndercutColor2(v_rgba, input.f3PosWS);
 	//v_rgba = float4(1, 1, 0, 1);
 
 	out_ps.ds_z = input.f4PosSS.z;
@@ -1571,7 +1633,10 @@ void OIT_A_BUFFER_FILL_UNDERCUT(__VS_OUT input)
 
 	BasicShader(input, v_rgba, z_depth);
 
-	ApplyUndercutColor(v_rgba, input.f3PosWS);
+	if ((g_cbUndercut.icolor >> 24) == 1)
+		ApplyUndercutColor(v_rgba, input.f3PosWS);
+	else
+		ApplyUndercutColor2(v_rgba, input.f3PosWS);
 
 	// Atomically allocate space in the deep buffer
 	int2 tex2d_xy = int2(input.f4PosSS.xy);

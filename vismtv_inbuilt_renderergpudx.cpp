@@ -215,8 +215,9 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		strRendererSource = "VOLUME";
 	
 	bool is_vr = false;
+	const bool gpu_query_synch = false;
 
-	if (is_first_renderer && !is_picking_routine)
+	if (is_first_renderer && !is_picking_routine && gpu_query_synch)
 	{
 		g_vmCommonParams.dx11DeviceImmContext->Begin(g_vmCommonParams.dx11qr_disjoint);
 		//g_vmCommonParams.dx11DeviceImmContext->End(g_vmCommonParams.dx11qr_timestamps[0]);
@@ -603,7 +604,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	}
 
 
-	if (is_last_renderer && !is_picking_routine)
+	if (is_last_renderer && !is_picking_routine && gpu_query_synch)
 	{
 		//g_vmCommonParams.dx11DeviceImmContext->End(g_vmCommonParams.dx11qr_timestamps[1]);
 		g_vmCommonParams.dx11DeviceImmContext->End(g_vmCommonParams.dx11qr_disjoint);

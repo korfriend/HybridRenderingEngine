@@ -79,8 +79,8 @@ struct HxCB_EnvState
 	float4 ltint_diffuse;
 	float4 ltint_spec;
 
-	float4x4 shadowmap_mat_ws2ls; // for shadow : Sample Depth Map
-	float4x4 shadowmap_mat_ws2wls; // for shadow : Depth Comparison And Storage
+	float4x4	mat_ws2lss_smap;	// for shadow : Sample Depth Map (ws2ss)
+	float4x4	mat_ws2lcs_smap;	// for shadow : Depth Comparison 
 
 	float r_kernel_ao;
 	int num_dirs;
@@ -310,6 +310,16 @@ struct Particle
 	float life;
 	uint color;
 };
+
+struct HxCB_Undercut
+{
+	float4x4	mat_ws2lss_udc_map;
+	float4x4	mat_ws2lcs_udc_map;
+
+	float3		undercutDir;
+	uint		icolor;
+};
+
 //=====================
 // Constant Buffers
 //=====================

@@ -912,7 +912,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 		};
 #else
 		string strNames_PS[PS_NUM] = {
-			"SR_CAST_SHADOW_ps_5_0",
+			"SR_CAST_DEPTHMAP_ps_5_0",
 			   "SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0"
 			  ,"SR_OIT_FILL_SKBTZ_DASHEDLINE_ps_5_0"
 			  ,"SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ps_5_0"
@@ -1750,6 +1750,17 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 		PICK_ON_GS
 	};
 
+	auto SetCamConstBuf = [&dx11DeviceImmContext, &cbuf_cam_state](const CB_CameraState& cbCamState) {
+		D3D11_MAPPED_SUBRESOURCE mappedResCamState;
+		dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
+		CB_CameraState* cbCamStateData = (CB_CameraState*)mappedResCamState.pData;
+		memcpy(cbCamStateData, &cbCamState, sizeof(CB_CameraState));
+		dx11DeviceImmContext->Unmap(cbuf_cam_state, 0);
+	};
+
+	CB_CameraState cbCamState;
+	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, gi_v_thickness);
+
 	auto RenderStage1 = [&](
 		vector<VmActor*>& actor_list,
 		const MFR_MODE mode_OIT, const RENDER_GEOPASS render_pass, const bool is_frag_counter_buffer,
@@ -1956,13 +1967,6 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 				cbPolygonObj.pobj_flag |= (int)is_ghost_surface << 22;
 				cbPolygonObj.pobj_flag |= (int)is_only_hotspot_visible << 23;
 				//cout << "TEST : " << is_ghost_surface << ", " << is_only_hotspot_visible << endl;
-			}
-			if (modeUndercut != 0)
-			{
-				cbPolygonObj.dash_interval = undercutDir.x;
-				cbPolygonObj.depth_thres = undercutDir.y;
-				cbPolygonObj.pix_thickness = undercutDir.z;
-				cbPolygonObj.pobj_dummy_1 = int(undercutColor.b * 255) | (int(undercutColor.g * 255) << 8) | (int(undercutColor.r * 255)) << 16 | (modeUndercut << 24);
 			}
 
 			D3D11_MAPPED_SUBRESOURCE mappedResPobjData;
@@ -2459,6 +2463,20 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 				if (dx11InputLayer_Target != dx11LI_PTTT && modeUndercut != 0)// && render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) 
 				{
 					const bool use_raycaster = modeUndercut == 1;
+
+					CB_Undercut cbUndercut;
+					cbUndercut.undercutDir = undercutDir;
+					cbUndercut.icolor = int(undercutColor.b * 255) | (int(undercutColor.g * 255) << 8) | (int(undercutColor.r * 255)) << 16 | (modeUndercut << 24);
+
+					ID3D11Buffer* cbuf_undercut = dx11CommonParams->get_cbuf("CB_Undercut");
+					dx11DeviceImmContext->PSSetConstantBuffers(8, 1, &cbuf_undercut);
+					auto SetUndercutCB = [&cbUndercut, &cbuf_undercut, &dx11DeviceImmContext]() {
+						D3D11_MAPPED_SUBRESOURCE mappedResUndercut;
+						dx11DeviceImmContext->Map(cbuf_undercut, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResUndercut);
+						memcpy(mappedResUndercut.pData, &cbUndercut, sizeof(CB_Undercut));
+						dx11DeviceImmContext->Unmap(cbuf_undercut, 0);
+					};
+
 					if (use_raycaster) {
 						vmint4* nodePtr;
 						int nodeSize;
@@ -2481,37 +2499,159 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 							dx11DeviceImmContext->PSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&bvhTriWoop.alloc_res_ptrs[DTYPE_SRV]);
 							dx11DeviceImmContext->PSSetShaderResources(2, 1, (ID3D11ShaderResourceView**)&bvhTriDebug.alloc_res_ptrs[DTYPE_SRV]);
 							dx11DeviceImmContext->PSSetShaderResources(3, 1, (ID3D11ShaderResourceView**)&bvhIndice.alloc_res_ptrs[DTYPE_SRV]);
+
+							dx11PS_Target = render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES ? GETPS(SR_UNDERCUT_ps_5_0) : GETPS(SR_OIT_ABUFFER_UNDERCUT_ps_5_0);
 						}
+						else {
+							vmlog::LogErr("Undercut using raycaster requires BVH!! (" + actor->name + ")");
+						}
+						SetUndercutCB();
 					}
 					else {
+
+						GpuRes gres_map_undercut, gres_ds_undercut;
+						grd_helper::UpdateFrameBuffer(gres_map_undercut, iobj, "UNDERCUT_MAP", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
+						grd_helper::UpdateFrameBuffer(gres_ds_undercut, iobj, "UNDERCUT_DS", RTYPE_TEXTURE2D, D3D11_BIND_DEPTH_STENCIL, DXGI_FORMAT_D32_FLOAT, 0);
 
 						// check the undercut direction is changed
 						const bool update_undercutMap = true;
 						if (update_undercutMap) {
-							GpuRes gres_map_undercut, gres_ds_undercut; 
-							grd_helper::UpdateFrameBuffer(gres_map_undercut, iobj, "UNDERCUT_MAP", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R32_FLOAT, 0);
-							grd_helper::UpdateFrameBuffer(gres_ds_undercut, iobj, "UNDERCUT_DS", RTYPE_TEXTURE2D, D3D11_BIND_DEPTH_STENCIL, DXGI_FORMAT_D32_FLOAT, 0);
 
 							dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_map_undercut.alloc_res_ptrs[DTYPE_RTV], clr_float_fltmax_4);
 							dx11DeviceImmContext->ClearDepthStencilView((ID3D11DepthStencilView*)gres_ds_undercut.alloc_res_ptrs[DTYPE_DSV], D3D11_CLEAR_DEPTH, 1.0f, 0);
 
 							dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(LESSEQUAL), 0);
-
-							dx11DeviceImmContext->PSSetShader(GETPS(SR_OIT_ABUFFER_FRAGCOUNTER_MTT_ps_5_0), NULL, 0);
+							dx11DeviceImmContext->PSSetShader(GETPS(SR_CAST_DEPTHMAP_ps_5_0), NULL, 0);
 							dx11DeviceImmContext->RSSetState(GETRASTER(SOLID_CULL_BACK));
 							dx11DeviceImmContext->IASetPrimitiveTopology(pobj_topology_type);
-							dx11DeviceImmContext->OMSetRenderTargets(1, (ID3D11RenderTargetView**)&gres_map_undercut.alloc_res_ptrs[DTYPE_RTV], dx11DSV);
+							dx11DeviceImmContext->OMSetRenderTargets(1, (ID3D11RenderTargetView**)&gres_map_undercut.alloc_res_ptrs[DTYPE_RTV], (ID3D11DepthStencilView*)gres_ds_undercut.alloc_res_ptrs[DTYPE_DSV]);
+
+							auto SetLightCaster = [](CB_CameraState& cb_cam, vmmat44f& matLightWS2CS, vmmat44f& matLightWS2PS,
+								const vmfloat3& lightPos, const vmfloat3& lightDir, const std::vector<vmfloat3>& aabb_pts)
+							{
+								vmfloat3 lightUp(0, 1.f, 0);
+								vmfloat3 lightRight;
+								vmmath::fCrossDotVector(&lightRight, &lightDir, &lightUp);
+								if (vmmath::fLengthVectorSq(&lightRight) < 0.001f) {
+									lightUp = vmfloat3(0, 0, 1.f);
+									vmmath::fCrossDotVector(&lightRight, &lightDir, &lightUp);
+								}
+								vmmath::fNormalizeVector(&lightRight, &lightRight);
+								vmmath::fCrossDotVector(&lightUp, &lightRight, &lightDir);
+								vmmath::fNormalizeVector(&lightUp, &lightUp);
+
+								vmmat44f matLightCS2WS, matLightCS2PS, matLightPS2SS;
+								vmmath::fMatrixWS2CS(&matLightWS2CS, &lightPos, &lightUp, &lightDir);
+
+								const bool is_orthogonal = (int)aabb_pts.size() > 0;
+								if (is_orthogonal) {
+									vmfloat3 minCS(FLT_MAX), maxCS(-FLT_MAX);
+									for (int i = 0; i < (int)aabb_pts.size(); i++) {
+										vmfloat3 pCS;
+										vmmath::fTransformPoint(&pCS, &aabb_pts[i], &matLightWS2CS);
+										minCS = glm::min(pCS, minCS);
+										maxCS = glm::max(pCS, maxCS);
+									}
+
+									float map_w = maxCS.x - minCS.x;
+									float map_h = maxCS.y - minCS.y;
+									vmfloat3 pos_new_light = (minCS + maxCS) * 0.5f;
+									vmmath::fMatrixInverse(&matLightCS2WS, &matLightWS2CS);
+									float hyper_diagonal = vmmath::fLengthVector(&(maxCS - minCS));
+
+									vmmath::fTransformPoint(&pos_new_light, &pos_new_light, &matLightCS2WS);
+									pos_new_light -= lightDir * (maxCS.z - minCS.z) * 3.f;
+									vmmath::fMatrixWS2CS(&matLightWS2CS, &pos_new_light, &lightUp, &lightDir);
+
+									float ipW, ipH;
+									{
+										if (map_w < map_h)
+										{
+											ipW = hyper_diagonal;
+											ipH = ipW * (float)cb_cam.rt_width / (float)cb_cam.rt_height;
+										}
+										else
+										{
+											ipH = hyper_diagonal;
+											ipW = ipH * (float)cb_cam.rt_width / (float)cb_cam.rt_height;
+										}
+									}
+
+									vmmath::fMatrixOrthogonalCS2PS(&matLightCS2PS, ipW, ipH, cb_cam.near_plane, cb_cam.far_plane);
+									vmmath::fMatrixPS2SS(&matLightPS2SS, cb_cam.rt_width, cb_cam.rt_height);
+									
+									cb_cam.pos_cam_ws = pos_new_light;
+									cb_cam.cam_flag = 0; // orthogonal projection
+								}
+								else {
+									cb_cam.pos_cam_ws = lightPos;
+									cb_cam.cam_flag = 1;
+								}
+
+								matLightWS2PS = matLightWS2CS * matLightCS2PS;
+								vmmat44f matLightWS2SS = matLightWS2PS * matLightPS2SS, matLightSS2WS;
+								vmmath::fMatrixInverse(&matLightSS2WS, &matLightWS2SS);
+
+								cb_cam.mat_ss2ws = TRANSPOSE(matLightSS2WS);
+								cb_cam.mat_ws2ss = TRANSPOSE(matLightWS2SS);
+								
+								cb_cam.dir_view_ws = lightDir;
+							};
+							CB_CameraState cbCamStateUndercut = cbCamState;
+							std::vector<vmfloat3> aabb_pts;
+							{
+								// 1. compute aabb_ws from prim_data->aabb_os, mat_os2ws
+								AaBbMinMax& aabb_os = prim_data->aabb_os;
+								aabb_pts = {
+									vmfloat3(aabb_os.pos_max),
+									vmfloat3(aabb_os.pos_min.x, aabb_os.pos_max.y, aabb_os.pos_max.z),
+									vmfloat3(aabb_os.pos_max.x, aabb_os.pos_min.y, aabb_os.pos_max.z),
+									vmfloat3(aabb_os.pos_min.x, aabb_os.pos_min.y, aabb_os.pos_max.z),
+									vmfloat3(aabb_os.pos_min),
+									vmfloat3(aabb_os.pos_min.x, aabb_os.pos_max.y, aabb_os.pos_min.z),
+									vmfloat3(aabb_os.pos_max.x, aabb_os.pos_min.y, aabb_os.pos_min.z),
+									vmfloat3(aabb_os.pos_max.x, aabb_os.pos_max.y, aabb_os.pos_min.z),
+								};
+								for (int i = 0; i < (int)aabb_pts.size(); i++) {
+									vmmath::fTransformPoint(&aabb_pts[i], &aabb_pts[i], &TRANSPOSE(cbPolygonObj.mat_os2ws));
+								}
+							}
+							vmmat44f matLightWS2CS, matLightWS2PS;
+							SetLightCaster(cbCamStateUndercut, matLightWS2CS, matLightWS2PS, vmfloat3(0), undercutDir, aabb_pts);
+							SetCamConstBuf(cbCamStateUndercut);
+
+							cbUndercut.mat_ws2lcs_udc_map = TRANSPOSE(matLightWS2CS);
+							cbUndercut.mat_ws2lss_udc_map = cbCamStateUndercut.mat_ws2ss;
+
+							D3D11_MAPPED_SUBRESOURCE mappedResPobjData;
+							dx11DeviceImmContext->Map(cbuf_pobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResPobjData);
+							CB_PolygonObject* cbPolygonObjData = (CB_PolygonObject*)mappedResPobjData.pData;
+							memcpy(cbPolygonObjData, &cbPolygonObj, sizeof(CB_PolygonObject));
+							cbPolygonObjData->mat_os2ps = TRANSPOSE(matLightWS2PS) * cbPolygonObjData->mat_os2ws;
+							dx11DeviceImmContext->Unmap(cbuf_pobj, 0);
+
+							SetUndercutCB();
 
 							if (prim_data->is_stripe || pobj_topology_type == D3D11_PRIMITIVE_TOPOLOGY_POINTLIST)
 								dx11DeviceImmContext->Draw(prim_data->num_vtx, 0);
 							else
 								dx11DeviceImmContext->DrawIndexed(prim_data->num_vidx, 0, 0);
-						}
-					}
 
-					dx11PS_Target = render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES ? GETPS(SR_UNDERCUT_ps_5_0) : GETPS(SR_OIT_ABUFFER_UNDERCUT_ps_5_0);
+							SetCamConstBuf(cbCamState);
+							dx11DeviceImmContext->Map(cbuf_pobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResPobjData);
+							cbPolygonObjData = (CB_PolygonObject*)mappedResPobjData.pData;
+							memcpy(cbPolygonObjData, &cbPolygonObj, sizeof(CB_PolygonObject));
+							dx11DeviceImmContext->Unmap(cbuf_pobj, 0);
+						}
+
+						dx11DeviceImmContext->OMSetRenderTargets(0, NULL, NULL);
+
+						dx11DeviceImmContext->PSSetShaderResources(40, 1, (ID3D11ShaderResourceView**)&gres_map_undercut.alloc_res_ptrs[DTYPE_SRV]);
+						dx11PS_Target = render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES ? GETPS(SR_UNDERCUT_ps_5_0) : GETPS(SR_OIT_ABUFFER_UNDERCUT_ps_5_0);
+					}
 				}
 			}
+
 			dx11DeviceImmContext->GSSetShader(dx11GS_Target, NULL, 0);
 			dx11DeviceImmContext->PSSetShader(dx11PS_Target, NULL, 0);
 			dx11DeviceImmContext->RSSetState(dx11RState_TargetObj);
@@ -2646,8 +2786,8 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 
 			dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
 
-			dx11DeviceImmContext->PSSetShaderResources(50, 1, dx11SRVs_NULL); // note that t50 is assigned for offsettable used in DKB and DFB 
-			dx11DeviceImmContext->PSSetShaderResources(0, 20, dx11SRVs_NULL); // note that t50 is assigned for offsettable used in DKB and DFB 
+			dx11DeviceImmContext->PSSetShaderResources(40, 20, dx11SRVs_NULL); // note that t50 is assigned for offsettable used in DKB and DFB 
+			dx11DeviceImmContext->PSSetShaderResources(0, 20, dx11SRVs_NULL); 
 #pragma endregion // GEO RENDERING PASS
 
 			if (render_pass == RENDER_GEOPASS::PASS_SILHOUETTE && !is_group_silhouette) {
@@ -2740,17 +2880,6 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 	dx11DeviceImmContext->PSSetConstantBuffers(2, 1, &cbuf_clip);
 	dx11DeviceImmContext->PSSetConstantBuffers(3, 1, &cbuf_reffect);
 	dx11DeviceImmContext->CSSetConstantBuffers(3, 1, &cbuf_reffect);
-
-	CB_CameraState cbCamState;
-	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, gi_v_thickness);
-
-	auto SetCamConstBuf = [&dx11DeviceImmContext, &cbuf_cam_state](const CB_CameraState& cbCamState) {
-		D3D11_MAPPED_SUBRESOURCE mappedResCamState;
-		dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
-		CB_CameraState* cbCamStateData = (CB_CameraState*)mappedResCamState.pData;
-		memcpy(cbCamStateData, &cbCamState, sizeof(CB_CameraState));
-		dx11DeviceImmContext->Unmap(cbuf_cam_state, 0);
-	};
 
 	HWND hWnd = (HWND)_fncontainer->fnParams.GetParam("_hwnd_WindowHandle", (HWND)NULL);
 
@@ -3095,10 +3224,10 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 						}
 						gres_vb_nor = gres_vb_pos;
 						gres_vb_nor.res_name = string("gres_particle_vb_nor");
-						if (!gpu_manager->UpdateGpuResource(gres_vb_pos)) {
+						if (!gpu_manager->UpdateGpuResource(gres_vb_nor)) {
 
 							// D3D11_BIND_VERTEX_BUFFER 는 shader resource view 가 안 되는 것일까? 되네 :)
-							gpu_manager->GenerateGpuResource(gres_vb_pos);
+							gpu_manager->GenerateGpuResource(gres_vb_nor);
 						}
 
 						gres_vb_tex = gres_vb_pos;
@@ -3468,7 +3597,8 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 						uint stride_inputlayer = 0u, offset = 0u;
 						D3D_PRIMITIVE_TOPOLOGY pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_POINTLIST;// D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 						
-						dx11DeviceImmContext->IASetVertexBuffers(0, 1, NULL, &stride_inputlayer, &offset);
+						ID3D11Buffer* nullBuffers[10] = { NULL };
+						dx11DeviceImmContext->IASetVertexBuffers(0, 1, nullBuffers, & stride_inputlayer, & offset);
 						dx11DeviceImmContext->IASetIndexBuffer(
 							(ID3D11Buffer*)gres_vb_idx.alloc_res_ptrs[DTYPE_RES], 
 							DXGI_FORMAT_R32_UINT, 0);

@@ -61,12 +61,25 @@ PS_FILL_OUTPUT BasicShader4(__VS_OUT input)
 	return out_ps;
 }
 
-[earlydepthstencil]
-float CastShadow(__VS_OUT input) : SV_TARGET0
+cbuffer cbGlobalParams : register(b8)
 {
-    POBJ_PRE_CONTEXT
+    HxCB_Undercut g_cbUndercut;
+}
 
-    return z_depth + 0.1f; // offset
+[earlydepthstencil]
+PS_FILL_DEPTHCS CastDepthMap(__VS_OUT input)
+{
+    PS_FILL_DEPTHCS out_ps;
+    out_ps.ds_z = 1.f;
+    out_ps.depthcs = FLT_MAX;
+
+    POBJ_PRE_CONTEXT;
+
+    float3 posLCS = TransformPoint(input.f3PosWS, g_cbUndercut.mat_ws2lcs_udc_map);
+
+    out_ps.depthcs = abs(-posLCS.z);
+    out_ps.ds_z = input.f4PosSS.z;
+    return out_ps;
 }
 
 // https://stackoverflow.com/questions/39404502/direct11-write-data-to-buffer-in-pixel-shader-like-ssbo-in-open

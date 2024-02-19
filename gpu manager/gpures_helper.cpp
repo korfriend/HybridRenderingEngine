@@ -326,6 +326,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		CREATE_AND_SET(CB_Particle_Blob);
 		CREATE_AND_SET(CB_Frame);
 		CREATE_AND_SET(CB_Emitter);
+		CREATE_AND_SET(CB_Undercut);
 	}
 	if (hr != S_OK)
 	{
@@ -500,7 +501,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11005), "SR_OIT_PTTT_vs_5_0", "vs_5_0", "PTTT", lotypeInputPosTTTex, 4), SR_OIT_PTTT_vs_5_0);
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11006), "SR_OIT_IDX_vs_5_0", "vs_5_0", "", NULL, 4), SR_OIT_IDX_vs_5_0);
 
-		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10000), "SR_CAST_SHADOW_ps_5_0", "ps_5_0"), SR_CAST_SHADOW_ps_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10000), "SR_CAST_DEPTHMAP_ps_5_0", "ps_5_0"), SR_CAST_DEPTHMAP_ps_5_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10101), "SR_BASIC_PHONGBLINN_ps_5_0", "ps_5_0"), SR_BASIC_PHONGBLINN_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10102), "SR_BASIC_DASHEDLINE_ps_5_0", "ps_5_0"), SR_BASIC_DASHEDLINE_ps_5_0);

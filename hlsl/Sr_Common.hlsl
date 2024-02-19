@@ -13,6 +13,8 @@ Texture2D g_tex2D_Mat_NS : register(t13);
 Texture2D g_tex2D_Mat_BUMP : register(t14);
 Texture2D g_tex2D_Mat_D : register(t15);
 
+Texture2D g_tex2D_shadowMap : register(t20);
+
 struct VS_INPUT_PN
 {
     float3 f3PosOS : POSITION;
@@ -159,6 +161,7 @@ VS_OUTPUT_TTT CommonVS_PTTT(VS_INPUT_PTTT input)
 //#define __InterlockedExchange(A, B, C) InterlockedExchange(A, B, C)
 
 #define POBJ_PRE_CONTEXT \
+    if (g_cbPobj.alpha == 0) clip(-1);\
     if (g_cbClipInfo.clip_flag & 0x1)\
         clip(dot(g_cbClipInfo.vec_clipplane, input.f3PosWS - g_cbClipInfo.pos_clipplane) > 0 ? -1 : 1);\
     if (g_cbClipInfo.clip_flag & 0x2)\
@@ -950,8 +953,6 @@ PS_FILL_DEPTHCS SINGLE_LAYER(VS_OUTPUT input)
 
     POBJ_PRE_CONTEXT;
 
-	if (g_cbPobj.alpha == 0) clip(-1);
-    
     out_ps.ds_z = input.f4PosSS.z;
     //out_ps.color = v_rgba;
     out_ps.depthcs = z_depth;
