@@ -49,6 +49,7 @@
     <ClInclude Include="gpu manager\gpures_helper.h" />
     <ClInclude Include="gpu manager\gpures_interface.h" />
     <ClInclude Include="gpu_common_res.h" />
+    <ClInclude Include="hlsl\particle\ParticleInterop.hlsli" />
     <ClInclude Include="renderer\RendererHeader.h" />
     <ClInclude Include="renderer\Sampler.h" />
     <ClInclude Include="resource.h" />

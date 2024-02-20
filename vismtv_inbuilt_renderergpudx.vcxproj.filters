@@ -45,6 +45,9 @@
       <Filter>gpu manager</Filter>
     </ClInclude>
     <ClInclude Include="gpu_common_res.h" />
+    <ClInclude Include="hlsl\particle\ParticleInterop.hlsli">
+      <Filter>hlsl source code\Particle</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="hlsl\moment\ComplexAlgebra.hlsli">

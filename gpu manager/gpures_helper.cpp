@@ -710,6 +710,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA71001), "PCE_KickoffEmitterSystem_cs_5_0", "cs_5_0"), PCE_KickoffEmitterSystem_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA71002), "PCE_ParticleEmitter_cs_5_0", "cs_5_0"), PCE_ParticleEmitter_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA71003), "PCE_ParticleSimulation_cs_5_0", "cs_5_0"), PCE_ParticleSimulation_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA71004), "PCE_ParticleUpdateFinish_cs_5_0", "cs_5_0"), PCE_ParticleUpdateFinish_cs_5_0);
 #pragma endregion
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA72000), "CS_Blend2ndLayer_cs_5_0", "cs_5_0"), CS_Blend2ndLayer_cs_5_0);
 

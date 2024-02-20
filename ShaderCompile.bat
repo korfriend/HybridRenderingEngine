@@ -101,6 +101,7 @@ fxc /E RayMarchingDistanceMap /T cs_5_0 ./hlsl/particle/BlobParticle.hlsl /Fo ./
 fxc /E KickoffEmitterSystem /T cs_5_0 ./hlsl/particle/Emitter.hlsl /Fo ./shader_compiled_objs/PCE_KickoffEmitterSystem_cs_5_0
 fxc /E ParticleEmitter /T cs_5_0 ./hlsl/particle/Emitter.hlsl /Fo ./shader_compiled_objs/PCE_ParticleEmitter_cs_5_0
 fxc /E ParticleSimulation /T cs_5_0 ./hlsl/particle/Emitter.hlsl /Fo ./shader_compiled_objs/PCE_ParticleSimulation_cs_5_0
+fxc /E ParticleUpdateFinish /T cs_5_0 ./hlsl/particle/Emitter.hlsl /Fo ./shader_compiled_objs/PCE_ParticleUpdateFinish_cs_5_0
 
 fxc /E CommonVS_IDX /T vs_5_0 ./hlsl/particle/ParticleRenderer.hlsl /Fo ./shader_compiled_objs/SR_OIT_IDX_vs_5_0 
 fxc /E ParticleRender /T ps_5_0 ./hlsl/particle/ParticleRenderer.hlsl /Fo ./shader_compiled_objs/PCE_ParticleRenderBasic_ps_5_0

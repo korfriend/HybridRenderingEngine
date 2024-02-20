@@ -255,6 +255,7 @@
 #define IDR_RCDATA71001					  71001
 #define IDR_RCDATA71002					  71002
 #define IDR_RCDATA71003					  71003
+#define IDR_RCDATA71004					  71004
 
 #define IDR_RCDATA72000					  72000
 
