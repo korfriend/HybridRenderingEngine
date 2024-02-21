@@ -10,8 +10,14 @@ StructuredBuffer<Particle> particleBuffer : register(t50);
 StructuredBuffer<uint> culledIndirectionBuffer : register(t51);
 StructuredBuffer<uint> culledIndirectionBuffer2 : register(t52);
 
+
+RWTexture2D<unorm float4> fragment_rgba_singleLayer : register(u1);
+RWTexture2D<float> fragment_zdepth_singleLayer : register(u2);
+RWTexture2D<float> fragment_temp_zdepth_singleLayer : register(u3);
+
 VS_OUTPUT CommonVS_IDX(uint vid : SV_VertexID, uint instanceID : SV_InstanceID)
 {
+    // culledIndirectionBuffer implies sorted order instances (optional)
     uint particleIndex = culledIndirectionBuffer2[culledIndirectionBuffer[instanceID]];
     uint vertexID = particleIndex * 4 + vid;
 
@@ -67,15 +73,15 @@ PS_FILL_OUTPUT ParticleRender(VS_OUTPUT input)
     out_ps.color = (float4)0;
     out_ps.depthcs = FLT_MAX;
 
-    float4 v_rgba = (float4)1;// float4(input.f3Color, 1);
+    float4 v_rgba = float4(input.f3Color, 1);
     
     POBJ_PRE_CONTEXT;
 
-    //if (g_cbPobj.alpha == 0 || z_depth < 0 || (input.f4PosSS.z / input.f4PosSS.w < 0)
-    //    || input.f4PosSS.x < 0 || input.f4PosSS.y < 0
-    //    || (uint)input.f4PosSS.x >= g_cbCamState.rt_width
-    //    || (uint)input.f4PosSS.y >= g_cbCamState.rt_height)
-    //    clip(-1);
+    if (g_cbPobj.alpha == 0 || z_depth < 0 || (input.f4PosSS.z / input.f4PosSS.w < 0)
+        || input.f4PosSS.x < 0 || input.f4PosSS.y < 0
+        || (uint)input.f4PosSS.x >= g_cbCamState.rt_width
+        || (uint)input.f4PosSS.y >= g_cbCamState.rt_height)
+        clip(-1);
 
     out_ps.ds_z = input.f4PosSS.z;
     out_ps.color = v_rgba;

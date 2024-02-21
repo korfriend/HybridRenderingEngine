@@ -559,12 +559,13 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	cam_obj->GetMatrixWStoSS(&dmatWS2CS, &dmatCS2PS, &dmatPS2SS);
 	cam_obj->GetMatrixSStoWS(&dmatSS2PS, &dmatPS2CS, &dmatCS2WS);
 	vmmat44 dmatWS2PS = dmatWS2CS * dmatCS2PS;
+	vmmat44f matWS2CS = dmatWS2CS;
 	vmmat44f matWS2PS = dmatWS2PS;
 	vmmat44f matWS2SS = dmatWS2PS * dmatPS2SS;
 	vmmat44f matSS2WS = (dmatSS2PS * dmatPS2CS) * dmatCS2WS;
 
 	CB_CameraState cbCamState;
-	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, v_thickness <= 0? min_pitch : (float)v_thickness);
+	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, matWS2CS, cam_obj, fb_size_cur, k_value, v_thickness <= 0? min_pitch : (float)v_thickness);
 	cbCamState.iSrCamDummy__0 = *(uint*)&merging_beta;
 	if (fastRender2x) cbCamState.cam_flag |= 0x1 << 8; // 9th bit set
 	int oulineiRGB = (int)(outline_color.r * 255.f) | (int)(outline_color.g * 255.f) << 8 | (int)(outline_color.b * 255.f) << 16;

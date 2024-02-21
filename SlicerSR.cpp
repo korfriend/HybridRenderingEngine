@@ -1279,6 +1279,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	cam_obj->GetMatrixWStoSS(&dmatWS2CS, &dmatCS2PS, &dmatPS2SS);
 	cam_obj->GetMatrixSStoWS(&dmatSS2PS, &dmatPS2CS, &dmatCS2WS);
 	vmmat44 dmatWS2PS = dmatWS2CS * dmatCS2PS;
+	vmmat44f matWS2CS = dmatWS2CS;
 	vmmat44f matWS2PS = dmatWS2PS;
 	vmmat44f matWS2SS = dmatWS2PS * dmatPS2SS;
 	vmmat44f matSS2WS = (dmatSS2PS * dmatPS2CS) * dmatCS2WS;
@@ -2000,7 +2001,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	dx11DeviceImmContext->PSSetConstantBuffers(0, 1, &cbuf_cam_state);
 	dx11DeviceImmContext->CSSetConstantBuffers(0, 1, &cbuf_cam_state);
 	CB_CameraState cbCamState;
-	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, gi_v_thickness);
+	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, matWS2CS, cam_obj, fb_size_cur, k_value, gi_v_thickness);
 	cbCamState.far_plane = planeThickness;
 	if (!is_system_out) {
 		// which means the k-buffer will be used for the following renderer

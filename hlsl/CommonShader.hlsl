@@ -28,6 +28,7 @@ struct HxCB_CameraState // Hlsl dX Contant Buffer
 {
 	float4x4 mat_ws2ss;
 	float4x4 mat_ss2ws;
+	float4x4 mat_ws2cs;
 
 	float3 pos_cam_ws;
 	uint rt_width;

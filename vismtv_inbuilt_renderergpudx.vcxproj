@@ -49,7 +49,12 @@
     <ClInclude Include="gpu manager\gpures_helper.h" />
     <ClInclude Include="gpu manager\gpures_interface.h" />
     <ClInclude Include="gpu_common_res.h" />
-    <ClInclude Include="hlsl\particle\ParticleInterop.hlsli" />
+    <ClInclude Include="hlsl\particle\ParticleInterop.hlsli">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_DX10.0|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_DX11.0|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClInclude>
     <ClInclude Include="renderer\RendererHeader.h" />
     <ClInclude Include="renderer\Sampler.h" />
     <ClInclude Include="resource.h" />

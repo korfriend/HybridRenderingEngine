@@ -1370,6 +1370,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 	cam_obj->GetMatrixWStoSS(&dmatWS2CS, &dmatCS2PS, &dmatPS2SS);
 	cam_obj->GetMatrixSStoWS(&dmatSS2PS, &dmatPS2CS, &dmatCS2WS);
 	vmmat44 dmatWS2PS = dmatWS2CS * dmatCS2PS;
+	vmmat44f matWS2CS = dmatWS2CS; // view
 	vmmat44f matWS2PS = dmatWS2PS;
 	vmmat44f matWS2SS = dmatWS2PS * dmatPS2SS;
 	vmmat44f matSS2WS = (dmatSS2PS * dmatPS2CS) * dmatCS2WS;
@@ -1760,7 +1761,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 	};
 
 	CB_CameraState cbCamState;
-	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, cam_obj, fb_size_cur, k_value, gi_v_thickness);
+	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, matWS2CS, cam_obj, fb_size_cur, k_value, gi_v_thickness);
 
 	auto RenderStage1 = [&](
 		vector<VmActor*>& actor_list,
@@ -3153,6 +3154,8 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 				dx11DeviceImmContext->Unmap(cbuf_pobj, 0);
 
 				dx11DeviceImmContext->CSSetConstantBuffers(1, 1, &cbuf_pobj);
+				dx11DeviceImmContext->VSSetConstantBuffers(1, 1, &cbuf_pobj);
+				dx11DeviceImmContext->PSSetConstantBuffers(1, 1, &cbuf_pobj);
 
 				//std::string PARTICLE_TYPE = actor->GetParam("_string_ParticleSysType", "METABALL");
 				std::string PARTICLE_TYPE = actor->GetParam("_string_ParticleSysType", "NORMAL");
@@ -3203,556 +3206,567 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 					dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
 				}
 				else if (PARTICLE_TYPE == "NORMAL") {
-					const int MAX_PARTICLES = 1000;
-					VmVObjectPrimitive* pobj = (VmVObjectPrimitive*)actor->GetGeometryRes();
-					int pobjId = pobj ? pobj->GetObjectID() : 1234567;
 
-					// rendering resources //
+					// resources for particle system
 					GpuRes gres_vb_pos, gres_vb_nor, gres_vb_tex, gres_vb_color, gres_vb_idx;
-					{
-						gres_vb_pos.vm_src_id = pobjId;
-						gres_vb_pos.res_name = string("gres_particle_vb_pos");
-						if (!gpu_manager->UpdateGpuResource(gres_vb_pos)) {
-							gres_vb_pos.rtype = RTYPE_BUFFER;
-							gres_vb_pos.options["USAGE"] = D3D11_USAGE_DEFAULT;
-							gres_vb_pos.options["CPU_ACCESS_FLAG"] = NULL;
-							gres_vb_pos.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-							gres_vb_pos.options["FORMAT"] = DXGI_FORMAT_R32_TYPELESS; // note RGB32F is not allowed for Views
-							gres_vb_pos.options["RAW_ACCESS"] = 1;
-							gres_vb_pos.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES * 4 * 3) );
-							gres_vb_pos.res_values.SetParam("STRIDE_BYTES", 4u);
-
-							// D3D11_BIND_VERTEX_BUFFER 는 shader resource view 가 안 되는 것일까? 되네 :)
-							gpu_manager->GenerateGpuResource(gres_vb_pos);
-						}
-						gres_vb_nor = gres_vb_pos;
-						gres_vb_nor.res_name = string("gres_particle_vb_nor");
-						if (!gpu_manager->UpdateGpuResource(gres_vb_nor)) {
-
-							// D3D11_BIND_VERTEX_BUFFER 는 shader resource view 가 안 되는 것일까? 되네 :)
-							gpu_manager->GenerateGpuResource(gres_vb_nor);
-						}
-
-						gres_vb_tex = gres_vb_pos;
-						gres_vb_tex.res_name = string("gres_particle_vb_tex");
-						if (!gpu_manager->UpdateGpuResource(gres_vb_tex)) {
-							gres_vb_tex.rtype = RTYPE_BUFFER;
-							gres_vb_tex.options["USAGE"] = D3D11_USAGE_DEFAULT;
-							gres_vb_tex.options["CPU_ACCESS_FLAG"] = NULL;
-							gres_vb_tex.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-							gres_vb_tex.options["FORMAT"] = DXGI_FORMAT_R16G16_UNORM; 
-							gres_vb_tex.options["RAW_ACCESS"] = 0;
-							gres_vb_tex.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES * 4));
-							gres_vb_tex.res_values.SetParam("STRIDE_BYTES", 4u);
-
-							// D3D11_BIND_VERTEX_BUFFER 는 shader resource view 가 안 되는 것일까? 되네 :)
-							gpu_manager->GenerateGpuResource(gres_vb_tex);
-						}
-
-						gres_vb_color= gres_vb_pos;
-						gres_vb_color.res_name = string("gres_particle_vb_color");
-						if (!gpu_manager->UpdateGpuResource(gres_vb_color)) {
-							gres_vb_color.rtype = RTYPE_BUFFER;
-							gres_vb_color.options["USAGE"] = D3D11_USAGE_DEFAULT;
-							gres_vb_color.options["CPU_ACCESS_FLAG"] = NULL;
-							gres_vb_color.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-							gres_vb_color.options["FORMAT"] = DXGI_FORMAT_R8G8B8A8_UNORM;
-							gres_vb_color.options["RAW_ACCESS"] = 0;
-							gres_vb_color.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES * 4));
-							gres_vb_color.res_values.SetParam("STRIDE_BYTES", 4u);
-
-							// D3D11_BIND_VERTEX_BUFFER 는 shader resource view 가 안 되는 것일까? 되네 :)
-							gpu_manager->GenerateGpuResource(gres_vb_color);
-						}
-
-						gres_vb_idx.vm_src_id = pobjId;
-						gres_vb_idx.res_name = string("PARTICLE_VB_IDX");
-						if (!gpu_manager->UpdateGpuResource(gres_vb_idx))
-						{
-							gres_vb_idx.rtype = RTYPE_BUFFER;
-							gres_vb_idx.options["USAGE"] = D3D11_USAGE_DEFAULT;
-							gres_vb_idx.options["CPU_ACCESS_FLAG"] = NULL;
-							gres_vb_idx.options["BIND_FLAG"] = D3D11_BIND_INDEX_BUFFER;
-							gres_vb_idx.options["FORMAT"] = DXGI_FORMAT_R32_UINT;
-							gres_vb_idx.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES * 6));
-							gres_vb_idx.res_values.SetParam("STRIDE_BYTES", 4u);
-
-							gpu_manager->GenerateGpuResource(gres_vb_idx);
-
-							std::vector<uint> indexBuffer(MAX_PARTICLES * 6);
-							for (int i = 0; i < MAX_PARTICLES; i++)
-							{
-								uint v0 = i * 4;
-								uint i0 = i * 6;
-								indexBuffer[i0 + 0] = v0 + 0;
-								indexBuffer[i0 + 1] = v0 + 1;
-								indexBuffer[i0 + 2] = v0 + 2;
-								indexBuffer[i0 + 3] = v0 + 2;
-								indexBuffer[i0 + 4] = v0 + 1;
-								indexBuffer[i0 + 5] = v0 + 3;
-							}
-
-							D3D11_SUBRESOURCE_DATA subres;
-							subres.pSysMem = &indexBuffer[0];
-							subres.SysMemPitch = sizeof(uint) * MAX_PARTICLES;
-							subres.SysMemSlicePitch = 0; // only for 3D resource
-							dx11DeviceImmContext->UpdateSubresource((ID3D11Resource*)gres_vb_idx.alloc_res_ptrs[DesType::DTYPE_RES], 0, NULL, subres.pSysMem, subres.SysMemPitch, 0);
-						}
-
-					}
-
 					GpuRes gres_particle;
-					gres_particle.vm_src_id = pobjId;
-					gres_particle.res_name = string("PARTICLE_EMITTER");
-					if (!gpu_manager->UpdateGpuResource(gres_particle)) {
-						gres_particle.rtype = RTYPE_BUFFER;
-						gres_particle.options["USAGE"] = D3D11_USAGE_DEFAULT;
-						gres_particle.options["CPU_ACCESS_FLAG"] = 0;
-						gres_particle.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-						gres_particle.options["FORMAT"] = DXGI_FORMAT_UNKNOWN;
-						gres_particle.options["MISC"] = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
-						gres_particle.res_values.SetParam("NUM_ELEMENTS", (const uint)MAX_PARTICLES);
-						gres_particle.res_values.SetParam("STRIDE_BYTES", (const uint)sizeof(Particle));
-						gpu_manager->GenerateGpuResource(gres_particle);
-					}
-					GpuRes gres_aliveList0 = gres_particle;
-					gres_aliveList0.res_name = string("PARTICLE_ALIVELIST0");
-					if (!gpu_manager->UpdateGpuResource(gres_aliveList0)) {
-						gres_aliveList0.res_values.SetParam("NUM_ELEMENTS", (const uint)MAX_PARTICLES);
-						gres_aliveList0.res_values.SetParam("STRIDE_BYTES", (const uint)sizeof(uint));
-						gpu_manager->GenerateGpuResource(gres_aliveList0);
-					}
-					GpuRes gres_aliveList1 = gres_aliveList0;
-					gres_aliveList1.res_name = string("PARTICLE_ALIVELIST1");
-					if (!gpu_manager->UpdateGpuResource(gres_aliveList1)) {
-						gpu_manager->GenerateGpuResource(gres_aliveList1);
-					}
-					GpuRes gres_culledIndirect0 = gres_aliveList0;
-					gres_culledIndirect0.res_name = string("PARTICLE_CULLEDINDIRECT0");
-					if (!gpu_manager->UpdateGpuResource(gres_culledIndirect0)) {
-						gpu_manager->GenerateGpuResource(gres_culledIndirect0);
-					}
-					GpuRes gres_culledIndirect1 = gres_aliveList0;
-					gres_culledIndirect1.res_name = string("PARTICLE_CULLEDINDIRECT1");
-					if (!gpu_manager->UpdateGpuResource(gres_culledIndirect1)) {
-						gpu_manager->GenerateGpuResource(gres_culledIndirect1);
-					}
-
-					GpuRes gres_deadList = gres_aliveList0;
-					gres_deadList.res_name = string("PARTICLE_DEADLIST");
-					if (!gpu_manager->UpdateGpuResource(gres_deadList)) {
-						gpu_manager->GenerateGpuResource(gres_deadList);
-
-						// Dead index list:
-						std::vector<uint> deadList(MAX_PARTICLES);
-						for (int i = 0; i < MAX_PARTICLES; i++) deadList[i] = i;
-
-						D3D11_SUBRESOURCE_DATA subres;
-						subres.pSysMem = &deadList[0];
-						subres.SysMemPitch = sizeof(uint) * MAX_PARTICLES;
-						subres.SysMemSlicePitch = 0; // only for 3D resource
-						dx11DeviceImmContext->UpdateSubresource((ID3D11Resource*)gres_deadList.alloc_res_ptrs[DesType::DTYPE_RES], 0, NULL, subres.pSysMem, subres.SysMemPitch, 0);
-					}
-
+					GpuRes gres_aliveList0, gres_aliveList1;
+					GpuRes gres_culledIndirect0, gres_culledIndirect1;
+					GpuRes gres_deadList;
 					GpuRes gres_counter;
-					gres_counter.vm_src_id = pobjId;
-					gres_counter.res_name = string("PARTICLE_COUNTER");
-					if (!gpu_manager->UpdateGpuResource(gres_counter)) {
-						gres_counter.rtype = RTYPE_BUFFER;
-						gres_counter.options["USAGE"] = D3D11_USAGE_DEFAULT;
-						gres_counter.options["CPU_ACCESS_FLAG"] = 0;
-						gres_counter.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-						gres_counter.options["FORMAT"] = DXGI_FORMAT_R32_TYPELESS;
-						gres_counter.options["RAW_ACCESS"] = 1;
-						gres_counter.res_values.SetParam("NUM_ELEMENTS", (uint)(sizeof(ParticleCounters) / 4));
-						gres_counter.res_values.SetParam("STRIDE_BYTES", 4u);
-						gpu_manager->GenerateGpuResource(gres_counter);
+					GpuRes gres_indirect;
+					GpuRes gres_distance;
 
-						ParticleCounters counters;
-						counters.aliveCount = 0;
-						counters.deadCount = MAX_PARTICLES;
-						counters.realEmitCount = 0;
-						counters.aliveCount_afterSimulation = 0;
-						counters.cellAllocator = 0;
-						
-						D3D11_SUBRESOURCE_DATA subres;
-						subres.pSysMem = &counters;
-						subres.SysMemPitch = sizeof(ParticleCounters);
-						subres.SysMemSlicePitch = 0; // only for 3D resource
-						dx11DeviceImmContext->UpdateSubresource((ID3D11Resource*)gres_counter.alloc_res_ptrs[DesType::DTYPE_RES], 0, NULL, subres.pSysMem, subres.SysMemPitch, 0);
-					}
-
-					GpuRes gres_indirect = gres_aliveList0;
-					gres_indirect.res_name = string("PARTICLE_INDIRECT");
-					if (!gpu_manager->UpdateGpuResource(gres_indirect)) {
-						
-						gres_indirect.rtype = RTYPE_BUFFER;
-						gres_indirect.options["USAGE"] = D3D11_USAGE_DEFAULT;
-						gres_indirect.options["CPU_ACCESS_FLAG"] = 0;
-						gres_indirect.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-						gres_indirect.options["FORMAT"] = DXGI_FORMAT_R32_TYPELESS;
-						gres_indirect.options["RAW_ACCESS"] = 1;
-						gres_indirect.options["MISC"] = D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
-						uint stride = AlignTo(sizeof(IndirectDispatchArgs), (uint64_t)4) +
-							AlignTo(sizeof(IndirectDispatchArgs), (uint64_t)4) +
-							AlignTo(sizeof(IndirectDrawArgsInstanced), (uint64_t)4);
-						gres_indirect.res_values.SetParam("NUM_ELEMENTS", stride / 4u);
-						gres_indirect.res_values.SetParam("STRIDE_BYTES", 4u);
-						gpu_manager->GenerateGpuResource(gres_indirect);
-					}
-
-					GpuRes gres_distance = gres_aliveList0;
-					gres_distance.res_name = string("PARTICLE_DISTANCE");
-					if (!gpu_manager->UpdateGpuResource(gres_distance)) {
-						gpu_manager->GenerateGpuResource(gres_distance);
-
-						// Dead index list:
-						std::vector<float> distList(MAX_PARTICLES, 0.f);
-						//for (int i = 0; i < MAX_PARTICLES; i++) distList[i] = 0.f;
-
-						D3D11_SUBRESOURCE_DATA subres;
-						subres.pSysMem = &distList[0];
-						subres.SysMemPitch = sizeof(float) * MAX_PARTICLES;
-						subres.SysMemSlicePitch = 0; // only for 3D resource
-						dx11DeviceImmContext->UpdateSubresource((ID3D11Resource*)gres_distance.alloc_res_ptrs[DesType::DTYPE_RES], 0, NULL, subres.pSysMem, subres.SysMemPitch, 0);
-					}
-
-					// particle update //
+					static float emit = 0.f;
+					static float count = 10.f;
+					static float burst = 0;
+					static float time = 0, time_previous = 0;
+					static std::chrono::high_resolution_clock::time_point timestamp = std::chrono::high_resolution_clock::now();
+					static uint frameCount = 0;
+					static float dt = 0;
+					// CPU UPDATE
 					{
-						dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 20, dx11UAVs_NULL, NULL);
-						dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&gres_particle.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
-						dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 1, (ID3D11UnorderedAccessView**)&gres_aliveList0.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
-						dx11DeviceImmContext->CSSetUnorderedAccessViews(2, 1, (ID3D11UnorderedAccessView**)&gres_aliveList1.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
-						dx11DeviceImmContext->CSSetUnorderedAccessViews(3, 1, (ID3D11UnorderedAccessView**)&gres_deadList.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
-						dx11DeviceImmContext->CSSetUnorderedAccessViews(4, 1, (ID3D11UnorderedAccessView**)&gres_counter.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
-						dx11DeviceImmContext->CSSetUnorderedAccessViews(5, 1, (ID3D11UnorderedAccessView**)&gres_indirect.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
-						dx11DeviceImmContext->CSSetUnorderedAccessViews(6, 1, (ID3D11UnorderedAccessView**)&gres_distance.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+						frameCount++;
 
-						dx11DeviceImmContext->CSSetUnorderedAccessViews(7, 1, (ID3D11UnorderedAccessView**)&gres_vb_pos.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
-						dx11DeviceImmContext->CSSetUnorderedAccessViews(8, 1, (ID3D11UnorderedAccessView**)&gres_vb_nor.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
-						dx11DeviceImmContext->CSSetUnorderedAccessViews(9, 1, (ID3D11UnorderedAccessView**)&gres_vb_tex.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
-						dx11DeviceImmContext->CSSetUnorderedAccessViews(10, 1, (ID3D11UnorderedAccessView**)&gres_vb_color.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+						auto timestamp2 = std::chrono::high_resolution_clock::now();
+						std::chrono::duration<double> time_span = std::chrono::duration_cast<std::chrono::duration<double>>(timestamp2 - timestamp);
+						auto elapsed = time_span.count();
+						dt = (float)elapsed;
+						timestamp = timestamp2;
+						time_previous = time;
+						time += dt;
 
-						dx11DeviceImmContext->CSSetUnorderedAccessViews(11, 1, (ID3D11UnorderedAccessView**)&gres_culledIndirect0.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
-						dx11DeviceImmContext->CSSetUnorderedAccessViews(12, 1, (ID3D11UnorderedAccessView**)&gres_culledIndirect1.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+						emit = std::max(0.0f, emit - std::floor(emit));
+						emit += (float)count * dt;
+						emit += burst;
+						burst = 0;
 
-						ID3D11Buffer* cbuf_Emitter = dx11CommonParams->get_cbuf("CB_Emitter");
-						dx11DeviceImmContext->CSSetConstantBuffers(11, 1, &cbuf_Emitter);
-						ID3D11Buffer* cbuf_Frame = dx11CommonParams->get_cbuf("CB_Frame");
-						dx11DeviceImmContext->CSSetConstantBuffers(12, 1, &cbuf_Frame);
+						//if (emit >= 1) {
+						//	vmlog::LogInfo("emit : " + std::to_string(emit));
+						//}
+					}
 
-						CB_Frame cbFrame = {};
+					// GPU UPDATE
+					{
+						const int MAX_PARTICLES = 1000;
+						VmVObjectPrimitive* pobj = (VmVObjectPrimitive*)actor->GetGeometryRes();
+						int pobjId = pobj ? pobj->GetObjectID() : 1234567;
+
+						// rendering resources //
 						{
-							static uint frameCount = 0;
-							frameCount++;
-
-							static float time = 0, time_previous = 0;
-							static std::chrono::high_resolution_clock::time_point timestamp = std::chrono::high_resolution_clock::now();
-							auto timestamp2 = std::chrono::high_resolution_clock::now();
-							std::chrono::duration<double> time_span = std::chrono::duration_cast<std::chrono::duration<double>>(timestamp2 - timestamp);
-							auto elapsed = time_span.count();
-							timestamp = timestamp2;
-							time_previous = time;
-							time += elapsed;// cbFrame.delta_time;
-
-							cbFrame.frame_count = frameCount;
-							cbFrame.delta_time = (float)elapsed;
-							cbFrame.time = time;
-							cbFrame.time_previous = time_previous;
-						}
-						D3D11_MAPPED_SUBRESOURCE mappedResFrame;
-						dx11DeviceImmContext->Map(cbuf_Frame, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResFrame);
-						CB_Frame* cbGpuFrame = (CB_Frame*)mappedResFrame.pData;
-						memcpy(cbGpuFrame, &cbFrame, sizeof(CB_Frame));
-						dx11DeviceImmContext->Unmap(cbuf_Frame, 0);
-
-						CB_Emitter cbEmitter = {};
-						{
-							cbEmitter.xEmitterTransform = TRANSPOSE(actor->matOS2WS); // cbPolygonObj.mat_os2ws
-							//if (mesh == nullptr || !IsFormatUnorm(mesh->position_format) || mesh->so_pos.IsValid())
-							//{
-							//	cb.xEmitterBaseMeshUnormRemap.init();
-							//}
-							//else
-							//{
-							//	XMFLOAT4X4 unormRemap;
-							//	XMStoreFloat4x4(&unormRemap, mesh->aabb.getUnormRemapMatrix());
-							//	cb.xEmitterBaseMeshUnormRemap.Create(unormRemap);
-							//}
-
-
-							static float emit = 0.f;
-							static float count = 10.f;
-							static float burst = 0;
-							emit = std::max(0.0f, emit - std::floor(emit));
-							emit += (float)count * cbFrame.delta_time;// dt;
-							emit += burst;
-							burst = 0;
-
-							//if (emit >= 1) {
-							//	vmlog::LogInfo("emit : " + std::to_string(emit));
-							//}
-
-							cbEmitter.xEmitCount = emit;// (uint32_t)actor->GetParam("_int_EmitCount", (int)0);
-							//if (mesh == nullptr)
-							{
-								cbEmitter.xEmitterMeshGeometryOffset = 0;
-								cbEmitter.xEmitterMeshGeometryCount = 0;
-							}
-							//else
-							//{
-							//	uint32_t first_subset = 0;
-							//	uint32_t last_subset = 0;
-							//	mesh->GetLODSubsetRange(0, first_subset, last_subset);
-							//	cb.xEmitterMeshGeometryOffset = mesh->geometryOffset + first_subset;
-							//	cb.xEmitterMeshGeometryCount = last_subset - first_subset;
-							//}
-							srand(time(NULL));
-							cbEmitter.xEmitterRandomness = (rand() % 100) * 0.01f;
-							cbEmitter.xParticleLifeSpan = actor->GetParam("_float_LifeSpan", (float)1.f);
-							cbEmitter.xParticleLifeSpanRandomness = actor->GetParam("_float_LifeSpanRandomness", (float)1.f);
-							cbEmitter.xParticleNormalFactor = actor->GetParam("_float_NormFactor", (float)1.f);
-							cbEmitter.xParticleRandomFactor = actor->GetParam("_float_RandomFactor", (float)1.f);
-							cbEmitter.xParticleScaling = actor->GetParam("_float_ScaleFactor", (float)1.f);
-							cbEmitter.xParticleSize = actor->GetParam("_float_ScaleSize", (float)1.f);
-							cbEmitter.xParticleMotionBlurAmount = actor->GetParam("_float_MotionBlurAmount", (float)0.f);
-							cbEmitter.xParticleRotation = actor->GetParam("_float_RotationDeg", (float)0.f) * VM_PI * 60.f;
-							cbEmitter.xParticleMass = actor->GetParam("_float_Mass", (float)1.f);
-							cbEmitter.xEmitterMaxParticleCount = MAX_PARTICLES;
-							cbEmitter.xEmitterFixedTimestep = actor->GetParam("_float_FixedTimeStep", (float)-1.f);
-							cbEmitter.xEmitterRestitution = actor->GetParam("_float_Restitution", (float)0.98f);
-							cbEmitter.xEmitterFramesXY = vmuint2(std::max(1u, (uint)actor->GetParam("_int_FramesX", (int)1)), 
-								std::max(1u, (uint)actor->GetParam("_int_FramesY", (int)1)));
-							cbEmitter.xEmitterFrameCount = std::max(1u, (uint)actor->GetParam("_int_FrameCount", (int)1));
-							cbEmitter.xEmitterFrameStart = (uint)actor->GetParam("_int_FrameStart", (int)0);
-							cbEmitter.xEmitterTexMul = vmfloat2(1.0f / (float)cbEmitter.xEmitterFramesXY.x, 1.0f / (float)cbEmitter.xEmitterFramesXY.y);
-							cbEmitter.xEmitterFrameRate = actor->GetParam("_float_FrameRate", (float)0.f);
-							cbEmitter.xParticleGravity = vmfloat3(0, 0, 0);
-							cbEmitter.xParticleDrag = actor->GetParam("_float_ParticleDrag", (float)1.f);
-							vmfloat3 velosity = actor->GetParam("_float3_Velocity", (vmfloat3)0.f);
-							vmmath::fTransformVector(&cbEmitter.xParticleVelocity, &velosity, &actor->matOS2WS);
-							cbEmitter.xParticleRandomColorFactor = (rand() % 100) * 0.01f;
-							cbEmitter.xEmitterLayerMask = ~0u;
-							cbEmitter.xEmitterInstanceIndex = 0;
-
-							cbEmitter.xEmitterOptions = 0;
-							//if (IsSPHEnabled())
-							//{
-							//	cb.xEmitterOptions |= EMITTER_OPTION_BIT_SPH_ENABLED;
-							//}
-							//if (IsFrameBlendingEnabled())
-							//{
-							//	cb.xEmitterOptions |= EMITTER_OPTION_BIT_FRAME_BLENDING_ENABLED;
-							//}
-							//if (ALLOW_MESH_SHADER && device->CheckCapability(GraphicsDeviceCapability::MESH_SHADER))
-							//{
-							//	cb.xEmitterOptions |= EMITTER_OPTION_BIT_MESH_SHADER_ENABLED;
-							//}
-							//if (IsCollidersDisabled())
-							//{
-							//	cb.xEmitterOptions |= EMITTER_OPTION_BIT_COLLIDERS_DISABLED;
-							//}
-							//if (_flags & FLAG_USE_RAIN_BLOCKER)
-							//{
-							//	cb.xEmitterOptions |= EMITTER_OPTION_BIT_USE_RAIN_BLOCKER;
-							//}
-							//if (IsTakeColorFromMesh())
-							//{
-							//	cb.xEmitterOptions |= EMITTER_OPTION_BIT_TAKE_COLOR_FROM_MESH;
-							//}
-
-							// SPH:
-							//cb.xSPH_h = SPH_h;
-							//cb.xSPH_h_rcp = 1.0f / SPH_h;
-							//cb.xSPH_h2 = SPH_h * SPH_h;
-							//cb.xSPH_h3 = cb.xSPH_h2 * SPH_h;
-							//const float h6 = cb.xSPH_h2 * cb.xSPH_h2 * cb.xSPH_h2;
-							//const float h9 = h6 * cb.xSPH_h3;
-							//cb.xSPH_poly6_constant = (315.0f / (64.0f * XM_PI * h9));
-							//cb.xSPH_spiky_constant = (-45.0f / (XM_PI * h6));
-							//cb.xSPH_visc_constant = (45.0f / (XM_PI * h6));
-							//cb.xSPH_K = SPH_K;
-							//cb.xSPH_p0 = SPH_p0;
-							//cb.xSPH_e = SPH_e;
-
-							//device->UpdateBuffer(&constantBuffer, &cb, cmd);
-							//{
-							//	GPUBarrier barriers[] = {
-							//		GPUBarrier::Buffer(&constantBuffer, ResourceState::COPY_DST, ResourceState::CONSTANT_BUFFER),
-							//	};
-							//	device->Barrier(barriers, arraysize(barriers), cmd);
-							//}
-						}
-						D3D11_MAPPED_SUBRESOURCE mappedResEmitter;
-						dx11DeviceImmContext->Map(cbuf_Emitter, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResEmitter);
-						CB_Emitter* cbGpuEmitter = (CB_Emitter*)mappedResEmitter.pData;
-						memcpy(cbGpuEmitter, &cbEmitter, sizeof(CB_Emitter));
-						dx11DeviceImmContext->Unmap(cbuf_Emitter, 0);
-
-						dx11DeviceImmContext->CSSetShader(GETCS(PCE_KickoffEmitterSystem_cs_5_0), NULL, 0);
-						dx11DeviceImmContext->Dispatch(1, 1, 1);
-
-						// COUNTER TEST //
-						auto counter_test = [&gres_counter, &gpu_manager, &dx11DeviceImmContext]()
-						{
-							GpuRes gres_counter_sys_test = gres_counter;
-							gres_counter_sys_test.res_name = string("PARTICLE_COUNTER_SYSOUT");
-							if (!gpu_manager->UpdateGpuResource(gres_counter_sys_test)) {
-
-								gres_counter_sys_test.rtype = RTYPE_BUFFER;
-								gres_counter_sys_test.options["USAGE"] = D3D11_USAGE_STAGING;
-								gres_counter_sys_test.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_READ;
-								gres_counter_sys_test.options["BIND_FLAG"] = NULL;
-								gres_counter_sys_test.options["FORMAT"] = DXGI_FORMAT_R32_FLOAT;
-								gres_counter_sys_test.options["RAW_ACCESS"] = 0;
-								gres_counter_sys_test.options["MISC"] = NULL;
-								gres_counter.res_values.SetParam("NUM_ELEMENTS", (uint)(sizeof(ParticleCounters) / 4));
-								gres_counter.res_values.SetParam("STRIDE_BYTES", 4u);
-								gpu_manager->GenerateGpuResource(gres_counter_sys_test);
-							}
-							dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_counter_sys_test.alloc_res_ptrs[DTYPE_RES], (ID3D11Buffer*)gres_counter.alloc_res_ptrs[DTYPE_RES]);
-							D3D11_MAPPED_SUBRESOURCE mappedResSys;
-							HRESULT hr = dx11DeviceImmContext->Map((ID3D11Buffer*)gres_counter_sys_test.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSys);
-							uint* dv = (uint*)mappedResSys.pData;
-							dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_counter_sys_test.alloc_res_ptrs[DTYPE_RES], 0);
-						};
-						//counter_test();
-
-						// INDIRECT TEST //
-						auto indirect_test = [&gres_indirect, &gpu_manager, &dx11DeviceImmContext]()
-						{
-							GpuRes gres_indirect_sys_test = gres_indirect;
-							gres_indirect_sys_test.res_name = string("PARTICLE_INDIRECT_SYSOUT");
-							if (!gpu_manager->UpdateGpuResource(gres_indirect_sys_test)) {
-
-								gres_indirect_sys_test.rtype = RTYPE_BUFFER;
-								gres_indirect_sys_test.options["USAGE"] = D3D11_USAGE_STAGING;
-								gres_indirect_sys_test.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_READ;
-								gres_indirect_sys_test.options["BIND_FLAG"] = NULL;
-								gres_indirect_sys_test.options["FORMAT"] = DXGI_FORMAT_R32_FLOAT;
-								gres_indirect_sys_test.options["RAW_ACCESS"] = 0;
-								gres_indirect_sys_test.options["MISC"] = NULL;
-								uint stride = AlignTo(sizeof(IndirectDispatchArgs), (uint64_t)4) +
-									AlignTo(sizeof(IndirectDispatchArgs), (uint64_t)4) +
-									AlignTo(sizeof(IndirectDrawArgsInstanced), (uint64_t)4);
-								gres_indirect_sys_test.res_values.SetParam("NUM_ELEMENTS", stride / 4u);
-								gres_indirect_sys_test.res_values.SetParam("STRIDE_BYTES", 4u);
-								gpu_manager->GenerateGpuResource(gres_indirect_sys_test);
-							}
-							dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_indirect_sys_test.alloc_res_ptrs[DTYPE_RES], (ID3D11Buffer*)gres_indirect.alloc_res_ptrs[DTYPE_RES]);
-
-							D3D11_MAPPED_SUBRESOURCE mappedResSys;
-							HRESULT hr = dx11DeviceImmContext->Map((ID3D11Buffer*)gres_indirect_sys_test.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSys);
-							uint* dv = (uint*)mappedResSys.pData;
-							//vmlog::LogInfo(std::to_string(dv[6]) + ", " + std::to_string(dv[7]));
-							dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_indirect_sys_test.alloc_res_ptrs[DTYPE_RES], 0);
-						};
-						//indirect_test();
-
-						auto vbpos_test = [&gres_vb_pos, &pobjId, &gpu_manager, &dx11DeviceImmContext, &MAX_PARTICLES]()
-						{
-							GpuRes gres_vb_pos_sys_test = gres_vb_pos;
-							gres_vb_pos_sys_test.res_name = string("gres_particle_vb_pos_SYSOUT");
-							if (!gpu_manager->UpdateGpuResource(gres_vb_pos_sys_test)) {
-								gres_vb_pos_sys_test.rtype = RTYPE_BUFFER;
-								gres_vb_pos_sys_test.options["USAGE"] = D3D11_USAGE_STAGING;
-								gres_vb_pos_sys_test.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_READ;
-								gres_vb_pos_sys_test.options["BIND_FLAG"] = NULL;
-								gres_vb_pos_sys_test.options["FORMAT"] = DXGI_FORMAT_R32_FLOAT; // note RGB32F is not allowed for Views
-								gres_vb_pos_sys_test.options["RAW_ACCESS"] = 0;
-								gres_vb_pos_sys_test.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES * 4 * 3));
-								gres_vb_pos_sys_test.res_values.SetParam("STRIDE_BYTES", 4u);
+							gres_vb_pos.vm_src_id = pobjId;
+							gres_vb_pos.res_name = string("gres_particle_vb_pos");
+							if (!gpu_manager->UpdateGpuResource(gres_vb_pos)) {
+								gres_vb_pos.rtype = RTYPE_BUFFER;
+								gres_vb_pos.options["USAGE"] = D3D11_USAGE_DEFAULT;
+								gres_vb_pos.options["CPU_ACCESS_FLAG"] = NULL;
+								gres_vb_pos.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+								gres_vb_pos.options["FORMAT"] = DXGI_FORMAT_R32_TYPELESS; // note RGB32F is not allowed for Views
+								gres_vb_pos.options["RAW_ACCESS"] = 1;
+								gres_vb_pos.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES * 3 * 4)); // 4 refers to quad
+								gres_vb_pos.res_values.SetParam("STRIDE_BYTES", 4u);
 
 								// D3D11_BIND_VERTEX_BUFFER 는 shader resource view 가 안 되는 것일까? 되네 :)
-								gpu_manager->GenerateGpuResource(gres_vb_pos_sys_test);
+								gpu_manager->GenerateGpuResource(gres_vb_pos);
 							}
-							dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_vb_pos_sys_test.alloc_res_ptrs[DTYPE_RES], (ID3D11Buffer*)gres_vb_pos.alloc_res_ptrs[DTYPE_RES]);
+							gres_vb_nor = gres_vb_pos;
+							gres_vb_nor.res_name = string("gres_particle_vb_nor");
+							if (!gpu_manager->UpdateGpuResource(gres_vb_nor)) {
 
-							D3D11_MAPPED_SUBRESOURCE mappedResSys;
-							HRESULT hr = dx11DeviceImmContext->Map((ID3D11Buffer*)gres_vb_pos_sys_test.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSys);
-							float* dv = (float*)mappedResSys.pData;
-							//vmlog::LogInfo(std::to_string(dv[6]) + ", " + std::to_string(dv[7]));
-							if (dv[0] != 0)
-								vmlog::LogInfo("GGG");
-							dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_vb_pos_sys_test.alloc_res_ptrs[DTYPE_RES], 0);
-						};
+								// D3D11_BIND_VERTEX_BUFFER 는 shader resource view 가 안 되는 것일까? 되네 :)
+								gpu_manager->GenerateGpuResource(gres_vb_nor);
+							}
 
-						constexpr uint ARGUMENTBUFFER_OFFSET_DISPATCHEMIT = 0u;
-						dx11DeviceImmContext->CSSetShader(GETCS(PCE_ParticleEmitter_cs_5_0), NULL, 0);
-						dx11DeviceImmContext->DispatchIndirect((ID3D11Buffer*)gres_indirect.alloc_res_ptrs[DTYPE_RES], ARGUMENTBUFFER_OFFSET_DISPATCHEMIT);
+							gres_vb_tex = gres_vb_pos;
+							gres_vb_tex.res_name = string("gres_particle_vb_tex");
+							if (!gpu_manager->UpdateGpuResource(gres_vb_tex)) {
+								gres_vb_tex.rtype = RTYPE_BUFFER;
+								gres_vb_tex.options["USAGE"] = D3D11_USAGE_DEFAULT;
+								gres_vb_tex.options["CPU_ACCESS_FLAG"] = NULL;
+								gres_vb_tex.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+								gres_vb_tex.options["FORMAT"] = DXGI_FORMAT_R16G16_UNORM;
+								gres_vb_tex.options["RAW_ACCESS"] = 0;
+								gres_vb_tex.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES));
+								gres_vb_tex.res_values.SetParam("STRIDE_BYTES", 4u);
 
-						//counter_test();
+								// D3D11_BIND_VERTEX_BUFFER 는 shader resource view 가 안 되는 것일까? 되네 :)
+								gpu_manager->GenerateGpuResource(gres_vb_tex);
+							}
 
-						constexpr uint ARGUMENTBUFFER_OFFSET_DISPATCHSIMULATION = 12u;
-						dx11DeviceImmContext->CSSetShader(GETCS(PCE_ParticleSimulation_cs_5_0), NULL, 0);
-						dx11DeviceImmContext->DispatchIndirect((ID3D11Buffer*)gres_indirect.alloc_res_ptrs[DTYPE_RES], ARGUMENTBUFFER_OFFSET_DISPATCHSIMULATION);
+							gres_vb_color = gres_vb_pos;
+							gres_vb_color.res_name = string("gres_particle_vb_color");
+							if (!gpu_manager->UpdateGpuResource(gres_vb_color)) {
+								gres_vb_color.rtype = RTYPE_BUFFER;
+								gres_vb_color.options["USAGE"] = D3D11_USAGE_DEFAULT;
+								gres_vb_color.options["CPU_ACCESS_FLAG"] = NULL;
+								gres_vb_color.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+								gres_vb_color.options["FORMAT"] = DXGI_FORMAT_R8G8B8A8_UNORM;
+								gres_vb_color.options["RAW_ACCESS"] = 0;
+								gres_vb_color.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES));
+								gres_vb_color.res_values.SetParam("STRIDE_BYTES", 4u);
 
-						//counter_test();
+								// D3D11_BIND_VERTEX_BUFFER 는 shader resource view 가 안 되는 것일까? 되네 :)
+								gpu_manager->GenerateGpuResource(gres_vb_color);
+							}
 
-						dx11DeviceImmContext->CSSetShader(GETCS(PCE_ParticleUpdateFinish_cs_5_0), NULL, 0);
-						dx11DeviceImmContext->Dispatch(1, 1, 1);
+							gres_vb_idx.vm_src_id = pobjId;
+							gres_vb_idx.res_name = string("PARTICLE_VB_IDX");
+							if (!gpu_manager->UpdateGpuResource(gres_vb_idx))
+							{
+								gres_vb_idx.rtype = RTYPE_BUFFER;
+								gres_vb_idx.options["USAGE"] = D3D11_USAGE_DEFAULT;
+								gres_vb_idx.options["CPU_ACCESS_FLAG"] = NULL;
+								gres_vb_idx.options["BIND_FLAG"] = D3D11_BIND_INDEX_BUFFER;
+								gres_vb_idx.options["FORMAT"] = DXGI_FORMAT_R32_UINT;
+								gres_vb_idx.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES * 6));
+								gres_vb_idx.res_values.SetParam("STRIDE_BYTES", 4u);
 
-						counter_test();
-						indirect_test();
-						vbpos_test();
+								gpu_manager->GenerateGpuResource(gres_vb_idx);
+
+								std::vector<uint> indexBuffer(MAX_PARTICLES * 6);
+								for (int i = 0; i < MAX_PARTICLES; i++)
+								{
+									uint v0 = i * 4;
+									uint i0 = i * 6;
+									indexBuffer[i0 + 0] = v0 + 0;
+									indexBuffer[i0 + 1] = v0 + 1;
+									indexBuffer[i0 + 2] = v0 + 2;
+									indexBuffer[i0 + 3] = v0 + 2;
+									indexBuffer[i0 + 4] = v0 + 1;
+									indexBuffer[i0 + 5] = v0 + 3;
+								}
+
+								D3D11_SUBRESOURCE_DATA subres;
+								subres.pSysMem = &indexBuffer[0];
+								subres.SysMemPitch = sizeof(uint) * MAX_PARTICLES * 6;
+								subres.SysMemSlicePitch = 0; // only for 3D resource
+								dx11DeviceImmContext->UpdateSubresource((ID3D11Resource*)gres_vb_idx.alloc_res_ptrs[DesType::DTYPE_RES], 0, NULL, subres.pSysMem, subres.SysMemPitch, 0);
+							}
+
+						}
+
+						gres_particle.vm_src_id = pobjId;
+						gres_particle.res_name = string("PARTICLE_EMITTER");
+						if (!gpu_manager->UpdateGpuResource(gres_particle)) {
+							gres_particle.rtype = RTYPE_BUFFER;
+							gres_particle.options["USAGE"] = D3D11_USAGE_DEFAULT;
+							gres_particle.options["CPU_ACCESS_FLAG"] = 0;
+							gres_particle.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+							gres_particle.options["FORMAT"] = DXGI_FORMAT_UNKNOWN;
+							gres_particle.options["MISC"] = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+							gres_particle.res_values.SetParam("NUM_ELEMENTS", (const uint)MAX_PARTICLES);
+							gres_particle.res_values.SetParam("STRIDE_BYTES", (const uint)sizeof(Particle));
+							gpu_manager->GenerateGpuResource(gres_particle);
+						}
+						
+						int alivebufferIndex0 = frameCount % 2;
+						gres_aliveList0 = gres_particle;
+						gres_aliveList0.res_name = string("PARTICLE_ALIVELIST") + std::to_string(alivebufferIndex0);
+						if (!gpu_manager->UpdateGpuResource(gres_aliveList0)) {
+							gres_aliveList0.res_values.SetParam("NUM_ELEMENTS", (const uint)MAX_PARTICLES);
+							gres_aliveList0.res_values.SetParam("STRIDE_BYTES", (const uint)sizeof(uint));
+							gpu_manager->GenerateGpuResource(gres_aliveList0);
+						}
+
+						int alivebufferIndex1 = (frameCount + 1) % 2;
+						gres_aliveList1 = gres_aliveList0;
+						gres_aliveList1.res_name = string("PARTICLE_ALIVELIST") + std::to_string(alivebufferIndex1);
+						if (!gpu_manager->UpdateGpuResource(gres_aliveList1)) {
+							gpu_manager->GenerateGpuResource(gres_aliveList1);
+						}
+						
+						gres_culledIndirect0 = gres_aliveList0;
+						gres_culledIndirect0.res_name = string("PARTICLE_CULLEDINDIRECT0");
+						if (!gpu_manager->UpdateGpuResource(gres_culledIndirect0)) {
+							gpu_manager->GenerateGpuResource(gres_culledIndirect0);
+						}
+						
+						gres_culledIndirect1 = gres_aliveList0;
+						gres_culledIndirect1.res_name = string("PARTICLE_CULLEDINDIRECT1");
+						if (!gpu_manager->UpdateGpuResource(gres_culledIndirect1)) {
+							gpu_manager->GenerateGpuResource(gres_culledIndirect1);
+						}
+
+						gres_deadList = gres_aliveList0;
+						gres_deadList.res_name = string("PARTICLE_DEADLIST");
+						if (!gpu_manager->UpdateGpuResource(gres_deadList)) {
+							gpu_manager->GenerateGpuResource(gres_deadList);
+
+							// Dead index list:
+							std::vector<uint> deadList(MAX_PARTICLES);
+							for (int i = 0; i < MAX_PARTICLES; i++) deadList[i] = i;
+
+							D3D11_SUBRESOURCE_DATA subres;
+							subres.pSysMem = &deadList[0];
+							subres.SysMemPitch = sizeof(uint) * MAX_PARTICLES;
+							subres.SysMemSlicePitch = 0; // only for 3D resource
+							dx11DeviceImmContext->UpdateSubresource((ID3D11Resource*)gres_deadList.alloc_res_ptrs[DesType::DTYPE_RES], 0, NULL, subres.pSysMem, subres.SysMemPitch, 0);
+						}
+
+						gres_counter.vm_src_id = pobjId;
+						gres_counter.res_name = string("PARTICLE_COUNTER");
+						if (!gpu_manager->UpdateGpuResource(gres_counter)) {
+							gres_counter.rtype = RTYPE_BUFFER;
+							gres_counter.options["USAGE"] = D3D11_USAGE_DEFAULT;
+							gres_counter.options["CPU_ACCESS_FLAG"] = 0;
+							gres_counter.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+							gres_counter.options["FORMAT"] = DXGI_FORMAT_R32_TYPELESS;
+							gres_counter.options["RAW_ACCESS"] = 1;
+							gres_counter.res_values.SetParam("NUM_ELEMENTS", (uint)(sizeof(ParticleCounters) / 4));
+							gres_counter.res_values.SetParam("STRIDE_BYTES", 4u);
+							gpu_manager->GenerateGpuResource(gres_counter);
+
+							ParticleCounters counters;
+							counters.aliveCount = 0;
+							counters.deadCount = MAX_PARTICLES;
+							counters.realEmitCount = 0;
+							counters.aliveCount_afterSimulation = 0;
+							counters.cellAllocator = 0;
+
+							D3D11_SUBRESOURCE_DATA subres;
+							subres.pSysMem = &counters;
+							subres.SysMemPitch = sizeof(ParticleCounters);
+							subres.SysMemSlicePitch = 0; // only for 3D resource
+							dx11DeviceImmContext->UpdateSubresource((ID3D11Resource*)gres_counter.alloc_res_ptrs[DesType::DTYPE_RES], 0, NULL, subres.pSysMem, subres.SysMemPitch, 0);
+						}
+
+						gres_indirect = gres_aliveList0;
+						gres_indirect.res_name = string("PARTICLE_INDIRECT");
+						if (!gpu_manager->UpdateGpuResource(gres_indirect)) {
+
+							gres_indirect.rtype = RTYPE_BUFFER;
+							gres_indirect.options["USAGE"] = D3D11_USAGE_DEFAULT;
+							gres_indirect.options["CPU_ACCESS_FLAG"] = 0;
+							gres_indirect.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+							gres_indirect.options["FORMAT"] = DXGI_FORMAT_R32_TYPELESS;
+							gres_indirect.options["RAW_ACCESS"] = 1;
+							gres_indirect.options["MISC"] = D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
+							uint stride = AlignTo(sizeof(IndirectDispatchArgs), (uint64_t)4) +
+								AlignTo(sizeof(IndirectDispatchArgs), (uint64_t)4) +
+								AlignTo(sizeof(IndirectDrawArgsInstanced), (uint64_t)4);
+							gres_indirect.res_values.SetParam("NUM_ELEMENTS", stride / 4u);
+							gres_indirect.res_values.SetParam("STRIDE_BYTES", 4u);
+							gpu_manager->GenerateGpuResource(gres_indirect);
+						}
+
+						gres_distance = gres_aliveList0;
+						gres_distance.res_name = string("PARTICLE_DISTANCE");
+						if (!gpu_manager->UpdateGpuResource(gres_distance)) {
+							gpu_manager->GenerateGpuResource(gres_distance);
+
+							// Dead index list:
+							std::vector<float> distList(MAX_PARTICLES, 0.f);
+							//for (int i = 0; i < MAX_PARTICLES; i++) distList[i] = 0.f;
+
+							D3D11_SUBRESOURCE_DATA subres;
+							subres.pSysMem = &distList[0];
+							subres.SysMemPitch = sizeof(float) * MAX_PARTICLES;
+							subres.SysMemSlicePitch = 0; // only for 3D resource
+							dx11DeviceImmContext->UpdateSubresource((ID3D11Resource*)gres_distance.alloc_res_ptrs[DesType::DTYPE_RES], 0, NULL, subres.pSysMem, subres.SysMemPitch, 0);
+						}
+
+						// particle update //
+						{
+							dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 20, dx11UAVs_NULL, NULL);
+							dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&gres_particle.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+							dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 1, (ID3D11UnorderedAccessView**)&gres_aliveList0.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+							dx11DeviceImmContext->CSSetUnorderedAccessViews(2, 1, (ID3D11UnorderedAccessView**)&gres_aliveList1.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+							dx11DeviceImmContext->CSSetUnorderedAccessViews(3, 1, (ID3D11UnorderedAccessView**)&gres_deadList.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+							dx11DeviceImmContext->CSSetUnorderedAccessViews(4, 1, (ID3D11UnorderedAccessView**)&gres_counter.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+							dx11DeviceImmContext->CSSetUnorderedAccessViews(5, 1, (ID3D11UnorderedAccessView**)&gres_indirect.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+							dx11DeviceImmContext->CSSetUnorderedAccessViews(6, 1, (ID3D11UnorderedAccessView**)&gres_distance.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+
+							dx11DeviceImmContext->CSSetUnorderedAccessViews(7, 1, (ID3D11UnorderedAccessView**)&gres_vb_pos.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+							dx11DeviceImmContext->CSSetUnorderedAccessViews(8, 1, (ID3D11UnorderedAccessView**)&gres_vb_nor.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+							dx11DeviceImmContext->CSSetUnorderedAccessViews(9, 1, (ID3D11UnorderedAccessView**)&gres_vb_tex.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+							dx11DeviceImmContext->CSSetUnorderedAccessViews(10, 1, (ID3D11UnorderedAccessView**)&gres_vb_color.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+
+							dx11DeviceImmContext->CSSetUnorderedAccessViews(11, 1, (ID3D11UnorderedAccessView**)&gres_culledIndirect0.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+							dx11DeviceImmContext->CSSetUnorderedAccessViews(12, 1, (ID3D11UnorderedAccessView**)&gres_culledIndirect1.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+
+							ID3D11Buffer* cbuf_Emitter = dx11CommonParams->get_cbuf("CB_Emitter");
+							dx11DeviceImmContext->CSSetConstantBuffers(11, 1, &cbuf_Emitter);
+							ID3D11Buffer* cbuf_Frame = dx11CommonParams->get_cbuf("CB_Frame");
+							dx11DeviceImmContext->CSSetConstantBuffers(12, 1, &cbuf_Frame);
+
+							CB_Frame cbFrame = {};
+							{
+								cbFrame.frame_count = frameCount;
+								cbFrame.delta_time = dt;
+								cbFrame.time = time;
+								cbFrame.time_previous = time_previous;
+							}
+							D3D11_MAPPED_SUBRESOURCE mappedResFrame;
+							dx11DeviceImmContext->Map(cbuf_Frame, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResFrame);
+							CB_Frame* cbGpuFrame = (CB_Frame*)mappedResFrame.pData;
+							memcpy(cbGpuFrame, &cbFrame, sizeof(CB_Frame));
+							dx11DeviceImmContext->Unmap(cbuf_Frame, 0);
+
+							CB_Emitter cbEmitter = {};
+							{
+								cbEmitter.xEmitterTransform = TRANSPOSE(actor->matOS2WS); // cbPolygonObj.mat_os2ws
+								//if (mesh == nullptr || !IsFormatUnorm(mesh->position_format) || mesh->so_pos.IsValid())
+								//{
+								//	cb.xEmitterBaseMeshUnormRemap.init();
+								//}
+								//else
+								//{
+								//	XMFLOAT4X4 unormRemap;
+								//	XMStoreFloat4x4(&unormRemap, mesh->aabb.getUnormRemapMatrix());
+								//	cb.xEmitterBaseMeshUnormRemap.Create(unormRemap);
+								//}
+
+								cbEmitter.xEmitCount = emit;// (uint32_t)actor->GetParam("_int_EmitCount", (int)0);
+								//if (mesh == nullptr)
+								{
+									cbEmitter.xEmitterMeshGeometryOffset = 0;
+									cbEmitter.xEmitterMeshGeometryCount = 0;
+								}
+								//else
+								//{
+								//	uint32_t first_subset = 0;
+								//	uint32_t last_subset = 0;
+								//	mesh->GetLODSubsetRange(0, first_subset, last_subset);
+								//	cb.xEmitterMeshGeometryOffset = mesh->geometryOffset + first_subset;
+								//	cb.xEmitterMeshGeometryCount = last_subset - first_subset;
+								//}
+								srand(std::time(NULL));
+								cbEmitter.xEmitterRandomness = (rand() % 100) * 0.01f;
+								cbEmitter.xParticleLifeSpan = actor->GetParam("_float_LifeSpan", (float)1.f);
+								cbEmitter.xParticleLifeSpanRandomness = actor->GetParam("_float_LifeSpanRandomness", (float)1.f);
+								cbEmitter.xParticleNormalFactor = actor->GetParam("_float_NormFactor", (float)1.f);
+								cbEmitter.xParticleRandomFactor = actor->GetParam("_float_RandomFactor", (float)1.f);
+								cbEmitter.xParticleScaling = actor->GetParam("_float_ScaleFactor", (float)1.f);
+								cbEmitter.xParticleSize = actor->GetParam("_float_ScaleSize", (float)10.f);
+								cbEmitter.xParticleMotionBlurAmount = actor->GetParam("_float_MotionBlurAmount", (float)0.f);
+								cbEmitter.xParticleRotation = actor->GetParam("_float_RotationDeg", (float)0.f) * VM_PI * 60.f;
+								cbEmitter.xParticleMass = actor->GetParam("_float_Mass", (float)1.f);
+								cbEmitter.xEmitterMaxParticleCount = MAX_PARTICLES;
+								cbEmitter.xEmitterFixedTimestep = actor->GetParam("_float_FixedTimeStep", (float)-1.f);
+								cbEmitter.xEmitterRestitution = actor->GetParam("_float_Restitution", (float)0.98f);
+								cbEmitter.xEmitterFramesXY = vmuint2(std::max(1u, (uint)actor->GetParam("_int_FramesX", (int)1)),
+									std::max(1u, (uint)actor->GetParam("_int_FramesY", (int)1)));
+								cbEmitter.xEmitterFrameCount = std::max(1u, (uint)actor->GetParam("_int_FrameCount", (int)1));
+								cbEmitter.xEmitterFrameStart = (uint)actor->GetParam("_int_FrameStart", (int)0);
+								cbEmitter.xEmitterTexMul = vmfloat2(1.0f / (float)cbEmitter.xEmitterFramesXY.x, 1.0f / (float)cbEmitter.xEmitterFramesXY.y);
+								cbEmitter.xEmitterFrameRate = actor->GetParam("_float_FrameRate", (float)0.f);
+								cbEmitter.xParticleGravity = vmfloat3(0, 0, 0);
+								cbEmitter.xParticleDrag = actor->GetParam("_float_ParticleDrag", (float)1.f);
+								vmfloat3 velosity = actor->GetParam("_float3_Velocity", (vmfloat3)0.f);
+								vmmath::fTransformVector(&cbEmitter.xParticleVelocity, &velosity, &actor->matOS2WS);
+								cbEmitter.xParticleRandomColorFactor = (rand() % 100) * 0.01f;
+								cbEmitter.xEmitterLayerMask = ~0u;
+								cbEmitter.xEmitterInstanceIndex = 0;
+
+								cbEmitter.xEmitterOptions = 0;
+								//if (IsSPHEnabled())
+								//{
+								//	cb.xEmitterOptions |= EMITTER_OPTION_BIT_SPH_ENABLED;
+								//}
+								//if (IsFrameBlendingEnabled())
+								//{
+								//	cb.xEmitterOptions |= EMITTER_OPTION_BIT_FRAME_BLENDING_ENABLED;
+								//}
+								//if (ALLOW_MESH_SHADER && device->CheckCapability(GraphicsDeviceCapability::MESH_SHADER))
+								//{
+								//	cb.xEmitterOptions |= EMITTER_OPTION_BIT_MESH_SHADER_ENABLED;
+								//}
+								//if (IsCollidersDisabled())
+								//{
+								//	cb.xEmitterOptions |= EMITTER_OPTION_BIT_COLLIDERS_DISABLED;
+								//}
+								//if (_flags & FLAG_USE_RAIN_BLOCKER)
+								//{
+								//	cb.xEmitterOptions |= EMITTER_OPTION_BIT_USE_RAIN_BLOCKER;
+								//}
+								//if (IsTakeColorFromMesh())
+								//{
+								//	cb.xEmitterOptions |= EMITTER_OPTION_BIT_TAKE_COLOR_FROM_MESH;
+								//}
+
+								// SPH:
+								//cb.xSPH_h = SPH_h;
+								//cb.xSPH_h_rcp = 1.0f / SPH_h;
+								//cb.xSPH_h2 = SPH_h * SPH_h;
+								//cb.xSPH_h3 = cb.xSPH_h2 * SPH_h;
+								//const float h6 = cb.xSPH_h2 * cb.xSPH_h2 * cb.xSPH_h2;
+								//const float h9 = h6 * cb.xSPH_h3;
+								//cb.xSPH_poly6_constant = (315.0f / (64.0f * XM_PI * h9));
+								//cb.xSPH_spiky_constant = (-45.0f / (XM_PI * h6));
+								//cb.xSPH_visc_constant = (45.0f / (XM_PI * h6));
+								//cb.xSPH_K = SPH_K;
+								//cb.xSPH_p0 = SPH_p0;
+								//cb.xSPH_e = SPH_e;
+
+								//device->UpdateBuffer(&constantBuffer, &cb, cmd);
+								//{
+								//	GPUBarrier barriers[] = {
+								//		GPUBarrier::Buffer(&constantBuffer, ResourceState::COPY_DST, ResourceState::CONSTANT_BUFFER),
+								//	};
+								//	device->Barrier(barriers, arraysize(barriers), cmd);
+								//}
+							}
+							D3D11_MAPPED_SUBRESOURCE mappedResEmitter;
+							dx11DeviceImmContext->Map(cbuf_Emitter, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResEmitter);
+							CB_Emitter* cbGpuEmitter = (CB_Emitter*)mappedResEmitter.pData;
+							memcpy(cbGpuEmitter, &cbEmitter, sizeof(CB_Emitter));
+							dx11DeviceImmContext->Unmap(cbuf_Emitter, 0);
+
+							dx11DeviceImmContext->CSSetShader(GETCS(PCE_KickoffEmitterSystem_cs_5_0), NULL, 0);
+							dx11DeviceImmContext->Dispatch(1, 1, 1);
+
+							// COUNTER TEST //
+							auto counter_test = [&gres_counter, &gpu_manager, &dx11DeviceImmContext]()
+							{
+								GpuRes gres_counter_sys_test = gres_counter;
+								gres_counter_sys_test.res_name = string("PARTICLE_COUNTER_SYSOUT");
+								if (!gpu_manager->UpdateGpuResource(gres_counter_sys_test)) {
+
+									gres_counter_sys_test.rtype = RTYPE_BUFFER;
+									gres_counter_sys_test.options["USAGE"] = D3D11_USAGE_STAGING;
+									gres_counter_sys_test.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_READ;
+									gres_counter_sys_test.options["BIND_FLAG"] = NULL;
+									gres_counter_sys_test.options["FORMAT"] = DXGI_FORMAT_R32_FLOAT;
+									gres_counter_sys_test.options["RAW_ACCESS"] = 0;
+									gres_counter_sys_test.options["MISC"] = NULL;
+									gres_counter.res_values.SetParam("NUM_ELEMENTS", (uint)(sizeof(ParticleCounters) / 4));
+									gres_counter.res_values.SetParam("STRIDE_BYTES", 4u);
+									gpu_manager->GenerateGpuResource(gres_counter_sys_test);
+								}
+								dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_counter_sys_test.alloc_res_ptrs[DTYPE_RES], (ID3D11Buffer*)gres_counter.alloc_res_ptrs[DTYPE_RES]);
+								D3D11_MAPPED_SUBRESOURCE mappedResSys;
+								HRESULT hr = dx11DeviceImmContext->Map((ID3D11Buffer*)gres_counter_sys_test.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSys);
+								uint* dv = (uint*)mappedResSys.pData;
+								dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_counter_sys_test.alloc_res_ptrs[DTYPE_RES], 0);
+							};
+							//counter_test();
+
+							// INDIRECT TEST //
+							auto indirect_test = [&gres_indirect, &gpu_manager, &dx11DeviceImmContext]()
+							{
+								GpuRes gres_indirect_sys_test = gres_indirect;
+								gres_indirect_sys_test.res_name = string("PARTICLE_INDIRECT_SYSOUT");
+								if (!gpu_manager->UpdateGpuResource(gres_indirect_sys_test)) {
+
+									gres_indirect_sys_test.rtype = RTYPE_BUFFER;
+									gres_indirect_sys_test.options["USAGE"] = D3D11_USAGE_STAGING;
+									gres_indirect_sys_test.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_READ;
+									gres_indirect_sys_test.options["BIND_FLAG"] = NULL;
+									gres_indirect_sys_test.options["FORMAT"] = DXGI_FORMAT_R32_FLOAT;
+									gres_indirect_sys_test.options["RAW_ACCESS"] = 0;
+									gres_indirect_sys_test.options["MISC"] = NULL;
+									uint stride = AlignTo(sizeof(IndirectDispatchArgs), (uint64_t)4) +
+										AlignTo(sizeof(IndirectDispatchArgs), (uint64_t)4) +
+										AlignTo(sizeof(IndirectDrawArgsInstanced), (uint64_t)4);
+									gres_indirect_sys_test.res_values.SetParam("NUM_ELEMENTS", stride / 4u);
+									gres_indirect_sys_test.res_values.SetParam("STRIDE_BYTES", 4u);
+									gpu_manager->GenerateGpuResource(gres_indirect_sys_test);
+								}
+								dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_indirect_sys_test.alloc_res_ptrs[DTYPE_RES], (ID3D11Buffer*)gres_indirect.alloc_res_ptrs[DTYPE_RES]);
+
+								D3D11_MAPPED_SUBRESOURCE mappedResSys;
+								HRESULT hr = dx11DeviceImmContext->Map((ID3D11Buffer*)gres_indirect_sys_test.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSys);
+								uint* dv = (uint*)mappedResSys.pData;
+								//vmlog::LogInfo(std::to_string(dv[6]) + ", " + std::to_string(dv[7]));
+								//cout << ("Instance Count : " + std::to_string(dv[7])) << endl;
+								dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_indirect_sys_test.alloc_res_ptrs[DTYPE_RES], 0);
+							};
+							//indirect_test();
+
+							auto vbpos_test = [&gres_vb_pos, &pobjId, &gpu_manager, &dx11DeviceImmContext, &MAX_PARTICLES]()
+							{
+								GpuRes gres_vb_pos_sys_test = gres_vb_pos;
+								gres_vb_pos_sys_test.res_name = string("gres_particle_vb_pos_SYSOUT");
+								if (!gpu_manager->UpdateGpuResource(gres_vb_pos_sys_test)) {
+									gres_vb_pos_sys_test.rtype = RTYPE_BUFFER;
+									gres_vb_pos_sys_test.options["USAGE"] = D3D11_USAGE_STAGING;
+									gres_vb_pos_sys_test.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_READ;
+									gres_vb_pos_sys_test.options["BIND_FLAG"] = NULL;
+									gres_vb_pos_sys_test.options["FORMAT"] = DXGI_FORMAT_R32_FLOAT; // note RGB32F is not allowed for Views
+									gres_vb_pos_sys_test.options["RAW_ACCESS"] = 0;
+									gres_vb_pos_sys_test.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES * 3 * 4)); // 4 refers to quad
+									gres_vb_pos_sys_test.res_values.SetParam("STRIDE_BYTES", 4u);
+
+									// D3D11_BIND_VERTEX_BUFFER 는 shader resource view 가 안 되는 것일까? 되네 :)
+									gpu_manager->GenerateGpuResource(gres_vb_pos_sys_test);
+								}
+								dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_vb_pos_sys_test.alloc_res_ptrs[DTYPE_RES], (ID3D11Buffer*)gres_vb_pos.alloc_res_ptrs[DTYPE_RES]);
+
+								D3D11_MAPPED_SUBRESOURCE mappedResSys;
+								HRESULT hr = dx11DeviceImmContext->Map((ID3D11Buffer*)gres_vb_pos_sys_test.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSys);
+								float* dv = (float*)mappedResSys.pData;
+								uint* udv = (uint*)mappedResSys.pData;
+								//vmlog::LogInfo(std::to_string(dv[6]) + ", " + std::to_string(dv[7]));
+								//if (udv[0] != 0)
+								//	cout << ("TEST : " + std::to_string(udv[0])) << endl;
+								dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_vb_pos_sys_test.alloc_res_ptrs[DTYPE_RES], 0);
+							};
+
+							constexpr uint ARGUMENTBUFFER_OFFSET_DISPATCHEMIT = 0u;
+							dx11DeviceImmContext->CSSetShader(GETCS(PCE_ParticleEmitter_cs_5_0), NULL, 0);
+							dx11DeviceImmContext->DispatchIndirect((ID3D11Buffer*)gres_indirect.alloc_res_ptrs[DTYPE_RES], ARGUMENTBUFFER_OFFSET_DISPATCHEMIT);
+
+							//counter_test();
+
+							constexpr uint ARGUMENTBUFFER_OFFSET_DISPATCHSIMULATION = 12u;
+							dx11DeviceImmContext->CSSetShader(GETCS(PCE_ParticleSimulation_cs_5_0), NULL, 0);
+							dx11DeviceImmContext->DispatchIndirect((ID3D11Buffer*)gres_indirect.alloc_res_ptrs[DTYPE_RES], ARGUMENTBUFFER_OFFSET_DISPATCHSIMULATION);
+
+							//counter_test();
+
+							dx11DeviceImmContext->CSSetShader(GETCS(PCE_ParticleUpdateFinish_cs_5_0), NULL, 0);
+							dx11DeviceImmContext->Dispatch(1, 1, 1);
+
+							//counter_test();
+							//indirect_test();
+							//vbpos_test();
+						}
 					}
 
 					// particle rendering //
 					{
 						dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 13, dx11UAVs_NULL, NULL);
 						dx11DeviceImmContext->PSSetShaderResources(20, 1, (ID3D11ShaderResourceView**)&gres_fb_dynK_buffer.alloc_res_ptrs[DTYPE_SRV]);
-						dx11DeviceImmContext->PSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_particle.alloc_res_ptrs[DTYPE_SRV]);
-						dx11DeviceImmContext->PSSetShaderResources(51, 1, (ID3D11ShaderResourceView**)&gres_culledIndirect0.alloc_res_ptrs[DTYPE_SRV]);
-						dx11DeviceImmContext->PSSetShaderResources(52, 1, (ID3D11ShaderResourceView**)&gres_culledIndirect1.alloc_res_ptrs[DTYPE_SRV]);
 
-						dx11DeviceImmContext->PSSetShaderResources(53, 1, (ID3D11ShaderResourceView**)&gres_vb_pos.alloc_res_ptrs[DTYPE_SRV]);
-						dx11DeviceImmContext->PSSetShaderResources(54, 1, (ID3D11ShaderResourceView**)&gres_vb_nor.alloc_res_ptrs[DTYPE_SRV]);
-						dx11DeviceImmContext->PSSetShaderResources(55, 1, (ID3D11ShaderResourceView**)&gres_vb_tex.alloc_res_ptrs[DTYPE_SRV]);
-						dx11DeviceImmContext->PSSetShaderResources(56, 1, (ID3D11ShaderResourceView**)&gres_vb_color.alloc_res_ptrs[DTYPE_SRV]);
-					
-						//ID3D11InputLayout* dx11InputLayer_Target = dx11LI_PNTC;
-						ID3D11VertexShader* dx11VS_Target = dx11VShader_IDX;
-						ID3D11GeometryShader* dx11GS_Target = NULL;
-						ID3D11PixelShader* dx11PS_Target = GETPS(PCE_ParticleRenderBasic_ps_5_0);
-						ID3D11RasterizerState2* dx11RState_TargetObj = GETRASTER(SOLID_NONE); // blender state...
-						//ID3D11BlendState 
+						dx11DeviceImmContext->VSSetShaderResources(50, 1, (ID3D11ShaderResourceView**)&gres_particle.alloc_res_ptrs[DTYPE_SRV]);
+						dx11DeviceImmContext->VSSetShaderResources(51, 1, (ID3D11ShaderResourceView**)&gres_culledIndirect0.alloc_res_ptrs[DTYPE_SRV]);
+						dx11DeviceImmContext->VSSetShaderResources(52, 1, (ID3D11ShaderResourceView**)&gres_culledIndirect1.alloc_res_ptrs[DTYPE_SRV]);
+
+						dx11DeviceImmContext->VSSetShaderResources(53, 1, (ID3D11ShaderResourceView**)&gres_vb_pos.alloc_res_ptrs[DTYPE_SRV]);
+						dx11DeviceImmContext->VSSetShaderResources(54, 1, (ID3D11ShaderResourceView**)&gres_vb_nor.alloc_res_ptrs[DTYPE_SRV]);
+						dx11DeviceImmContext->VSSetShaderResources(55, 1, (ID3D11ShaderResourceView**)&gres_vb_tex.alloc_res_ptrs[DTYPE_SRV]);
+						dx11DeviceImmContext->VSSetShaderResources(56, 1, (ID3D11ShaderResourceView**)&gres_vb_color.alloc_res_ptrs[DTYPE_SRV]);
+
 						uint stride_inputlayer = 0u, offset = 0u;
-						D3D_PRIMITIVE_TOPOLOGY pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-						//D3D_PRIMITIVE_TOPOLOGY pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_POINTLIST;
 						
-						ID3D11Buffer* nullBuffers[10] = { NULL };
-						dx11DeviceImmContext->IASetVertexBuffers(0, 1, nullBuffers, & stride_inputlayer, & offset);
-						dx11DeviceImmContext->IASetIndexBuffer(
-							(ID3D11Buffer*)gres_vb_idx.alloc_res_ptrs[DTYPE_RES], 
-							DXGI_FORMAT_R32_UINT, 0);
+						//ID3D11Buffer* nullBuffers[10] = { NULL };
+						dx11DeviceImmContext->IASetVertexBuffers(0, 0, NULL, NULL, NULL);
+						dx11DeviceImmContext->IASetIndexBuffer(NULL, DXGI_FORMAT_UNKNOWN, 0);
+						//dx11DeviceImmContext->IASetIndexBuffer(
+						//	(ID3D11Buffer*)gres_vb_idx.alloc_res_ptrs[DTYPE_RES],
+						//	DXGI_FORMAT_R32_UINT, 0);
 						dx11DeviceImmContext->IASetInputLayout(NULL); // using idx buffer and access SRV of VB
 
-						dx11DeviceImmContext->VSSetShader(dx11VS_Target, NULL, 0);
-						dx11DeviceImmContext->GSSetShader(dx11GS_Target, NULL, 0);
-						dx11DeviceImmContext->PSSetShader(dx11PS_Target, NULL, 0);
-						dx11DeviceImmContext->RSSetState(dx11RState_TargetObj);
-						//dx11DeviceImmContext->
-						dx11DeviceImmContext->IASetPrimitiveTopology(pobj_topology_type);
-
+						dx11DeviceImmContext->VSSetShader(dx11VShader_IDX, NULL, 0);
+						dx11DeviceImmContext->GSSetShader(NULL, NULL, 0);
+						dx11DeviceImmContext->PSSetShader(GETPS(PCE_ParticleRenderBasic_ps_5_0), NULL, 0);
+						//dx11DeviceImmContext->RSSetState(GETRASTER(SOLID_NONE));
+						// D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST, D3D11_PRIMITIVE_TOPOLOGY_POINTLIST
+						dx11DeviceImmContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 
 						ID3D11RenderTargetView* dx11RTVs[2] = {
 							(ID3D11RenderTargetView*)gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_RTV],
 							(ID3D11RenderTargetView*)gres_fb_singlelayer_depthcs.alloc_res_ptrs[DTYPE_RTV] };
 
 						dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(ALWAYS), 0);
-						dx11DeviceImmContext->OMSetBlendState(dx11CommonParams->get_blender("ADD"), NULL, 0xffffffff);
-						dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVs, dx11DSV, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
+						dx11DeviceImmContext->OMSetRenderTargets(2, dx11RTVs, dx11DSV);
 
 						const uint ARGUMENTBUFFER_OFFSET_DRAWPARTICLES = 24;
 						dx11DeviceImmContext->DrawInstancedIndirect((ID3D11Buffer*)gres_indirect.alloc_res_ptrs[DTYPE_RES], ARGUMENTBUFFER_OFFSET_DRAWPARTICLES);
-						//if (pobj_topology_type == D3D11_PRIMITIVE_TOPOLOGY_POINTLIST)
-						//	dx11DeviceImmContext->Draw(MAX_PARTICLES * 4, 0);
-						//else
-						//	dx11DeviceImmContext->DrawIndexed(MAX_PARTICLES * 6, 0, 0);
 
 						dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
 						dx11DeviceImmContext->PSSetShaderResources(20, 1, dx11SRVs_NULL);
-						dx11DeviceImmContext->PSSetShaderResources(50, 3, dx11SRVs_NULL);
+						dx11DeviceImmContext->VSSetShaderResources(50, 10, dx11SRVs_NULL);
 					}
 				}
 			}
@@ -3775,7 +3789,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 		cbCamState.cam_flag |= (storeKBuf << 3);
 		SetCamConstBuf(cbCamState);
 
-		if (general_oit_routine_objs.size() > 0 || storeKBuf != 0) {  
+		if (general_oit_routine_objs.size() > 0 || particle_layer_objs.size() > 0 || storeKBuf != 0) {
 #ifdef DX10_0
 			if (general_oit_routine_objs.size() > 0)
 				assert(0);

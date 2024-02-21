@@ -156,6 +156,7 @@ void ParticleUpdateFinish(uint3 DTid : SV_DispatchThreadID)
 void ParticleSimulation(uint3 DTid : SV_DispatchThreadID, uint Gid : SV_GroupIndex)
 {
 	uint aliveCount = counterBuffer.Load(PARTICLECOUNTER_OFFSET_ALIVECOUNT);
+
 	if (DTid.x >= aliveCount)
 		return;
 
@@ -280,17 +281,25 @@ void ParticleSimulation(uint3 DTid : SV_DispatchThreadID, uint Gid : SV_GroupInd
 			quadPos *= particleSize;
 
 			// scale the billboard along view space motion vector:
-			float3 velocity = 0;// mul((float3x3)GetCamera().view, particle.velocity);
-			//quadPos += dot(quadPos, velocity) * velocity * xParticleMotionBlurAmount;
-			//
-			//// rotate the billboard to face the camera:
+			//float3 velocity = mul((float3x3)GetCamera().view, particle.velocity);
+			float3 velocity = mul((float3x3)g_cbCamState.mat_ws2cs, particle.velocity); //ws2cs
+			quadPos += dot(quadPos, velocity) * velocity * g_emitter.xParticleMotionBlurAmount;
+			
+			// rotate the billboard to face the camera:
 			//quadPos = mul(quadPos, (float3x3)GetCamera().view); // reversed mul for inverse camera rotation!
+			quadPos = mul(quadPos, (float3x3)g_cbCamState.mat_ws2cs); // reversed mul for inverse camera rotation!
 
 			// write out vertex:
 			//vertexBuffer_POS.Store<float3>((v0 + vertexID) * sizeof(float3), particle.position + quadPos);
 			float3 p_vtx = particle.position + quadPos;
-			uint3 p_asuint = uint3(asuint(p_vtx.x), asuint(p_vtx.y), asuint(p_vtx.z));
+			uint3 p_asuint = asuint(p_vtx);// uint3(asuint(p_vtx.x), asuint(p_vtx.y), asuint(p_vtx.z));
 			vertexBuffer_POS.Store3((v0 + vertexID) * 12, p_asuint);
+			vertexBuffer_POS.Store3((0) * 12, p_asuint);
+
+			{
+				//p_vtx.particleIndex;//
+				//vertexBuffer_POS.Store3((0 + 0) * 12, uint3(particleIndex, aliveBuffer_CURRENT[0], DTid.x));
+			}
 
 			uint3 n_asuint = uint3(asuint(g_cbCamState.dir_view_ws.x), asuint(g_cbCamState.dir_view_ws.y), asuint(g_cbCamState.dir_view_ws.z));
 			vertexBuffer_NOR.Store3((v0 + vertexID) * 12, n_asuint); //[v0 + vertexID] = float4(normalize(-g_cbCamState.dir_view_ws), 0);
@@ -317,7 +326,7 @@ void ParticleSimulation(uint3 DTid : SV_DispatchThreadID, uint Gid : SV_GroupInd
 			uint prevCount;
 			counterBuffer.InterlockedAdd(PARTICLECOUNTER_OFFSET_CULLEDCOUNT, 1, prevCount);
 
-			culledIndirectionBuffer[prevCount] = prevCount; // ????
+			culledIndirectionBuffer[prevCount] = prevCount; // for sorting
 			culledIndirectionBuffer2[prevCount] = particleIndex;
 
 #ifdef SORTING
@@ -336,10 +345,13 @@ void ParticleSimulation(uint3 DTid : SV_DispatchThreadID, uint Gid : SV_GroupInd
 		counterBuffer.InterlockedAdd(PARTICLECOUNTER_OFFSET_DEADCOUNT, 1, deadIndex);
 		deadBuffer[deadIndex] = particleIndex;
 
-		vertexBuffer_POS.Store3((v0 + 0) * 12, 0);
-		vertexBuffer_POS.Store3((v0 + 1) * 12, 0);
-		vertexBuffer_POS.Store3((v0 + 2) * 12, 0);
-		vertexBuffer_POS.Store3((v0 + 3) * 12, 0);
+		float3 p_vtx = float3(1.f, 2.f, 3.f);
+		uint3 p_asuint = uint3(asuint(p_vtx.x), asuint(p_vtx.y), asuint(p_vtx.z));
+
+		vertexBuffer_POS.Store3((v0 + 0) * 12, (uint3)0);
+		vertexBuffer_POS.Store3((v0 + 1) * 12, (uint3)0);
+		vertexBuffer_POS.Store3((v0 + 2) * 12, (uint3)0);
+		vertexBuffer_POS.Store3((v0 + 3) * 12, (uint3)0);
 		//vertexBuffer_PNTC.Store3((v0 + 0) * 32, (uint3)0);
 		//vertexBuffer_PNTC.Store3((v0 + 1) * 32, (uint3)0);
 		//vertexBuffer_PNTC.Store3((v0 + 2) * 32, (uint3)0);

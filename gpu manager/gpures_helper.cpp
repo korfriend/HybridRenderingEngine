@@ -2078,10 +2078,11 @@ bool grd_helper::UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string
 //#define *(vmfloat4*)&
 //#define *(XMMATRIX*)&
 
-void grd_helper::SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, const vmmat44f& matSS2WS, VmCObject* ccobj, const vmint2& fb_size, const int k_value, const float vz_thickness)
+void grd_helper::SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, const vmmat44f& matSS2WS, const vmmat44f& matWS2CS, VmCObject* ccobj, const vmint2& fb_size, const int k_value, const float vz_thickness)
 {
 	cb_cam.mat_ss2ws = TRANSPOSE(matSS2WS);
 	cb_cam.mat_ws2ss = TRANSPOSE(matWS2SS);
+	cb_cam.mat_ws2cs = TRANSPOSE(matWS2CS);
 
 	vmfloat3 pos_cam, dir_cam;
 	ccobj->GetCameraExtStatef(&pos_cam, &dir_cam, NULL);
