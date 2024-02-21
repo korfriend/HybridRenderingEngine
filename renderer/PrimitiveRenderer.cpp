@@ -3218,7 +3218,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 					GpuRes gres_distance;
 
 					static float emit = 0.f;
-					static float count = 10.f;
+					static float count = 1.f;
 					static float burst = 0;
 					static float time = 0, time_previous = 0;
 					static std::chrono::high_resolution_clock::time_point timestamp = std::chrono::high_resolution_clock::now();
@@ -3286,7 +3286,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 								gres_vb_tex.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 								gres_vb_tex.options["FORMAT"] = DXGI_FORMAT_R16G16_UNORM;
 								gres_vb_tex.options["RAW_ACCESS"] = 0;
-								gres_vb_tex.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES));
+								gres_vb_tex.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES) * 4u);
 								gres_vb_tex.res_values.SetParam("STRIDE_BYTES", 4u);
 
 								// D3D11_BIND_VERTEX_BUFFER 는 shader resource view 가 안 되는 것일까? 되네 :)
@@ -3302,7 +3302,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 								gres_vb_color.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 								gres_vb_color.options["FORMAT"] = DXGI_FORMAT_R8G8B8A8_UNORM;
 								gres_vb_color.options["RAW_ACCESS"] = 0;
-								gres_vb_color.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES));
+								gres_vb_color.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES) * 4u);
 								gres_vb_color.res_values.SetParam("STRIDE_BYTES", 4u);
 
 								// D3D11_BIND_VERTEX_BUFFER 는 shader resource view 가 안 되는 것일까? 되네 :)
@@ -3537,9 +3537,9 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 								cbEmitter.xParticleNormalFactor = actor->GetParam("_float_NormFactor", (float)1.f);
 								cbEmitter.xParticleRandomFactor = actor->GetParam("_float_RandomFactor", (float)1.f);
 								cbEmitter.xParticleScaling = actor->GetParam("_float_ScaleFactor", (float)1.f);
-								cbEmitter.xParticleSize = actor->GetParam("_float_ScaleSize", (float)10.f);
+								cbEmitter.xParticleSize = actor->GetParam("_float_ScaleSize", (float)1.f);
 								cbEmitter.xParticleMotionBlurAmount = actor->GetParam("_float_MotionBlurAmount", (float)0.f);
-								cbEmitter.xParticleRotation = actor->GetParam("_float_RotationDeg", (float)0.f) * VM_PI * 60.f;
+								cbEmitter.xParticleRotation = actor->GetParam("_float_RotationDeg", (float)0.f) * VM_PI / 180.f; // RAD
 								cbEmitter.xParticleMass = actor->GetParam("_float_Mass", (float)1.f);
 								cbEmitter.xEmitterMaxParticleCount = MAX_PARTICLES;
 								cbEmitter.xEmitterFixedTimestep = actor->GetParam("_float_FixedTimeStep", (float)-1.f);
@@ -3550,9 +3550,9 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 								cbEmitter.xEmitterFrameStart = (uint)actor->GetParam("_int_FrameStart", (int)0);
 								cbEmitter.xEmitterTexMul = vmfloat2(1.0f / (float)cbEmitter.xEmitterFramesXY.x, 1.0f / (float)cbEmitter.xEmitterFramesXY.y);
 								cbEmitter.xEmitterFrameRate = actor->GetParam("_float_FrameRate", (float)0.f);
-								cbEmitter.xParticleGravity = vmfloat3(0, 0, 0);
+								cbEmitter.xParticleGravity = vmfloat3(actor->GetParam("_fvec3_Gravity", glm::fvec3(0)));
 								cbEmitter.xParticleDrag = actor->GetParam("_float_ParticleDrag", (float)1.f);
-								vmfloat3 velosity = actor->GetParam("_float3_Velocity", (vmfloat3)0.f);
+								vmfloat3 velosity = vmfloat3(actor->GetParam("_fvec3_Velocity", glm::fvec3(0)));
 								vmmath::fTransformVector(&cbEmitter.xParticleVelocity, &velosity, &actor->matOS2WS);
 								cbEmitter.xParticleRandomColorFactor = (rand() % 100) * 0.01f;
 								cbEmitter.xEmitterLayerMask = ~0u;

@@ -10,8 +10,8 @@ RWByteAddressBuffer indirectBuffers : register(u5);
 RWStructuredBuffer<float> distanceBuffer : register(u6);
 RWByteAddressBuffer vertexBuffer_POS : register(u7);
 RWByteAddressBuffer vertexBuffer_NOR : register(u8);
-RWBuffer<float2> vertexBuffer_UVS : register(u9);
-RWBuffer<float4> vertexBuffer_COL : register(u10);
+RWBuffer<unorm float2> vertexBuffer_UVS : register(u9);
+RWBuffer<unorm float4> vertexBuffer_COL : register(u10);
 RWStructuredBuffer<uint> culledIndirectionBuffer : register(u11);
 RWStructuredBuffer<uint> culledIndirectionBuffer2 : register(u12);
 
@@ -294,26 +294,11 @@ void ParticleSimulation(uint3 DTid : SV_DispatchThreadID, uint Gid : SV_GroupInd
 			float3 p_vtx = particle.position + quadPos;
 			uint3 p_asuint = asuint(p_vtx);// uint3(asuint(p_vtx.x), asuint(p_vtx.y), asuint(p_vtx.z));
 			vertexBuffer_POS.Store3((v0 + vertexID) * 12, p_asuint);
-			vertexBuffer_POS.Store3((0) * 12, p_asuint);
-
-			{
-				//p_vtx.particleIndex;//
-				//vertexBuffer_POS.Store3((0 + 0) * 12, uint3(particleIndex, aliveBuffer_CURRENT[0], DTid.x));
-			}
 
 			uint3 n_asuint = uint3(asuint(g_cbCamState.dir_view_ws.x), asuint(g_cbCamState.dir_view_ws.y), asuint(g_cbCamState.dir_view_ws.z));
 			vertexBuffer_NOR.Store3((v0 + vertexID) * 12, n_asuint); //[v0 + vertexID] = float4(normalize(-g_cbCamState.dir_view_ws), 0);
 			vertexBuffer_UVS[v0 + vertexID] = uv;// float4(uv, uv2);
 			vertexBuffer_COL[v0 + vertexID] = particleColor;
-
-			// sizeof(vmfloat3) + sizeof(vmfloat3) + sizeof(ushort2) + sizeof(uint); // pos, nor, uvs, col
-			//uint vid = v0 + vertexID;
-			//vertexBuffer_PNTC.Store3(vid * 32, p_asuint);
-			//float3 n_vtx = -g_cbCamState.dir_view_ws;
-			//uint3 n_asuint = uint3(asuint(n_vtx.x), asuint(n_vtx.y), asuint(n_vtx.z));
-			//vertexBuffer_PNTC.Store3(vid * 32 + 12, n_asuint);
-			//uint2 uvCol_asuint = uint2(((uint)(uv.y * 65535) << 16) | (uint)(uv.x * 65535), pack_rgba(particleColor));
-			//vertexBuffer_PNTC.Store2(vid * 32 + 24, n_asuint);
 		}
 
 		// Frustum culling:

@@ -89,6 +89,28 @@ namespace grd_helper
 	typedef map<string, ID3D11DeviceChild*> GCRMAP;
 	typedef map<string, ID3D11Resource*> CONSTBUFMAP;
 
+	struct GPUBVH
+	{
+		// Mesh Object BVH intersection resources:
+		int objId = 0;
+		ID3D11Buffer* bvhNodeBuffer = NULL;
+		ID3D11Buffer* bvhParentBuffer = NULL;
+		ID3D11Buffer* bvhFlagBuffer = NULL;
+		ID3D11Buffer* primitiveCounterBuffer = NULL;
+		ID3D11Buffer* primitiveIDBuffer = NULL;
+		ID3D11Buffer* primitiveBuffer = NULL;
+		ID3D11Buffer* primitiveMortonBuffer = NULL;
+		uint32_t primitiveCapacity = 0;
+		//bool IsValid() const { return primitiveCounterBuffer.IsValid(); }
+
+		void Update();
+		void Build() const;
+
+		void Clear();
+
+		static void Initialize();
+	};
+
 	struct GpuDX11CommonParameters
 	{
 		bool is_initialized;
