@@ -26,6 +26,9 @@
     <ClCompile Include="gpu manager\gpures_interface.cpp">
       <Filter>gpu manager</Filter>
     </ClCompile>
+    <ClCompile Include="gpu manager\gpulib.cpp">
+      <Filter>gpu manager</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="resource.h">
@@ -47,6 +50,9 @@
     <ClInclude Include="gpu_common_res.h" />
     <ClInclude Include="hlsl\particle\ParticleInterop.hlsli">
       <Filter>hlsl source code\Particle</Filter>
+    </ClInclude>
+    <ClInclude Include="gpu manager\gpulib.h">
+      <Filter>gpu manager</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -115,6 +121,9 @@
     <Filter Include="hlsl source code\Particle">
       <UniqueIdentifier>{2a3608ee-3797-4766-bf5d-4698ea5c9a7f}</UniqueIdentifier>
     </Filter>
+    <Filter Include="hlsl source code\sort">
+      <UniqueIdentifier>{d2e21266-2138-473d-873f-a249d19e431a}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="vismtv_inbuilt_renderergpudx.rc">
@@ -178,6 +187,9 @@
     </FxCompile>
     <FxCompile Include="hlsl\particle\ParticleRenderer.hlsl">
       <Filter>hlsl source code\Particle</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\sort\Sort.hlsl">
+      <Filter>hlsl source code\sort</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>

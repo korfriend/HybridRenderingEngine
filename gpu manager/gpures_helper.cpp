@@ -327,6 +327,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		CREATE_AND_SET(CB_Frame);
 		CREATE_AND_SET(CB_Emitter);
 		CREATE_AND_SET(CB_Undercut);
+		CREATE_AND_SET(CB_SortConstants);
 	}
 	if (hr != S_OK)
 	{
@@ -513,8 +514,13 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10108), "SR_UNDERCUT_ps_5_0", "ps_5_0"), SR_UNDERCUT_ps_5_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10201), "PCE_ParticleRenderBasic_ps_5_0", "ps_5_0"), PCE_ParticleRenderBasic_ps_5_0);
-		
-		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10150), "SR_QUAD_OUTLINE_ps_5_0", "ps_5_0"), SR_QUAD_OUTLINE_ps_5_0);
+
+		{
+			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10800), "SORT_Kickoff_cs_5_0", "cs_5_0"), SORT_Kickoff_cs_5_0);
+			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10801), "SORT_cs_5_0", "cs_5_0"), SORT_cs_5_0);
+			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10802), "SORT_Step_cs_5_0", "cs_5_0"), SORT_Step_cs_5_0);
+			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10803), "SORT_Inner_cs_5_0", "cs_5_0"), SORT_Inner_cs_5_0);
+		}
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11010), "SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0", "ps_5_0"), SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11011), "SR_OIT_FILL_SKBTZ_DASHEDLINE_ps_5_0", "ps_5_0"), SR_OIT_FILL_SKBTZ_DASHEDLINE_ps_5_0);
@@ -710,6 +716,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA71001), "PCE_KickoffEmitterSystem_cs_5_0", "cs_5_0"), PCE_KickoffEmitterSystem_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA71002), "PCE_ParticleEmitter_cs_5_0", "cs_5_0"), PCE_ParticleEmitter_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA71003), "PCE_ParticleSimulation_cs_5_0", "cs_5_0"), PCE_ParticleSimulation_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA71005), "PCE_ParticleSimulationSort_cs_5_0", "cs_5_0"), PCE_ParticleSimulationSort_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA71004), "PCE_ParticleUpdateFinish_cs_5_0", "cs_5_0"), PCE_ParticleUpdateFinish_cs_5_0);
 #pragma endregion
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA72000), "CS_Blend2ndLayer_cs_5_0", "cs_5_0"), CS_Blend2ndLayer_cs_5_0);

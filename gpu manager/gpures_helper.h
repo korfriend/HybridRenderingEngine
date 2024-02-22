@@ -386,6 +386,20 @@ namespace grd_helper
 		uint cellAllocator;
 	};
 
+	static const uint PARTICLECOUNTER_OFFSET_ALIVECOUNT = 0;
+	static const uint PARTICLECOUNTER_OFFSET_DEADCOUNT = PARTICLECOUNTER_OFFSET_ALIVECOUNT + 4;
+	static const uint PARTICLECOUNTER_OFFSET_REALEMITCOUNT = PARTICLECOUNTER_OFFSET_DEADCOUNT + 4;
+	static const uint PARTICLECOUNTER_OFFSET_ALIVECOUNT_AFTERSIMULATION = PARTICLECOUNTER_OFFSET_REALEMITCOUNT + 4;
+	static const uint PARTICLECOUNTER_OFFSET_CULLEDCOUNT = PARTICLECOUNTER_OFFSET_ALIVECOUNT_AFTERSIMULATION + 4;
+	static const uint PARTICLECOUNTER_OFFSET_CELLALLOCATOR = PARTICLECOUNTER_OFFSET_CULLEDCOUNT + 4;
+
+	static const uint EMITTER_OPTION_BIT_FRAME_BLENDING_ENABLED = 1 << 0;
+	static const uint EMITTER_OPTION_BIT_SPH_ENABLED = 1 << 1;
+	static const uint EMITTER_OPTION_BIT_MESH_SHADER_ENABLED = 1 << 2;
+	static const uint EMITTER_OPTION_BIT_COLLIDERS_DISABLED = 1 << 3;
+	static const uint EMITTER_OPTION_BIT_USE_RAIN_BLOCKER = 1 << 4;
+	static const uint EMITTER_OPTION_BIT_TAKE_COLOR_FROM_MESH = 1 << 5;
+
 	struct IndirectDrawArgsInstanced
 	{
 		uint VertexCountPerInstance;
@@ -928,6 +942,12 @@ namespace grd_helper
 
 		vmfloat3		xParticleVelocity;
 		float		xParticleDrag;
+	};
+
+	struct CB_SortConstants
+	{
+		vmint3 job_params;
+		uint counterReadOffset;
 	};
 
 

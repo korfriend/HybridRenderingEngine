@@ -64,13 +64,6 @@ void ParticleEmitter(uint3 DTid : SV_DispatchThreadID)
 	float3 nor = 0;
 	float3 velocity = g_emitter.xParticleVelocity;
 	
-	//float3 Ka, Kd, Ks;
-	//float Ns = g_cbPobj.Ns;
-	//// note g_cbPobj's Ka, Kd, and Ks has already been multiplied by pb_shading_factor.xyz
-	//Ka = g_cbPobj.Ka;
-	//Kd = g_cbPobj.Kd;
-	//Ks = g_cbPobj.Ks;
-
 	float4 baseColor = float4(g_cbPobj.Kd, g_cbPobj.alpha);
 #ifdef EMITTER_VOLUME
 	// Emit inside volume:
@@ -217,6 +210,7 @@ void ParticleSimulation(uint3 DTid : SV_DispatchThreadID, uint Gid : SV_GroupInd
 			float elastic = 0.6;
 
 #ifdef SPH_FLOOR_COLLISION
+			// consider world space...
 			// floor collision:
 			if (particle.position.y - particleSize < 0)
 			{
@@ -286,13 +280,16 @@ void ParticleSimulation(uint3 DTid : SV_DispatchThreadID, uint Gid : SV_GroupInd
 			quadPos += dot(quadPos, velocity) * velocity * g_emitter.xParticleMotionBlurAmount;
 			
 			// rotate the billboard to face the camera:
+			// note the inverse of rotation matrix is the transpose matrix
+			// key trick to apply the transpose matrix to the rotation is using the other major convention
 			//quadPos = mul(quadPos, (float3x3)GetCamera().view); // reversed mul for inverse camera rotation!
+			// to the world space
 			quadPos = mul(quadPos, (float3x3)g_cbCamState.mat_ws2cs); // reversed mul for inverse camera rotation!
 
 			// write out vertex:
 			//vertexBuffer_POS.Store<float3>((v0 + vertexID) * sizeof(float3), particle.position + quadPos);
-			float3 p_vtx = particle.position + quadPos;
-			uint3 p_asuint = asuint(p_vtx);// uint3(asuint(p_vtx.x), asuint(p_vtx.y), asuint(p_vtx.z));
+			float3 p_vtx = particle.position + quadPos; // ws
+			uint3 p_asuint = asuint(p_vtx);
 			vertexBuffer_POS.Store3((v0 + vertexID) * 12, p_asuint);
 
 			uint3 n_asuint = uint3(asuint(g_cbCamState.dir_view_ws.x), asuint(g_cbCamState.dir_view_ws.y), asuint(g_cbCamState.dir_view_ws.z));
@@ -337,9 +334,5 @@ void ParticleSimulation(uint3 DTid : SV_DispatchThreadID, uint Gid : SV_GroupInd
 		vertexBuffer_POS.Store3((v0 + 1) * 12, (uint3)0);
 		vertexBuffer_POS.Store3((v0 + 2) * 12, (uint3)0);
 		vertexBuffer_POS.Store3((v0 + 3) * 12, (uint3)0);
-		//vertexBuffer_PNTC.Store3((v0 + 0) * 32, (uint3)0);
-		//vertexBuffer_PNTC.Store3((v0 + 1) * 32, (uint3)0);
-		//vertexBuffer_PNTC.Store3((v0 + 2) * 32, (uint3)0);
-		//vertexBuffer_PNTC.Store3((v0 + 3) * 32, (uint3)0);
 	}
 }

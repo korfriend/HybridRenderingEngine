@@ -87,3 +87,4 @@ public:
 	int fontWeight = 4; // 1 : thinest, 4 : regular, 7 : bold, 9 : maximum heavy
 	int posScreenX = 0, posScreenY = 0; // 
 };
+

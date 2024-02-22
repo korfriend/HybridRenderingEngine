@@ -50,8 +50,10 @@ VertextoPixel CommonVS_IDX(uint vid : SV_VertexID, uint instanceID : SV_Instance
         ((g_emitter.xEmitterFrameStart + particle.life * g_emitter.xEmitterFrameRate) % g_emitter.xEmitterFrameCount);
     const float frameBlend = frac(spriteframe);
 
+
+	// note that the particle has been calculated in world space!
     VertextoPixel Out;
-    Out.P = TransformPoint(position, g_cbPobj.mat_os2ws);
+	Out.P = position;// TransformPoint(position, g_cbPobj.mat_os2ws);
     // Out.pos = float4(position, 1);
     Out.clip = 1;// dot(Out.pos, GetCamera().clip_plane);
     Out.pos = mul(g_cbPobj.mat_os2ps, float4(position, 1.f)); //mul(GetCamera().view_projection, Out.pos);
@@ -142,7 +144,7 @@ PS_FILL_OUTPUT ParticleRender(VertextoPixel input)
 	opacity = saturate(opacity);
 
 	//color.rgb *= inputColor.rgb * (1 + material.GetEmissive());
-	const float emissive = 0.f;
+	const float emissive = 1.f;
 	color.rgb *= inputColor.rgb * (1 + emissive);
 	color.a = opacity;
 

@@ -1,4 +1,5 @@
 #include "RendererHeader.h"
+#include "gpulib.h"
 
 #define GETDEPTHSTENTIL(NAME) dx11CommonParams->get_depthstencil(#NAME)
 //#include <opencv2/imgproc.hpp>
@@ -766,7 +767,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 #define VS_NUM 6
 #define GS_NUM 4
 #define PS_NUM 84
-#define CS_NUM 33
+#define CS_NUM 38
 #endif
 
 #ifdef DX10_0
@@ -974,7 +975,9 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			,"SR_UNDERCUT_ps_5_0"
 			,"PCE_ParticleRenderBasic_ps_5_0"
 
+
 			,"SR_QUAD_OUTLINE_ps_5_0"
+
 			//,"SR_OIT_KDEPTH_NPRGHOST_ps_5_0"
 
 			,"SR_OIT_ABUFFER_FRAGCOUNTER_ps_5_0"
@@ -1062,6 +1065,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			  ,"PCE_KickoffEmitterSystem_cs_5_0"
 			  ,"PCE_ParticleEmitter_cs_5_0"
 			  ,"PCE_ParticleSimulation_cs_5_0"
+			  ,"PCE_ParticleSimulationSort_cs_5_0"
 			  ,"PCE_ParticleUpdateFinish_cs_5_0"
 			  ,"CS_Blend2ndLayer_cs_5_0"
 			  ,"KB_SSAO_cs_5_0"
@@ -1076,6 +1080,10 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			  ,"KB_MINMAXTEXTURE_FM_cs_5_0"
 			  ,"KB_MINMAX_NBUF_FM_cs_5_0"
 			  ,"KB_SSDOF_RT_FM_cs_5_0"
+			,"SORT_Kickoff_cs_5_0"
+			,"SORT_cs_5_0"
+			,"SORT_Step_cs_5_0"
+			,"SORT_Inner_cs_5_0"
 		};
 
 		for (int i = 0; i < CS_NUM; i++)
@@ -3217,9 +3225,11 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 					GpuRes gres_indirect;
 					GpuRes gres_distance;
 
+					float count = actor->GetParam("_float_ParticleCount", 1.f);
+					float burst = actor->GetParam("_float_ParticleBurst", 0.f);
+					bool isSorted = actor->GetParam("_bool_ParticleSort", false);
+
 					static float emit = 0.f;
-					static float count = 1.f;
-					static float burst = 0;
 					static float time = 0, time_previous = 0;
 					static std::chrono::high_resolution_clock::time_point timestamp = std::chrono::high_resolution_clock::now();
 					static uint frameCount = 0;
@@ -3709,13 +3719,20 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 							//counter_test();
 
 							constexpr uint ARGUMENTBUFFER_OFFSET_DISPATCHSIMULATION = 12u;
-							dx11DeviceImmContext->CSSetShader(GETCS(PCE_ParticleSimulation_cs_5_0), NULL, 0);
+							dx11DeviceImmContext->CSSetShader(isSorted ? GETCS(PCE_ParticleSimulationSort_cs_5_0) : GETCS(PCE_ParticleSimulation_cs_5_0), NULL, 0);
 							dx11DeviceImmContext->DispatchIndirect((ID3D11Buffer*)gres_indirect.alloc_res_ptrs[DTYPE_RES], ARGUMENTBUFFER_OFFSET_DISPATCHSIMULATION);
+
+							if (isSorted)
+								gpulib::sort::Sort(gpu_manager, dx11CommonParams, 
+									MAX_PARTICLES, gres_distance, gres_counter, PARTICLECOUNTER_OFFSET_CULLEDCOUNT, gres_culledIndirect0);
 
 							//counter_test();
 
-							dx11DeviceImmContext->CSSetShader(GETCS(PCE_ParticleUpdateFinish_cs_5_0), NULL, 0);
-							dx11DeviceImmContext->Dispatch(1, 1, 1);
+							const bool isPaused = false;
+							if (!isPaused && dt > 0) {
+								dx11DeviceImmContext->CSSetShader(GETCS(PCE_ParticleUpdateFinish_cs_5_0), NULL, 0);
+								dx11DeviceImmContext->Dispatch(1, 1, 1);
+							}
 
 							//counter_test();
 							//indirect_test();
@@ -3750,7 +3767,8 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 						dx11DeviceImmContext->VSSetShader(dx11VShader_IDX, NULL, 0);
 						dx11DeviceImmContext->GSSetShader(NULL, NULL, 0);
 						dx11DeviceImmContext->PSSetShader(GETPS(PCE_ParticleRenderBasic_ps_5_0), NULL, 0);
-						//dx11DeviceImmContext->RSSetState(GETRASTER(SOLID_NONE));
+						dx11DeviceImmContext->RSSetState(GETRASTER(SOLID_NONE));
+						dx11DeviceImmContext->OMSetBlendState(dx11CommonParams->get_blender("ADD"), NULL, 0xffffffff);
 						// D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST, D3D11_PRIMITIVE_TOPOLOGY_POINTLIST
 						dx11DeviceImmContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 
