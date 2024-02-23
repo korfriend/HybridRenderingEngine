@@ -41,18 +41,20 @@ void sort::Sort(VmGpuManager* gpu_manager,
 		dx11DeviceImmContext->Unmap(cbuf_sort, 0);
 		dx11DeviceImmContext->CSSetConstantBuffers(13, 1, &cbuf_sort);
 	};
+
+	dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&indexBuffer_write.alloc_res_ptrs[DTYPE_UAV], NULL);
+	dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 1, (ID3D11UnorderedAccessView**)&indirectBuffer.alloc_res_ptrs[DTYPE_UAV], NULL);
+
+	ID3D11ShaderResourceView* srvs[] = {
+		(ID3D11ShaderResourceView*)counterBuffer_read.alloc_res_ptrs[DTYPE_SRV],
+		(ID3D11ShaderResourceView*)comparisonBuffer_read.alloc_res_ptrs[DTYPE_SRV],
+	};
+	dx11DeviceImmContext->CSSetShaderResources(0, 2, srvs);
+
 	// initialize sorting arguments:
 	{
 		dx11DeviceImmContext->CSSetShader(GETCS(SORT_Kickoff_cs_5_0), NULL, 0);
 
-		//ByteAddressBuffer counterBuffer : register(t0);
-		//StructuredBuffer<float> comparisonBuffer : register(t1);
-		//
-		//RWByteAddressBuffer indirectBuffers : register(u0);
-		//RWStructuredBuffer<uint> indexBuffer : register(u1);
-
-		dx11DeviceImmContext->CSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&comparisonBuffer_read.alloc_res_ptrs[DTYPE_SRV]);
-		dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 1, (ID3D11UnorderedAccessView**)&indirectBuffer.alloc_res_ptrs[DTYPE_UAV], NULL);
 
 		SetSortContants(counterReadOffset, vmint3());
 
@@ -61,13 +63,6 @@ void sort::Sort(VmGpuManager* gpu_manager,
 	}
 
 
-	dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&indexBuffer_write.alloc_res_ptrs[DTYPE_UAV], NULL);
-
-	ID3D11ShaderResourceView* srvs[] = {
-		(ID3D11ShaderResourceView*)counterBuffer_read.alloc_res_ptrs[DTYPE_SRV],
-		(ID3D11ShaderResourceView*)comparisonBuffer_read.alloc_res_ptrs[DTYPE_SRV],
-	};
-	dx11DeviceImmContext->CSSetShaderResources(0, 2, srvs);
 
 	// initial sorting:
 	bool bDone = true;
@@ -145,4 +140,9 @@ void sort::Sort(VmGpuManager* gpu_manager,
 
 		presorted *= 2;
 	}
+
+	ID3D11ShaderResourceView* srvnulls[2] = {};
+	dx11DeviceImmContext->CSSetShaderResources(0, 2, srvnulls);
+	ID3D11UnorderedAccessView* uavnulls[2] = {};
+	dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 2, uavnulls, NULL);
 }

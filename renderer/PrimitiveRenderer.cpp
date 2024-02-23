@@ -3477,22 +3477,26 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 
 						// particle update //
 						{
+
+							auto SetUAVs2CS = [&]() {
+								dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&gres_particle.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+								dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 1, (ID3D11UnorderedAccessView**)&gres_aliveList0.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+								dx11DeviceImmContext->CSSetUnorderedAccessViews(2, 1, (ID3D11UnorderedAccessView**)&gres_aliveList1.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+								dx11DeviceImmContext->CSSetUnorderedAccessViews(3, 1, (ID3D11UnorderedAccessView**)&gres_deadList.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+								dx11DeviceImmContext->CSSetUnorderedAccessViews(4, 1, (ID3D11UnorderedAccessView**)&gres_counter.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+								dx11DeviceImmContext->CSSetUnorderedAccessViews(5, 1, (ID3D11UnorderedAccessView**)&gres_indirect.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+								dx11DeviceImmContext->CSSetUnorderedAccessViews(6, 1, (ID3D11UnorderedAccessView**)&gres_distance.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+
+								dx11DeviceImmContext->CSSetUnorderedAccessViews(7, 1, (ID3D11UnorderedAccessView**)&gres_vb_pos.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+								dx11DeviceImmContext->CSSetUnorderedAccessViews(8, 1, (ID3D11UnorderedAccessView**)&gres_vb_nor.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+								dx11DeviceImmContext->CSSetUnorderedAccessViews(9, 1, (ID3D11UnorderedAccessView**)&gres_vb_tex.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+								dx11DeviceImmContext->CSSetUnorderedAccessViews(10, 1, (ID3D11UnorderedAccessView**)&gres_vb_color.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+
+								dx11DeviceImmContext->CSSetUnorderedAccessViews(11, 1, (ID3D11UnorderedAccessView**)&gres_culledIndirect0.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+								dx11DeviceImmContext->CSSetUnorderedAccessViews(12, 1, (ID3D11UnorderedAccessView**)&gres_culledIndirect1.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+							};
 							dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 20, dx11UAVs_NULL, NULL);
-							dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&gres_particle.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
-							dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 1, (ID3D11UnorderedAccessView**)&gres_aliveList0.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
-							dx11DeviceImmContext->CSSetUnorderedAccessViews(2, 1, (ID3D11UnorderedAccessView**)&gres_aliveList1.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
-							dx11DeviceImmContext->CSSetUnorderedAccessViews(3, 1, (ID3D11UnorderedAccessView**)&gres_deadList.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
-							dx11DeviceImmContext->CSSetUnorderedAccessViews(4, 1, (ID3D11UnorderedAccessView**)&gres_counter.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
-							dx11DeviceImmContext->CSSetUnorderedAccessViews(5, 1, (ID3D11UnorderedAccessView**)&gres_indirect.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
-							dx11DeviceImmContext->CSSetUnorderedAccessViews(6, 1, (ID3D11UnorderedAccessView**)&gres_distance.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
-
-							dx11DeviceImmContext->CSSetUnorderedAccessViews(7, 1, (ID3D11UnorderedAccessView**)&gres_vb_pos.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
-							dx11DeviceImmContext->CSSetUnorderedAccessViews(8, 1, (ID3D11UnorderedAccessView**)&gres_vb_nor.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
-							dx11DeviceImmContext->CSSetUnorderedAccessViews(9, 1, (ID3D11UnorderedAccessView**)&gres_vb_tex.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
-							dx11DeviceImmContext->CSSetUnorderedAccessViews(10, 1, (ID3D11UnorderedAccessView**)&gres_vb_color.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
-
-							dx11DeviceImmContext->CSSetUnorderedAccessViews(11, 1, (ID3D11UnorderedAccessView**)&gres_culledIndirect0.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
-							dx11DeviceImmContext->CSSetUnorderedAccessViews(12, 1, (ID3D11UnorderedAccessView**)&gres_culledIndirect1.alloc_res_ptrs[DesType::DTYPE_UAV], NULL);
+							SetUAVs2CS();
 
 							ID3D11Buffer* cbuf_Emitter = dx11CommonParams->get_cbuf("CB_Emitter");
 							dx11DeviceImmContext->CSSetConstantBuffers(11, 1, &cbuf_Emitter);
@@ -3722,10 +3726,13 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 							dx11DeviceImmContext->CSSetShader(isSorted ? GETCS(PCE_ParticleSimulationSort_cs_5_0) : GETCS(PCE_ParticleSimulation_cs_5_0), NULL, 0);
 							dx11DeviceImmContext->DispatchIndirect((ID3D11Buffer*)gres_indirect.alloc_res_ptrs[DTYPE_RES], ARGUMENTBUFFER_OFFSET_DISPATCHSIMULATION);
 
+							dx11DeviceImmContext->Flush();
+							dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 20, dx11UAVs_NULL, NULL);
 							if (isSorted)
 								gpulib::sort::Sort(gpu_manager, dx11CommonParams, 
 									MAX_PARTICLES, gres_distance, gres_counter, PARTICLECOUNTER_OFFSET_CULLEDCOUNT, gres_culledIndirect0);
-
+							dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 20, dx11UAVs_NULL, NULL);
+							SetUAVs2CS();
 							//counter_test();
 
 							const bool isPaused = false;
@@ -3768,8 +3775,10 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 						dx11DeviceImmContext->GSSetShader(NULL, NULL, 0);
 						dx11DeviceImmContext->PSSetShader(GETPS(PCE_ParticleRenderBasic_ps_5_0), NULL, 0);
 						dx11DeviceImmContext->RSSetState(GETRASTER(SOLID_NONE));
-						dx11DeviceImmContext->OMSetBlendState(dx11CommonParams->get_blender("ADD"), NULL, 0xffffffff);
-						// D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST, D3D11_PRIMITIVE_TOPOLOGY_POINTLIST
+						float blendFactor[] = { 0,0, 0, 0 };
+
+						dx11DeviceImmContext->OMSetBlendState(dx11CommonParams->get_blender("ALPHA_BLEND"), blendFactor, 0xffffffff);
+
 						dx11DeviceImmContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 
 						ID3D11RenderTargetView* dx11RTVs[2] = {
@@ -3785,6 +3794,9 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 						dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, dx11DSVNULL, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
 						dx11DeviceImmContext->PSSetShaderResources(20, 1, dx11SRVs_NULL);
 						dx11DeviceImmContext->VSSetShaderResources(50, 10, dx11SRVs_NULL);
+
+						//dx11DeviceImmContext->OMSetBlendState(dx11CommonParams->get_blender("ADD"), NULL, 0xffffffff);
+						dx11DeviceImmContext->OMSetBlendState(NULL, NULL, 0xffffffff);
 					}
 				}
 			}

@@ -550,7 +550,8 @@ namespace grd_helper
 		uint rt_height;
 
 		float cam_vz_thickness;
-		uint k_value; // used for max k for DK+B algorithm
+		uint k_value; 
+		// used for max k for DK+B algorithm
 		// 0- bit : 0 : (orthogonal), 1 : (perspective)
 		// 1- bit : for RT to k-buffer : 0 (just RT), 1 : (after silhouette processing)
 		// 2- bit : for dynamic K value // deprecated... (this will be treated as a separate shader

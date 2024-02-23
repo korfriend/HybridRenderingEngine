@@ -138,7 +138,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 	{
 		D3D11_BLEND_DESC descBlend = {};
 		descBlend.AlphaToCoverageEnable = false;
-		descBlend.IndependentBlendEnable = false;
+		descBlend.IndependentBlendEnable = true;
 		descBlend.RenderTarget[0].BlendEnable = true;
 		descBlend.RenderTarget[0].SrcBlend = D3D11_BLEND_ONE;
 		descBlend.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
@@ -151,6 +151,28 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		ID3D11BlendState* blender_state;
 		hr |= g_pvmCommonParams->dx11Device->CreateBlendState(&descBlend, &blender_state);
 		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::BLEND_STATE, "ADD"), blender_state);
+
+		descBlend.AlphaToCoverageEnable = false;
+		descBlend.IndependentBlendEnable = true;
+		descBlend.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+		descBlend.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+		descBlend.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+		descBlend.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+		descBlend.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
+		descBlend.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+		for (int i = 1; i < 8; i++) {
+			descBlend.RenderTarget[i].BlendEnable = false;
+			descBlend.RenderTarget[i].SrcBlendAlpha = D3D11_BLEND_ONE;
+			descBlend.RenderTarget[i].DestBlendAlpha = D3D11_BLEND_ONE;
+			descBlend.RenderTarget[i].BlendOp = D3D11_BLEND_OP_ADD;
+			descBlend.RenderTarget[i].SrcBlendAlpha = D3D11_BLEND_ONE;
+			descBlend.RenderTarget[i].DestBlendAlpha = D3D11_BLEND_ONE;
+			descBlend.RenderTarget[i].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+			descBlend.RenderTarget[i].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+		}
+		hr |= g_pvmCommonParams->dx11Device->CreateBlendState(&descBlend, &blender_state);
+		g_pvmCommonParams->safe_set_res(COMRES_INDICATOR(GpuhelperResType::BLEND_STATE, "ALPHA_BLEND"), blender_state);
+
 
 #ifdef DX11_3
 		D3D11_RASTERIZER_DESC2 descRaster;

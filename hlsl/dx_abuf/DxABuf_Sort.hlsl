@@ -199,6 +199,7 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 		}
 	}
 
+	//return;//
 	// done in CreateOffsetTable_CS
 	//if (additionalLayers)
 	//{
@@ -228,7 +229,6 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 	//const int test_idx = 0;
 	//if (N <= test_idx + 1) return;
 	//fragment_blendout[nDTid.xy] = ConvertUIntToFloat4(fragments[test_idx].i_vis);
-	//return;
 
 	sort(N, fragments, FragmentVD);
 
@@ -267,6 +267,7 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 	//	return;
 	//}
 	f_1.opacity_sum = ConvertUIntToFloat4(f_1.i_vis).a;
+	
 	// use the SFM
 	[loop]
 	for (i = 0; i < N; i++)
@@ -326,6 +327,7 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 			f_1 = f_merge;
 		}
 	}
+	//return;
 	[branch]
 	if (f_1.i_vis != 0)
 	{
