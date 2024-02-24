@@ -3553,7 +3553,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 								cbEmitter.xParticleScaling = actor->GetParam("_float_ScaleFactor", (float)1.f);
 								cbEmitter.xParticleSize = actor->GetParam("_float_ScaleSize", (float)1.f);
 								cbEmitter.xParticleMotionBlurAmount = actor->GetParam("_float_MotionBlurAmount", (float)0.f);
-								cbEmitter.xParticleRotation = actor->GetParam("_float_RotationDeg", (float)0.f) * VM_PI / 180.f; // RAD
+								cbEmitter.xParticleRotation = actor->GetParam("_float_Rotation", (float)0.f) * VM_PI * 60.f; // heuristic scale
 								cbEmitter.xParticleMass = actor->GetParam("_float_Mass", (float)1.f);
 								cbEmitter.xEmitterMaxParticleCount = MAX_PARTICLES;
 								cbEmitter.xEmitterFixedTimestep = actor->GetParam("_float_FixedTimeStep", (float)-1.f);
