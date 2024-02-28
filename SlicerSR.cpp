@@ -1271,6 +1271,8 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		detaultOutlinePixelThickness = 1.2f;
 	}
 
+	float camForcedOutlinePixelThickness = _fncontainer->fnParams.GetParam("_float_OutlinePixThickness", -1.f);
+	
 #pragma region // Camera & Light Setting
 	VmCObject* cam_obj = iobj->GetCameraObject();
 
@@ -1595,7 +1597,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		&cbuf_cam_state, &cbuf_env_state, &cbuf_clip, &cbuf_pobj, &cbuf_vobj, &cbuf_reffect, &cbuf_tmap, &cbuf_hsmask,
 		&num_grid_x, &num_grid_y, &matWS2PS, &matWS2SS, &matSS2WS,
 		&light_src, &default_phong_lighting_coeff, &default_point_thickness, &default_surfel_size, &default_line_thickness, &default_color_cmmobj, &use_spinlock_pixsynch, &use_blending_option_MomentOIT,
-		&count_call_render, &progress, &cam_obj, &planeThickness, & detaultOutlinePixelThickness, 
+		&count_call_render, &progress, &cam_obj, &planeThickness, &detaultOutlinePixelThickness, &camForcedOutlinePixelThickness,
 		&camClipMode, &camClipPlanePos, &camClipPlaneDir, &camClipMatWS2BS,
 #ifdef DX10_0
 		&matQaudWS2PS_T, 
@@ -1697,6 +1699,9 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			
 			//if (planeThickness == 0) {
 				cbPolygonObj.pix_thickness = actor->GetParam("_float_OutlinePixThickness", detaultOutlinePixelThickness);
+				if (camForcedOutlinePixelThickness > 0) {
+					cbPolygonObj.pix_thickness = camForcedOutlinePixelThickness;
+				}
 			//}
 			
 			D3D11_MAPPED_SUBRESOURCE mappedResPobjData;

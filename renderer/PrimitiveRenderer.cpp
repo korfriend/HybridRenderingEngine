@@ -3726,7 +3726,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 							dx11DeviceImmContext->CSSetShader(isSorted ? GETCS(PCE_ParticleSimulationSort_cs_5_0) : GETCS(PCE_ParticleSimulation_cs_5_0), NULL, 0);
 							dx11DeviceImmContext->DispatchIndirect((ID3D11Buffer*)gres_indirect.alloc_res_ptrs[DTYPE_RES], ARGUMENTBUFFER_OFFSET_DISPATCHSIMULATION);
 
-							dx11DeviceImmContext->Flush();
+							//dx11DeviceImmContext->Flush();
 							dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 20, dx11UAVs_NULL, NULL);
 							if (isSorted)
 								gpulib::sort::Sort(gpu_manager, dx11CommonParams, 
