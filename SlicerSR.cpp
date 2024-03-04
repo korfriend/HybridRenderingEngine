@@ -1521,13 +1521,13 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		//vmmat44f matOS2SS = actor->matOS2WS * matWS2SS;
 		//int w, h;
 		//__compute_computespace_screen(w, h, matOS2SS, prim_data->aabb_os);
-		vector<VmActor*>& targetSlicerActors = slicer_actors;
+		vector<VmActor*>* targetSlicerActors = &slicer_actors;
 		if (planeThickness > 0) {
 			bool noSlicerFill = actor->GetParam("_bool_DisableSolidFillOnSlicer", false);
-			if (noSlicerFill) targetSlicerActors = slicer_post_actors;
+			if (noSlicerFill) targetSlicerActors = &slicer_post_actors;
 		}
 
-		targetSlicerActors.push_back(actor);
+		targetSlicerActors->push_back(actor);
 	}
 
 	for (int i = 0; i < (int)slicer_post_actors.size(); i++) {
