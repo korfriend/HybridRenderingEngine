@@ -128,8 +128,16 @@ bool InitModule(fncontainer::VmFnContainer& _fncontainer)
 	return true;
 }
 
+#ifdef THREAD_SAFE_CODE
+static std::mutex queue_locker;
+#endif 
+
 bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 {
+#ifdef THREAD_SAFE_CODE
+	std::scoped_lock lock(queue_locker);
+#endif 
+
 	if(g_pCGpuManager == NULL)
 	{
 		return false;

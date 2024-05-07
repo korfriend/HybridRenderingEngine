@@ -2754,6 +2754,7 @@ bool grd_helper::CollisionCheck(const vmmat44f& matWS2OS, const AaBbMinMax& aabb
 	CollisionRay dxRay;
 	dxRay.origin = XMVectorSet(ray_origin_os.x, ray_origin_os.y, ray_origin_os.z, 1.f);
 	dxRay.direction = XMVectorSet(ray_dir_os.x, ray_dir_os.y, ray_dir_os.z, 0);
+	dxRay.direction = XMVector3Normalize(dxRay.direction);
 	float fDist = 0;
 	if (dxAabb.aabox.Intersects(dxRay.origin, dxRay.direction, fDist))
 		return true;
