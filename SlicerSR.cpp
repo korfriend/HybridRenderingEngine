@@ -807,6 +807,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	vmfloat3 camClipPlanePos = _fncontainer->fnParams.GetParam("_float3_PosClipPlaneWS", vmfloat3(0));
 	vmfloat3 camClipPlaneDir = _fncontainer->fnParams.GetParam("_float3_VecClipPlaneWS", vmfloat3(0));
 	vmmat44f camClipMatWS2BS = _fncontainer->fnParams.GetParam("_matrix44f_MatrixClipWS2BS", vmmat44f(1));
+	std::set<int> camClipperFreeActors = _fncontainer->fnParams.GetParam("_set_int_CamClipperFreeActors", std::set<int>());
 
 	bool is_picking_routine = _fncontainer->fnParams.GetParam("_bool_IsPickingRoutine", false);
 #ifdef DX10_0
@@ -1608,7 +1609,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		&num_grid_x, &num_grid_y, &matWS2PS, &matWS2SS, &matSS2WS,
 		&light_src, &default_phong_lighting_coeff, &default_point_thickness, &default_surfel_size, &default_line_thickness, &default_color_cmmobj, &use_spinlock_pixsynch, &use_blending_option_MomentOIT,
 		&count_call_render, &progress, &cam_obj, &planeThickness, &detaultOutlinePixelThickness, &camForcedOutlinePixelThickness,
-		&camClipMode, &camClipPlanePos, &camClipPlaneDir, &camClipMatWS2BS,
+		&camClipMode, &camClipPlanePos, &camClipPlaneDir, &camClipMatWS2BS, &camClipperFreeActors,
 #ifdef DX10_0
 		&matQaudWS2PS_T, 
 #endif
@@ -1721,7 +1722,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			dx11DeviceImmContext->Unmap(cbuf_pobj, 0);
 
 			CB_ClipInfo cbClipInfo;
-			grd_helper::SetCb_ClipInfo(cbClipInfo, pobj, actor, camClipMode, camClipMatWS2BS, camClipPlanePos, camClipPlaneDir);
+			grd_helper::SetCb_ClipInfo(cbClipInfo, pobj, actor, camClipMode, camClipperFreeActors, camClipMatWS2BS, camClipPlanePos, camClipPlaneDir);
 			D3D11_MAPPED_SUBRESOURCE mappedResClipInfo;
 			dx11DeviceImmContext->Map(cbuf_clip, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResClipInfo);
 			CB_ClipInfo* cbClipInfoData = (CB_ClipInfo*)mappedResClipInfo.pData;

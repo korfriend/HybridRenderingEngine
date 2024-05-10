@@ -2476,7 +2476,7 @@ void grd_helper::SetCb_VolumeRenderingEffect(CB_VolumeMaterial& cb_vreffect, VmV
 	cb_vreffect.flag = (int)jitteringSample;
 }
 
-void grd_helper::SetCb_ClipInfo(CB_ClipInfo& cb_clip, VmVObject* obj, VmActor* actor, const int camClipMode, 
+void grd_helper::SetCb_ClipInfo(CB_ClipInfo& cb_clip, VmVObject* obj, VmActor* actor, const int camClipMode, const std::set<int> camClipperFreeActor,
 	const vmmat44f& matCamClipWS2BS, const vmfloat3& matCamClipPlanePos, const vmfloat3& matCamClipPlaneDir)
 {
 	const int obj_id = obj->GetObjectID();
@@ -2493,7 +2493,8 @@ void grd_helper::SetCb_ClipInfo(CB_ClipInfo& cb_clip, VmVObject* obj, VmActor* a
 			cb_clip.clip_flag = clip_mode & 0x3;
 		}
 		else {
-			cb_clip.clip_flag = camClipMode & 0x3;
+			if (camClipperFreeActor.find(actor->actorId) == camClipperFreeActor.end())
+				cb_clip.clip_flag = camClipMode & 0x3;
 		}
 	}
 

@@ -46,6 +46,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	vmfloat3 camClipPlanePos = _fncontainer->fnParams.GetParam("_float3_PosClipPlaneWS", vmfloat3(0));
 	vmfloat3 camClipPlaneDir = _fncontainer->fnParams.GetParam("_float3_VecClipPlaneWS", vmfloat3(0));
 	vmmat44f camClipMatWS2BS = _fncontainer->fnParams.GetParam("_matrix44f_MatrixClipWS2BS", vmmat44f(1));
+	std::set<int> camClipperFreeActors = _fncontainer->fnParams.GetParam("_set_int_CamClipperFreeActors", std::set<int>());
 
 	// TEST
 	int test_value = _fncontainer->fnParams.GetParam("_int_TestValue", (int)0);
@@ -673,7 +674,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		SET_CBUFFERS(4, 1, &cbuf_vobj);
 
 		CB_ClipInfo cbClipInfo;
-		grd_helper::SetCb_ClipInfo(cbClipInfo, vobj, actor, camClipMode, camClipMatWS2BS, camClipPlanePos, camClipPlaneDir);
+		grd_helper::SetCb_ClipInfo(cbClipInfo, vobj, actor, camClipMode, camClipperFreeActors, camClipMatWS2BS, camClipPlanePos, camClipPlaneDir);
 		D3D11_MAPPED_SUBRESOURCE mappedResClipInfo;
 		dx11DeviceImmContext->Map(cbuf_clip, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResClipInfo);
 		CB_ClipInfo* cbClipInfoData = (CB_ClipInfo*)mappedResClipInfo.pData;
