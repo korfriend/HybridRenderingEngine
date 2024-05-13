@@ -756,7 +756,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		// 2 (&&is_modulation_mode) 
 		// 3 or 4
 		GpuRes gres_vol;
-		grd_helper::UpdateVolumeModel(gres_vol, vobj, ray_cast_type == __RM_VISVOLMASK, planeThickness < 0 && 
+		grd_helper::UpdateVolumeModel(gres_vol, vobj, ray_cast_type == __RM_VISVOLMASK, false && //planeThickness < 0 && 
 			(
 				((downScaleOption == 1 || downScaleOption == 2) && is_modulation_mode)
 				|| downScaleOption == 3 || downScaleOption == 4

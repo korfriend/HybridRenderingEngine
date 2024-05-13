@@ -597,7 +597,8 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		}
 
 		GpuRes gres_vol;
-		grd_helper::UpdateVolumeModel(gres_vol, vobj, ray_cast_type == __RM_VISVOLMASK, planeThickness <= 0, progress); // ray_cast_type == __RM_MAXMASK
+		//grd_helper::UpdateVolumeModel(gres_vol, vobj, ray_cast_type == __RM_VISVOLMASK, planeThickness <= 0, progress); // ray_cast_type == __RM_MAXMASK
+		grd_helper::UpdateVolumeModel(gres_vol, vobj, ray_cast_type == __RM_VISVOLMASK, false, progress); // ray_cast_type == __RM_MAXMASK
 		SET_SHADER_RES(0, 1, (__SRV_PTR*)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
 
 		GpuRes gres_tmap_otf, gres_tmap_preintotf;

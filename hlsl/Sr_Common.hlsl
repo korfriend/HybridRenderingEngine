@@ -605,7 +605,7 @@ float3 ComputeDeviation(float3 pos, float3 nrl)
     nrl = normalize(nrl);
     float3 dirSampleOS = TransformVector(nrl * sampleDist, g_cbPobj.mat_ws2os);
     float3 dirSampleTS = TransformVector(dirSampleOS, g_cbVobj.mat_ws2ts);
-    float sampleDistTS = length(dirSampleTS);
+    //float sampleDistTS = length(dirSampleTS);
 
     float3 sampleDirs[2] = { dirSampleTS, -dirSampleTS };
 

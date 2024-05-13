@@ -1835,7 +1835,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 
 			if (vobj) {
 				GpuRes gres_vol;
-				grd_helper::UpdateVolumeModel(gres_vol, vobj, false, progress);
+				grd_helper::UpdateVolumeModel(gres_vol, vobj, false, false, progress);
 				//dx11DeviceImmContext->VSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
 				dx11DeviceImmContext->PSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
 
