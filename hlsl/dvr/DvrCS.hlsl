@@ -815,8 +815,12 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #if VR_MODE == 2
 					//g_cbVobj.kappa_i
 					//float modulator = pow(min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(g_cbVobj.kappa_i * max(__s, 0.1f), g_cbVobj.kappa_s));
-					float modulator = min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
-					vis_sample *= modulator;
+					//float modulator = min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
+					//vis_sample *= modulator;
+
+					float dist_sq = 1.f - (float)(i + j) / (float)num_ray_samples;
+					dist_sq *= dist_sq;
+					MODULATE(dist_sq, grad_len);
 #endif
 					//vis_sample *= mask_weight;
 #if FRAG_MERGING == 1
@@ -1435,20 +1439,11 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 			float4 vis_sample = vis_otf;
 #if VR_MODE == 2
 			float grad_len = length(grad);
-			float3 nrl = grad / (grad_len + 0.0001f);
+			//float3 nrl = grad / (grad_len + 0.0001f);
+			//float modulator = pow(min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(kappa_i * max(__s, 0.1f), kappa_s));
+			//float modulator = pow(min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(kappa_i * max(__s, 0.1f), kappa_s));
 
-			float depth_sample = depthHit + sample_dist;
-			float __s = grad_len > 0.001f ? abs(dot(view_dir, nrl)) : 0;
-			float kappa_t = 5.0;// g_cbVobj.kappa_i;
-			float kappa_s = 0.5;// g_cbVobj.kappa_s;
-			//float modulator = pow(min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(kappa_i * max(__s, 0.1f), kappa_s));
-			//float modulator = pow(min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(kappa_i * max(__s, 0.1f), kappa_s));
-			float modulator = min(grad_len * 2.f * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
-			float dist_plane_sq = fPlaneThickness * 0.5f - depth_sample;
-			dist_plane_sq /= fPlaneThickness * 0.5f;
-			dist_plane_sq *= dist_plane_sq;
-			modulator *= pow(max(1.f - dist_plane_sq, 0.1), kappa_t) * pow(max(1.f - __s, 0.1), kappa_s);
-			vis_sample *= modulator;
+			MODULATE(0, grad_len);
 #endif
 			//vis_sample *= mask_weight;
 			
@@ -1512,18 +1507,10 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 					float4 vis_sample = float4(shade * vis_otf.rgb, vis_otf.a);
 					float depth_sample = depthHit + (float)(i + j) * sample_dist;
 #if VR_MODE == 2
-					float __s = grad_len > 0.001f ? abs(dot(view_dir, nrl)) : 0;
-					float kappa_t = 5.0;// g_cbVobj.kappa_i;
-					float kappa_s = 0.5;// g_cbVobj.kappa_s;
-					//float modulator = pow(min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(kappa_i * max(__s, 0.1f), kappa_s));
-					//float modulator = pow(min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(kappa_i * max(__s, 0.1f), kappa_s));
-					//if (grad_len < 0.01f) grad_len = 0;
-					float modulator = max(min(grad_len * 2.f * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), 0.01);
-					float dist_plane_sq = fPlaneThickness * 0.5f - depth_sample;
-					dist_plane_sq /= fPlaneThickness * 0.5f;
-					dist_plane_sq *= dist_plane_sq;
-					modulator *= pow(max(1.f - dist_plane_sq, 0.1), kappa_t) * pow(max(1.f - __s, 0.1), kappa_s);
-					vis_sample *= modulator;
+					float dist_sq = 1.f - (float)(i + j) / (float)num_new_ray_samples;
+					dist_sq *= dist_sq;
+
+					MODULATE(dist_sq, grad_len);
 #endif
 
 //					vis_out += vis_sample * (1.f - vis_out.a);

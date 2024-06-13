@@ -765,6 +765,14 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 		SET_SHADER_RES(0, 1, (__SRV_PTR*)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
 
+		// test code for kuei
+		ID3D11ShaderResourceView* test_srv = (ID3D11ShaderResourceView*)actor->GetParam("TEST_SRV_VOLUME", (void*)nullptr);
+		if (test_srv)
+		{
+			vmlog::LogInfo("test_srv comes in");
+			SET_SHADER_RES(0, 1, &test_srv);
+		}
+
 		GpuRes gres_tmap_otf, gres_tmap_preintotf;
 		//clock_t __start2 = clock();
 		grd_helper::UpdateTMapBuffer(gres_tmap_otf, tobj_otf, false);
@@ -1005,7 +1013,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			}
 			break;
 		}
-
+ 
 		ID3D11UnorderedAccessView* dx11UAVs[4] = {
 				  (ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV]
 				, (ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]

@@ -135,6 +135,16 @@
 		sort_shellOpt(num, fragments, FRAG)\
 }
 
+// sampling range Àû¿ë
+#define MODULATE(NORM_D2, GRAD_LENGTH) {\
+			float __s = GRAD_LENGTH > 0.001f ? abs(dot(view_dir, nrl)) : 0;\
+			float kappa_t = g_cbVobj.kappa_i; /*5*/\
+			float kappa_s = g_cbVobj.kappa_s; /*0.5*/\
+			float modulator = min(GRAD_LENGTH * 2.f * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);\
+			modulator *= pow(min(max(NORM_D2, 0.1), 1.f), kappa_t) * pow(max(1.f - __s, 0.1), kappa_s);\
+			vis_sample *= modulator;\
+}
+
 #define INTERMIX_OLD(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, thick_sample, fs, merging_beta) {\
     if (idx_dlayer >= num_frags)\
     {\
