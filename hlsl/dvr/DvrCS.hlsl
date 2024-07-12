@@ -381,6 +381,60 @@ void FindNearestInsideSurface(inout float3 pos_refined_ws, const float3 pos_samp
 #define GRAD_VOL(Vc, Vp, P, VV, VU, VR, UVV, UVU, UVR) GradientBinVolume(P, 2*g_cbVobj.vec_grad_x, 2*g_cbVobj.vec_grad_y, 2*g_cbVobj.vec_grad_z, tex3D_volume)
 #endif
 
+float3 GradientClippedVolume(const float sampleV, 
+	const float3 pos_sample_ws, const float3 pos_sample_ts,
+	const float3 vec_v, const float3 vec_u, const float3 vec_r, // TS from WS
+	const float3 uvec_v, const float3 uvec_u, const float3 uvec_r,
+	Texture3D tex3d_data)
+{
+	bool bv = IsInsideClipBound(pos_sample_ws - uvec_v * g_cbVobj.sample_dist * 2.f, g_cbClipInfo);
+	bool bu = IsInsideClipBound(pos_sample_ws - uvec_u * g_cbVobj.sample_dist * 2.f, g_cbClipInfo);
+	bool br = IsInsideClipBound(pos_sample_ws - uvec_r * g_cbVobj.sample_dist * 2.f, g_cbClipInfo);
+
+	// note v, u, r are orthogonal for each other
+	// vec_u and vec_r are defined in TS, and each length is sample distance
+	// uvec_v, uvec_u, and uvec_r are unit vectors defined in WS
+	//float dv = bv ? tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts - 2 * vec_v, 0).r - sampleV : 0;
+	//float du = bu ? tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts - 2 * vec_u, 0).r - sampleV : 0;
+	//float dr = br ? tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts - 2 * vec_r, 0).r - sampleV : 0;
+	float dv = bv ? 1 : 0;
+	float du = bu ? 1 : 0;
+	float dr = br ? 1 : 0;
+
+	float3 v_v = uvec_v * dv;
+	float3 v_u = uvec_u * du;
+	float3 v_r = uvec_r * dr;
+	return v_v + v_u + v_r;
+}
+
+float3 GradientClippedVolume2(const float3 pos_sample_ws, const float3 pos_sample_ts, Texture3D tex3d_data)
+{
+	//g_cbVobj.vec_grad_x, g_cbVobj.vec_grad_y, g_cbVobj.vec_grad_z
+	bool bx0 = IsInsideClipBound(pos_sample_ws - float3(1, 0, 0) * g_cbVobj.sample_dist * 2.f, g_cbClipInfo);
+	bool bx1 = IsInsideClipBound(pos_sample_ws + float3(1, 0, 0) * g_cbVobj.sample_dist * 2.f, g_cbClipInfo);
+	bool by0 = IsInsideClipBound(pos_sample_ws - float3(0, 1, 0) * g_cbVobj.sample_dist * 2.f, g_cbClipInfo);
+	bool by1 = IsInsideClipBound(pos_sample_ws + float3(0, 1, 0) * g_cbVobj.sample_dist * 2.f, g_cbClipInfo);
+	bool bz0 = IsInsideClipBound(pos_sample_ws - float3(0, 0, 1) * g_cbVobj.sample_dist * 2.f, g_cbClipInfo);
+	bool bz1 = IsInsideClipBound(pos_sample_ws + float3(0, 0, 1) * g_cbVobj.sample_dist * 2.f, g_cbClipInfo);
+
+	//!IsInsideClipBox(input.f3PosWS, g_cbClipInfo.mat_clipbox_ws2bs)
+
+	float fGx = (bx1 ? tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts + g_cbVobj.vec_grad_x, 0).r : 0)
+		- (bx0 ? tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts - g_cbVobj.vec_grad_x, 0).r : 0);
+	float fGy = (by1 ? tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts + g_cbVobj.vec_grad_y, 0).r : 0)
+		- (by1 ? tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts - g_cbVobj.vec_grad_y, 0).r : 0);
+	float fGz = (bz1 ? tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts + g_cbVobj.vec_grad_z, 0).r : 0)
+		- (bz0 ? tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts - g_cbVobj.vec_grad_z, 0).r : 0);
+
+	//float fGx = (bx1 ? 1 : 0)
+	//	- (bx0 ? 1 : 0);
+	//float fGy = (by1 ? 1 : 0)
+	//	- (by1 ? 1 : 0);
+	//float fGz = (bz1 ? 1 : 0)
+	//	- (bz0 ? 1 : 0);
+
+	return float3(fGx, fGy, fGz);
+}
 
 float PhongBlinnVr(const float3 cam_view, const in float4 shading_factors, const in float3 light_dirinv, in float3 normal, const in bool is_max_shading)
 {
@@ -737,13 +791,12 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #else
 	if (vr_hit_enc == __VRHIT_ON_CLIPPLANE) // on the clip plane
 	{
-		//fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
-		//return;
 		float4 vis_otf = (float4) 0;
 		start_idx++;
 
 #if VR_MODE != 3
-		float3 grad = GRAD_VOL(sample_v, sample_prev, pos_ray_start_ts, v_v, v_u, v_r, uv_v, uv_u, uv_r);
+		//float3 grad = GRAD_VOL(sample_v, sample_prev, pos_ray_start_ts, v_v, v_u, v_r, uv_v, uv_u, uv_r);
+		float3 grad = GradientClippedVolume2(pos_ray_start_ws, pos_ray_start_ts, tex3D_volume);
 		if (Vis_Volume_And_Check_Slab(vis_otf, sample_v, sample_prev, pos_ray_start_ts))
 #else
 		if (Vis_Volume_And_Check(vis_otf, pos_ray_start_ts))
@@ -755,7 +808,16 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 			depth_sample += sample_dist; // slab's back boundary
 #endif
 
-			float4 vis_sample = vis_otf;
+			//float4 vis_sample = vis_otf;
+			float grad_len = length(grad);
+			float3 nrl = grad / (grad_len + 0.00001f);
+			float shade = 1.f;
+			if (grad_len > 0) {
+				shade = saturate(PhongBlinnVr(view_dir, g_cbVobj.pb_shading_factor, light_dirinv, nrl, true));
+			}
+			float4 vis_sample = float4(shade * vis_otf.rgb, vis_otf.a);
+			//vis_sample.rgb = (nrl)/2;
+
 #if VR_MODE == 2
 			float grad_len = length(grad) * 0.5f;
 			//float modulator = pow(min(grad_len * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(g_cbVobj.kappa_i, g_cbVobj.kappa_s));

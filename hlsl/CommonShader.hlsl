@@ -509,6 +509,24 @@ float2 ComputePlaneHits(const in float prev_t, const in float next_t, const in f
 	return hits_t;
 }
 
+bool IsInsideClipBound(const in float3 pos, const in HxCB_ClipInfo clip_info)
+{
+	// Custom Clip Plane //
+	//if (clip_info.clip_flag & 0x1)
+	//{
+	//	float ph = pos - clip_info.pos_clipplane;
+	//	if (dot(ph, clip_info.vec_clipplane) > 0)
+	//		return false;
+	//}
+	
+	if (clip_info.clip_flag & 0x2)
+	{
+		if (!IsInsideClipBox(pos, clip_info.mat_clipbox_ws2bs))
+			return false;
+	}
+	return true;
+}
+
 float2 ComputeVBoxHits(const in float3 pos_start, const in float3 vec_dir, const in float4x4 mat_vbox_2bs, const in HxCB_ClipInfo clip_info)
 {
 	// Compute VObject Box Enter and Exit //
@@ -735,6 +753,7 @@ BlockSkip ComputeBlockSkip(const float3 pos_start_ts, const float3 vec_sample_ts
 	//blk_v.num_skip_steps = ceil(dist_skip_ts);
 	return blk_v;
 };
+
 
 float3 GradientVolume(const in float3 pos_sample_ts, const in float3 vec_x, const in float3 vec_y, const in float3 vec_z, Texture3D tex3d_data)
 {
