@@ -407,6 +407,80 @@ float3 GradientClippedVolume(const float sampleV,
 	return v_v + v_u + v_r;
 }
 
+bool GetClipPlaneNormal(const float3 pos_sample_ws, out float3 clipNormal)
+{
+	float4x4 mat_target = float4x4(1, 0, 0, 0,
+		0, 1, 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1);
+	float3 p_cb = pos_sample_ws;
+	float3 nrm = float3(1, 1, 1);
+	float d = 100000.f;
+	bool ret = false;
+	if (g_cbClipInfo.clip_flag & 0x2)
+	{
+		mat_target = g_cbClipInfo.mat_clipbox_ws2bs;
+		p_cb = TransformPoint(pos_sample_ws, mat_target);
+		float3 pp = abs(p_cb);
+		if (pp.x < pp.y)
+		{
+			nrm.x = 0;
+			if (pp.y < pp.z)
+			{
+				nrm.y = 0;
+				d = p_cb.z;
+				if (d < 0){
+					d = -d;
+					nrm.z = -1;
+				}
+			}
+			else
+			{
+				nrm.z = 0;
+				d = p_cb.y;
+				if (d < 0){
+					d = -d;
+					nrm.y = -1;
+				}
+			}
+		}
+		else {
+			nrm.y = 0;
+			if (pp.x < pp.z)
+			{
+				nrm.x = 0;
+				d = p_cb.z;
+				if (d < 0){
+					d = -d;
+					nrm.z = -1;
+				}
+			}
+			else
+			{
+				nrm.z = 0;
+				d = p_cb.x;
+				if (d < 0){
+					d = -d;
+					nrm.x = -1;
+				}
+			}
+		}
+		float4x4 matbs2ws = inverse(mat_target);
+		clipNormal = normalize(TransformVector(nrm, matbs2ws));
+	}
+	if (g_cbClipInfo.clip_flag & 0x1)
+	{
+		float3 normal_cb = normalize(TransformVector(g_cbClipInfo.vec_clipplane, mat_target));
+		float3 p_plane_cb = TransformPoint(g_cbClipInfo.pos_clipplane, mat_target);
+		float3 ph = p_cb - p_plane_cb;
+		float dot_p = abs(dot(ph, normal_cb));
+		if (d > dot_p)
+		{
+			nrm = normal_cb;
+		}
+	}
+	return ret;
+}
 float3 GradientClippedVolume2(const float3 pos_sample_ws, const float3 pos_sample_ts, Texture3D tex3d_data)
 {
 	//g_cbVobj.vec_grad_x, g_cbVobj.vec_grad_y, g_cbVobj.vec_grad_z
@@ -422,7 +496,7 @@ float3 GradientClippedVolume2(const float3 pos_sample_ws, const float3 pos_sampl
 	float fGx = (bx1 ? tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts + g_cbVobj.vec_grad_x, 0).r : 0)
 		- (bx0 ? tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts - g_cbVobj.vec_grad_x, 0).r : 0);
 	float fGy = (by1 ? tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts + g_cbVobj.vec_grad_y, 0).r : 0)
-		- (by1 ? tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts - g_cbVobj.vec_grad_y, 0).r : 0);
+		- (by0 ? tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts - g_cbVobj.vec_grad_y, 0).r : 0);
 	float fGz = (bz1 ? tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts + g_cbVobj.vec_grad_z, 0).r : 0)
 		- (bz0 ? tex3d_data.SampleLevel(g_samplerLinear_clamp, pos_sample_ts - g_cbVobj.vec_grad_z, 0).r : 0);
 
@@ -796,7 +870,14 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 #if VR_MODE != 3
 		//float3 grad = GRAD_VOL(sample_v, sample_prev, pos_ray_start_ts, v_v, v_u, v_r, uv_v, uv_u, uv_r);
+		//float3 grad = GradientClippedVolume2(pos_ray_start_ws, pos_ray_start_ts, tex3D_volume);
+#if VR_MODE != 2
+		float3 nrl;
+		GetClipPlaneNormal(pos_ray_start_ws, nrl);
+#else
 		float3 grad = GradientClippedVolume2(pos_ray_start_ws, pos_ray_start_ts, tex3D_volume);
+#endif
+
 		if (Vis_Volume_And_Check_Slab(vis_otf, sample_v, sample_prev, pos_ray_start_ts))
 #else
 		if (Vis_Volume_And_Check(vis_otf, pos_ray_start_ts))
@@ -808,21 +889,20 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 			depth_sample += sample_dist; // slab's back boundary
 #endif
 
+#if VR_MODE == 2
+			float grad_len = length(grad) * 0.001f;
+			float3 nrl = grad / grad_len;
+#endif
 			//float4 vis_sample = vis_otf;
-			float grad_len = length(grad);
-			float3 nrl = grad / (grad_len + 0.00001f);
 			float shade = 1.f;
-			if (grad_len > 0) {
-				shade = saturate(PhongBlinnVr(view_dir, g_cbVobj.pb_shading_factor, light_dirinv, nrl, true));
-			}
+			shade = saturate(PhongBlinnVr(view_dir, g_cbVobj.pb_shading_factor, light_dirinv, nrl, true));
 			float4 vis_sample = float4(shade * vis_otf.rgb, vis_otf.a);
 			//vis_sample.rgb = (nrl)/2;
 
 #if VR_MODE == 2
-			float grad_len = length(grad) * 0.5f;
-			//float modulator = pow(min(grad_len * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(g_cbVobj.kappa_i, g_cbVobj.kappa_s));
+			float modulator = pow(min(grad_len * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(g_cbVobj.kappa_i, g_cbVobj.kappa_s));
 			//float modulator = min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
-			//vis_sample *= modulator; // https://github.com/korfriend/OsstemCoreAPIs/discussions/199#discussion-5114460
+			vis_sample *= modulator; // https://github.com/korfriend/OsstemCoreAPIs/discussions/199#discussion-5114460
 #endif
 			//vis_sample *= mask_weight;
 #if FRAG_MERGING == 1

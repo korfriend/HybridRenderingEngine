@@ -512,12 +512,12 @@ float2 ComputePlaneHits(const in float prev_t, const in float next_t, const in f
 bool IsInsideClipBound(const in float3 pos, const in HxCB_ClipInfo clip_info)
 {
 	// Custom Clip Plane //
-	//if (clip_info.clip_flag & 0x1)
-	//{
-	//	float ph = pos - clip_info.pos_clipplane;
-	//	if (dot(ph, clip_info.vec_clipplane) > 0)
-	//		return false;
-	//}
+	if (clip_info.clip_flag & 0x1)
+	{
+		float3 ph = pos - clip_info.pos_clipplane;
+		if (dot(ph, clip_info.vec_clipplane) > 0)
+			return false;
+	}
 	
 	if (clip_info.clip_flag & 0x2)
 	{

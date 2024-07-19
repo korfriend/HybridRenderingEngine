@@ -240,10 +240,14 @@
   <PropertyGroup Label="Globals">
     <ProjectGuid>{BD108E48-5831-4F89-8E39-5662EBDB276A}</ProjectGuid>
     <RootNamespace>VRGPUDX11Simple_Dojo</RootNamespace>
-    <SccProjectName>Svn</SccProjectName>
-    <SccLocalPath>Svn</SccLocalPath>
-    <SccProvider>SubversionScc</SccProvider>
-    <SccAuxPath>Svn</SccAuxPath>
+    <SccProjectName>
+    </SccProjectName>
+    <SccLocalPath>
+    </SccLocalPath>
+    <SccProvider>
+    </SccProvider>
+    <SccAuxPath>
+    </SccAuxPath>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
     <ProjectName>vismtv_inbuilt_renderergpudx</ProjectName>
   </PropertyGroup>
