@@ -476,7 +476,7 @@ bool GetClipPlaneNormal(const float3 pos_sample_ws, out float3 clipNormal)
 		float dot_p = abs(dot(ph, normal_cb));
 		if (d > dot_p)
 		{
-			nrm = normal_cb;
+			clipNormal = normal_cb;
 		}
 	}
 	return ret;
@@ -900,9 +900,10 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 			//vis_sample.rgb = (nrl)/2;
 
 #if VR_MODE == 2
-			float modulator = pow(min(grad_len * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(g_cbVobj.kappa_i, g_cbVobj.kappa_s));
+			//float modulator = pow(min(grad_len * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(g_cbVobj.kappa_i, g_cbVobj.kappa_s));
 			//float modulator = min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
-			vis_sample *= modulator; // https://github.com/korfriend/OsstemCoreAPIs/discussions/199#discussion-5114460
+			//vis_sample *= modulator; // https://github.com/korfriend/OsstemCoreAPIs/discussions/199#discussion-5114460
+			MODULATE(0, grad_len);
 #endif
 			//vis_sample *= mask_weight;
 #if FRAG_MERGING == 1
@@ -917,6 +918,11 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	}
 
 	int sample_count = 0;
+	//fragment_vis[tex2d_xy] = float4((pos_ray_start_ts + (float3)1) * 0.5f, 1.f);
+	//if (num_ray_samples < start_idx)
+	//	fragment_vis[tex2d_xy] = float4(1, 0, 0, 1.f);
+	//
+	//return;
 
 	[loop]
 	for (i = start_idx; i < num_ray_samples; i++)
