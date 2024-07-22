@@ -10,3 +10,7 @@ __vmstatic void GetModuleSpecification(std::vector<std::string>& requirements);
 
 // customized function
 __vmstatic bool GetSharedShaderResView(const int iobjId, const void* dx11devPtr, void** sharedSRV);
+__vmstatic bool GetRendererDevice(
+	vmobjects::VmParamMap<std::string, std::any>& ioResObjs,
+	vmobjects::VmParamMap<std::string, std::any>& ioActors,
+	vmobjects::VmParamMap<std::string, std::any>& ioParams);

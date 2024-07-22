@@ -849,3 +849,23 @@ bool GetSharedShaderResView(const int iobjId, const void* dx11devPtr, void** sha
 	*sharedSRV = *ppsharedSRV;
 	return true;
 }
+
+bool GetRendererDevice(
+	vmobjects::VmParamMap<std::string, std::any>& ioResObjs,
+	vmobjects::VmParamMap<std::string, std::any>& ioActors,
+	vmobjects::VmParamMap<std::string, std::any>& ioParams)
+{
+	if (g_pCGpuManager == NULL) {
+		vmlog::LogErr("No GPU Manager is assigned!");
+		return false;
+	}
+
+	__ID3D11Device* device;
+#ifdef DX11_3
+	g_pCGpuManager->GetDeviceInformation((void*)(&device), "DEVICE_POINTER_3");
+#else
+	g_pCGpuManager->GetDeviceInformation((void*)(&device), "DEVICE_POINTER");
+#endif
+	ioParams.SetParam("DirectX11Device", (void*)device);
+	return true;
+}

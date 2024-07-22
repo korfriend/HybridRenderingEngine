@@ -835,9 +835,12 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		}
 		else if (is_modulation_mode) {
 			cbVolumeObj.grad_max = grad_minmax.y;
-			cbVolumeObj.grad_scale = actor->GetParam("_float_ModulationGradScale", 1.f);
-			cbVolumeObj.kappa_i = actor->GetParam("_float_ModulationKappai", 1.f);
-			cbVolumeObj.kappa_s = actor->GetParam("_float_ModulationKappas", 1.f);
+			//cbVolumeObj.grad_scale = actor->GetParam("_float_ModulationGradScale", 1.f);
+			//cbVolumeObj.kappa_i = actor->GetParam("_float_ModulationKappai", 1.f);
+			//cbVolumeObj.kappa_s = actor->GetParam("_float_ModulationKappas", 1.f);
+			cbVolumeObj.grad_scale = actor->GetParam("_float_ModulationGradScale", 0.5f);
+			cbVolumeObj.kappa_i = actor->GetParam("_float_ModulationKappai", 0.f);
+			cbVolumeObj.kappa_s = actor->GetParam("_float_ModulationKappas", 0.f);
 		}
 		if (mask_vol_obj) {
 			cbVolumeObj.mask_vol_size = vmfloat3(gres_mask_vol.res_values.GetParam("WIDTH", (uint)1),
