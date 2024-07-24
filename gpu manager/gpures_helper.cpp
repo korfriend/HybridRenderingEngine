@@ -1250,6 +1250,20 @@ bool grd_helper::UpdateVolumeModel(GpuRes& gres, VmVObjectVolume* vobj, const bo
 		//sample_offset.x = sample_offset.y = sample_offset.z = ceil((float)dRescaleSize);
 	}
 
+#define DEVICE_MAX_VOLUME_EXTENT 2048
+	auto ResizeVolumeOffset = [](const int volSize, const float inOffset, float& outOffset)
+		{
+			float resample_size = (float)volSize / inOffset;
+			if (resample_size > 2048.f)
+			{
+				outOffset = (float)volSize / (float)DEVICE_MAX_VOLUME_EXTENT;
+				assert(outOffset > inOffset);
+			}
+		};
+	ResizeVolumeOffset(vol_data->vol_size.x, sample_offset.x, sample_offset.x);
+	ResizeVolumeOffset(vol_data->vol_size.y, sample_offset.y, sample_offset.y);
+	ResizeVolumeOffset(vol_data->vol_size.z, sample_offset.z, sample_offset.z);
+	
 	////////////////////////////////////
 	// Texture for Volume Description //
 RETRY:
