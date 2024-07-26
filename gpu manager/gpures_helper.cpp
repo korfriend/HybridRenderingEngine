@@ -1503,8 +1503,11 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 		}
 		else
 		{
+			int num_vtx_defs = prim_data->GetNumVertexDefinitions();
+			uint stride_bytes = num_vtx_defs * sizeof(vmfloat3);
 			vmobjects::VmParamMap<std::string, std::any> res_new_values;
 			res_new_values.SetParam("NUM_ELEMENTS", (uint)prim_data->num_vtx);
+			res_new_values.SetParam("STRIDE_BYTES", (uint)stride_bytes);
 			bool regen_data = false;
 			CheckReusability(gres_vtx, pobj, update_data, regen_data, res_new_values);
 			if(regen_data)
