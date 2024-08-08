@@ -153,7 +153,7 @@ namespace vmmath {
 	/*!
 	 * @fn void vmmath::MatrixPS2SS(d44p mat, const double w, const double h)
 	 * @brief 오른손 방향으로 정의된 Space를 기준으로 Screen의 Pixel Plane으로 정의되는 Screen Space로 변환하는 matrix 생성.
-	 * @param psvxMatrix [out] \n double 44 \n Screen Space로 변환하는 vxmatrix에 대한 포인터
+	 * @param pMatrix [out] \n double 44 \n Screen Space로 변환하는 vxmatrix에 대한 포인터
 	 * @param w [in] \n double \n Screen의 width로 pixel 단위로 정의
 	 * @param h [in] \n double \n Screen의 height로 pixel 단위로 정의
 	 * @remarks
@@ -195,8 +195,8 @@ namespace vmmath {
 	/*!
 	* @fn void vmmath::MatrixInverse(d44p mat, cd44p mat_in)
 	* @brief Inverse matrix를 생성
-	* @param psvxMatrixInv [out] \n double 44 \n inverse matrix의 결과 포인터
-	* @param psvxMatrix [in] \n double 44 \n operation의 source인 matrix에 대한 포인터
+	* @param pMatrixInv [out] \n double 44 \n inverse matrix의 결과 포인터
+	* @param pMatrix [in] \n double 44 \n operation의 source인 matrix에 대한 포인터
 	* @remarks Determinant 0인 경우 mat_in 의 값을 변환하지 않고 반환
 	*/
 	inline void MatrixInverse(d44p mat, const_d44p mat_in);

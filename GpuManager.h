@@ -105,7 +105,7 @@ namespace vmgpuinterface
 		/*!
 		 * @brief 해당 VmObject 와 관련된 모든 GPU resource를 얻음
 		 * @param src_id [in] \n int \n VmObject의 ID
-		 * @param gres_list [out] \n vector<SVXGPUResourceArchive*> \n 해당 VXObject 와 관련된 모든 GPU resource가 vector list로 저장
+		 * @param gres_list [out] \n vector<GPUResourceArchive*> \n 해당 VXObject 와 관련된 모든 GPU resource가 vector list로 저장
 		 * @return uint \n GPU resource로 등록된 자료구조의 개수
 		 * @remarks 모든 GPU SDK에 대하여 동작
 		 */

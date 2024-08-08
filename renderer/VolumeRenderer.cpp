@@ -741,7 +741,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 				// down-scaling true when downScaleOption is 1, 3, or 5
 				grd_helper::UpdateVolumeModel(gres_mask_vol, mask_vol_obj, true, 
-					downScaleOption == 1 || downScaleOption == 3 || downScaleOption == 5);
+					false // force to set FALSE (for quality issue)
+					//downScaleOption == 1 || downScaleOption == 3 || downScaleOption == 5
+				);
 				SET_SHADER_RES(2, 1, (__SRV_PTR*)&gres_mask_vol.alloc_res_ptrs[DTYPE_SRV]);
 				
 				//printf("######111 %f√ \n", (double)(clock() - __start) / CLOCKS_PER_SEC);
@@ -756,11 +758,15 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		// 2 (&&is_modulation_mode) 
 		// 3 or 4
 		GpuRes gres_vol;
-		grd_helper::UpdateVolumeModel(gres_vol, vobj, ray_cast_type == __RM_VISVOLMASK, false && //planeThickness < 0 && 
-			(
-				((downScaleOption == 1 || downScaleOption == 2) && is_modulation_mode)
-				|| downScaleOption == 3 || downScaleOption == 4
-				), progress); // ray_cast_type == __RM_MAXMASK
+		grd_helper::UpdateVolumeModel(gres_vol, vobj, ray_cast_type == __RM_VISVOLMASK, 
+			// force to set FALSE (for quality issue)
+			false 
+			//&& //planeThickness < 0 && 
+			//(
+			//	((downScaleOption == 1 || downScaleOption == 2) && is_modulation_mode)
+			//	|| downScaleOption == 3 || downScaleOption == 4
+			//	)
+			, progress); // ray_cast_type == __RM_MAXMASK
 		//grd_helper::UpdateVolumeModel(gres_vol, vobj, ray_cast_type == __RM_VISVOLMASK, true, progress); // ray_cast_type == __RM_MAXMASK
 
 		SET_SHADER_RES(0, 1, (__SRV_PTR*)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);

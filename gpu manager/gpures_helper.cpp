@@ -1471,7 +1471,7 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 			update_data = true;
 			bool is_reuse_memory = resObj->GetObjParam("_bool_ReuseGpuMemory", false);
 			
-			vmlog::LogInfo(">>> OBJ ID : " + std::to_string(resObj->GetObjectID()) + ", RES TYPE : " + gres.res_name + ", reuseTag : " + (is_reuse_memory ? "true" : "false"));
+			//vmlog::LogInfo(">>> OBJ ID : " + std::to_string(resObj->GetObjectID()) + ", RES TYPE : " + gres.res_name + ", reuseTag : " + (is_reuse_memory ? "true" : "false"));
 			if (!is_reuse_memory)
 			{
 				regen_data = true;

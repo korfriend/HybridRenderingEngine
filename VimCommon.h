@@ -286,7 +286,7 @@ struct LocalProgress {
 	}
 
 	/*!
-	 * @fn void vmobjects::SVXLocalProgress::Deinit()
+	 * @fn void vmobjects::LocalProgress::Deinit()
 	 * @brief >> dStartProgress = *pdProgressOfCurWork;
 	 */
 	void Deinit()
@@ -1385,9 +1385,9 @@ namespace vmobjects
 
 		// Optional //
 		/*!
-		* @brief volume 의 내부 값이 바뀌었을 경우, 해당 값에 대한 block 단위의 최소 최대값을 저장하고 있는 @ref SVXVolumeBlock 자료구조를 갱신하는 함수
+		* @brief volume 의 내부 값이 바뀌었을 경우, 해당 값에 대한 block 단위의 최소 최대값을 저장하고 있는 @ref VolumeBlock 자료구조를 갱신하는 함수
 		* @param progress [out](optional) \n LocalProgress \n
-		* 함수가 진행되는 progress 정보를 포함하는 SVXLocalProgress 의 포인터 \n
+		* 함수가 진행되는 progress 정보를 포함하는 LocalProgress 의 포인터 \n
 		* 기본값은 NULL이며, NULL이면 사용 안 함.
 		* @param i3BlockSizes[2] [in](optional) \n vmint3[] \n
 		* 생성할 Block Size. Array Index 는 Level 을 의미.
@@ -1663,7 +1663,7 @@ namespace vmobjects
 		 */
 		void GetFrameBufferInfo(vmint2* buffer_size/*out*/, int* num_buffers = NULL/*out*/, int* bytes_per_pixel = NULL/*out*/);
 		/*!
-		 * @brief 정의되어 있는 frame buffer의 정보가 저장된(array 포함) @ref vmobjects::SVXFrameBuffer 를 얻는 함수
+		 * @brief 정의되어 있는 frame buffer의 정보가 저장된(array 포함) @ref vmobjects::FrameBuffer 를 얻는 함수
 		 * @param fb_usage [in] \n EvmFrameBufferUsage \n 정의된 frame buffer들 중 해당 usage의 buffer를 얻음
 		 * @param buffer_idx [in] \n int \n 해당 usage의 frame buffer 중 index 번째로 정의되어 있는 buffer를 얻음
 		 * @return FrameBuffer \n frame buffer의 정보가 저장된(array 포함) @ref vmobjects::FrameBuffer 의 포인터
@@ -1716,7 +1716,7 @@ namespace vmobjects
 		VmCObject* GetCameraObject();
 
 		/*!
-		 * @brief SVXFrameBuffer 들이 저장된 vector container를 얻음
+		 * @brief FrameBuffer 들이 저장된 vector container를 얻음
 		 * @param fb_usage [in] \n EvmFrameBufferUsage \n 얻고자 하는 Frame Usage
 		 * @return 정의된 FrameBuffer 들이 저장된 vector container에 대한 vector<FrameBuffer> 의 포인터
 		 */
