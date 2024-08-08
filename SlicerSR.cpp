@@ -1629,6 +1629,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 
 			vmfloat4 material_phongCoeffs = actor->GetParam("_float4_PhongCoeffs", default_phong_lighting_coeff);
 			bool use_vertex_color = actor->GetParam("_bool_UseVertexColor", false) && prim_data->GetVerticeDefinition("TEXCOORD0") != NULL;
+
 #pragma endregion
 
 #pragma region GPU resource updates
@@ -1696,6 +1697,15 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			//cbPolygonObj.Ns *= material_phongCoeffs.w;
 			if (default_color_cmmobj.x >= 0 && default_color_cmmobj.y >= 0 && default_color_cmmobj.z >= 0)
 				cbPolygonObj.Ka = cbPolygonObj.Kd = cbPolygonObj.Ks = default_color_cmmobj;
+
+			if (actor->GetParam("_bool_ApplyColorOnSlicer", false))
+			{
+				vmfloat4 color_on_slicer = actor->GetParam("_float4_ColorOnSlicer", vmfloat4(1));
+				cbPolygonObj.Ka = cbPolygonObj.Kd = cbPolygonObj.Ks = color_on_slicer;
+				cbPolygonObj.alpha = color_on_slicer.a;
+			}
+
+
 			if (is_ghost_mode)
 			{
 				bool is_ghost_surface = actor->GetParam("_bool_IsGhostSurface", false);
