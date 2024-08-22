@@ -430,7 +430,7 @@ namespace grd_helper
 		VmObject* tobj, const int sculpt_value, LocalProgress* progress = NULL);
 	bool UpdateMinMaxBlocks(GpuRes& gres_min, GpuRes& gres_max, const VmVObjectVolume* vobj, LocalProgress* progress = NULL);
 	// bool UpdateAOMask(const VmVObjectVolume* vobj, LocalProgress* progress = NULL); // to do
-	bool UpdateVolumeModel(GpuRes& gres, VmVObjectVolume* vobj, const bool use_nearest_max, bool heuristicResize = true, LocalProgress* progress = NULL);
+	bool UpdateVolumeModel(GpuRes& gres, VmVObjectVolume* vobj, const bool use_nearest_max, bool heuristicResize = false, LocalProgress* progress = NULL);
 
 	bool UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, const bool isPreInt = false, LocalProgress* progress = NULL);
 
