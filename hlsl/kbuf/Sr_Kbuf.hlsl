@@ -428,6 +428,15 @@ __IES(ADDR + (K) * NUM_ELES_PER_FRAG * 4, 1, asuint(F.z)); }
 #define __SET_ZEROFRAG SET_ZEROFRAG
 #define __ADD_COUNT(CNT) { fragment_counter[tex2d_xy] = CNT + 1; }
 
+	// only available for static k buffer
+	if (fragment_counter[tex2d_xy.xy] == 0) // clear k_buffer using the counter as a mask
+	{
+		for (uint k = 0; k < k_value; k++)
+		{
+			__SET_ZEROFRAG(addr_base, k);
+		}
+	}
+
 #if TAIL_HANDLING == 1
 #define __SET_TAIL(OPA_SUM) deep_dynK_buf.Store(addr_tail, asuint(OPA_SUM))
 #endif

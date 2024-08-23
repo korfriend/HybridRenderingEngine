@@ -263,21 +263,23 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 	}
 	//return;
 #ifdef DEBUG__
-	else if (frag_cnt == 7777777)
+	else if (frag_cnt == 1)
 	{
 		fragment_blendout[DTid.xy] = float4(1, 0, 0, 1);
 		return;
 	}
-	else if (frag_cnt == 8888888)
+	else if (frag_cnt == 2)
 	{
 		fragment_blendout[DTid.xy] = float4(0, 0, 1, 1);
 		return;
 	}
-	else if (frag_cnt == 9999999)
+	else if (frag_cnt == 0)
 	{
 		fragment_blendout[DTid.xy] = float4(0, 1, 0, 1);
 		return;
 	}
+		fragment_blendout[DTid.xy] = float4(1, 1, 0, 1);
+		return;
 #endif
 	const uint k_value = g_cbCamState.k_value;
 	frag_cnt = min(frag_cnt, k_value);
@@ -326,10 +328,8 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 	//	fragment_blendout[DTid.xy] = float4(0, 0, 1, 1);
 	//else if (frag_cnt == 5)
 	//	fragment_blendout[DTid.xy] = float4(0, 1, 1, 1);
-	//fragment_blendout[DTid.xy] = ConvertUIntToFloat4(fs[0].i_vis);
+	//fragment_blendout[DTid.xy] = ConvertUIntToFloat4(fs[1].i_vis);
 	//return;
-
-
 
 
 	uint valid_frag_cnt = frag_cnt;
