@@ -828,6 +828,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	bool use_spinlock_pixsynch = _fncontainer->fnParams.GetParam("_bool_UseSpinLock", false);
 	bool is_ghost_mode = _fncontainer->fnParams.GetParam("_bool_GhostEffect", false);
 	bool is_rgba = _fncontainer->fnParams.GetParam("_bool_IsRGBA", false); // false means bgra
+	bool isDrawingOnlyContours = _fncontainer->fnParams.GetParam("_bool_DrawingOnlyContours", false);
 
 	// note planeThickness is defined in WS
 	float planeThickness = _fncontainer->fnParams.GetParam("_float_PlaneThickness", 0.f);
@@ -1609,7 +1610,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		&num_grid_x, &num_grid_y, &matWS2PS, &matWS2SS, &matSS2WS,
 		&light_src, &default_phong_lighting_coeff, &default_point_thickness, &default_surfel_size, &default_line_thickness, &default_color_cmmobj, &use_spinlock_pixsynch, &use_blending_option_MomentOIT,
 		&count_call_render, &progress, &cam_obj, &planeThickness, &detaultOutlinePixelThickness, &camForcedOutlinePixelThickness,
-		&camClipMode, &camClipPlanePos, &camClipPlaneDir, &camClipMatWS2BS, &camClipperFreeActors,
+		&camClipMode, &camClipPlanePos, &camClipPlaneDir, &camClipMatWS2BS, &camClipperFreeActors, &isDrawingOnlyContours,
 #ifdef DX10_0
 		&matQaudWS2PS_T, 
 #endif
@@ -1716,6 +1717,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			}
 
 			bool noSlicerFill = actor->GetParam("_bool_DisableSolidFillOnSlicer", false);
+			if (isDrawingOnlyContours) noSlicerFill = true;
 			cbPolygonObj.pobj_flag |= (int)noSlicerFill << 6;
 			
 			//if (planeThickness == 0) {
