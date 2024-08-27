@@ -872,8 +872,8 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		//float3 grad = GRAD_VOL(sample_v, sample_prev, pos_ray_start_ts, v_v, v_u, v_r, uv_v, uv_u, uv_r);
 		//float3 grad = GradientClippedVolume2(pos_ray_start_ws, pos_ray_start_ts, tex3D_volume);
 #if VR_MODE != 2
-		float3 nrl;
-		GetClipPlaneNormal(pos_ray_start_ws, nrl);
+		//float3 nrl;
+		//GetClipPlaneNormal(pos_ray_start_ws, nrl);
 #else
 		float3 grad = GradientClippedVolume2(pos_ray_start_ws, pos_ray_start_ts, tex3D_volume);
 #endif
@@ -895,7 +895,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #endif
 			//float4 vis_sample = vis_otf;
 			float shade = 1.f;
-			shade = saturate(PhongBlinnVr(view_dir, g_cbVobj.pb_shading_factor, light_dirinv, nrl, true));
+			//shade = saturate(PhongBlinnVr(view_dir, g_cbVobj.pb_shading_factor, light_dirinv, nrl, true));
 			float4 vis_sample = float4(shade * vis_otf.rgb, vis_otf.a);
 			//vis_sample.rgb = (nrl)/2;
 
