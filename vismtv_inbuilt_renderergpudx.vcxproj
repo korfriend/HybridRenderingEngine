@@ -45,6 +45,8 @@
     <ClCompile Include="renderer\VolumeRenderer.cpp" />
     <ClCompile Include="SSRenderer.cpp" />
     <ClCompile Include="vismtv_inbuilt_renderergpudx.cpp" />
+    <ClCompile Include="VolumeRenderer_CUSTOM1.cpp" />
+    <ClCompile Include="VolumeRenderer_CUSTOM2.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="gpu manager\gpulib.h" />

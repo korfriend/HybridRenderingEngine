@@ -235,7 +235,20 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	if (strRendererSource == "VOLUME")
 	{
 		double dRuntime = 0;
-		RenderVrDLS(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
+		uint32_t vrSlot = _fncontainer.fnParams.GetParam("DVR_CUSTOM_SLOT", 0u);
+		switch (vrSlot)
+		{
+		case 1:
+			RenderVrDLS1(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
+			break;
+		case 2:
+			RenderVrDLS2(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
+			break;
+		default:
+		case 0:
+			RenderVrDLS(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
+			break;
+		}
 		g_dRunTimeVRs += dRuntime;
 		is_final_render_out = true;
 		is_vr = true;

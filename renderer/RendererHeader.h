@@ -46,6 +46,18 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	LocalProgress* progress,
 	double* run_time_ptr);
 
+bool RenderVrDLS1(VmFnContainer* _fncontainer,
+	VmGpuManager* gpu_manager,
+	grd_helper::GpuDX11CommonParameters* dx11CommonParams,
+	LocalProgress* progress,
+	double* run_time_ptr);
+
+bool RenderVrDLS2(VmFnContainer* _fncontainer,
+	VmGpuManager* gpu_manager,
+	grd_helper::GpuDX11CommonParameters* dx11CommonParams,
+	LocalProgress* progress,
+	double* run_time_ptr);
+
 void ComputeSSAO(__ID3D11DeviceContext* dx11DeviceImmContext,
 	grd_helper::GpuDX11CommonParameters* dx11CommonParams, VmIObject* iobj,
 	int num_grid_x, int num_grid_y,
