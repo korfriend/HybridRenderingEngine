@@ -832,7 +832,6 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
         sample_v = -1;
 
     float4 colorMap = g_f4bufOTF[(int)(sample_v * (g_cbTmap.tmap_size_x - 1))];// g_cbTmap.tmap_size_x];
-
     if (BitCheck(g_cbPobj.pobj_flag, 7)) 
     {
         v_rgba.rgb = colorMap.rgb * colorMap.a;
@@ -846,16 +845,25 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     if (nor_len > 0)
     {
         //float3 Ka = v_rgba.rgb * g_cbPobj.Ka, Kd = v_rgba.rgb * g_cbPobj.Kd, Ks = v_rgba.rgb * g_cbPobj.Ks;
-        float3 Ka = v_rgba.rgb * 0.9, Kd = v_rgba.rgb * 0.2, Ks = v_rgba.rgb;
-        if (colorMap.a == 0) 
-        {
-            Ka = g_cbPobj.Ka, Kd = g_cbPobj.Kd, Ks = g_cbPobj.Ks;
-        }
+        //float3 Ka = v_rgba.rgb * 0.9, Kd = v_rgba.rgb * 0.2, Ks = v_rgba.rgb;
+        //if (colorMap.a == 0) 
+        //{
+        //    Ka = g_cbPobj.Ka, Kd = g_cbPobj.Kd, Ks = g_cbPobj.Ks;
+        //}
+        //
+        ////Ka *= g_cbEnv.ltint_ambient.rgb;
+        ////Kd *= g_cbEnv.ltint_diffuse.rgb;
+        ////Ks *= g_cbEnv.ltint_spec.rgb;
+        //float Ns = g_cbPobj.Ns;
 
+        float3 Ka = v_rgba.rgb * g_cbPobj.Ka;// * 1.15;
+        float3 Kd = v_rgba.rgb * g_cbPobj.Kd;// * 1.15;
+        float3 Ks = v_rgba.rgb * g_cbPobj.Ks;// * 1.15;
         Ka *= g_cbEnv.ltint_ambient.rgb;
         Kd *= g_cbEnv.ltint_diffuse.rgb;
         Ks *= g_cbEnv.ltint_spec.rgb;
         float Ns = g_cbPobj.Ns;
+
         ComputeColor(v_rgba.rgb, Ka, Kd, Ks, Ns, 1.0, input.f3PosWS, view_dir, nor, nor_len);
     }
 #elif __RENDERING_MODE == 6
@@ -938,7 +946,6 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
 #endif
 
 #endif
-
     v_rgba_out = v_rgba;
     z_depth_out = z_depth;
 }
