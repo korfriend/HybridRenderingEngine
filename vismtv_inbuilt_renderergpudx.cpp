@@ -125,6 +125,7 @@ bool InitModule(fncontainer::VmFnContainer& _fncontainer)
 		if (hr != S_OK)
 			vmlog::LogErr("D2D Device Setting Error!");
 	}
+
 	return true;
 }
 

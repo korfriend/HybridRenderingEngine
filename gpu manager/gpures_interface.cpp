@@ -245,6 +245,40 @@ bool __InitializeDevice()
 
 	// 0x10DE : NVIDIA
 	// 0x1002, 0x1022 : AMD ATI
+	// Switch on VendorId to identify the vendor
+	vmlog::LogInfo("==============");
+	switch (g_adapterDesc.VendorId) {
+	case 0x10DE: // NVIDIA
+		vmlog::LogInfo("[NVIDIA]");
+		break;
+	case 0x1002: // AMD
+	case 0x1022: // ATI
+		vmlog::LogInfo("[AMD]");
+		break;
+	case 0x8086: // Intel
+		vmlog::LogInfo("[Intel]");
+		break;
+	case 0x1414: // Microsoft
+	case 0x5143: // Qualcomm
+	case 0x1106: // VIA
+	case 0x5333: // S3 Graphics
+	case 0x102B: // Matrox
+	case 0x126F: // Silicon Motion
+	case 0x106B: // Apple
+		vmlog::LogErr("[Unsupported Vendor]");
+		VMSAFE_RELEASE(g_pdx11DeviceImmContext);
+		VMSAFE_RELEASE(g_pdx11Device);
+		return false;
+	default:
+		vmlog::LogErr("[Unknown Vendor]");
+		VMSAFE_RELEASE(g_pdx11DeviceImmContext);
+		VMSAFE_RELEASE(g_pdx11Device);
+		return false;
+	}
+	wstring description = g_adapterDesc.Description;
+	vmlog::LogInfo(string(description.begin(), description.end()));
+	vmlog::LogInfo("==============");
+
 // 	if(g_adapterDesc.VendorId != 0x10DE && g_adapterDesc.VendorId != 0x1002 && g_adapterDesc.VendorId != 0x1022)
 // 	{
 // 		VMSAFE_RELEASE(g_pdx11DeviceImmContext);
