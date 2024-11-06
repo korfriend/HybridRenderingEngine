@@ -432,6 +432,8 @@ namespace grd_helper
 	// bool UpdateAOMask(const VmVObjectVolume* vobj, LocalProgress* progress = NULL); // to do
 	bool UpdateVolumeModel(GpuRes& gres, VmVObjectVolume* vobj, const bool use_nearest_max, bool heuristicResize = false, LocalProgress* progress = NULL);
 
+	void SetUserCapacity(const float maxVolumeSizeKB, const float maxVolumeExtent);
+
 	bool UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, const bool isPreInt = false, LocalProgress* progress = NULL);
 
 	// primitive structure

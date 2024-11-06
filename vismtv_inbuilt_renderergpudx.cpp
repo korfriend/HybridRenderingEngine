@@ -197,6 +197,9 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	//	vtrInputVolumes.at(i)->RegisterCustomParameter("_float_ForcedHalfCriterionKB", halfCriterionKB);
 #pragma endregion
 
+	float maxTextureResoulution = _fncontainer.fnParams.GetParam("_float_MaxTextureResoulution", 2048.f);
+	float maxVolumeSizeKB = _fncontainer.fnParams.GetParam("_float_MaxVolumeSizeKB", 1024.f * 1024.f);
+	grd_helper::SetUserCapacity(maxVolumeSizeKB, maxTextureResoulution);
 	bool is_shadow = _fncontainer.fnParams.GetParam("_bool_IsShadow", false);
 	bool curved_slicer = _fncontainer.fnParams.GetParam("_bool_IsNonlinear", false);
 	string strRendererSource = _fncontainer.fnParams.GetParam("_string_RenderingSourceType", string("MESH"));

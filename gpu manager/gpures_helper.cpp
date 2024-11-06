@@ -1187,6 +1187,13 @@ template <typename GPUTYPE, typename CPUTYPE> bool __FillVolumeValues(CPUTYPE* g
 	return true;
 }
 
+float g_maxVolumeSizeKB = 1024.f * 1024.f;
+float g_maxVolumeExtent = 2048.f;
+void grd_helper::SetUserCapacity(const float maxVolumeSizeKB, const float maxVolumeExtent)
+{
+	g_maxVolumeSizeKB = maxVolumeSizeKB;
+	g_maxVolumeExtent = maxVolumeExtent;
+}
 
 bool grd_helper::UpdateVolumeModel(GpuRes& gres, VmVObjectVolume* vobj, const bool use_nearest_max, bool heuristicResize, LocalProgress* progress)
 {
@@ -1227,8 +1234,7 @@ bool grd_helper::UpdateVolumeModel(GpuRes& gres, VmVObjectVolume* vobj, const bo
 		hueristic_res = 100000;
 	}
 
-	double half_criteria_KB = vobj->GetObjParam("_float_ForcedHalfCriterionKB", (double)(1024.0 * 1024.0));
-	half_criteria_KB = min(max(16.0 * 1024.0, half_criteria_KB), hueristic_size * 1024.0);
+	double half_criteria_KB = (float)g_maxVolumeSizeKB;
 
 	//////////////////////////////
 	// GPU Volume Sample Policy //
@@ -1250,13 +1256,12 @@ bool grd_helper::UpdateVolumeModel(GpuRes& gres, VmVObjectVolume* vobj, const bo
 		//sample_offset.x = sample_offset.y = sample_offset.z = ceil((float)dRescaleSize);
 	}
 
-#define DEVICE_MAX_VOLUME_EXTENT 2048
 	auto ResizeVolumeOffset = [](const int volSize, const float inOffset, float& outOffset)
 		{
 			float resample_size = (float)volSize / inOffset;
 			if (resample_size > 2048.f)
 			{
-				outOffset = (float)volSize / (float)DEVICE_MAX_VOLUME_EXTENT;
+				outOffset = (float)volSize / g_maxVolumeExtent;
 				assert(outOffset > inOffset);
 			}
 		};
