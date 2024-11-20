@@ -403,6 +403,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			continue;
 
 		if (dvr_volumes.size() > 1) {
+			vmlog::LogInfo("WARNNING!! two rendering target volumes are not allowed!");
 			test_out("WARNNING!! two rendering target volumes are not allowed!");
 			break;
 		}
