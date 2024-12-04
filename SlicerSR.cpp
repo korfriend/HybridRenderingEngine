@@ -832,6 +832,9 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 
 	// note planeThickness is defined in WS
 	float planeThickness = _fncontainer->fnParams.GetParam("_float_PlaneThickness", 0.f);
+#ifdef DX10_0
+	//planeThickness = 0.f;
+#endif
 
 	bool is_system_out = false;
 	// note : planeThickness == 0 calls CPU renderer which uses system-out buffer
@@ -1238,7 +1241,6 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		D3D11_BIND_STREAM_OUTPUT, DXGI_FORMAT_R32G32B32A32_FLOAT, UPFB_NFPP_BUFFERSIZE, max_cutlines);
 	grd_helper::UpdateFrameBuffer(gres_cutlines_system_buffer, iobj, "SYSTEM_OUT_RW_CUTLINES_GSO_BUF", RTYPE_BUFFER,
 		NULL, DXGI_FORMAT_R32G32B32A32_FLOAT, UPFB_SYSOUT | UPFB_NFPP_BUFFERSIZE, max_cutlines);
-
 #pragma endregion 
 
 	uint num_grid_x = __BLOCKSIZE == 1 ? fb_size_cur.x : (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);

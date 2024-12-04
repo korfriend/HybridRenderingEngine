@@ -235,7 +235,6 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		//g_vmCommonParams.dx11DeviceImmContext->End(g_vmCommonParams.dx11qr_timestamps[0]);
 	}
 
-
 	if (strRendererSource == "VOLUME")
 	{
 		double dRuntime = 0;

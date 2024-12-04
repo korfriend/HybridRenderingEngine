@@ -13,6 +13,8 @@ Buffer<float> g_bufHotSpotMask : register(t50);
 RWByteAddressBuffer deep_dynK_buf : register(u1);
 RWTexture2D<unorm float4> fragment_blendout : register(u2);
 RWTexture2D<float> fragment_zdepth : register(u3);
+
+Texture2D<float> fragment_zthick : register(t51);	// vr_fragment_1sthit_write
 #if DYNAMIC_K_MODE == 1
 Buffer<uint> sr_offsettable_buf : register(t50); // gres_fb_ref_pidx
 #endif
@@ -285,9 +287,9 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 	frag_cnt = min(frag_cnt, k_value);
 
 	// we will test our oit with the number of deep layers : 4, 8, 16 ... here, set max 32 ( larger/equal than k_value * 2 )
-	uint bytes_per_frag = 4 * NUM_ELES_PER_FRAG;
+	uint bytes_per_frag = NUM_ELES_PER_FRAG * 4; // * 4 refers to 4 bytes
 #if DYNAMIC_K_MODE== 1
-#define LOCAL_SIZE 64
+#define LOCAL_SIZE 9 // for SS-based MDVR
 	uint offsettable_idx = DTid.y * g_cbCamState.rt_width + DTid.x; // num of frags
 	if (offsettable_idx == 0) return; // for test
 	uint addr_base = sr_offsettable_buf[offsettable_idx] * bytes_per_frag;
@@ -296,7 +298,7 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 	// recommended LOCAL_SIZE is dependent on GPU
 	// if only small size of temp registers are used, then the performance is not reduced
 	// in our experiments, static k is set to 8 or 16 (8 is used for all experiments)
-#define LOCAL_SIZE 8 
+#define LOCAL_SIZE 8 // +1 for external RT
 	uint bytes_frags_per_pixel = k_value * bytes_per_frag; // to do : consider the dynamic scheme. (4 bytes unit)
 	uint pixel_id = DTid.y * g_cbCamState.rt_width + DTid.x;
 	uint addr_base = pixel_id * bytes_frags_per_pixel;
@@ -313,6 +315,21 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 		Fragment f;
 		GET_FRAG(f, addr_base, k);
 		fs[k] = f;
+	}
+
+	// new custom add check! (e.g., SS DVR)
+	if (BitCheck(g_cbCamState.cam_flag, 11))
+	{
+		Fragment f;
+		f.i_vis = external_rgba[DTid.xy];
+		f.z = external_zdepth[DTid.xy];
+#if !defined(FRAG_MERGING) || FRAG_MERGING == 1
+		f.zthick = external_zthick[DTid.xy];
+		f.opacity_sum = 0;
+#endif
+		fs[frag_cnt] = f;
+
+		frag_cnt++;
 	}
 
 	sort(frag_cnt, fs, Fragment);

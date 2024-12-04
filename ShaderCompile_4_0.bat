@@ -26,10 +26,10 @@ fxc /E GS_ThickPoints_Pixels /T gs_4_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compil
 fxc /E GS_ThickLines /T gs_4_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs_4_0/GS_ThickLines_gs_4_0
 
 
-fxc /E ThickSlicePathTracer /T ps_4_0 ./hlsl/PathTracer.hlsl /Fo ./shader_compiled_objs_4_0/ThickSlicePathTracer_ps_4_0 /D FRAG_MERGING=0 /D CURVEDPLANE=0 /D DX10_0=1
-fxc /E ThickSlicePathTracer /T ps_4_0 ./hlsl/PathTracer.hlsl /Fo ./shader_compiled_objs_4_0/CurvedThickSlicePathTracer_ps_4_0 /D FRAG_MERGING=0 /D CURVEDPLANE=1 /D DX10_0=1
+fxc /E ThickSlicePathTracer /T ps_4_0 ./hlsl/RayProcessing.hlsl /Fo ./shader_compiled_objs_4_0/ThickSlicePathTracer_ps_4_0 /D FRAG_MERGING=0 /D CURVEDPLANE=0 /D DX10_0=1
+fxc /E ThickSlicePathTracer /T ps_4_0 ./hlsl/RayProcessing.hlsl /Fo ./shader_compiled_objs_4_0/CurvedThickSlicePathTracer_ps_4_0 /D FRAG_MERGING=0 /D CURVEDPLANE=1 /D DX10_0=1
 
-fxc /E Outline2D /T ps_4_0 ./hlsl/PathTracer.hlsl /Fo ./shader_compiled_objs_4_0/SliceOutline_ps_4_0 /D DX10_0=1
+fxc /E Outline2D /T ps_4_0 ./hlsl/RayProcessing.hlsl /Fo ./shader_compiled_objs_4_0/SliceOutline_ps_4_0 /D DX10_0=1
 
 fxc /E RayCasting /T ps_4_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs_4_0/VR_RAYMAX_ps_4_0 /D RAYMODE=1 /D OTF_MASK=0 /D MAX_LAYERS=8 /D FRAG_MERGING=0 /D DX10_0=1
 fxc /E RayCasting /T ps_4_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs_4_0/VR_RAYMIN_ps_4_0 /D RAYMODE=2 /D OTF_MASK=0 /D MAX_LAYERS=8 /D FRAG_MERGING=0 /D DX10_0=1

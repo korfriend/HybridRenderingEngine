@@ -47,8 +47,9 @@ struct HxCB_CameraState // Hlsl dX Contant Buffer
 	// 6-  bit : 0 : (stores the final RGBA and depth to RT), 1 : (does not store them) // will be deprecated
 	// 7-  bit : 0 : full raycaster, 1 : half raycaster for 4x faster volume rendering (dither)
 	// 8-  bit : 0 : only OIT fragments, 1 : foremostopaque or singlelayer effect ...
-	// 9-  bit : 0 : outlint mode (solid), 1 : outlint mode (gradient alpha)
+	// 9-  bit : 0 : outline mode (solid), 1 : outline mode (gradient alpha)
 	// 10- bit : 0 : 3D camera, 1 : Slicer
+	// 11- bit : 0 : no external K-buffer, 1 : put an external RT to K-buffer (OIT_RESOLVE)
 	uint cam_flag;
 	// used for 
 	// 1) A-Buffer prefix computations /*deprecated*/ or 2) beta (asfloat) for merging operation

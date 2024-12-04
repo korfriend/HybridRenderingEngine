@@ -53,7 +53,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	MFR_MODE mode_OIT = (MFR_MODE)_fncontainer->fnParams.GetParam("_int_OitMode", (int)MFR_MODE::DYNAMIC_FB); // 1
 	mode_OIT = (MFR_MODE)min((int)mode_OIT, (int)MFR_MODE::MOMENT);
 #ifdef DX10_0
-	mode_OIT = MFR_MODE::NONE;
+	//mode_OIT = MFR_MODE::NONE;
 #endif
 	//if (mode_OIT == MFR_MODE::STATIC_KB_FM) apply_fragmerge = true;
 
@@ -402,11 +402,6 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			!actor->visible || actor->color.a == 0)
 			continue;
 
-		if (dvr_volumes.size() > 1) {
-			vmlog::LogInfo("WARNNING!! two rendering target volumes are not allowed!");
-			test_out("WARNNING!! two rendering target volumes are not allowed!");
-			break;
-		}
 		dvr_volumes.push_back(actor);
 		VmVObjectVolume* volobj = (VmVObjectVolume*)geo_obj;
 		VolumeData* vol_data = volobj->GetVolumeData();
@@ -417,6 +412,16 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			(double)min_pitch);
 	}
 #pragma endregion 
+
+#ifdef DX10_0
+	if (dvr_volumes.size() > 1) {
+		vmlog::LogWarn("WARNNING!! multiple volume-actors are not allowed!");
+		vmlog::LogWarn("WARNNING!! force to use the final one as a main volume actor!");
+		VmActor* main_actor = dvr_volumes[dvr_volumes.size() - 1];
+		dvr_volumes.clear();
+		dvr_volumes.push_back(main_actor);
+	}
+#endif
 
 	int count_call_render = iobj->GetObjParam("_int_NumCallRenders", (int)0);
 
@@ -633,6 +638,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	// Initial Setting of Frame Buffers //
 	bool is_performed_ssao = false;
 
+	int vr_render_count = 0;
 	for (VmActor* actor : dvr_volumes)
 	{
 		VmVObjectVolume* vobj = (VmVObjectVolume*)actor->GetGeometryRes();
@@ -930,7 +936,12 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		}
 #else
 		ID3D11ComputeShader* cshader = NULL;
-		switch (ray_cast_type)
+		int final_ray_cast_type = ray_cast_type;
+		if (dvr_volumes.size() > 1 && vr_render_count < dvr_volumes.size() - 1)
+		{
+			final_ray_cast_type = __RM_OPAQUE;
+		}
+		switch (final_ray_cast_type)
 		{
 		case __RM_RAYMIN: cshader = GETCS(VR_RAYMIN_cs_5_0); break;
 		case __RM_RAYMAX: cshader = GETCS(VR_RAYMAX_cs_5_0); break;
@@ -1127,6 +1138,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #endif
 		count_call_render++;
 #pragma endregion 
+		vr_render_count++;
 	}
 
 #ifdef DX10_0

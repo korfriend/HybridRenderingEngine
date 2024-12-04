@@ -190,21 +190,24 @@ Buffer<int> buf_gpuTriIndices : register(t3);
 #define OUTSIDE_PLANE 0x87654321
 
 #if DX10_0 == 1
-#include "CommonShader.hlsl"
+//#include "Sr_Common.hlsl"
+#include "./kbuf/Sr_Kbuf.hlsl"
+//#include "CommonShader.hlsl"
+//#define __VS_OUT VS_OUTPUT
 
 // USE PIXEL SHADER //
 // USE PS_FILL_OUTPUT //
 Texture2D prev_fragment_vis : register(t20);
 Texture2D<float> prev_fragment_zdepth : register(t21);
 
-struct VS_OUTPUT
-{
-	float4 f4PosSS : SV_POSITION;
-	float3 f3VecNormalWS : NORMAL;
-	float3 f3PosWS : TEXCOORD0;
-	float3 f3Custom : TEXCOORD1;
-};
-struct PS_FILL_OUTPUT
+//struct VS_OUTPUT
+//{
+//	float4 f4PosSS : SV_POSITION;
+//	float3 f3VecNormalWS : NORMAL;
+//	float3 f3PosWS : TEXCOORD0;
+//	float3 f3Custom : TEXCOORD1;
+//};
+struct PS_FILL_OUTPUT_NO_DS
 {
 	float4 color : SV_TARGET0; // UNORM
 	float depthcs : SV_TARGET1;
@@ -764,7 +767,7 @@ int intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 }
 
 #if DX10_0 == 1
-PS_FILL_OUTPUT ThickSlicePathTracer(VS_OUTPUT input)
+PS_FILL_OUTPUT_NO_DS ThickSlicePathTracer(VS_OUTPUT input)
 #else
 [numthreads(GRIDSIZE, GRIDSIZE, 1)]
 void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
@@ -774,7 +777,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	float depth_out = 0;
 
 #if DX10_0 == 1
-	PS_FILL_OUTPUT out_ps;
+	PS_FILL_OUTPUT_NO_DS out_ps;
 	//out_ps.ds_z = 0;
 	int2 ss_xy = int2(input.f4PosSS.xy);
 
@@ -1425,7 +1428,7 @@ float TestAlpha(float v) {
 }
 
 #if DX10_0 == 1
-PS_FILL_OUTPUT Outline2D(VS_OUTPUT input)
+PS_FILL_OUTPUT_NO_DS Outline2D(VS_OUTPUT input)
 #else
 [numthreads(GRIDSIZE, GRIDSIZE, 1)]
 void Outline2D(uint3 DTid : SV_DispatchThreadID)
@@ -1433,7 +1436,7 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 {
 #if DX10_0 == 1
 	int2 ss_xy = int2(input.f4PosSS.xy);
-	PS_FILL_OUTPUT out_ps;
+	PS_FILL_OUTPUT_NO_DS out_ps;
 	//out_ps.ds_z = 0;
 	out_ps.color = prev_fragment_vis[ss_xy];
 	out_ps.depthcs = prev_fragment_zdepth[ss_xy];
@@ -1596,10 +1599,10 @@ void ApplyUndercutColorOld(inout float4 v_rgba, in float3 f3PosWS)
 }
 
 /**/
-PS_FILL_OUTPUT UndercutShader(__VS_OUT input)
+PS_FILL_OUTPUT_NO_DS UndercutShader(__VS_OUT input)
 {
-	PS_FILL_OUTPUT out_ps;
-	out_ps.ds_z = 1.f; // remove???
+	PS_FILL_OUTPUT_NO_DS out_ps;
+	//out_ps.ds_z = 1.f; // remove???
 	out_ps.color = (float4)0;
 	out_ps.depthcs = FLT_MAX;
 
@@ -1614,7 +1617,7 @@ PS_FILL_OUTPUT UndercutShader(__VS_OUT input)
 		ApplyUndercutColor2(v_rgba, input.f3PosWS);
 	//v_rgba = float4(1, 1, 0, 1);
 
-	out_ps.ds_z = input.f4PosSS.z;
+	//out_ps.ds_z = input.f4PosSS.z;
 	out_ps.color = v_rgba;
 	out_ps.depthcs = z_depth;
 

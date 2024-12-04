@@ -38,7 +38,7 @@ RWTexture2D<uint> fragment_counter : register(u0);
 RWByteAddressBuffer deep_dynK_buf : register(u1);
 RWTexture2D<unorm float4> fragment_vis : register(u2);
 RWTexture2D<float> fragment_zdepth : register(u3);
-RWTexture2D<float> vr_fragment_1sthit_write : register(u4);
+RWTexture2D<float> vr_fragment_1sthit_write : register(u4);	// use this as a z-thickness in Single layre mode!
 #endif
 
 #define AO_MAX_LAYERS 8 
@@ -578,7 +578,10 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
         return;
 
     // consider the deep-layers are sored in order
+#if ONLY_SINGLE_LAYER == 1
+#else
 	Fragment fs[VR_MAX_LAYERS];
+#endif
 
 	float aos[AO_MAX_LAYERS] = {0, 0, 0, 0, 0, 0, 0, 0};
 	float ao_vr = 0;
@@ -588,10 +591,15 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		ao_vr = ao_vr_texture[DTid.xy];
 	}
 
+#if ONLY_SINGLE_LAYER == 1
+	uint vr_hit_enc = fragment_counter[DTid.xy] >> 24;
+#else
 	uint num_frags = fragment_counter[DTid.xy];
 	uint vr_hit_enc = num_frags >> 24;
+	num_frags = num_frags & 0xFFF;
+#endif
 
-	bool isDither = BitCheck(g_cbCamState.cam_flag, 8);
+	bool isDither = BitCheck(g_cbCamState.cam_flag, 7);
 	if (isDither) {
 #if RAYMODE == 0
 		if (vr_hit_enc != __VRHIT_OUTSIDE_VOLUME)
@@ -605,8 +613,6 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		//fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
 		//return;
 	}
-
-	num_frags = num_frags & 0xFFF;
 
 	uint pixel_id = tex2d_xy.y * g_cbCamState.rt_width + tex2d_xy.x;
 	//uint nThreadNum = nDTid.y * g_cbCamState.rt_width + nDTid.x; // pixel_id
@@ -628,6 +634,9 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	}
 //#endif
 
+#if ONLY_SINGLE_LAYER == 1
+	int i = 0;
+#else
 	[loop]
     for (int i = 0; i < (int)num_frags; i++)
     {
@@ -650,7 +659,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	//fragment_vis[tex2d_xy] = float4(1, 1, 0, 1);
 	if(num_frags > 0)
 		fragment_vis[tex2d_xy] = ConvertUIntToFloat4(fs[0].i_vis);
-		//fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
+	//fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
 	//return;
 
 	//fragment_vis[DTid.xy] = float4(1, 0, 0, 1);
@@ -675,6 +684,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 	fs[num_frags] = (Fragment)0;
 	fs[num_frags].z = FLT_MAX;
+#endif
     fragment_vis[tex2d_xy] = vis_out;
 #if RAYMODE != 0
     fragment_zdepth[tex2d_xy] = depth_out = fs[0].z;
@@ -722,6 +732,9 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		uint idx_dlayer = 0;
 		int num_ray_samples = VR_MAX_LAYERS;
 		vis_out = (float4)0;
+#if ONLY_SINGLE_LAYER == 1
+		vis_out += v_rgba * (1.f - vis_out.a);
+#else
 #if FRAG_MERGING == 1
 		Fragment f_dly = fs[0]; // if no frag, the z-depth is infinite
 		INTERMIX(vis_out, idx_dlayer, num_frags, v_rgba, depth_out, g_cbVobj.sample_dist, fs, merging_beta);
@@ -729,13 +742,19 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		INTERMIX_V1(vis_out, idx_dlayer, num_frags, v_rgba, depth_out, fs);
 #endif
 		REMAINING_MIX(vis_out, idx_dlayer, num_frags, fs);
+#endif
 
 #if DX10_0 == 1
 		output.color = vis_out;
 		output.depthcs = min(depth_out, fs[0].z);
 #else
 		fragment_vis[tex2d_xy] = vis_out;
+
+#if ONLY_SINGLE_LAYER == 1
+		fragment_zdepth[tex2d_xy] = depth_out;
+#else
 		fragment_zdepth[tex2d_xy] = min(depth_out, fs[0].z);
+#endif
 #endif
 		__EXIT_VR_RayCasting;
 	}
@@ -744,7 +763,11 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #if DX10_0 == 1
 	output.depthcs = fs[0].z;
 #else
+#if ONLY_SINGLE_LAYER == 1
+	fragment_zdepth[tex2d_xy] = depth_out;
+#else
 	fragment_zdepth[tex2d_xy] = fs[0].z;
+#endif
 #endif
 	//bool is_dynamic_transparency = false;// BitCheck(g_cbPobj.pobj_flag, 19);
 	//bool is_mask_transparency = true;// BitCheck(g_cbPobj.pobj_flag, 20);
@@ -826,9 +849,12 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	//return;
 
 	float sampleThickness = sample_dist;
+#if ONLY_SINGLE_LAYER == 1
+#else
 #if FRAG_MERGING == 1
 	Fragment f_dly = fs[0]; // if no frag, the z-depth is infinite
 	sampleThickness = max(sample_dist, g_cbCamState.cam_vz_thickness);
+#endif
 #endif
 
 	int start_idx = 0;
@@ -856,11 +882,15 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		float4 vis_sample = float4(shade * vis_otf.rgb, 1.f);
 		vis_sample.rgb = saturate(vis_sample.rgb);
 
+#if ONLY_SINGLE_LAYER == 1
+		vis_out += vis_sample * (1.f - vis_out.a);
+#else
 #if FRAG_MERGING == 1
 		INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, sampleThickness, fs, merging_beta);
 #else
 		INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, fs);
 #endif
+#endif	// ONLY_SINGLE_LAYER == 1
 	}
 #else
 	if (vr_hit_enc == __VRHIT_ON_CLIPPLANE) // on the clip plane
@@ -906,11 +936,15 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 			MODULATE(0, grad_len);
 #endif
 			//vis_sample *= mask_weight;
+#if ONLY_SINGLE_LAYER == 1
+			vis_out += vis_sample * (1.f - vis_out.a);
+#else
 #if FRAG_MERGING == 1
 			INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, sampleThickness, fs, merging_beta);
 #else
 			INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, fs);
 #endif
+#endif	// ONLY_SINGLE_LAYER == 1
 		}
 #if VR_MODE != 3
 		sample_prev = sample_v;
@@ -971,11 +1005,15 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 					MODULATE(dist_sq, grad_len);
 #endif
 					//vis_sample *= mask_weight;
+#if ONLY_SINGLE_LAYER == 1
+					vis_out += vis_sample * (1.f - vis_out.a);
+#else
 #if FRAG_MERGING == 1
 					INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, sampleThickness, fs, merging_beta);
 #else
 					INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, fs);
 #endif
+#endif	// ONLY_SINGLE_LAYER == 1
 					if (vis_out.a >= ERT_ALPHA)
 					{
 						i = num_ray_samples;
@@ -1004,7 +1042,14 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #if DX10_0 != 1
 	vis_out.rgb *= (1.f - ao_vr);
 #endif
+#if ONLY_SINGLE_LAYER == 1
+#else
 	REMAINING_MIX(vis_out, idx_dlayer, num_frags, fs);
+#endif
+
+
+
+
 #else // RAYMODE != 0
 	float3 pos_ray_start_ts = TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts);
 	float depth_begin = depth_out = length(pos_ray_start_ws - pos_ip_ws);
@@ -1100,6 +1145,8 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #endif
 
 	uint idx_dlayer = 0;
+#if ONLY_SINGLE_LAYER == 1
+#else
 #if FRAG_MERGING == 1
 	Fragment f_dly = fs[0]; // if no frag, the z-depth is infinite
 	INTERMIX(vis_out, idx_dlayer, num_frags, vis_otf, depth_begin, hits_t.y - hits_t.x, fs, merging_beta);
@@ -1108,6 +1155,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #endif
 	REMAINING_MIX(vis_out, idx_dlayer, num_frags, fs);
 #endif
+#endif // ONLY_SINGLE_LAYER == 1
 
 #ifdef DX10_0
 	output.color = vis_out;
@@ -1119,9 +1167,13 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	//vis_out = float4(TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts), 1);
 	vis_out = saturate(vis_out);
     fragment_vis[tex2d_xy] = vis_out;
+#if ONLY_SINGLE_LAYER == 1
+	// to do : compute thickness...
+	fragment_zdepth[tex2d_xy] = depth_out;
+#else
 	fragment_zdepth[tex2d_xy] = min(depth_out, fs[0].z);
 	//fragment_counter[DTid.xy] = num_frags + 1;
-
+#endif
 
 	//float tt = sample_count / 30.f;
 	//fragment_vis[tex2d_xy] = float4((float3)tt, 1);// float4((pos_ray_start_ts + float3(1, 1, 1)) / 2, 1);
