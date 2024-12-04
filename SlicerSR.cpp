@@ -832,9 +832,6 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 
 	// note planeThickness is defined in WS
 	float planeThickness = _fncontainer->fnParams.GetParam("_float_PlaneThickness", 0.f);
-#ifdef DX10_0
-	//planeThickness = 0.f;
-#endif
 
 	bool is_system_out = false;
 	// note : planeThickness == 0 calls CPU renderer which uses system-out buffer
@@ -1383,11 +1380,6 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			}
 			else 
 				return true;
-
-			//float fExCurveThicknessPositionRange = _fncontainer->fnParams.GetParam("_float_CurveThicknessPositionRange", 1.f);
-			//float fThicknessRatio = _fncontainer->fnParams.GetParam("_float_ThicknessRatio", 0.f);
-			//float fThicknessPosition = fThicknessRatio * fExCurveThicknessPositionRange * 0.5;
-			//float fPlaneThickness = _fncontainer->fnParams.GetParam("_float_PlaneThickness", 0.f);
 		}
 		else {
 			cam_obj->GetCameraExtStatef(&picking_ray_origin, &picking_ray_dir, NULL);
@@ -1566,7 +1558,8 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
 	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV], planeThickness > 0 ? clr_float_fltmax_4 : clr_float_zero_4);
 
-	if (!curved_slicer && planeThickness == 0.f) {
+	if (!curved_slicer && planeThickness == 0.f) 
+	{
 		static std::vector<vmfloat4> clearDataUnit(max_cutlines, vmfloat4(0, 0, 0, 0));//make sure that this thing is aligned
 		dx11CommonParams->dx11DeviceImmContext->UpdateSubresource(
 			(ID3D11Buffer*)gres_cutlines_buffer.alloc_res_ptrs[DTYPE_RES]
@@ -1893,7 +1886,9 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 					dx11DeviceImmContext->OMSetRenderTargets(2, dx11RTVsNULL, NULL);
 					SET_SHADER_RES(20, 2, dx11SRVs_NULL);
 
-					if (planeThickness == 0.f) {
+					// DX11 forces to run the slicer with zero thickness
+					if (1)// planeThickness == 0.f)
+					{
 						SET_SHADER(GETPS(SliceOutline_ps_4_0), NULL, 0);
 						SET_SHADER_RES(20, 1, (ID3D11ShaderResourceView**)&gres_fb_rgba2.alloc_res_ptrs[DTYPE_SRV]);
 						SET_SHADER_RES(21, 1, (ID3D11ShaderResourceView**)&gres_fb_depthcs2.alloc_res_ptrs[DTYPE_SRV]);
@@ -2032,6 +2027,11 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	dx11DeviceImmContext->CSSetConstantBuffers(0, 1, &cbuf_cam_state);
 	CB_CameraState cbCamState;
 	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, matWS2CS, cam_obj, fb_size_cur, k_value, gi_v_thickness);
+//#ifdef DX10_0
+//	cbCamState.far_plane = planeThickness_original;
+//#else
+//	cbCamState.far_plane = planeThickness;
+//#endif
 	cbCamState.far_plane = planeThickness;
 	if (!is_system_out) {
 		// which means the k-buffer will be used for the following renderer

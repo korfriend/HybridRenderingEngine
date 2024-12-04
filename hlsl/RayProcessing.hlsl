@@ -921,7 +921,11 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	int debugbingo = 0;
 	float planeThickness = g_cbCamState.far_plane;// g_cbCurvedSlicer.thicknessPlane;// g_cbCamState.far_plane;
 
-	if (disableSolidFill && planeThickness > 0) {
+#if DX10_0 == 1
+#else
+	if (disableSolidFill && planeThickness > 0) 
+#endif
+	{
 		// planeThickness > 0
 		pos_ip_ws = pos_ip_ws + ray_dir_unit_ws * planeThickness * 0.5f;
 		planeThickness = 0;
