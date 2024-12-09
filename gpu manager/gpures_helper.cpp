@@ -481,6 +481,8 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA91011), "GS_SurfelPoints_gs_4_0", "gs_4_0"), GS_SurfelPoints_gs_4_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA91020), "GS_ThickLines_gs_4_0", "gs_4_0"), GS_ThickLines_gs_4_0);
 
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31025), "GS_TriNormal_gs_4_0", "gs_4_0"), GS_TriNormal_gs_4_0);
+
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90101), "SR_BASIC_PHONGBLINN_ps_4_0", "ps_4_0"), SR_BASIC_PHONGBLINN_ps_4_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90102), "SR_BASIC_DASHEDLINE_ps_4_0", "ps_4_0"), SR_BASIC_DASHEDLINE_ps_4_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90103), "SR_BASIC_MULTITEXTMAPPING_ps_4_0", "ps_4_0"), SR_BASIC_MULTITEXTMAPPING_ps_4_0);
@@ -686,7 +688,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31010), "GS_ThickPoints_gs_5_0", "gs_5_0"), GS_ThickPoints_gs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31011), "GS_SurfelPoints_gs_5_0", "gs_5_0"), GS_SurfelPoints_gs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31020), "GS_ThickLines_gs_5_0", "gs_5_0"), GS_ThickLines_gs_5_0);
-		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31021), "GS_TriNormal_gs_5_0", "gs_5_0"), GS_TriNormal);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31021), "GS_TriNormal_gs_5_0", "gs_5_0"), GS_TriNormal_gs_5_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50000), "VR_RAYMAX_cs_5_0", "cs_5_0"), VR_RAYMAX_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50001), "VR_RAYMIN_cs_5_0", "cs_5_0"), VR_RAYMIN_cs_5_0);

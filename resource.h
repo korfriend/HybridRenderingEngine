@@ -8,6 +8,7 @@
 #define IDR_RCDATA31021                   31021
 #define IDR_RCDATA31030                   31030
 #define IDR_RCDATA31031                   31031
+#define IDR_RCDATA31025                   31035
 
 #define IDR_RCDATA91010                   91010
 #define IDR_RCDATA91011                   91011

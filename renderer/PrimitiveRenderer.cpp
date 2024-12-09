@@ -762,7 +762,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 
 #ifdef DX10_0
 #define VS_NUM 5
-#define GS_NUM 4
+#define GS_NUM 5
 #define PS_NUM 10
 #else
 #define VS_NUM 6
@@ -823,6 +823,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			  ,"GS_SurfelPoints_gs_4_0"
 			  ,"GS_ThickLines_gs_4_0"
 			  ,"GS_PickingBasic_gs_4_0"
+			  ,"GS_TriNormal_gs_4_0"
 		};
 #else
 		string strNames_GS[GS_NUM] = {
@@ -2469,7 +2470,11 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			dx11DeviceImmContext->VSSetShader(dx11VS_Target, NULL, 0);
 			if (!is_picking_routine) {
 				if (dx11GS_Target == NULL && useTriNormal) {
+#ifdef DX10_0
+					dx11GS_Target = GETGS(GS_TriNormal_gs_4_0);
+#else
 					dx11GS_Target = GETGS(GS_TriNormal_gs_5_0);
+#endif
 				}
 				if (dx11InputLayer_Target != dx11LI_PTTT && modeUndercut != 0)// && render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) 
 				{
