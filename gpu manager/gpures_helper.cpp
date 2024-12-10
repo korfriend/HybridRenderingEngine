@@ -511,6 +511,9 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA9101), "CurvedThickSlicePathTracer_ps_4_0", "ps_4_0"), CurvedThickSlicePathTracer_ps_4_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA9102), "SliceOutline_ps_4_0", "ps_4_0"), SliceOutline_ps_4_0);
 
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA9110), "PickingThickSlice_ps_4_0", "ps_4_0"), PickingThickSlice_ps_4_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA9111), "PickingCurvedThickSlice_ps_4_0", "ps_4_0"), PickingCurvedThickSlice_ps_4_0);
+
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA6001), "PanoVR_RAYMAX_ps_4_0", "ps_4_0"), PanoVR_RAYMAX_ps_4_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA6002), "PanoVR_RAYMIN_ps_4_0", "ps_4_0"), PanoVR_RAYMIN_ps_4_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA6003), "PanoVR_RAYSUM_ps_4_0", "ps_4_0"), PanoVR_RAYSUM_ps_4_0);
@@ -2067,8 +2070,16 @@ bool grd_helper::UpdateFrameBuffer(GpuRes& gres,
 		gres.res_values.SetParam("STRIDE_BYTES", (uint)stride_bytes);
 		break;
 	case RTYPE_TEXTURE2D:
-		gres.res_values.SetParam("WIDTH", (uint)(((fb_flag & UPFB_HALF) || (fb_flag & UPFB_HALF_W)) ? fb_size.x / 2 : fb_size.x));
-		gres.res_values.SetParam("HEIGHT", (uint)(((fb_flag & UPFB_HALF) || (fb_flag & UPFB_HALF_H)) ? fb_size.y / 2 : fb_size.y));
+		if (fb_flag & UPFB_PICK_TEXTURE)
+		{
+			gres.res_values.SetParam("WIDTH", 1u);
+			gres.res_values.SetParam("HEIGHT", 1u);
+		}
+		else
+		{
+			gres.res_values.SetParam("WIDTH", (uint)(((fb_flag & UPFB_HALF) || (fb_flag & UPFB_HALF_W)) ? fb_size.x / 2 : fb_size.x));
+			gres.res_values.SetParam("HEIGHT", (uint)(((fb_flag & UPFB_HALF) || (fb_flag & UPFB_HALF_H)) ? fb_size.y / 2 : fb_size.y));
+		}
 		if (fb_flag & UPFB_NFPP_TEXTURESTACK) gres.res_values.SetParam("DEPTH", (uint)num_frags_perpixel);
 		if (fb_flag & UPFB_MIPMAP) gres.options["MIP_GEN"] = 1;
 		if (fb_flag & UPFB_HALF) gres.options["HALF_GEN"] = 1;

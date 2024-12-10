@@ -189,6 +189,15 @@ Buffer<int> buf_gpuTriIndices : register(t3);
 #define WILDCARD_DEPTH_OUTLINE 0x12345678
 #define OUTSIDE_PLANE 0x87654321
 
+struct PS_FILL_OUTPUT_NO_DS
+{
+	float4 color : SV_TARGET0;
+#if PICKING != 1
+	float depthcs : SV_TARGET1;
+#endif
+	//float ds_z : SV_Depth;
+};
+
 #if DX10_0 == 1
 //#include "Sr_Common.hlsl"
 #include "./kbuf/Sr_Kbuf.hlsl"
@@ -200,20 +209,6 @@ Buffer<int> buf_gpuTriIndices : register(t3);
 Texture2D prev_fragment_vis : register(t20);
 Texture2D<float> prev_fragment_zdepth : register(t21);
 
-//struct VS_OUTPUT
-//{
-//	float4 f4PosSS : SV_POSITION;
-//	float3 f3VecNormalWS : NORMAL;
-//	float3 f3PosWS : TEXCOORD0;
-//	float3 f3Custom : TEXCOORD1;
-//};
-struct PS_FILL_OUTPUT_NO_DS
-{
-	float4 color : SV_TARGET0; // UNORM
-	float depthcs : SV_TARGET1;
-
-	//float ds_z : SV_Depth;
-};
 #else
 #include "./kbuf/Sr_Kbuf.hlsl"
 
@@ -779,24 +774,33 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 #if DX10_0 == 1
 	PS_FILL_OUTPUT_NO_DS out_ps;
 	//out_ps.ds_z = 0;
+#if PICKING == 1
+	int2 ss_xy = int2(g_cbCamState.iSrCamDummy__1 & 0xFFFF, g_cbCamState.iSrCamDummy__1 >> 16);
+	int2 prev_load_index = int2(0, 0);
+#else
 	int2 ss_xy = int2(input.f4PosSS.xy);
+	int2 prev_load_index = ss_xy;
+#endif
 
-	out_ps.color = prev_fragment_vis[ss_xy];
-	out_ps.depthcs = prev_fragment_zdepth[ss_xy];
-	float fvPrev = prev_fragment_zdepth[ss_xy];
+	out_ps.color = prev_fragment_vis[prev_load_index];
+#if PICKING != 1
+	out_ps.depthcs = prev_fragment_zdepth[prev_load_index];
+	float fvPrev = prev_fragment_zdepth[prev_load_index];
 	uint wildcard_v = asuint(fvPrev);
 	if (wildcard_v == WILDCARD_DEPTH_OUTLINE)
 		__EXIT;
 
 	out_ps.depthcs = asfloat(OUTSIDE_PLANE);
+#endif
+
 #else
-	int2 ss_xy = int2(DTid.xy);
 
 #if PICKING == 1
-	int x_pick_ss = g_cbCamState.iSrCamDummy__1 & 0xFFFF;
-	int y_pick_ss = g_cbCamState.iSrCamDummy__1 >> 16;
-	if (x_pick_ss != ss_xy.x || y_pick_ss != ss_xy.y)
+	int2 ss_xy = int2(g_cbCamState.iSrCamDummy__1 & 0xFFFF, g_cbCamState.iSrCamDummy__1 >> 16);
+	if (DTid.x != 0 || DTid.y != 0)
 		__EXIT;
+#else
+	int2 ss_xy = int2(DTid.xy);
 #endif
 
 	// do not compute 1st hit surface separately
@@ -817,8 +821,6 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	uint bytes_frags_per_pixel = k_value * bytes_per_frag;
 	uint addr_base = pixel_id * bytes_frags_per_pixel;
 #endif
-	//fragment_zdepth[ss_xy] = asfloat(OUTSIDE_PLANE);
-	//__EXIT;
 
 	bool disableSolidFill = BitCheck(g_cbPobj.pobj_flag, 6);
 
@@ -1114,20 +1116,29 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		{
 			uint iii = (checkCountInsideHorizon == 2 ? 10 : 1) + (checkCountInsideVertical == 2 ? 1000 : 100);
 			uint fc = 0;
-			InterlockedAdd(fragment_counter[ss_xy], 1, fc);
+#if DX10_0 == 1
+			out_ps.color.r = asfloat(g_cbPobj.pobj_dummy_0);
+			out_ps.color.g = 0.f;
+			out_ps.color.b = 7.f;
+			out_ps.color.a = 77.f;
+#else
+			//InterlockedAdd(fragment_counter[ss_xy], 1, fc);
 			picking_buf[2 * fc + 0] = g_cbPobj.pobj_dummy_0;
 			picking_buf[2 * fc + 1] = asuint(0.f);
+#endif
 		}
-		return;
+		__EXIT;
 	}
 #else
 	if (planeThickness == 0) {
 #if DX10_0
+#if PICKING != 1 
 		out_ps.depthcs = minDistOnPlane;
+#endif
 #else
 		fragment_zdepth[ss_xy] = minDistOnPlane;
 #endif
-		//EXIT;
+		//__EXIT;
 	}
 #endif
 
@@ -1257,15 +1268,26 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 
 #if PICKING == 1 // NO DEFINED DX10_0
 	uint fc = 0;
-	InterlockedAdd(fragment_counter[ss_xy], 1, fc);
+#if DX10_0 == 1
+	out_ps.color.r = asfloat(g_cbPobj.pobj_dummy_0);
+	out_ps.color.g = zdepth0;
+	out_ps.color.b = 7.f;
+	out_ps.color.a = 77.f;
+	//out_ps.depthcs = zdepth0;
+#else
+	//InterlockedAdd(fragment_counter[ss_xy], 1, fc);
 	picking_buf[2 * fc + 0] = g_cbPobj.pobj_dummy_0;
 	picking_buf[2 * fc + 1] = asuint(zdepth0);
+#endif
 	//float3 posPlane = pos_ip_ws + ray_dir_unit_ws * (planeThickness * 0.5f);// -fThicknessPosition);
 	//picking_buf[5 * fc + 2] = asuint(posPlane.x);
 	//picking_buf[5 * fc + 3] = asuint(posPlane.y);
 	//picking_buf[5 * fc + 4] = asuint(posPlane.z);
-	return;
+	__EXIT;
 #endif
+
+
+#if PICKING != 1 
 
 #if DX10_0 == 1
 	float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
@@ -1373,6 +1395,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 
 	return;
 #endif
+#endif
 }
 
 //float4 SlicerOutlineTest(const in int2 tex2d_xy, const in float3 edge_color, const in int thick)
@@ -1431,6 +1454,8 @@ float TestAlpha(float v) {
 	return max(min(lingThres - distAbs, 1.f), 0); // AA option
 }
 
+
+#if PICKING != 1
 #if DX10_0 == 1
 PS_FILL_OUTPUT_NO_DS Outline2D(VS_OUTPUT input)
 #else
@@ -1668,3 +1693,4 @@ void OIT_A_BUFFER_FILL_UNDERCUT(__VS_OUT input)
 	STORE1_RBB(ConvertFloat4ToUInt(v_rgba), 2 * nDeepBufferPos + 0);
 	STORE1_RBB(asuint(z_depth), 2 * nDeepBufferPos + 1);
 }
+#endif

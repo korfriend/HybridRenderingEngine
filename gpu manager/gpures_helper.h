@@ -440,13 +440,14 @@ namespace grd_helper
 	bool UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<string, GpuRes>& map_gres_texs, VmVObjectPrimitive* pobj, VmObject* imgObj = NULL, bool* hasTextureMap = NULL, LocalProgress* progress = NULL);
 
 #define UPFB_SYSOUT 0x1
-#define UPFB_RAWBYTE 0x2 // buffer only
-#define UPFB_MIPMAP 0x4  // texture only
-#define UPFB_HALF 0x8    // texture only
-#define UPFB_HALF_W 0x10    // texture only
-#define UPFB_HALF_H 0x20    // texture only
-#define UPFB_NFPP_BUFFERSIZE 0x40 // buffer only //
-#define UPFB_NFPP_TEXTURESTACK 0x80 // texture only
+#define UPFB_RAWBYTE 0x1 << 1 // buffer only
+#define UPFB_MIPMAP 0x1 << 2  // texture only
+#define UPFB_HALF 0x1 << 3    // texture only
+#define UPFB_HALF_W 0x1 << 4    // texture only
+#define UPFB_HALF_H 0x1 << 5    // texture only
+#define UPFB_NFPP_BUFFERSIZE 0x1 << 6 // buffer only //
+#define UPFB_NFPP_TEXTURESTACK 0x1 << 7 // texture only
+#define UPFB_PICK_TEXTURE 0x1 << 8 // DX10 picking texture
 	// framebuffer structure
 	bool UpdateFrameBuffer(GpuRes& gres, const VmIObject* iobj,
 		const string& res_name,

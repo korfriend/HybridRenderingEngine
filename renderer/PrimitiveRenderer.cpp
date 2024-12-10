@@ -667,6 +667,8 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 #endif
 		//gi_v_thickness = v_thickness = 0.0000001f;
 	}
+	pickPrimitive = true;
+
 	vmint2 picking_pos_ss = _fncontainer->fnParams.GetParam("_int2_PickingPosSS", vmint2(-1, -1));
 
 	int outline_thickness = _fncontainer->fnParams.GetParam("_int_SilhouetteThickness", (int)0);

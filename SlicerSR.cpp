@@ -810,9 +810,9 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	std::set<int> camClipperFreeActors = _fncontainer->fnParams.GetParam("_set_int_CamClipperFreeActors", std::set<int>());
 
 	bool is_picking_routine = _fncontainer->fnParams.GetParam("_bool_IsPickingRoutine", false);
-#ifdef DX10_0
-	is_picking_routine = false;
-#endif
+//#ifdef DX10_0
+//	is_picking_routine = false;
+//#endif
 	vmint2 picking_pos_ss = _fncontainer->fnParams.GetParam("_int2_PickingPosSS", vmint2(-1, -1));
 
 	int buf_ex_scale = _fncontainer->fnParams.GetParam("_int_BufExScale", (int)8); // scaling the capacity of the k-buffer for _bool_PixelTransmittance
@@ -935,7 +935,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 #define VS_NUM 5
 #define GS_NUM 1
 #ifdef DX10_0
-#define PS_NUM 3
+#define PS_NUM 5
 #define SET_PS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::PIXEL_SHADER, NAME), __S, true)
 #else
 #define CS_NUM 6
@@ -1027,6 +1027,8 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		string strNames_PS[PS_NUM] = {
 			   "ThickSlicePathTracer_ps_4_0"
 			  ,"CurvedThickSlicePathTracer_ps_4_0"
+			  ,"PickingThickSlice_ps_4_0"
+			  ,"PickingCurvedThickSlice_ps_4_0"
 			  ,"SliceOutline_ps_4_0"
 		};
 		for (int i = 0; i < PS_NUM; i++)
@@ -1209,6 +1211,8 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	GpuRes gres_fb_rgba2, gres_fb_depthcs2;
 	grd_helper::UpdateFrameBuffer(gres_fb_rgba2, iobj, "RENDER_OUT_RGBA_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
 	grd_helper::UpdateFrameBuffer(gres_fb_depthcs2, iobj, "RENDER_OUT_DEPTH_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
+
+	GpuRes gres_picking_buffer2; // for pingpong
 #else
 	GpuRes gres_fb_counter, gres_fb_k_buffer;
 	grd_helper::UpdateFrameBuffer(gres_fb_counter, iobj, "RW_COUNTER", RTYPE_TEXTURE2D, D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
@@ -1218,6 +1222,12 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	const int max_picking_layers = 100;
 	GpuRes gres_picking_buffer, gres_picking_system_buffer;
 	if (is_picking_routine) {
+#ifdef DX10_0
+		// those picking layers contain depth (4bytes) and id (4bytes) information
+		grd_helper::UpdateFrameBuffer(gres_picking_buffer, iobj, "BUFFER_RW_PICKING_BUF", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32G32B32A32_FLOAT, UPFB_PICK_TEXTURE);
+		grd_helper::UpdateFrameBuffer(gres_picking_buffer2, iobj, "BUFFER_RW_PICKING_BUF_2", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32G32B32A32_FLOAT, UPFB_PICK_TEXTURE);
+		grd_helper::UpdateFrameBuffer(gres_picking_system_buffer, iobj, "SYSTEM_OUT_RW_PICKING_BUF", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R32G32B32A32_FLOAT, UPFB_SYSOUT | UPFB_PICK_TEXTURE);
+#else
 		// those picking layers contain depth (4bytes) and id (4bytes) information
 		grd_helper::UpdateFrameBuffer(gres_picking_buffer, iobj, "BUFFER_RW_PICKING_BUF", RTYPE_BUFFER,
 			D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, UPFB_NFPP_BUFFERSIZE, max_picking_layers * 2);
@@ -1227,6 +1237,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		static std::vector<uint> clearDataUnit(max_picking_layers * 3, 0);//make sure that this thing is aligned
 		dx11CommonParams->dx11DeviceImmContext->UpdateSubresource((ID3D11Buffer*)gres_picking_buffer.alloc_res_ptrs[DTYPE_RES]
 			, 0, NULL, &clearDataUnit[0], sizeof(uint) * clearDataUnit.size(), sizeof(uint) * clearDataUnit.size());
+#endif
 	}
 
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_rgba, iobj, "SYSTEM_OUT_RGBA", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_SYSOUT);
@@ -1549,23 +1560,31 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	float clr_float_zero_4[4] = { 0, 0, 0, 0 };
 	float clr_float_fltmax_4[4] = { FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX };
 	//float clr_float_minus_4[4] = { -1.f, -1.f, -1.f, -1.f };
+	if (is_picking_routine) {
 #ifdef DX10_0
-	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_rgba2.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
-	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_depthcs2.alloc_res_ptrs[DTYPE_RTV], planeThickness > 0? clr_float_fltmax_4 : clr_float_zero_4);
-#else
-	dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
+		dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_picking_buffer.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
+		dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_picking_buffer2.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
 #endif
-	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
-	dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV], planeThickness > 0 ? clr_float_fltmax_4 : clr_float_zero_4);
-
-	if (!curved_slicer && planeThickness == 0.f) 
-	{
-		static std::vector<vmfloat4> clearDataUnit(max_cutlines, vmfloat4(0, 0, 0, 0));//make sure that this thing is aligned
-		dx11CommonParams->dx11DeviceImmContext->UpdateSubresource(
-			(ID3D11Buffer*)gres_cutlines_buffer.alloc_res_ptrs[DTYPE_RES]
-			, 0, NULL, &clearDataUnit[0], sizeof(vmfloat4) * clearDataUnit.size(), sizeof(vmfloat4) * clearDataUnit.size());
 	}
+	else
+	{
+#ifdef DX10_0
+		dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_rgba2.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
+		dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_depthcs2.alloc_res_ptrs[DTYPE_RTV], planeThickness > 0 ? clr_float_fltmax_4 : clr_float_zero_4);
+#else
+		dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
+#endif
+		dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
+		dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV], planeThickness > 0 ? clr_float_fltmax_4 : clr_float_zero_4);
 
+		if (!curved_slicer && planeThickness == 0.f) 
+		{
+			static std::vector<vmfloat4> clearDataUnit(max_cutlines, vmfloat4(0, 0, 0, 0));//make sure that this thing is aligned
+			dx11CommonParams->dx11DeviceImmContext->UpdateSubresource(
+				(ID3D11Buffer*)gres_cutlines_buffer.alloc_res_ptrs[DTYPE_RES]
+				, 0, NULL, &clearDataUnit[0], sizeof(vmfloat4) * clearDataUnit.size(), sizeof(vmfloat4) * clearDataUnit.size());
+		}
+	}
 	dx11CommonParams->GpuProfile("Clear for Slicer Render - SR", true);
 #pragma endregion 
 
@@ -1602,12 +1621,12 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 #endif	
 		&gres_picking_buffer, &gres_fb_rgba, &gres_fb_depthcs, &gres_cutlines_buffer,
 		&cbuf_cam_state, &cbuf_env_state, &cbuf_clip, &cbuf_pobj, &cbuf_vobj, &cbuf_reffect, &cbuf_tmap, &cbuf_hsmask,
-		&num_grid_x, &num_grid_y, &matWS2PS, &matWS2SS, &matSS2WS,
+		&num_grid_x, &num_grid_y, &matWS2PS, &matWS2SS, &matSS2WS, 
 		&light_src, &default_phong_lighting_coeff, &default_point_thickness, &default_surfel_size, &default_line_thickness, &default_color_cmmobj, &use_spinlock_pixsynch, &use_blending_option_MomentOIT,
 		&count_call_render, &progress, &cam_obj, &planeThickness, &detaultOutlinePixelThickness, &camForcedOutlinePixelThickness,
 		&camClipMode, &camClipPlanePos, &camClipPlaneDir, &camClipMatWS2BS, &camClipperFreeActors, &isDrawingOnlyContours,
 #ifdef DX10_0
-		&matQaudWS2PS_T, 
+		&matQaudWS2PS_T, & gres_picking_buffer2,
 #endif
 		&clr_float_zero_4, &clr_float_fltmax_4, &dx11RTVsNULL, &dx11UAVs_NULL, &dx11SRVs_NULL
 	](vector<VmActor*>& actor_list, const bool curved_slicer, const bool is_ghost_mode, const bool is_picking_routine)
@@ -1850,11 +1869,34 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 #endif
 				if (is_picking_routine) {
 #ifdef DX10_0
-					assert(0);
+					ID3D11Buffer* dx11BufferTargetPrim = (ID3D11Buffer*)gres_quad.alloc_res_ptrs[DTYPE_RES];
+					ID3D11Buffer* dx11IndiceTargetPrim = NULL;
+					uint stride_inputlayer = sizeof(vmfloat3);
+					uint offset = 0;
+					dx11DeviceImmContext->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&dx11BufferTargetPrim, &stride_inputlayer, &offset);
+					dx11DeviceImmContext->IASetInputLayout(dx11LI_P);
+					dx11DeviceImmContext->VSSetShader(dx11VShader_P, NULL, 0);
+					dx11DeviceImmContext->GSSetShader(NULL, NULL, 0);
+					dx11DeviceImmContext->RSSetState(GETRASTER(SOLID_NONE));
+					dx11DeviceImmContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+					dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(ALWAYS), 0);
+
+					SET_SHADER(
+						curved_slicer ? GETPS(PickingCurvedThickSlice_ps_4_0) : GETPS(PickingThickSlice_ps_4_0),
+						NULL, 0);
+
+					SET_SHADER_RES(20, 1, (ID3D11ShaderResourceView**)&gres_picking_buffer.alloc_res_ptrs[DTYPE_SRV]);
+					ID3D11RenderTargetView* dx11RTVs[2] = { (ID3D11RenderTargetView*)gres_picking_buffer2.alloc_res_ptrs[DTYPE_RTV], NULL};
+					dx11DeviceImmContext->OMSetRenderTargets(1, dx11RTVs, NULL);
+					dx11DeviceImmContext->Draw(4, 0);
+					dx11DeviceImmContext->OMSetRenderTargets(1, dx11RTVsNULL, NULL);
+					SET_SHADER_RES(20, 1, dx11SRVs_NULL);
+
+					dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_picking_buffer.alloc_res_ptrs[DTYPE_RES], (ID3D11Texture2D*)gres_picking_buffer2.alloc_res_ptrs[DTYPE_RES]);
 #else
 					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs, dx11UAVs, NULL);
 					SET_SHADER(curved_slicer ? GETCS(PickingCurvedThickSlice_cs_5_0) : GETCS(PickingThickSlice_cs_5_0), NULL, 0);
-					dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+					dx11DeviceImmContext->Dispatch(1, 1, 1);
 					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs, dx11UAVs_NULL, NULL);
 #endif
 				}
@@ -1886,7 +1928,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 					dx11DeviceImmContext->OMSetRenderTargets(2, dx11RTVsNULL, NULL);
 					SET_SHADER_RES(20, 2, dx11SRVs_NULL);
 
-					// DX11 forces to run the slicer with zero thickness
+					// DX10 forces to run the slicer with zero thickness
 					if (1)// planeThickness == 0.f)
 					{
 						SET_SHADER(GETPS(SliceOutline_ps_4_0), NULL, 0);
@@ -2067,8 +2109,16 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		map<float, int> picking_layers_depth_id;
 		D3D11_MAPPED_SUBRESOURCE mappedResSysPicking;
 		HRESULT hr = dx11DeviceImmContext->Map((ID3D11Buffer*)gres_picking_system_buffer.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysPicking);
-		uint* picking_buf = (uint*)mappedResSysPicking.pData;
+
 		int num_layers = 0;
+#ifdef DX10_0
+		vmfloat4 data = *(vmfloat4*)mappedResSysPicking.pData;
+		uint obj_id = *(uint*)(&data.x);
+		num_layers = obj_id > 0 ? 1 : 0;
+		if (num_layers > 0)
+			picking_layers_id_depth[obj_id] = data.y;
+#else
+		uint* picking_buf = (uint*)mappedResSysPicking.pData;
 		// note each layer has 5 integer-stored data 
 		// id, depth, planePos.xyz
 		for (int i = 0; i < max_picking_layers; i += 2) 
@@ -2087,6 +2137,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			}
 			num_layers++;
 		}
+#endif
 		dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_picking_system_buffer.alloc_res_ptrs[DTYPE_RES], 0);
 #pragma endregion copyback to sysmem
 		dx11CommonParams->GpuProfile("Picking", true);
