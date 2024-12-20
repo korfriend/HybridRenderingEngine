@@ -57,7 +57,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #endif
 	//if (mode_OIT == MFR_MODE::STATIC_KB_FM) apply_fragmerge = true;
 
-	int ray_cast_type = _fncontainer->fnParams.GetParam("_int_VolumeRayCastType", (int)0);
+	int ray_cast_type_global = _fncontainer->fnParams.GetParam("_int_VolumeRayCastType", (int)0);
 
 	int buf_ex_scale = _fncontainer->fnParams.GetParam("_int_BufExScale", (int)8); // 32 layers
 	int num_moments_old = iobj->GetObjParam("_int_NumQueueLayers", (int)8);
@@ -194,7 +194,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			}
 		}
 #else
-#define CS_NUM 27
+#define CS_NUM 36
 #define SET_CS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::COMPUTE_SHADER, NAME), dx11CShader, true)
 
 		string strNames_CS[CS_NUM] = {
@@ -225,6 +225,15 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			  ,"VR_SURFACE_cs_5_0"
 			  ,"FillDither_cs_5_0"
 			  ,"SampleTest_cs_5_0"
+			  ,"VR_SINGLE_DEFAULT_FM_cs_5_0"
+			  ,"VR_SINGLE_OPAQUE_FM_cs_5_0"
+			  ,"VR_SINGLE_OPAQUE_MULTIOTF_FM_cs_5_0"
+			  ,"VR_SINGLE_CONTEXT_FM_cs_5_0"
+			  ,"VR_SINGLE_MULTIOTF_FM_cs_5_0"
+			  ,"VR_SINGLE_MULTIOTF_CONTEXT_FM_cs_5_0"
+			  ,"VR_SINGLE_MASKVIS_FM_cs_5_0"
+			  ,"VR_SINGLE_SCULPTMASK_FM_cs_5_0"
+			  ,"VR_SINGLE_SCULPTMASK_CONTEXT_FM_cs_5_0"
 		};
 
 		for (int i = 0; i < CS_NUM; i++)
@@ -641,6 +650,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	int vr_render_count = 0;
 	for (VmActor* actor : dvr_volumes)
 	{
+		bool is_last_dvr = vr_render_count == dvr_volumes.size() - 1;
 		VmVObjectVolume* vobj = (VmVObjectVolume*)actor->GetGeometryRes();
 		VolumeData* vol_data = vobj->GetVolumeData();
 
@@ -669,6 +679,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		bool is_xray_mode = false;
 		bool is_modulation_mode = false;
 		vmfloat2 grad_minmax(FLT_MAX, -FLT_MAX);
+		int ray_cast_type = is_last_dvr? ray_cast_type_global : __RM_OPAQUE;
 		switch (ray_cast_type) {
 		case __RM_RAYMAX:
 		case __RM_RAYMIN:
@@ -936,12 +947,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		}
 #else
 		ID3D11ComputeShader* cshader = NULL;
-		int final_ray_cast_type = ray_cast_type;
-		if (dvr_volumes.size() > 1 && vr_render_count < dvr_volumes.size() - 1)
-		{
-			final_ray_cast_type = __RM_OPAQUE;
-		}
-		switch (final_ray_cast_type)
+		switch (ray_cast_type)
 		{
 		case __RM_RAYMIN: cshader = GETCS(VR_RAYMIN_cs_5_0); break;
 		case __RM_RAYMAX: cshader = GETCS(VR_RAYMAX_cs_5_0); break;
@@ -953,7 +959,11 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				// VR_OPAQUE_DFB_cs_5_0 is same as VR_OPAQUE_DKB_cs_5_0
 			case MFR_MODE::STATIC_KB:
 			case MFR_MODE::DYNAMIC_FB:
-				cshader = apply_fragmerge ? GETCS(VR_OPAQUE_FM_cs_5_0) : GETCS(VR_OPAQUE_cs_5_0); break;
+				if (is_last_dvr)
+					cshader = apply_fragmerge ? GETCS(VR_OPAQUE_FM_cs_5_0) : GETCS(VR_OPAQUE_cs_5_0); 
+				else
+					cshader = GETCS(VR_SINGLE_OPAQUE_FM_cs_5_0);
+				break;
 			case MFR_MODE::DYNAMIC_KB:
 				cshader = apply_fragmerge? GETCS(VR_OPAQUE_DKBZ_cs_5_0) : GETCS(VR_OPAQUE_DFB_cs_5_0); break;
 			default:
@@ -965,7 +975,11 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			{
 			case MFR_MODE::STATIC_KB:
 			case MFR_MODE::DYNAMIC_FB:
-				cshader = GETCS(VR_OPAQUE_MULTIOTF_FM_cs_5_0); break;
+				if (is_last_dvr)
+					cshader = GETCS(VR_OPAQUE_MULTIOTF_FM_cs_5_0);
+				else
+					cshader = GETCS(VR_SINGLE_OPAQUE_MULTIOTF_FM_cs_5_0);
+				break;
 			case MFR_MODE::DYNAMIC_KB:
 				assert(0); break;
 			default:
@@ -977,7 +991,11 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			{
 			case MFR_MODE::STATIC_KB:
 			case MFR_MODE::DYNAMIC_FB:
-				cshader = apply_fragmerge ? GETCS(VR_CONTEXT_FM_cs_5_0) : GETCS(VR_CONTEXT_cs_5_0); break;
+				if (is_last_dvr)
+					cshader = apply_fragmerge ? GETCS(VR_CONTEXT_FM_cs_5_0) : GETCS(VR_CONTEXT_cs_5_0); 
+				else
+					cshader = GETCS(VR_SINGLE_CONTEXT_FM_cs_5_0);
+				break;
 			case MFR_MODE::DYNAMIC_KB:
 				cshader = apply_fragmerge ? GETCS(VR_CONTEXT_DKBZ_cs_5_0) : GETCS(VR_CONTEXT_DFB_cs_5_0); break;
 			default:
@@ -989,7 +1007,11 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			{
 			case MFR_MODE::STATIC_KB:
 			case MFR_MODE::DYNAMIC_FB:
-				cshader = apply_fragmerge ? GETCS(VR_MULTIOTF_FM_cs_5_0) : GETCS(VR_MULTIOTF_cs_5_0); break;
+				if (is_last_dvr)
+					cshader = apply_fragmerge ? GETCS(VR_MULTIOTF_FM_cs_5_0) : GETCS(VR_MULTIOTF_cs_5_0);
+				else
+					cshader = GETCS(VR_SINGLE_MULTIOTF_FM_cs_5_0);
+				break;
 			case MFR_MODE::DYNAMIC_KB:
 				assert(0); break;
 			default:
@@ -1002,7 +1024,11 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			case MFR_MODE::STATIC_KB:
 			case MFR_MODE::DYNAMIC_FB:
 				assert(apply_fragmerge);
-				cshader = GETCS(VR_MULTIOTF_CONTEXT_FM_cs_5_0); break;
+				if (is_last_dvr)
+					cshader = GETCS(VR_MULTIOTF_CONTEXT_FM_cs_5_0);
+				else
+					cshader = GETCS(VR_SINGLE_MULTIOTF_CONTEXT_FM_cs_5_0);
+				break;
 			case MFR_MODE::DYNAMIC_KB:
 				assert(0); break;
 			default:
@@ -1010,13 +1036,22 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			}
 			break;
 		case __RM_VISVOLMASK:
-			cshader = apply_fragmerge ? GETCS(VR_MASKVIS_FM_cs_5_0) : GETCS(VR_MASKVIS_cs_5_0); break;
+			if (is_last_dvr)
+				cshader = apply_fragmerge ? GETCS(VR_MASKVIS_FM_cs_5_0) : GETCS(VR_MASKVIS_cs_5_0);
+			else
+				cshader = GETCS(VR_SINGLE_MASKVIS_FM_cs_5_0);
 			break;
 		case __RM_SCULPTMASK:
-			cshader = GETCS(VR_SCULPTMASK_FM_cs_5_0); break;
+			if (is_last_dvr)
+				cshader = GETCS(VR_SCULPTMASK_FM_cs_5_0);
+			else
+				cshader = GETCS(VR_SINGLE_SCULPTMASK_FM_cs_5_0);
 			break;
 		case __RM_SCULPTMASK_MODULATION:
-			cshader = GETCS(VR_SCULPTMASK_CONTEXT_FM_cs_5_0); break;
+			if (is_last_dvr)
+				cshader = GETCS(VR_SCULPTMASK_CONTEXT_FM_cs_5_0);
+			else
+				cshader = GETCS(VR_SINGLE_SCULPTMASK_CONTEXT_FM_cs_5_0);
 			break;
 		case __RM_SAMPLETEST:
 			cshader = GETCS(SampleTest_cs_5_0); break;
@@ -1026,7 +1061,11 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			{
 			case MFR_MODE::STATIC_KB:
 			case MFR_MODE::DYNAMIC_FB:
-				cshader = apply_fragmerge ? GETCS(VR_DEFAULT_FM_cs_5_0) : GETCS(VR_DEFAULT_cs_5_0); break;
+				if (is_last_dvr)
+					cshader = apply_fragmerge ? GETCS(VR_DEFAULT_FM_cs_5_0) : GETCS(VR_DEFAULT_cs_5_0);
+				else
+					cshader = GETCS(VR_SINGLE_DEFAULT_FM_cs_5_0);
+				break;
 			case MFR_MODE::DYNAMIC_KB:
 				cshader = apply_fragmerge ? GETCS(VR_DEFAULT_DKBZ_cs_5_0) : GETCS(VR_DEFAULT_DFB_cs_5_0); break;
 			default:

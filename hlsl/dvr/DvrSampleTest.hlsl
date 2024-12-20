@@ -42,7 +42,7 @@ Texture2D<unorm float> ao_vr_texture : register(t20);
 Buffer<float3> buf_curvePoints : register(t30);
 Buffer<float3> buf_curveTangents : register(t31);
 
-#define VR_MAX_LAYERS 9 // SKBTZ, +1 for DVR 
+#define VR_MAX_LAYERS 10 // SKBTZ, +1 for DVR 
 
 // case 1 : dvr to deep layers (intra layers are mixed with deep layers)
 // case 2 : mixnig dvr (deep layers and on-the-fly samples)

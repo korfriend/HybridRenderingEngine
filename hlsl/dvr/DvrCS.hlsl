@@ -38,7 +38,7 @@ RWTexture2D<uint> fragment_counter : register(u0);
 RWByteAddressBuffer deep_dynK_buf : register(u1);
 RWTexture2D<unorm float4> fragment_vis : register(u2);
 RWTexture2D<float> fragment_zdepth : register(u3);
-RWTexture2D<float> vr_fragment_1sthit_write : register(u4);	// use this as a z-thickness in Single layre mode!
+RWTexture2D<float> vr_fragment_1sthit_write : register(u4);	// use this as a z-thickness in Single layer mode!
 #endif
 
 #define AO_MAX_LAYERS 8 
@@ -93,7 +93,7 @@ float4 VrOutlineTest(const in int2 tex2d_xy, inout float depth_c, const in float
 
 Buffer<uint> sr_offsettable_buf : register(t50);// gres_fb_ref_pidx
 
-#define VR_MAX_LAYERS 9 // SKBTZ, +1 for DVR 
+#define VR_MAX_LAYERS 10 // SKBTZ, +1 for DVR 
 
 #if MBT == 1
 #include "MomentMath.hlsli"
@@ -634,9 +634,28 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	}
 //#endif
 
+//#define MDVR_TEST
+
 #if ONLY_SINGLE_LAYER == 1
 	int i = 0;
 #else
+
+#ifdef MDVR_TEST
+	float4 vis_prev = fragment_vis[tex2d_xy];
+	float depth_prev = fragment_zdepth[tex2d_xy];
+	Fragment f_dvr = (Fragment)0;
+	f_dvr.z = FLT_MAX;
+	if (vis_prev.a > 0)
+	{
+		f_dvr.i_vis = ConvertFloat4ToUInt(vis_prev);
+		f_dvr.z = depth_prev;
+#if FRAG_MERGING == 1
+		f_dvr.zthick = g_cbVobj.sample_dist;
+		f_dvr.opacity_sum = vis_prev.a;
+#endif
+	}
+#endif
+	int layer_count = 0;
 	[loop]
     for (int i = 0; i < (int)num_frags; i++)
     {
@@ -646,19 +665,34 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
         float4 vis_in = ConvertUIntToFloat4(f.i_vis);
 		//if (g_cbEnv.r_kernel_ao > 0)
 		//{
-		//	vis_in.rgb *= 1.f - aos[i];
+		//	vis_in.rgb *= 1.f - aos[layer_count];
 		//	f.i_vis = ConvertFloat4ToUInt(vis_in);
 		//}
-        if (vis_in.a > 0)
-        {
-            vis_out += vis_in * (1.f - vis_out.a);
-        }
-		fs[i] = f;
+#ifdef MDVR_TEST
+		if (depth_prev < f.z && vis_prev.a > 0)
+		{
+			vis_out += vis_prev * (1.f - vis_out.a);
+			fs[layer_count] = f_dvr;
+			layer_count++;
+			f_dvr.z = FLT_MAX;
+		}
+#endif
+		fs[layer_count] = f;
+		layer_count++;
+		vis_out += vis_in * (1.f - vis_out.a);
     }
 
+#ifdef MDVR_TEST
+	if (f_dvr.z < FLT_MAX && vis_prev.a > 0)
+	{
+		fs[num_frags] = f_dvr;
+	}
+	if (vis_prev.a > 0) num_frags++;
+#endif
+	
 	//fragment_vis[tex2d_xy] = float4(1, 1, 0, 1);
-	if(num_frags > 0)
-		fragment_vis[tex2d_xy] = ConvertUIntToFloat4(fs[0].i_vis);
+	//if(num_frags > 0)
+	//	fragment_vis[tex2d_xy] = ConvertUIntToFloat4(fs[0].i_vis);
 	//fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
 	//return;
 
@@ -1250,6 +1284,11 @@ void VR_SURFACE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
 		return;
+
+	// 2 : on the clip plane
+	// 1 : outside the clip plane
+	// 0 : outside the volume
+	fragment_counter[DTid.xy] &= 0xFFF;
 #endif
 
 	// Image Plane's Position and Camera State //
