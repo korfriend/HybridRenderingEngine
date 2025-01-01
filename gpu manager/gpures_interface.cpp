@@ -265,10 +265,11 @@ bool __InitializeDevice()
 	case 0x102B: // Matrox
 	case 0x126F: // Silicon Motion
 	case 0x106B: // Apple
-		vmlog::LogErr("[Unsupported Vendor]");
-		VMSAFE_RELEASE(g_pdx11DeviceImmContext);
-		VMSAFE_RELEASE(g_pdx11Device);
-		return false;
+		vmlog::LogErr("[Unsupported Vendor] : " + std::to_string(g_adapterDesc.VendorId));
+		//VMSAFE_RELEASE(g_pdx11DeviceImmContext);
+		//VMSAFE_RELEASE(g_pdx11Device);
+		//return false;
+		break;
 	default:
 		vmlog::LogErr("[Unknown Vendor]");
 		VMSAFE_RELEASE(g_pdx11DeviceImmContext);
