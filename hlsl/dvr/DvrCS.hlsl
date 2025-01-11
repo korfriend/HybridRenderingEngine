@@ -1,6 +1,8 @@
 #include "../CommonShader.hlsl"
 #include "../macros.hlsl"
 
+#define VR_ENC_BIT_SHIFT 30
+
 Texture3D tex3D_volume : register(t0);
 Texture3D tex3D_volblk : register(t1);
 Texture3D tex3D_volmask : register(t2);
@@ -39,6 +41,7 @@ RWByteAddressBuffer deep_dynK_buf : register(u1);
 RWTexture2D<unorm float4> fragment_vis : register(u2);
 RWTexture2D<float> fragment_zdepth : register(u3);
 RWTexture2D<float> vr_fragment_1sthit_write : register(u4);	// use this as a z-thickness in Single layer mode!
+RWTexture2D<float> fragment_zthick : register(u5);
 #endif
 
 #define AO_MAX_LAYERS 8 
@@ -525,6 +528,31 @@ float PhongBlinnVr(const float3 cam_view, const in float4 shading_factors, const
 	return shading_factors.x + shading_factors.y * diff + shading_factors.z * reft;
 }
 
+#if FRAG_MERGING == 1
+// these following two functions are the same as in Sr_KBuf.hlsl
+int Fragment_OrderIndependentMerge(inout Fragment f_buf, const in Fragment f_in)
+{
+	float4 f_buf_fvis = ConvertUIntToFloat4(f_buf.i_vis);
+	float4 f_in_fvis = ConvertUIntToFloat4(f_in.i_vis);
+
+	float4 f_mix_vis = MixOpt(f_buf_fvis, f_buf.opacity_sum, f_in_fvis, f_in.opacity_sum);
+	f_buf.i_vis = ConvertFloat4ToUInt(f_mix_vis);
+	f_buf.opacity_sum = f_buf.opacity_sum + f_in.opacity_sum;
+	float z_front = min(f_buf.z - f_buf.zthick, f_in.z - f_in.zthick);
+	f_buf.z = max(f_buf.z, f_in.z);
+	f_buf.zthick = f_buf.z - z_front;
+
+	return 0;
+}
+
+bool OverlapTest(const in Fragment f_1, const in Fragment f_2)
+{
+	float diff_z1 = f_1.z - (f_2.z - f_2.zthick);
+	float diff_z2 = (f_1.z - f_1.zthick) - f_2.z;
+	return diff_z1 * diff_z2 < 0;
+}
+#endif
+
 #if DX10_0 == 1
 #define __EXIT_VR_RayCasting return output
 [earlydepthstencil]
@@ -592,10 +620,10 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	}
 
 #if ONLY_SINGLE_LAYER == 1
-	uint vr_hit_enc = fragment_counter[DTid.xy] >> 24;
+	uint vr_hit_enc = fragment_counter[DTid.xy] >> VR_ENC_BIT_SHIFT;
 #else
 	uint num_frags = fragment_counter[DTid.xy];
-	uint vr_hit_enc = num_frags >> 24;
+	uint vr_hit_enc = num_frags >> VR_ENC_BIT_SHIFT;
 	num_frags = num_frags & 0xFFF;
 #endif
 
@@ -634,15 +662,18 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	}
 //#endif
 
-//#define MDVR_TEST
+#define MDVR_TEST
 
 #if ONLY_SINGLE_LAYER == 1
 	int i = 0;
+	float dvr_layer_thickness = 0;
+	//fragment_zthick[tex2d_xy] = 0;
 #else
 
 #ifdef MDVR_TEST
 	float4 vis_prev = fragment_vis[tex2d_xy];
 	float depth_prev = fragment_zdepth[tex2d_xy];
+	float thick_prev = fragment_zthick[tex2d_xy];
 	Fragment f_dvr = (Fragment)0;
 	f_dvr.z = FLT_MAX;
 	if (vis_prev.a > 0)
@@ -650,12 +681,13 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		f_dvr.i_vis = ConvertFloat4ToUInt(vis_prev);
 		f_dvr.z = depth_prev;
 #if FRAG_MERGING == 1
-		f_dvr.zthick = g_cbVobj.sample_dist;
+		f_dvr.zthick = thick_prev;//g_cbVobj.sample_dist;
 		f_dvr.opacity_sum = vis_prev.a;
 #endif
 	}
 #endif
 	int layer_count = 0;
+
 	[loop]
     for (int i = 0; i < (int)num_frags; i++)
     {
@@ -681,15 +713,59 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		layer_count++;
 		vis_out += vis_in * (1.f - vis_out.a);
     }
+	num_frags = layer_count;
 
 #ifdef MDVR_TEST
-	if (f_dvr.z < FLT_MAX && vis_prev.a > 0)
+	if (vis_prev.a > 0)
 	{
-		fs[num_frags] = f_dvr;
-	}
-	if (vis_prev.a > 0) num_frags++;
+		if (f_dvr.z < FLT_MAX)
+		{
+			vis_out += vis_prev * (1.f - vis_out.a);
+			fs[num_frags++] = f_dvr;
+		}
+#if FRAG_MERGING == 1
+		else
+		{
+			// other fragments exist
+			// extended merging for consistent visibility transition
+			vis_out = (float4)0;
+			[loop]
+			for (uint k = 0; k < num_frags; k++)
+			{
+				Fragment f_k = fs[k];
+				if (f_k.i_vis != 0)
+				{
+					[loop]
+					for (uint l = k + 1; l < num_frags; l++)
+					{
+						if (l != k)
+						{
+							Fragment f_l = fs[l];
+							if (f_l.i_vis != 0)
+							{
+								if (OverlapTest(f_k, f_l))
+								{
+									Fragment_OrderIndependentMerge(f_k, f_l);
+									f_l.i_vis = 0;
+									f_l.z = FLT_MAX;
+									fs[l] = f_l;
+									//mer_cnt++;
+								}
+							}
+						}
+					}
+
+					// optional setting for manual z-thickness
+					//f_k.zthick = max(f_k.zthick, GetVZThickness(f_k.z, vz_thickness));
+					fs[k] = f_k;
+					vis_out += ConvertUIntToFloat4(f_k.i_vis) * (1.f - vis_out.a);
+				}
+			}
+		}
 #endif
-	
+	}
+#endif
+
 	//fragment_vis[tex2d_xy] = float4(1, 1, 0, 1);
 	//if(num_frags > 0)
 	//	fragment_vis[tex2d_xy] = ConvertUIntToFloat4(fs[0].i_vis);
@@ -718,11 +794,12 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 	fs[num_frags] = (Fragment)0;
 	fs[num_frags].z = FLT_MAX;
-#endif
+#endif // ONLY_SINGLE_LAYER == 1
     fragment_vis[tex2d_xy] = vis_out;
+	
 #if RAYMODE != 0
     fragment_zdepth[tex2d_xy] = depth_out = fs[0].z;
-#endif
+#endif 
 
 #endif // DX10_0
 
@@ -745,7 +822,6 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	uv_u = normalize(cross(uv_r, uv_v)); // uv_u , normalize?! for precision
 	v_u = TransformVector(uv_u * g_cbVobj.sample_dist, g_cbVobj.mat_ws2ts); // v_u
 	float3 v_r = TransformVector(uv_r * g_cbVobj.sample_dist, g_cbVobj.mat_ws2ts); // v_r
-
     
 	const float merging_beta = 1.0;
 
@@ -786,6 +862,8 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 #if ONLY_SINGLE_LAYER == 1
 		fragment_zdepth[tex2d_xy] = depth_out;
+		dvr_layer_thickness += g_cbVobj.sample_dist;
+		fragment_zthick[tex2d_xy] = dvr_layer_thickness;
 #else
 		fragment_zdepth[tex2d_xy] = min(depth_out, fs[0].z);
 #endif
@@ -799,6 +877,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #else
 #if ONLY_SINGLE_LAYER == 1
 	fragment_zdepth[tex2d_xy] = depth_out;
+	fragment_zthick[tex2d_xy] = dvr_layer_thickness;
 #else
 	fragment_zdepth[tex2d_xy] = fs[0].z;
 #endif
@@ -901,9 +980,10 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	
 #if VR_MODE == 1
 	// opauqe vr
+	float depth_sample = depth_hit;
 	float4 vis_otf = (float4) 0; // note the otf result is the pre-multiplied color
 	if (Vis_Volume_And_Check(vis_otf, sample_v, pos_ray_start_ts)) {
-		float depth_sample = depth_hit;
+		
 		float3 grad = GRAD_VOL2(sample_v, sample_prev, pos_ray_start_ts, v_v, v_u, v_r, uv_v, uv_u, uv_r);
 		float grad_len = length(grad);
 		float3 nrl = grad / (grad_len + 0.00001f);
@@ -918,6 +998,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 #if ONLY_SINGLE_LAYER == 1
 		vis_out += vis_sample * (1.f - vis_out.a);
+		dvr_layer_thickness += sample_dist;
 #else
 #if FRAG_MERGING == 1
 		INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, sampleThickness, fs, merging_beta);
@@ -991,6 +1072,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	//	fragment_vis[tex2d_xy] = float4(1, 0, 0, 1.f);
 	//
 	//return;
+	float depth_sample = depth_hit;
 
 	[loop]
 	for (i = start_idx; i < num_ray_samples; i++)
@@ -1027,7 +1109,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 					}
 
 					float4 vis_sample = float4(shade * vis_otf.rgb, vis_otf.a);
-					float depth_sample = depth_hit + (float)(i + j) * sample_dist;
+					depth_sample = depth_hit + (float)(i + j) * sample_dist;
 #if VR_MODE == 2
 					//g_cbVobj.kappa_i
 					//float modulator = pow(min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(g_cbVobj.kappa_i * max(__s, 0.1f), g_cbVobj.kappa_s));
@@ -1204,6 +1286,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #if ONLY_SINGLE_LAYER == 1
 	// to do : compute thickness...
 	fragment_zdepth[tex2d_xy] = depth_out;
+	fragment_zthick[tex2d_xy] = max(depth_sample - depth_out, sample_dist);
 #else
 	fragment_zdepth[tex2d_xy] = min(depth_out, fs[0].z);
 	//fragment_counter[DTid.xy] = num_frags + 1;
@@ -1288,7 +1371,7 @@ void VR_SURFACE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	// 2 : on the clip plane
 	// 1 : outside the clip plane
 	// 0 : outside the volume
-	fragment_counter[DTid.xy] &= 0xFFF;
+	fragment_counter[DTid.xy] &= 0x3FFFFFFF;
 #endif
 
 	// Image Plane's Position and Camera State //
@@ -1345,7 +1428,7 @@ void VR_SURFACE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	// 2 : on the clip plane
 	// 1 : outside the clip plane
 	// 0 : outside the volume
-	fragment_counter[DTid.xy] = fcnt | (dvr_hit_enc << 24);
+	fragment_counter[DTid.xy] = fcnt | (dvr_hit_enc << VR_ENC_BIT_SHIFT);
 #endif
 }
 

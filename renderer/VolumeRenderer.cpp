@@ -420,6 +420,12 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			vol_data->vox_pitch.z), 
 			(double)min_pitch);
 	}
+
+	GpuRes gres_fb_thickcs;
+	if (dvr_volumes.size() > 1)
+	{
+		grd_helper::UpdateFrameBuffer(gres_fb_thickcs, iobj, "RENDER_OUT_THICK_0", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
+	}
 #pragma endregion 
 
 #ifdef DX10_0
@@ -460,6 +466,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		//dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 		dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 		dx11DeviceImmContext->ClearUnorderedAccessViewFloat((ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV], clr_float_fltmax_4);
+		if (dvr_volumes.size() > 1)
+			dx11DeviceImmContext->ClearUnorderedAccessViewFloat((ID3D11UnorderedAccessView*)gres_fb_thickcs.alloc_res_ptrs[DTYPE_UAV], clr_float_zero_4);
 		// note that gres_fb_vrdepthcs is supposed to be initialized in VR_SURFACE
 #endif
 		count_call_render = 0;
@@ -1161,7 +1169,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #else
 		SET_SHADER(cshader, NULL, 0);
 		//dx11DeviceImmContext->Flush();
+		dx11DeviceImmContext->CSSetUnorderedAccessViews(5, 1, (ID3D11UnorderedAccessView**)&gres_fb_thickcs.alloc_res_ptrs[DTYPE_UAV], (UINT*)(&dx11UAVs));
 		dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+		dx11DeviceImmContext->CSSetUnorderedAccessViews(5, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs));
 		if (fastRender2x) {
 			SET_SHADER(GETCS(FillDither_cs_5_0), NULL, 0);
 			dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
