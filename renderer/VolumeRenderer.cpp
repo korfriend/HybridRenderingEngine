@@ -687,7 +687,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		bool is_xray_mode = false;
 		bool is_modulation_mode = false;
 		vmfloat2 grad_minmax(FLT_MAX, -FLT_MAX);
-		int ray_cast_type = is_last_dvr? ray_cast_type_global : __RM_OPAQUE;
+		int ray_cast_type = is_last_dvr ? ray_cast_type_global : __RM_OPAQUE;
 		switch (ray_cast_type) {
 		case __RM_RAYMAX:
 		case __RM_RAYMIN:

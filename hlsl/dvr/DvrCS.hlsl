@@ -684,6 +684,9 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		f_dvr.zthick = thick_prev;//g_cbVobj.sample_dist;
 		f_dvr.opacity_sum = vis_prev.a;
 #endif
+
+		//fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
+		//return;
 	}
 #endif
 	int layer_count = 0;
@@ -767,10 +770,6 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #endif
 
 	//fragment_vis[tex2d_xy] = float4(1, 1, 0, 1);
-	//if(num_frags > 0)
-	//	fragment_vis[tex2d_xy] = ConvertUIntToFloat4(fs[0].i_vis);
-	//fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
-	//return;
 
 	//fragment_vis[DTid.xy] = float4(1, 0, 0, 1);
 	//return;

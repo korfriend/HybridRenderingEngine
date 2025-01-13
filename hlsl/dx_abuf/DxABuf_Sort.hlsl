@@ -343,13 +343,13 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 	if (store_to_kbuf) fragment_counter[nDTid.xy] = cnt_stored_fs;
 
 
-	//if (!store_to_kbuf) {
+	if (!store_to_kbuf) {
 		fragment_blendout[nDTid.xy] = vis_out;// float4(1, 0, 0, 1);;
 		//if (cnt_stored_fs > N)
 		//	fragment_blendout[nDTid.xy] = float4(1, 1, 1, 1);
 		//fragment_blendout[nDTid.xy] = ConvertUIntToFloat4(fragments[1].i_vis);
 		fragment_zdepth[nDTid.xy] = fragments[0].z;
-	//}
+	}
 #if TEST == 1
 	//if (g_cbEnv.env_dummy_2 >= 1)
 	{
@@ -393,10 +393,10 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 	}
 	if (store_to_kbuf && !store_all_onto_dymbuf) fragment_counter[nDTid.xy] = storing_num_frags;
 	
-	//if (!store_to_kbuf) {
+	if (!store_to_kbuf) {
 		fragment_blendout[nDTid.xy] = vis_out;
 		fragment_zdepth[nDTid.xy] = fragments[0].z;
-	//}
+	}
 #if TEST == 1
 	if (g_cbEnv.env_dummy_2 >= 1)
 	{
