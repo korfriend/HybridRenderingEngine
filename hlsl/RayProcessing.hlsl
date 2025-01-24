@@ -23,13 +23,6 @@ typedef int Refl_t;
 #define COAT 4
 //enum Refl_t { DIFF = 0, METAL, SPEC, REFR, COAT };  // material types
 
-// CUDA textures containing scene data
-//texture<float4, 1, cudaReadModeElementType> bvhNodesTexture;
-//texture<float4, 1, cudaReadModeElementType> triWoopTexture;
-//texture<float4, 1, cudaReadModeElementType> triNormalsTexture;
-//texture<int, 1, cudaReadModeElementType> triIndicesTexture;
-//texture<float4, 1, cudaReadModeElementType> HDRtexture;
-
 typedef float3 Vec3f;
 typedef float4 Vec4f;
 

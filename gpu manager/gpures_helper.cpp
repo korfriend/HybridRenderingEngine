@@ -550,6 +550,12 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10803), "SORT_Inner_cs_5_0", "cs_5_0"), SORT_Inner_cs_5_0);
 		}
 
+		{
+			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10900), "BVH_Hierarchy_cs_5_0", "cs_5_0"), BVH_Hierarchy_cs_5_0);
+			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10901), "BVH_Primitives_cs_5_0", "cs_5_0"), BVH_Primitives_cs_5_0);
+			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10902), "BVH_Propagateaabb_cs_5_0", "cs_5_0"), BVH_Propagateaabb_cs_5_0);
+		}
+
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11010), "SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0", "ps_5_0"), SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11011), "SR_OIT_FILL_SKBTZ_DASHEDLINE_ps_5_0", "ps_5_0"), SR_OIT_FILL_SKBTZ_DASHEDLINE_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA11012), "SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ps_5_0", "ps_5_0"), SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ps_5_0);

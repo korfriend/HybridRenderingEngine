@@ -35,6 +35,9 @@
     <ClCompile Include="VolumeRenderer_CUSTOM2.cpp">
       <Filter>renderer</Filter>
     </ClCompile>
+    <ClCompile Include="gpu manager\BVHUpdate.cpp">
+      <Filter>gpu manager</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="resource.h">
@@ -58,6 +61,36 @@
       <Filter>hlsl source code\Particle</Filter>
     </ClInclude>
     <ClInclude Include="gpu manager\gpulib.h">
+      <Filter>gpu manager</Filter>
+    </ClInclude>
+    <ClInclude Include="vzm2\Backlog.h">
+      <Filter>vzm2</Filter>
+    </ClInclude>
+    <ClInclude Include="vzm2\CommonInclude.h">
+      <Filter>vzm2</Filter>
+    </ClInclude>
+    <ClInclude Include="vzm2\EventHandler.h">
+      <Filter>vzm2</Filter>
+    </ClInclude>
+    <ClInclude Include="vzm2\Geometrics.h">
+      <Filter>vzm2</Filter>
+    </ClInclude>
+    <ClInclude Include="vzm2\Helpers.h">
+      <Filter>vzm2</Filter>
+    </ClInclude>
+    <ClInclude Include="vzm2\JobSystem.h">
+      <Filter>vzm2</Filter>
+    </ClInclude>
+    <ClInclude Include="vzm2\Math.h">
+      <Filter>vzm2</Filter>
+    </ClInclude>
+    <ClInclude Include="vzm2\Timer.h">
+      <Filter>vzm2</Filter>
+    </ClInclude>
+    <ClInclude Include="hlsl\ShaderInterop_BVH.h">
+      <Filter>hlsl source code</Filter>
+    </ClInclude>
+    <ClInclude Include="gpu manager\BVHUpdate.h">
       <Filter>gpu manager</Filter>
     </ClInclude>
   </ItemGroup>
@@ -130,6 +163,12 @@
     <Filter Include="hlsl source code\sort">
       <UniqueIdentifier>{d2e21266-2138-473d-873f-a249d19e431a}</UniqueIdentifier>
     </Filter>
+    <Filter Include="hlsl source code\BVH">
+      <UniqueIdentifier>{9a7219b5-2081-495e-878a-d20445208234}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="vzm2">
+      <UniqueIdentifier>{f83226b6-e3b9-490f-8ea3-082947b0f4dd}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="vismtv_inbuilt_renderergpudx.rc">
@@ -196,6 +235,15 @@
     </FxCompile>
     <FxCompile Include="hlsl\sort\Sort.hlsl">
       <Filter>hlsl source code\sort</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\bvh\bvh_hierarchyCS.hlsl">
+      <Filter>hlsl source code\BVH</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\bvh\bvh_primitivesCS.hlsl">
+      <Filter>hlsl source code\BVH</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\bvh\bvh_propagateaabbCS.hlsl">
+      <Filter>hlsl source code\BVH</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>

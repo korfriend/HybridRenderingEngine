@@ -35,6 +35,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="gpu manager\BVHUpdate.cpp" />
     <ClCompile Include="gpu manager\gpulib.cpp" />
     <ClCompile Include="SlicerSR.cpp" />
     <ClCompile Include="CurvedSlicerVR.cpp" />
@@ -49,6 +50,7 @@
     <ClCompile Include="VolumeRenderer_CUSTOM2.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="gpu manager\BVHUpdate.h" />
     <ClInclude Include="gpu manager\gpulib.h" />
     <ClInclude Include="gpu manager\gpures_helper.h" />
     <ClInclude Include="gpu manager\gpures_interface.h" />
@@ -59,10 +61,19 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_DX11.0|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClInclude>
+    <ClInclude Include="hlsl\ShaderInterop_BVH.h" />
     <ClInclude Include="renderer\RendererHeader.h" />
     <ClInclude Include="renderer\Sampler.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="vismtv_inbuilt_renderergpudx.h" />
+    <ClInclude Include="vzm2\Backlog.h" />
+    <ClInclude Include="vzm2\CommonInclude.h" />
+    <ClInclude Include="vzm2\EventHandler.h" />
+    <ClInclude Include="vzm2\Geometrics.h" />
+    <ClInclude Include="vzm2\Helpers.h" />
+    <ClInclude Include="vzm2\JobSystem.h" />
+    <ClInclude Include="vzm2\Math.h" />
+    <ClInclude Include="vzm2\Timer.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="vismtv_inbuilt_renderergpudx.rc" />
@@ -112,6 +123,9 @@
     </None>
   </ItemGroup>
   <ItemGroup>
+    <FxCompile Include="hlsl\bvh\bvh_hierarchyCS.hlsl" />
+    <FxCompile Include="hlsl\bvh\bvh_primitivesCS.hlsl" />
+    <FxCompile Include="hlsl\bvh\bvh_propagateaabbCS.hlsl" />
     <FxCompile Include="hlsl\CommonShader.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>

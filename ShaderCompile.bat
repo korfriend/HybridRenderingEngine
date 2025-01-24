@@ -127,3 +127,7 @@ fxc /E SortStep /T cs_5_0 ./hlsl/sort/Sort.hlsl /Fo ./shader_compiled_objs/SORT_
 fxc /E SortInner /T cs_5_0 ./hlsl/sort/Sort.hlsl /Fo ./shader_compiled_objs/SORT_Inner_cs_5_0 /D SORT_INNER=1
 
 
+fxc /E main /T cs_5_0 ./hlsl/BVH/bvh_hierarchyCS.hlsl /Fo ./shader_compiled_objs/BVH_Hierarchy_cs_5_0 
+fxc /E main /T cs_5_0 ./hlsl/BVH/bvh_primitivesCS.hlsl /Fo ./shader_compiled_objs/BVH_Primitives_cs_5_0 
+fxc /E main /T cs_5_0 ./hlsl/BVH/bvh_propagateaabbCS.hlsl /Fo ./shader_compiled_objs/BVH_Propagateaabb_cs_5_0 
+

@@ -16,7 +16,6 @@
 ID3D11Debug *debugDev;
 #endif
 
-#include <math.h>
 #include <iostream>
 
 #ifndef VMSAFE_RELEASE

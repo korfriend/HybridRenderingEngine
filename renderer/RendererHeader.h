@@ -1,4 +1,7 @@
 #pragma once
+#define _HAS_STD_BYTE 0
+
+#include "vzm2/CommonInclude.h"
 #include "VimCommon.h"
 #include "gpures_helper.h"
 
@@ -10,7 +13,6 @@
 #include <chrono>
 #include <fstream>
 #include <iostream>
-#include <cmath>
 #include <windows.h>
 
 using namespace Concurrency;	// for PPL
@@ -21,6 +23,8 @@ using namespace vmobjects;
 using namespace fncontainer;
 using namespace vmgpuinterface;
 using namespace grd_helper;
+
+//using byte = uint8_t;
 
 bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	VmGpuManager* gpu_manager,

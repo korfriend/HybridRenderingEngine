@@ -31,9 +31,11 @@
 //#define __VERSION "1.12" // released at 22.08.08
 //#define __VERSION "1.13" // released at 22.12.05
 //#define __VERSION "1.20" // released at 23.04.03
-#define __VERSION "1.21" // released at 23.07.16
+#define __VERSION "1.30" // released at 25.01.24
 
 #define _HAS_STD_BYTE 0
+
+#include "vzm2/Geometrics.h"
 
 #include <map>
 #include <unordered_map>
@@ -41,13 +43,14 @@
 #include <set>
 #include <string>
 #include <sstream>
-#include <math.h>
 #include <algorithm>
 #include <typeinfo>
 #include <typeindex>
 #include <any>
 
 #include "VimHelpers.h"
+
+using namespace vz;
 
 #define __WINDOWS
 #define __FILEMAP
@@ -170,8 +173,6 @@ typedef glm::fmat4x4 vmmat44f;
 
 namespace vmlog {
 	__vmstatic void InitLog(const std::string& coreName, const std::string& logFileName);
-	__vmstatic void GetLoggerPtr(std::shared_ptr<void>& logger);
-	__vmstatic void SetLogLevel(const int logLevel);
 	__vmstatic void LogInfo(std::string str);
 	__vmstatic void LogWarn(std::string str);
 	__vmstatic void LogErr(std::string str);
@@ -1776,10 +1777,15 @@ namespace vmobjects
 		void UpdateKDTree(); // just for point cloud
 		uint KDTSearchRadius(const vmfloat3& p_src, const float r_sq, const bool is_sorted, std::vector<std::pair<size_t, float>>& ret_matches);
 		uint KDTSearchKnn(const vmfloat3& p_src, const int k, size_t* out_ids, float* out_dists);
+		
 		void UpdateBVHTree(int min_size = -1, int max_size = -1); // for primitives
 		void* GetBVHTree();
 		bool GetBVHTreeBuffers(vmint4** nodePtr, int* nodeSize, vmint4** triWoopPtr, int* triWoopSize,
 			vmint4** triDebugPtr, int* triDebugSize, int** cpuTriIndicesPtr, int* triIndicesSize);
+
+		// VZM2 features
+		const void UpdateBVH(const bool GPUBVHEnabled);
+		const geometrics::BVH& GetBVH() const;
 	};
 }; // namespace vmobjects
 
