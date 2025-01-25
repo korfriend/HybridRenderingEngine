@@ -1,10 +1,11 @@
 #include "BVHUpdate.h"
 #include "vzm2/Backlog.h"
 #include "hlsl/ShaderInterop_BVH.h"
+#include "gpulib.h"
 
 namespace bvh {
 
-	bool UpdateGeometryGPUBVH(VmGpuManager* gpuManager, VmVObjectPrimitive* pobj)
+	bool UpdateGeometryGPUBVH(VmGpuManager* gpuManager, grd_helper::GpuDX11CommonParameters* dx11CommonParams, VmVObjectPrimitive* pobj)
 	{
 		PrimitiveData* primitive = pobj->GetPrimitiveData();
 		assert(primitive);
@@ -15,221 +16,284 @@ namespace bvh {
 			return false;
 		}
 
-		GpuRes gres_vtx, gres_idx;
-
-		gres_vtx.vm_src_id = pobj->GetObjectID();
-		gres_vtx.res_name = string("PRIMITIVE_MODEL_VTX");
-
-		gres_idx.vm_src_id = pobj->GetObjectID();
-		gres_idx.res_name = string("PRIMITIVE_MODEL_IDX");
-
-		if (!gpuManager->UpdateGpuResource(gres_vtx) || !gpuManager->UpdateGpuResource(gres_idx))
+		// gpu resource check
 		{
-			vzlog_error("target primitive MUST be registered in GPU memory!!");
-			return false;
+			GpuRes gres_vtx, gres_idx;
+
+			gres_vtx.vm_src_id = pobj->GetObjectID();
+			gres_vtx.res_name = string("PRIMITIVE_MODEL_VTX");
+
+			gres_idx.vm_src_id = pobj->GetObjectID();
+			gres_idx.res_name = string("PRIMITIVE_MODEL_IDX");
+
+			if (!gpuManager->UpdateGpuResource(gres_vtx) || !gpuManager->UpdateGpuResource(gres_idx))
+			{
+				vzlog_error("target primitive MUST be registered in GPU memory!!");
+				return false;
+			}
 		}
 
 		uint totalTriangles = primitive->num_prims;
-		/*
-		BVHBuffers& bvhBuffers = part_buffers->bvhBuffers;
-		if (totalTriangles > 0 && !bvhBuffers.primitiveCounterBuffer.IsValid())
+
+		GpuRes gres_primitiveCounterBuffer;
+		//GpuRes gres_primitiveCounterBuffer_system;
+		GpuRes gres_primitiveCounterBuffer_dynamic;
+		gres_primitiveCounterBuffer.vm_src_id = pobj->GetObjectID();
+		gres_primitiveCounterBuffer.res_name = string("GPUBVH::primitiveCounterBuffer");
+		if (totalTriangles > 0 && !gpuManager->UpdateGpuResource(gres_primitiveCounterBuffer))
 		{
-			GPUBufferDesc desc;
-			desc.bind_flags = BindFlag::SHADER_RESOURCE;
-			desc.stride = sizeof(uint);
-			desc.size = desc.stride;
-			desc.misc_flags = ResourceMiscFlag::BUFFER_RAW;
-			desc.usage = Usage::DEFAULT;
-			device->CreateBuffer(&desc, nullptr, &bvhBuffers.primitiveCounterBuffer);
-			device->SetName(&bvhBuffers.primitiveCounterBuffer, "GPUBVH::primitiveCounterBuffer");
+			uint stride_bytes = sizeof(uint);
+			gres_primitiveCounterBuffer.rtype = RTYPE_BUFFER;
+			gres_primitiveCounterBuffer.options["USAGE"] = D3D11_USAGE_DEFAULT;
+			gres_primitiveCounterBuffer.options["CPU_ACCESS_FLAG"] = 0u;
+			gres_primitiveCounterBuffer.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
+			gres_primitiveCounterBuffer.options["FORMAT"] = DXGI_FORMAT_R32_TYPELESS;
+			gres_primitiveCounterBuffer.options["RAW_ACCESS"] = 1;
+			gres_primitiveCounterBuffer.res_values.SetParam("NUM_ELEMENTS", (uint)1);
+			gres_primitiveCounterBuffer.res_values.SetParam("STRIDE_BYTES", (uint)stride_bytes);
+
+			gpuManager->GenerateGpuResource(gres_primitiveCounterBuffer);
+
+
+			//gres_primitiveCounterBuffer_system = gres_primitiveCounterBuffer;
+			//gres_primitiveCounterBuffer_system.res_name = string("GPUBVH::primitiveCounterBuffer_SYSTEM");
+			//gres_primitiveCounterBuffer_system.options["USAGE"] = D3D11_USAGE_STAGING;
+			//gres_primitiveCounterBuffer_system.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_READ;
+			//gres_primitiveCounterBuffer_system.options["BIND_FLAG"] = 0u;
+			//
+			//gpuManager->GenerateGpuResource(gres_primitiveCounterBuffer_system);
+
+			gres_primitiveCounterBuffer_dynamic = gres_primitiveCounterBuffer;
+			gres_primitiveCounterBuffer_dynamic.res_name = string("GPUBVH::primitiveCounterBuffer_DYNAMIC");
+			gres_primitiveCounterBuffer_dynamic.options["USAGE"] = D3D11_USAGE_DYNAMIC;
+			gres_primitiveCounterBuffer_dynamic.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
+			gres_primitiveCounterBuffer_dynamic.options["BIND_FLAG"] = 0u;
+
+			gpuManager->GenerateGpuResource(gres_primitiveCounterBuffer_dynamic);
 		}
 		else
 		{
-			bvhBuffers.primitiveCounterBuffer = {};
+			gpuManager->ReleaseGpuResource(gres_primitiveCounterBuffer, false);
+			//gpuManager->ReleaseGpuResource(gres_primitiveCounterBuffer_system, false);
+			gpuManager->ReleaseGpuResource(gres_primitiveCounterBuffer_dynamic, false);
+			return false;
 		}
 
-		if (totalTriangles > bvhBuffers.primitiveCapacity)
+		GpuRes gres_bvhNodeBuffer;
+		gres_bvhNodeBuffer.vm_src_id = pobj->GetObjectID();
+		gres_bvhNodeBuffer.res_name = string("GPUBVH::BVHNodeBuffer");
+		GpuRes gres_bvhParentBuffer;
+		gres_bvhParentBuffer.vm_src_id = pobj->GetObjectID();
+		gres_bvhParentBuffer.res_name = string("GPUBVH::BVHNodeBuffer");
+		GpuRes gres_bvhFlagBuffer;
+		gres_bvhFlagBuffer.vm_src_id = pobj->GetObjectID();
+		gres_bvhFlagBuffer.res_name = string("GPUBVH::BVHFlagBuffer");
+		GpuRes gres_primitiveIDBuffer;
+		gres_primitiveIDBuffer.vm_src_id = pobj->GetObjectID();
+		gres_primitiveIDBuffer.res_name = string("GPUBVH::primitiveIDBuffer");
+		GpuRes gres_primitiveBuffer;
+		gres_primitiveBuffer.vm_src_id = pobj->GetObjectID();
+		gres_primitiveBuffer.res_name = string("GPUBVH::primitiveBuffer");
+		GpuRes gres_primitiveMortonBuffer;
+		gres_primitiveMortonBuffer.vm_src_id = pobj->GetObjectID();
+		gres_primitiveMortonBuffer.res_name = string("GPUBVH::primitiveMortonBuffer");
+
+		uint primitive_capacity = pobj->GetObjParam("primitiveCapacity", 0u);
+		if (totalTriangles > primitive_capacity)
 		{
-			bvhBuffers.primitiveCapacity = std::max(2u, totalTriangles);
+			primitive_capacity = std::max(2u, totalTriangles);
+			pobj->SetObjParam("primitiveCapacity", primitive_capacity);
 
-			GPUBufferDesc desc;
+			gres_bvhNodeBuffer.rtype = RTYPE_BUFFER;
+			gres_bvhNodeBuffer.options["USAGE"] = D3D11_USAGE_DEFAULT;
+			gres_bvhNodeBuffer.options["CPU_ACCESS_FLAG"] = 0u;
+			gres_bvhNodeBuffer.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+			gres_bvhNodeBuffer.options["FORMAT"] = DXGI_FORMAT_UNKNOWN;
+			gres_bvhNodeBuffer.options["MISC"] = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+			gres_bvhNodeBuffer.res_values.SetParam("NUM_ELEMENTS", (uint)primitive_capacity * 2);
+			gres_bvhNodeBuffer.res_values.SetParam("STRIDE_BYTES", (uint)sizeof(BVHNode));
+			gpuManager->GenerateGpuResource(gres_bvhNodeBuffer);
 
-			desc.bind_flags = BindFlag::SHADER_RESOURCE | BindFlag::UNORDERED_ACCESS;
-			desc.stride = sizeof(BVHNode);
-			desc.size = desc.stride * bvhBuffers.primitiveCapacity * 2;
-			desc.misc_flags = ResourceMiscFlag::BUFFER_RAW;
-			desc.usage = Usage::DEFAULT;
-			device->CreateBuffer(&desc, nullptr, &bvhBuffers.bvhNodeBuffer);
-			device->SetName(&bvhBuffers.bvhNodeBuffer, "GPUBVH::BVHNodeBuffer");
+			gres_bvhParentBuffer.rtype = RTYPE_BUFFER;
+			gres_bvhParentBuffer.options["USAGE"] = D3D11_USAGE_DEFAULT;
+			gres_bvhParentBuffer.options["CPU_ACCESS_FLAG"] = 0u;
+			gres_bvhParentBuffer.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+			gres_bvhParentBuffer.options["FORMAT"] = DXGI_FORMAT_UNKNOWN;
+			gres_bvhParentBuffer.options["MISC"] = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+			gres_bvhParentBuffer.res_values.SetParam("NUM_ELEMENTS", (uint)primitive_capacity * 2);
+			gres_bvhParentBuffer.res_values.SetParam("STRIDE_BYTES", (uint)sizeof(uint));
+			gpuManager->GenerateGpuResource(gres_bvhParentBuffer);
 
-			desc.bind_flags = BindFlag::SHADER_RESOURCE | BindFlag::UNORDERED_ACCESS;
-			desc.stride = sizeof(uint);
-			desc.size = desc.stride * bvhBuffers.primitiveCapacity * 2;
-			desc.misc_flags = ResourceMiscFlag::BUFFER_STRUCTURED;
-			desc.usage = Usage::DEFAULT;
-			device->CreateBuffer(&desc, nullptr, &bvhBuffers.bvhParentBuffer);
-			device->SetName(&bvhBuffers.bvhParentBuffer, "GPUBVH::BVHParentBuffer");
+			gres_bvhFlagBuffer.rtype = RTYPE_BUFFER;
+			gres_bvhFlagBuffer.options["USAGE"] = D3D11_USAGE_DEFAULT;
+			gres_bvhFlagBuffer.options["CPU_ACCESS_FLAG"] = 0u;
+			gres_bvhFlagBuffer.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+			gres_bvhFlagBuffer.options["FORMAT"] = DXGI_FORMAT_UNKNOWN;
+			gres_bvhFlagBuffer.options["MISC"] = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+			gres_bvhFlagBuffer.res_values.SetParam("NUM_ELEMENTS", (uint)(((primitive_capacity - 1) + 31) / 32)); // bitfield for internal nodes
+			gres_bvhFlagBuffer.res_values.SetParam("STRIDE_BYTES", (uint)sizeof(uint));
+			gpuManager->GenerateGpuResource(gres_bvhFlagBuffer);
 
-			desc.bind_flags = BindFlag::SHADER_RESOURCE | BindFlag::UNORDERED_ACCESS;
-			desc.stride = sizeof(uint);
-			desc.size = desc.stride * (((bvhBuffers.primitiveCapacity - 1) + 31) / 32); // bitfield for internal nodes
-			desc.misc_flags = ResourceMiscFlag::BUFFER_STRUCTURED;
-			desc.usage = Usage::DEFAULT;
-			device->CreateBuffer(&desc, nullptr, &bvhBuffers.bvhFlagBuffer);
-			device->SetName(&bvhBuffers.bvhFlagBuffer, "GPUBVH::BVHFlagBuffer");
+			gres_primitiveIDBuffer.rtype = RTYPE_BUFFER;
+			gres_primitiveIDBuffer.options["USAGE"] = D3D11_USAGE_DEFAULT;
+			gres_primitiveIDBuffer.options["CPU_ACCESS_FLAG"] = 0u;
+			gres_primitiveIDBuffer.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+			gres_primitiveIDBuffer.options["FORMAT"] = DXGI_FORMAT_UNKNOWN;
+			gres_primitiveIDBuffer.options["MISC"] = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+			gres_primitiveIDBuffer.res_values.SetParam("NUM_ELEMENTS", (uint)primitive_capacity); 
+			gres_primitiveIDBuffer.res_values.SetParam("STRIDE_BYTES", (uint)sizeof(uint));
+			gpuManager->GenerateGpuResource(gres_primitiveIDBuffer);
 
-			desc.bind_flags = BindFlag::SHADER_RESOURCE | BindFlag::UNORDERED_ACCESS;
-			desc.stride = sizeof(uint);
-			desc.size = desc.stride * bvhBuffers.primitiveCapacity;
-			desc.misc_flags = ResourceMiscFlag::BUFFER_STRUCTURED;
-			desc.usage = Usage::DEFAULT;
-			device->CreateBuffer(&desc, nullptr, &bvhBuffers.primitiveIDBuffer);
-			device->SetName(&bvhBuffers.primitiveIDBuffer, "GPUBVH::primitiveIDBuffer");
+			gres_primitiveBuffer.rtype = RTYPE_BUFFER;
+			gres_primitiveBuffer.options["USAGE"] = D3D11_USAGE_DEFAULT;
+			gres_primitiveBuffer.options["CPU_ACCESS_FLAG"] = 0u;
+			gres_primitiveBuffer.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+			gres_primitiveBuffer.options["FORMAT"] = DXGI_FORMAT_UNKNOWN;
+			gres_primitiveBuffer.options["MISC"] = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+			gres_primitiveBuffer.res_values.SetParam("NUM_ELEMENTS", (uint)primitive_capacity);
+			gres_primitiveBuffer.res_values.SetParam("STRIDE_BYTES", (uint)sizeof(BVHPrimitive));
+			gpuManager->GenerateGpuResource(gres_primitiveBuffer);
 
-			desc.bind_flags = BindFlag::SHADER_RESOURCE | BindFlag::UNORDERED_ACCESS;
-			desc.stride = sizeof(uint);
-			desc.size = desc.stride * bvhBuffers.primitiveCapacity;
-			desc.misc_flags = ResourceMiscFlag::BUFFER_STRUCTURED;
-
-			desc.bind_flags = BindFlag::SHADER_RESOURCE | BindFlag::UNORDERED_ACCESS;
-			desc.stride = sizeof(BVHPrimitive);
-			desc.size = desc.stride * bvhBuffers.primitiveCapacity;
-			desc.misc_flags = ResourceMiscFlag::BUFFER_RAW;
-			desc.usage = Usage::DEFAULT;
-			device->CreateBuffer(&desc, nullptr, &bvhBuffers.primitiveBuffer);
-			device->SetName(&bvhBuffers.primitiveBuffer, "GPUBVH::primitiveBuffer");
-
-			desc.bind_flags = BindFlag::SHADER_RESOURCE | BindFlag::UNORDERED_ACCESS;
-			desc.size = desc.stride * bvhBuffers.primitiveCapacity;
-			desc.misc_flags = ResourceMiscFlag::BUFFER_STRUCTURED;
-			desc.usage = Usage::DEFAULT;
-			desc.stride = sizeof(float); // morton buffer is float because sorting must be done and gpu sort operates on floats for now!
-			device->CreateBuffer(&desc, nullptr, &bvhBuffers.primitiveMortonBuffer);
-			device->SetName(&bvhBuffers.primitiveMortonBuffer, "GPUBVH::primitiveMortonBuffer");
+			gres_primitiveMortonBuffer.rtype = RTYPE_BUFFER;
+			gres_primitiveMortonBuffer.options["USAGE"] = D3D11_USAGE_DEFAULT;
+			gres_primitiveMortonBuffer.options["CPU_ACCESS_FLAG"] = 0u;
+			gres_primitiveMortonBuffer.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+			gres_primitiveMortonBuffer.options["FORMAT"] = DXGI_FORMAT_UNKNOWN;
+			gres_primitiveMortonBuffer.options["MISC"] = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+			gres_primitiveMortonBuffer.res_values.SetParam("NUM_ELEMENTS", (uint)primitive_capacity);
+			gres_primitiveMortonBuffer.res_values.SetParam("STRIDE_BYTES", (uint)sizeof(float));
+			gpuManager->GenerateGpuResource(gres_primitiveMortonBuffer);
+		}
+		else
+		{
+			vzlog_assert(gpuManager->UpdateGpuResource(gres_bvhNodeBuffer), "gres_bvhNodeBuffer");
+			vzlog_assert(gpuManager->UpdateGpuResource(gres_bvhParentBuffer), "gres_bvhParentBuffer");
+			vzlog_assert(gpuManager->UpdateGpuResource(gres_bvhFlagBuffer), "gres_bvhFlagBuffer");
+			vzlog_assert(gpuManager->UpdateGpuResource(gres_primitiveIDBuffer), "gres_primitiveIDBuffer");
+			vzlog_assert(gpuManager->UpdateGpuResource(gres_primitiveBuffer), "gres_primitiveBuffer");
+			vzlog_assert(gpuManager->UpdateGpuResource(gres_primitiveMortonBuffer), "gres_primitiveMortonBuffer");
 		}
 
+		__ID3D11DeviceContext* dx11DeviceImmContext = dx11CommonParams->dx11DeviceImmContext;
 
 		// ----- build ----- 
-		auto range = profiler::BeginRangeGPU("BVH Rebuild", &cmd);
+		dx11CommonParams->GpuProfile("BVH Rebuild");
 
 		uint32_t primitiveCount = 0;
 
-		device->EventBegin("BVH - Primitive (GEOMETRY-ONLY) Builder", cmd);
+		ID3D11Buffer* cbuf_BVHPushConstants = dx11CommonParams->get_cbuf("BVHPushConstants");
+		D3D11_MAPPED_SUBRESOURCE mapped_pushConstants;
+
+		ID3D11UnorderedAccessView* dx11UAVs_NULL[10] = { };
+		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 10, dx11UAVs_NULL, NULL);
+		ID3D11ShaderResourceView* dx11SRVs_NULL[10] = { };
+		dx11DeviceImmContext->CSSetShaderResources(0, 10, dx11SRVs_NULL);
+
+		// BVH - Primitive (GEOMETRY-ONLY) Builder //
 		{
-			device->BindComputeShader(&rcommon::shaders[CSTYPE_BVH_PRIMITIVES_GEOMETRYONLY], cmd);
-			const GPUResource* uavs[] = {
-				&bvhBuffers.primitiveIDBuffer,
-				&bvhBuffers.primitiveBuffer,
-				&bvhBuffers.primitiveMortonBuffer,
+			ID3D11UnorderedAccessView* uavs[3] = {
+					  (ID3D11UnorderedAccessView*)gres_primitiveIDBuffer.alloc_res_ptrs[DTYPE_UAV]
+					, (ID3D11UnorderedAccessView*)gres_primitiveBuffer.alloc_res_ptrs[DTYPE_UAV]
+					, (ID3D11UnorderedAccessView*)gres_primitiveMortonBuffer.alloc_res_ptrs[DTYPE_UAV]
 			};
-			device->BindUAVs(uavs, 0, arraysize(uavs), cmd);
+			
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, arraysize(uavs), uavs, nullptr);
 
 			BVHPushConstants push;
-			push.geometryIndex = geometry->geometryOffset;
-			push.subsetIndex = i;
 			push.primitiveCount = totalTriangles;
-			push.instanceIndex = 0; // geometry-binding BVH does NOT require instance!
 
-			const geometrics::AABB& aabb = prim.GetAABB();
+			geometrics::AABB aabb(XMFLOAT3(primitive->aabb_os.pos_min.x, primitive->aabb_os.pos_min.x, primitive->aabb_os.pos_min.x), 
+				XMFLOAT3(primitive->aabb_os.pos_max.x, primitive->aabb_os.pos_max.x, primitive->aabb_os.pos_max.x));
 			push.aabb_min = aabb.getMin();
 			push.aabb_extents_rcp = aabb.getWidth();
 			push.aabb_extents_rcp.x = 1.f / push.aabb_extents_rcp.x;
 			push.aabb_extents_rcp.y = 1.f / push.aabb_extents_rcp.y;
 			push.aabb_extents_rcp.z = 1.f / push.aabb_extents_rcp.z;
 
-			device->PushConstants(&push, sizeof(push), cmd);
+			dx11DeviceImmContext->Map(cbuf_BVHPushConstants, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_pushConstants);
+			BVHPushConstants* cbData = (BVHPushConstants*)mapped_pushConstants.pData;
+			memcpy(cbData, &push, sizeof(BVHPushConstants));
+			dx11DeviceImmContext->Unmap(cbuf_BVHPushConstants, 0);
+			dx11DeviceImmContext->CSSetConstantBuffers(0, 1, &cbuf_BVHPushConstants);
 
 			primitiveCount += push.primitiveCount;
 
-			device->Dispatch(
-				(push.primitiveCount + BVH_BUILDER_GROUPSIZE - 1) / BVH_BUILDER_GROUPSIZE,
+			dx11DeviceImmContext->CSSetShader(GETCS(BVH_Primitives_cs_5_0), NULL, 0);
+			dx11DeviceImmContext->Dispatch((push.primitiveCount + BVH_BUILDER_GROUPSIZE - 1) / BVH_BUILDER_GROUPSIZE,
 				1,
+				1);
+			dx11DeviceImmContext->Flush();
+		}
+
+		// update primitiveCounterBuffer
+		{
+			D3D11_MAPPED_SUBRESOURCE d11MappedRes;
+			dx11DeviceImmContext->Map((ID3D11Resource*)gres_primitiveCounterBuffer_dynamic.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes);
+			*(uint*)d11MappedRes.pData = primitiveCount;
+			dx11DeviceImmContext->Unmap((ID3D11Resource*)gres_primitiveCounterBuffer_dynamic.alloc_res_ptrs[DTYPE_RES], 0);
+
+			dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_primitiveCounterBuffer.alloc_res_ptrs[DTYPE_RES], 
+				(ID3D11Buffer*)gres_primitiveCounterBuffer_dynamic.alloc_res_ptrs[DTYPE_RES]);
+		}
+
+		// BVH - Sort Primitive Mortons
+		{
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 10, dx11UAVs_NULL, NULL);
+			gpulib::sort::Sort(gpuManager, dx11CommonParams,
+				primitiveCount, gres_primitiveMortonBuffer, gres_primitiveCounterBuffer, 0, gres_primitiveIDBuffer);
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 10, dx11UAVs_NULL, NULL);
+
+		}
+
+		// BVH - Build Hierarchy
+		{
+			ID3D11UnorderedAccessView* uavs[3] = {
+				  (ID3D11UnorderedAccessView*)gres_bvhNodeBuffer.alloc_res_ptrs[DTYPE_UAV]
+				, (ID3D11UnorderedAccessView*)gres_bvhParentBuffer.alloc_res_ptrs[DTYPE_UAV]
+				, (ID3D11UnorderedAccessView*)gres_bvhFlagBuffer.alloc_res_ptrs[DTYPE_UAV]
+			};
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, arraysize(uavs), uavs, nullptr);
+
+			ID3D11ShaderResourceView* srvs[3] = {
+				  (ID3D11ShaderResourceView*)gres_primitiveCounterBuffer.alloc_res_ptrs[DTYPE_SRV]
+				, (ID3D11ShaderResourceView*)gres_primitiveIDBuffer.alloc_res_ptrs[DTYPE_SRV]
+				, (ID3D11ShaderResourceView*)gres_primitiveMortonBuffer.alloc_res_ptrs[DTYPE_SRV]
+			};
+			dx11DeviceImmContext->CSSetShaderResources(0, arraysize(srvs), srvs);
+
+
+			dx11DeviceImmContext->CSSetShader(GETCS(BVH_Hierarchy_cs_5_0), NULL, 0); 
+			dx11DeviceImmContext->Dispatch((primitiveCount + BVH_BUILDER_GROUPSIZE - 1) / BVH_BUILDER_GROUPSIZE,
 				1,
-				cmd
-			);
-
-			GPUBarrier barriers[] = {
-				GPUBarrier::Memory()
-			};
-			device->Barrier(barriers, arraysize(barriers), cmd);
+				1);
+			dx11DeviceImmContext->Flush();
 		}
 
+		// BVH - Propagate AABB
 		{
-			GPUBarrier barriers[] = {
-				GPUBarrier::Buffer(&bvhBuffers.primitiveCounterBuffer, ResourceState::SHADER_RESOURCE, ResourceState::COPY_DST),
+			ID3D11UnorderedAccessView* uavs[2] = {
+				  (ID3D11UnorderedAccessView*)gres_bvhNodeBuffer.alloc_res_ptrs[DTYPE_UAV]
+				, (ID3D11UnorderedAccessView*)gres_bvhFlagBuffer.alloc_res_ptrs[DTYPE_UAV]
 			};
-			device->Barrier(barriers, arraysize(barriers), cmd);
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, arraysize(uavs), uavs, nullptr);
+
+			ID3D11ShaderResourceView* srvs[4] = {
+				  (ID3D11ShaderResourceView*)gres_primitiveCounterBuffer.alloc_res_ptrs[DTYPE_SRV]
+				, (ID3D11ShaderResourceView*)gres_primitiveIDBuffer.alloc_res_ptrs[DTYPE_SRV]
+				, (ID3D11ShaderResourceView*)gres_primitiveBuffer.alloc_res_ptrs[DTYPE_SRV]
+				, (ID3D11ShaderResourceView*)gres_bvhParentBuffer.alloc_res_ptrs[DTYPE_SRV]
+			};
+			dx11DeviceImmContext->CSSetShaderResources(0, arraysize(srvs), srvs);
+
+			dx11DeviceImmContext->CSSetShader(GETCS(BVH_Propagateaabb_cs_5_0), NULL, 0);
+			dx11DeviceImmContext->Dispatch((primitiveCount + BVH_BUILDER_GROUPSIZE - 1) / BVH_BUILDER_GROUPSIZE,
+				1,
+				1);
+			dx11DeviceImmContext->Flush();
 		}
-		device->UpdateBuffer(&bvhBuffers.primitiveCounterBuffer, &primitiveCount, cmd);
-		{
-			GPUBarrier barriers[] = {
-				GPUBarrier::Buffer(&bvhBuffers.primitiveCounterBuffer, ResourceState::COPY_DST, ResourceState::SHADER_RESOURCE),
-			};
-			device->Barrier(barriers, arraysize(barriers), cmd);
-		}
 
-		device->EventEnd(cmd);
+		dx11CommonParams->GpuProfile("BVH Rebuild", true);
 
-		device->EventBegin("BVH - Sort Primitive Mortons", cmd);
-		gpusortlib::Sort(primitiveCount, bvhBuffers.primitiveMortonBuffer, bvhBuffers.primitiveCounterBuffer, 0, bvhBuffers.primitiveIDBuffer, cmd);
-		device->EventEnd(cmd);
-
-		device->EventBegin("BVH - Build Hierarchy", cmd);
-		{
-			device->BindComputeShader(&rcommon::shaders[CSTYPE_BVH_HIERARCHY], cmd);
-			const GPUResource* uavs[] = {
-				&bvhBuffers.bvhNodeBuffer,
-				&bvhBuffers.bvhParentBuffer,
-				&bvhBuffers.bvhFlagBuffer
-			};
-			device->BindUAVs(uavs, 0, arraysize(uavs), cmd);
-
-			const GPUResource* res[] = {
-				&bvhBuffers.primitiveCounterBuffer,
-				&bvhBuffers.primitiveIDBuffer,
-				&bvhBuffers.primitiveMortonBuffer,
-			};
-			device->BindResources(res, 0, arraysize(res), cmd);
-
-			device->Dispatch((primitiveCount + BVH_BUILDER_GROUPSIZE - 1) / BVH_BUILDER_GROUPSIZE, 1, 1, cmd);
-
-			GPUBarrier barriers[] = {
-				GPUBarrier::Memory()
-			};
-			device->Barrier(barriers, arraysize(barriers), cmd);
-		}
-		device->EventEnd(cmd);
-
-		device->EventBegin("BVH - Propagate AABB", cmd);
-		{
-			GPUBarrier barriers[] = {
-				GPUBarrier::Memory()
-			};
-			device->Barrier(barriers, arraysize(barriers), cmd);
-
-			device->BindComputeShader(&rcommon::shaders[CSTYPE_BVH_PROPAGATEAABB], cmd);
-			const GPUResource* uavs[] = {
-				&bvhBuffers.bvhNodeBuffer,
-				&bvhBuffers.bvhFlagBuffer,
-			};
-			device->BindUAVs(uavs, 0, arraysize(uavs), cmd);
-
-			const GPUResource* res[] = {
-				&bvhBuffers.primitiveCounterBuffer,
-				&bvhBuffers.primitiveIDBuffer,
-				&bvhBuffers.primitiveBuffer,
-				&bvhBuffers.bvhParentBuffer,
-			};
-			device->BindResources(res, 0, arraysize(res), cmd);
-
-			device->Dispatch((primitiveCount + BVH_BUILDER_GROUPSIZE - 1) / BVH_BUILDER_GROUPSIZE, 1, 1, cmd);
-
-			device->Barrier(barriers, arraysize(barriers), cmd);
-		}
-		device->EventEnd(cmd);
-
-		profiler::EndRange(range); // BVH rebuild
-		/**/
 		return true;
 	}
 }

@@ -1,5 +1,6 @@
 #include "gpures_helper.h"
 #include "D3DCompiler.h"
+#include "hlsl/ShaderInterop_BVH.h"
 #include <iostream>
 #include <fstream>
 
@@ -350,6 +351,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		CREATE_AND_SET(CB_Emitter);
 		CREATE_AND_SET(CB_Undercut);
 		CREATE_AND_SET(CB_SortConstants);
+		CREATE_AND_SET(BVHPushConstants);
 	}
 	if (hr != S_OK)
 	{
@@ -1524,8 +1526,9 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 			gres_vtx.rtype = RTYPE_BUFFER;
 			gres_vtx.options["USAGE"] = D3D11_USAGE_DEFAULT;
 			gres_vtx.options["CPU_ACCESS_FLAG"] = NULL; // D3D11_CPU_ACCESS_WRITE;// | D3D11_CPU_ACCESS_READ;
-			gres_vtx.options["BIND_FLAG"] = D3D11_BIND_VERTEX_BUFFER;
+			gres_vtx.options["BIND_FLAG"] = D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_SHADER_RESOURCE;
 			//gres_vtx.options["FORMAT"] = DXGI_FORMAT_R32G32B32_FLOAT; // buffer does not need the specific format except UNKNOWN (used for STRUCTURED buffer)
+			gres_vtx.options["FORMAT"] = DXGI_FORMAT_R32_FLOAT;
 			gres_vtx.res_values.SetParam("NUM_ELEMENTS", (uint)prim_data->num_vtx);
 			gres_vtx.res_values.SetParam("STRIDE_BYTES", (uint)stride_bytes);
 
@@ -1613,7 +1616,7 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 			gres_idx.rtype = RTYPE_BUFFER;
 			gres_idx.options["USAGE"] = D3D11_USAGE_DEFAULT;
 			gres_idx.options["CPU_ACCESS_FLAG"] = NULL;
-			gres_idx.options["BIND_FLAG"] = D3D11_BIND_INDEX_BUFFER;
+			gres_idx.options["BIND_FLAG"] = D3D11_BIND_INDEX_BUFFER | D3D11_BIND_SHADER_RESOURCE;
 			gres_idx.options["FORMAT"] = DXGI_FORMAT_R32_UINT;
 			gres_idx.res_values.SetParam("NUM_ELEMENTS", (uint)prim_data->num_vidx);
 			gres_idx.res_values.SetParam("STRIDE_BYTES", (uint)sizeof(uint));

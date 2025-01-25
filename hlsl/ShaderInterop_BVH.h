@@ -75,16 +75,11 @@ using int4 = XMINT4;
 
 struct BVHPushConstants
 {
-	uint instanceIndex;
-	uint subsetIndex;
-	uint primitiveCount;
-	uint primitiveOffset;
-
 	// GEOMETRYSPACE only (for a single geometry)
 	float3 aabb_min;
-	uint padding0;
+	uint primitiveCount;
 	float3 aabb_extents_rcp;	// enclosing AABB 1.0f / abs(max - min)
-	uint padding1;
+	uint padding0;
 };
 
 static const uint BVH_BUILDER_GROUPSIZE = 64;
