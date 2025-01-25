@@ -4,6 +4,10 @@
 #define __EXIT return
 #endif
 
+//#define BVH_LEGACY
+
+#ifdef BVH_LEGACY
+
 #define STACK_SIZE  64  // Size of the traversal stack in local memory.
 #define M_PI 3.1415926535897932384626422832795028841971f
 #define TWO_PI 6.2831853071795864769252867665590057683943f
@@ -170,13 +174,33 @@ Vec3f intersectRayTriangle(const Vec3f v0, const Vec3f v1, const Vec3f v2, const
 	return Vec3f(u, v, t); //true;
 }
 
-Buffer<float3> buf_curvePoints : register(t30);
-Buffer<float3> buf_curveTangents : register(t31);
-
 Buffer<float4> buf_gpuNodes : register(t0);
 Buffer<float4> buf_gpuTriWoops : register(t1);
 Buffer<float4> buf_gpuDebugTris : register(t2);
 Buffer<int> buf_gpuTriIndices : register(t3);
+
+#else // BVH_LEGACY
+
+#include "Globals.hlsli"
+#include "ShaderInterop_BVH.h"
+
+ByteAddressBuffer primitiveCounterBuffer : register(t0);
+StructuredBuffer<uint> primitiveIDBuffer : register(t1);
+StructuredBuffer<float> primitiveMortonBuffer : register(t2); // float because it was sorted
+StructuredBuffer<BVHNode> bvhNodeBuffer : register(t3);
+StructuredBuffer<BVHPrimitive> primitiveBuffer : register(t4);
+StructuredBuffer<uint> bvhParentBuffer : register(t5);
+StructuredBuffer<uint> bvhFlagBuffer : register(t6);
+
+Buffer<float> vertexBuffer : register(t10);
+Buffer<uint> indexBuffer : register(t11);
+
+StructuredBuffer<BVHPushConstants> pushBVH : register(t100);
+
+#endif // BVH_LEGACY
+
+Buffer<float3> buf_curvePoints : register(t30);
+Buffer<float3> buf_curveTangents : register(t31);
 
 // magic values
 #define WILDCARD_DEPTH_OUTLINE 0x12345678
@@ -215,6 +239,8 @@ RWTexture2D<float> fragment_zdepth : register(u4);
 #endif
 
 // modified intersection routine (uses regular instead of woopified triangles) for debugging purposes
+
+#ifdef BVH_LEGACY
 
 int DEBUGintersectBVHandTriangles(const in float4 rayorig, const in float4 raydir,
 	const in Buffer<float4> gpuNodes, const in Buffer<float4> gpuDebugTris, const in Buffer<int> gpuTriIndices, // const in Buffer<float4> gpuTriWoops,
@@ -754,6 +780,232 @@ int intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 	return 0;
 }
 
+#else // BVH_LEGACY
+
+struct RayDesc
+{
+	float3 Origin;
+	float TMin;
+	float3 Direction;
+	float TMax;
+};
+
+struct RayHit
+{
+	float2 bary;
+	float distance;
+	PrimitiveID primitiveID;
+	bool is_backface;
+};
+
+inline RayHit CreateRayHit()
+{
+	RayHit hit;
+	hit.bary = 0;
+	hit.distance = FLT_MAX;
+	hit.is_backface = false;
+	return hit;
+}
+
+//ByteAddressBuffer primitiveCounterBuffer : register(t0);
+//StructuredBuffer<uint> primitiveIDBuffer : register(t1);
+//StructuredBuffer<float> primitiveMortonBuffer : register(t2); // float because it was sorted
+//StructuredBuffer<BVHNode> bvhNodeBuffer : register(t3);
+//StructuredBuffer<uint> bvhParentBuffer : register(t4);
+//StructuredBuffer<uint> bvhFlagBuffer : register(t5);
+//Buffer<float> vertexBuffer : register(t10);
+//Buffer<uint> indexBuffer : register(t11);
+//StructuredBuffer<BVHPushConstants> pushBVH : register(t100);
+
+struct Surface
+{
+	// Fill these yourself:
+	float3 P;
+	float3 N;
+
+	float3 data0;
+	float3 data1;
+	float3 data2;
+
+	float2 bary;
+
+	inline void init()
+	{
+		P = 0;
+		N = 0;
+	}
+
+	bool preload_internal(PrimitiveID prim)
+	{
+		uint startIndex = prim.primitiveIndex * 3;
+		if (startIndex >= pushBVH[0].primitiveCount)
+			return false;
+		uint i0 = indexBuffer[startIndex + 0];
+		uint i1 = indexBuffer[startIndex + 1];
+		uint i2 = indexBuffer[startIndex + 2];
+
+		uint vtxIndex0 = i0 * pushBVH[0].vertexStride;
+		uint vtxIndex1 = i1 * pushBVH[0].vertexStride;
+		uint vtxIndex2 = i2 * pushBVH[0].vertexStride;
+		data0 = float3(vertexBuffer[vtxIndex0 + 0], vertexBuffer[vtxIndex0 + 1], vertexBuffer[vtxIndex0 + 2]);
+		data1 = float3(vertexBuffer[vtxIndex1 + 0], vertexBuffer[vtxIndex1 + 1], vertexBuffer[vtxIndex1 + 2]);
+		data2 = float3(vertexBuffer[vtxIndex2 + 0], vertexBuffer[vtxIndex2 + 1], vertexBuffer[vtxIndex2 + 2]);
+		return true;
+	}
+
+	bool load(in PrimitiveID prim, in float2 barycentrics)
+	{
+		if (!preload_internal(prim))
+			return false;
+
+		bary = barycentrics;
+
+		P = attribute_at_bary(data0, data1, data2, bary);
+		N = cross(data1 - data0, data2 - data0);
+		N = normalize(N);
+
+		return true;
+	}
+
+};
+
+#ifndef RAYTRACE_STACKSIZE
+#define RAYTRACE_STACKSIZE 32
+#endif // RAYTRACE_STACKSIZE
+
+inline void IntersectTriangle(
+	in RayDesc ray,
+	inout RayHit bestHit,
+	in BVHPrimitive prim,
+	inout RNG rng
+)
+{
+	float3 v0v1 = prim.v1() - prim.v0();
+	float3 v0v2 = prim.v2() - prim.v0();
+	float3 pvec = cross(ray.Direction, v0v2);
+	float det = dot(v0v1, pvec);
+
+	// ray and triangle are parallel if det is close to 0
+	if (abs(det) < 0.000001)
+		return;
+	float invDet = rcp(det);
+
+	float3 tvec = ray.Origin - prim.v0();
+	float u = dot(tvec, pvec) * invDet;
+	if (u < 0 || u > 1)
+		return;
+
+	float3 qvec = cross(tvec, v0v1);
+	float v = dot(ray.Direction, qvec) * invDet;
+	if (v < 0 || u + v > 1)
+		return;
+
+	float t = dot(v0v2, qvec) * invDet;
+
+	if (t >= ray.TMin && t <= bestHit.distance)
+	{
+		RayHit hit;
+		hit.distance = t;
+		hit.primitiveID = prim.primitiveID();
+		hit.bary = float2(u, v);
+		hit.is_backface = det > 0;
+
+		bestHit = hit;
+	}
+}
+
+inline bool IntersectNode(
+	in RayDesc ray,
+	in BVHNode box,
+	in float3 rcpDirection,
+	in float primitive_best_distance
+)
+{
+	const float t0 = (box.min.x - ray.Origin.x) * rcpDirection.x;
+	const float t1 = (box.max.x - ray.Origin.x) * rcpDirection.x;
+	const float t2 = (box.min.y - ray.Origin.y) * rcpDirection.y;
+	const float t3 = (box.max.y - ray.Origin.y) * rcpDirection.y;
+	const float t4 = (box.min.z - ray.Origin.z) * rcpDirection.z;
+	const float t5 = (box.max.z - ray.Origin.z) * rcpDirection.z;
+	const float tmin = max(max(min(t0, t1), min(t2, t3)), min(t4, t5)); // close intersection point's distance on ray
+	const float tmax = min(min(max(t0, t1), max(t2, t3)), max(t4, t5)); // far intersection point's distance on ray
+
+	if (tmax < 0 || tmin > tmax || tmin > primitive_best_distance) // this also checks if a better primitive was already hit or not and skips if yes
+	{
+		return false;
+	}
+	else
+	{
+		return true;
+	}
+}
+
+// Returns the closest hit primitive if any (useful for generic trace). If nothing was hit, then rayHit.distance will be equal to FLT_MAX
+inline RayHit TraceRay_Closest(RayDesc ray, uint mask, inout RNG rng, uint groupIndex = 0)
+{
+	const float3 rcpDirection = rcp(ray.Direction);
+
+	RayHit bestHit = CreateRayHit();
+
+#ifndef RAYTRACE_STACK_SHARED
+	// Emulated stack for tree traversal:
+	uint stack[RAYTRACE_STACKSIZE][1];
+#endif // RAYTRACE_STACK_SHARED
+	uint stackpos = 0;
+
+	const uint primitiveCount = primitiveCounterBuffer.Load(0);
+	const uint leafNodeOffset = primitiveCount - 1;
+
+	// push root node
+	stack[stackpos++][groupIndex] = 0;
+
+	do {
+		// pop untraversed node
+		const uint nodeIndex = stack[--stackpos][groupIndex];
+
+		//BVHNode node = bvhNodeBuffer.Load<BVHNode>(nodeIndex * sizeof(BVHNode));
+		BVHNode node = bvhNodeBuffer[nodeIndex];
+
+		if (IntersectNode(ray, node, rcpDirection, bestHit.distance))
+		{
+			if (nodeIndex >= leafNodeOffset)
+			{
+				// Leaf node
+				const uint primitiveID = node.LeftChildIndex;
+				//const BVHPrimitive prim = primitiveBuffer.Load<BVHPrimitive>(primitiveID * sizeof(BVHPrimitive));
+				const BVHPrimitive prim = primitiveBuffer[primitiveID];
+				if (prim.flags & mask)
+				{
+					IntersectTriangle(ray, bestHit, prim, rng);
+				}
+			}
+			else
+			{
+				// Internal node
+				if (stackpos < RAYTRACE_STACKSIZE - 1)
+				{
+					// push left child
+					stack[stackpos++][groupIndex] = node.LeftChildIndex;
+					// push right child
+					stack[stackpos++][groupIndex] = node.RightChildIndex;
+				}
+				else
+				{
+					// stack overflow, terminate
+					break;
+				}
+			}
+
+		}
+
+	} while (stackpos > 0);
+
+
+	return bestHit;
+}
+
+#endif // BVH_LEGACY
+
 #if DX10_0 == 1
 PS_FILL_OUTPUT_NO_DS ThickSlicePathTracer(VS_OUTPUT input)
 #else
@@ -906,7 +1158,6 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	//float3 nl; // oriented normal
 	//float3 nextdir; // ray direction of next path segment
 	float3 trinormal = float3(0, 0, 0);
-	Refl_t refltype;
 	float ray_tmin = 0.0001f;
 	float ray_tmax = 1e20; // use thickness!!
 	float ray_tmin2 = 0.0001f;
@@ -915,6 +1166,11 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	// intersect all triangles in the scene stored in BVH
 	int debugbingo = 0;
 	float planeThickness = g_cbCamState.far_plane;// g_cbCurvedSlicer.thicknessPlane;// g_cbCamState.far_plane;
+
+#ifndef BVH_LEGACY
+	RNG rng;
+	rng.init((uint2)ss_xy, ss_xy.x * ss_xy.y + ss_xy.x + ss_xy.y + 1);
+#endif
 
 #if DX10_0 == 1
 #else
@@ -990,9 +1246,27 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		float4 test_rayorig = float4(ray_orig_os, ray_tmin);
 		float4 test_raydir = float4(updir, ray_tmax);
 
+#ifdef BVH_LEGACY
 		intersectBVHandTriangles(test_rayorig, test_raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
+#else
+		RayDesc ray;
+		ray.Origin = ray_orig_os;
+		ray.Direction = updir;
+		ray.TMin = ray_tmin;
+		ray.TMax = ray_tmax;
+
+		RayHit hit = TraceRay_Closest(ray, ~0u, rng);
+		hitTriIdx = hit.distance >= FLT_MAX - 1 ? -1 : hit.primitiveID.primitiveIndex;
+		hitDistance = hit.distance;
+
+#endif
+
 		if (hitTriIdx >= 0) {
+#ifdef BVH_LEGACY
 			bool localInside = dot(trinormal, test_raydir.xyz) > 0;
+#else
+			bool localInside = hit.is_backface;
+#endif
 #if PICKING == 1 
 			if (localInside) checkCountInsideVertical++;
 #else
@@ -1014,7 +1288,10 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		}
 
 		test_raydir = float4(-updir, ray_tmax);
+#ifdef BVH_LEGACY
 		intersectBVHandTriangles(test_rayorig, test_raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
+#else
+#endif
 
 		if (hitTriIdx >= 0) {
 			bool localInside = dot(trinormal, test_raydir.xyz) > 0;
@@ -1050,7 +1327,10 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 #endif
 		float4 test_rayorig = float4(ray_orig_os, ray_tmin);
 		float4 test_raydir = float4(rightdir, ray_tmax);
+#ifdef BVH_LEGACY
 		intersectBVHandTriangles(test_rayorig, test_raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
+#else
+#endif
 		if (hitTriIdx >= 0) {
 			bool localInside = dot(trinormal, test_raydir.xyz) > 0;
 #if PICKING == 1 
@@ -1075,7 +1355,10 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 		}
 
 		test_raydir = float4(-rightdir, ray_tmax);
+#ifdef BVH_LEGACY
 		intersectBVHandTriangles(test_rayorig, test_raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
+#else
+#endif
 
 		if (hitTriIdx >= 0) {
 			bool localInside = dot(trinormal, test_raydir.xyz) > 0;
@@ -1143,8 +1426,12 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 	bool faceDirs[HITBUFFERSIZE];
 	[unroll]
 	for (int i = 0; i < HITBUFFERSIZE; i++) {
+
+#ifdef BVH_LEGACY
 		//DEBUGintersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuDebugTris, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
 		intersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
+#else
+#endif
 		if (hitTriIdx < 0)
 			break;
 
@@ -1199,7 +1486,10 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID)
 			float3 trinormal2 = float3(0, 0, 0);
 			float hitDistance2 = 1e20;
 			int hitTriIdx2 = -1;
+#ifdef BVH_LEGACY
 			intersectBVHandTriangles(rayorig2, raydir2, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx2, hitDistance2, debugbingo, trinormal2, false);
+#else
+#endif
 			if (hitTriIdx2 < 0) {
 				__EXIT;
 			}
@@ -1560,7 +1850,10 @@ void ApplyUndercutColor(inout float4 v_rgba, in float3 f3PosWS)
 	float4 rayorig = float4(ray_orig_os + ray_dir_os * 0.00f, ray_tmin);
 	float4 raydir = float4(ray_dir_os, ray_tmax);
 	int hitCount = 0;
+#ifdef BVH_LEGACY
 	intersectBVHandTriangles(rayorig, raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, hitDistance, debugbingo, trinormal, false);
+#else
+#endif
 
 	if (hitTriIdx >= 0) {
 		v_rgba.rgb *= ConvertUIntToFloat4(g_cbUndercut.icolor).rgb;

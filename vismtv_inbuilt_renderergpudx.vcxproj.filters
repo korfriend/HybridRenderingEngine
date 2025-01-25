@@ -116,6 +116,9 @@
     <None Include="ShaderCompile.bat">
       <Filter>bat</Filter>
     </None>
+    <None Include="hlsl\Globals.hlsli">
+      <Filter>hlsl source code</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="resources">

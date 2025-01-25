@@ -1,7 +1,7 @@
 #include "../ShaderInterop_BVH.h"
 
 
-Buffer<float> positionBuffer : register(t0);
+Buffer<float> vertexBuffer : register(t0);
 Buffer<uint> indexBuffer : register(t1);
 
 RWStructuredBuffer<uint> primitiveIDBuffer : register(u0);
@@ -38,18 +38,20 @@ void main(uint3 DTid : SV_DispatchThreadID, uint groupIndex : SV_GroupIndex)
 	//float3 P0 = bindless_buffers_float4[descriptor_index(geometry.vb_pos_wind)][i0].xyz;
 	//float3 P1 = bindless_buffers_float4[descriptor_index(geometry.vb_pos_wind)][i1].xyz;
 	//float3 P2 = bindless_buffers_float4[descriptor_index(geometry.vb_pos_wind)][i2].xyz;
-	//float3 P0 = asfloat(positionBuffer.Load3(i0 * 3 * 4));
-	//float3 P1 = asfloat(positionBuffer.Load3(i1 * 3 * 4));
-	//float3 P2 = asfloat(positionBuffer.Load3(i2 * 3 * 4));
+	//float3 P0 = asfloat(vertexBuffer.Load3(i0 * 3 * 4));
+	//float3 P1 = asfloat(vertexBuffer.Load3(i1 * 3 * 4));
+	//float3 P2 = asfloat(vertexBuffer.Load3(i2 * 3 * 4));
 
-	float3 P0 = float3(positionBuffer[i0 * push.vertexStride + 0], positionBuffer[i0 * push.vertexStride + 1], positionBuffer[i0 * push.vertexStride + 2]);
-	float3 P1 = float3(positionBuffer[i1 * push.vertexStride + 0], positionBuffer[i1 * push.vertexStride + 1], positionBuffer[i1 * push.vertexStride + 2]);
-	float3 P2 = float3(positionBuffer[i2 * push.vertexStride + 0], positionBuffer[i2 * push.vertexStride + 1], positionBuffer[i2 * push.vertexStride + 2]);
-
+	uint vtxIndex0 = i0 * push.vertexStride;
+	uint vtxIndex1 = i1 * push.vertexStride;
+	uint vtxIndex2 = i2 * push.vertexStride;
+	float3 P0 = float3(vertexBuffer[vtxIndex0 + 0], vertexBuffer[vtxIndex0 + 1], vertexBuffer[vtxIndex0 + 2]);
+	float3 P1 = float3(vertexBuffer[vtxIndex1 + 0], vertexBuffer[vtxIndex1 + 1], vertexBuffer[vtxIndex1 + 2]);
+	float3 P2 = float3(vertexBuffer[vtxIndex2 + 0], vertexBuffer[vtxIndex2 + 1], vertexBuffer[vtxIndex2 + 2]);
 	
 	BVHPrimitive bvhprim;
 	bvhprim.packed_prim = prim.pack2();
-	bvhprim.flags = 0;
+	bvhprim.flags = ~0u;
 
 	bvhprim.x0 = P0.x;
 	bvhprim.y0 = P0.y;
