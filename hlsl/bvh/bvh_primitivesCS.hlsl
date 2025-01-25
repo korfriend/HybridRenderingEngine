@@ -1,46 +1,50 @@
 #include "../ShaderInterop_BVH.h"
 
-// This shader builds scene triangle data and performs BVH classification:
-//	- This shader is run per object subset.
-//	- Each thread processes a triangle
-//	- Computes triangle bounding box, morton code and other properties and stores into global primitive buffer
-cbuffer cbGlobalParams : register(b0)
-{
-	BVHPushConstants g_cbBVH;
-}
 
-ByteAddressBuffer positionBuffer : register(t0);
-ByteAddressBuffer indexBuffer : register(t1);
+Buffer<float> positionBuffer : register(t0);
+Buffer<uint> indexBuffer : register(t1);
 
 RWStructuredBuffer<uint> primitiveIDBuffer : register(u0);
 RWStructuredBuffer<BVHPrimitive> primitiveBuffer : register(u1);
 RWStructuredBuffer<float> primitiveMortonBuffer : register(u2); // morton buffer is float because sorting is written for floats!
 
+// This shader builds scene triangle data and performs BVH classification:
+//	- This shader is run per object subset.
+//	- Each thread processes a triangle
+//	- Computes triangle bounding box, morton code and other properties and stores into global primitive buffer
+StructuredBuffer<BVHPushConstants> pushBVH : register(t100);
+
 [numthreads(BVH_BUILDER_GROUPSIZE, 1, 1)]
 void main(uint3 DTid : SV_DispatchThreadID, uint groupIndex : SV_GroupIndex)
 {
-	if (DTid.x >= g_cbBVH.primitiveCount)
+	BVHPushConstants push = pushBVH[0];
+
+	if (DTid.x >= push.primitiveCount)
 		return;
 
 	PrimitiveID prim;
 	prim.primitiveIndex = DTid.x;
-	prim.instanceIndex = g_cbBVH.instanceIndex;
-	prim.subsetIndex = g_cbBVH.subsetIndex;
+	prim.instanceIndex = 0u;
+	prim.subsetIndex = 0u;
 
 	uint startIndex = prim.primitiveIndex * 3;
 	//uint i0 = bindless_buffers_uint[descriptor_index(geometry.ib)][startIndex + 0];
 	//uint i1 = bindless_buffers_uint[descriptor_index(geometry.ib)][startIndex + 1];
 	//uint i2 = bindless_buffers_uint[descriptor_index(geometry.ib)][startIndex + 2];
-	uint i0 = indexBuffer.Load((startIndex + 0) * 4);
-	uint i1 = indexBuffer.Load((startIndex + 1) * 4);
-	uint i2 = indexBuffer.Load((startIndex + 2) * 4);
+	uint i0 = indexBuffer[startIndex + 0];//.Load((startIndex + 0) * 4);
+	uint i1 = indexBuffer[startIndex + 1];//.Load((startIndex + 1) * 4);
+	uint i2 = indexBuffer[startIndex + 2];//.Load((startIndex + 2) * 4);
 	
 	//float3 P0 = bindless_buffers_float4[descriptor_index(geometry.vb_pos_wind)][i0].xyz;
 	//float3 P1 = bindless_buffers_float4[descriptor_index(geometry.vb_pos_wind)][i1].xyz;
 	//float3 P2 = bindless_buffers_float4[descriptor_index(geometry.vb_pos_wind)][i2].xyz;
-	float3 P0 = asfloat(positionBuffer.Load3(i0 * 3 * 4));
-	float3 P1 = asfloat(positionBuffer.Load3(i1 * 3 * 4));
-	float3 P2 = asfloat(positionBuffer.Load3(i2 * 3 * 4));
+	//float3 P0 = asfloat(positionBuffer.Load3(i0 * 3 * 4));
+	//float3 P1 = asfloat(positionBuffer.Load3(i1 * 3 * 4));
+	//float3 P2 = asfloat(positionBuffer.Load3(i2 * 3 * 4));
+
+	float3 P0 = float3(positionBuffer[i0 * push.vertexStride + 0], positionBuffer[i0 * push.vertexStride + 1], positionBuffer[i0 * push.vertexStride + 2]);
+	float3 P1 = float3(positionBuffer[i1 * push.vertexStride + 0], positionBuffer[i1 * push.vertexStride + 1], positionBuffer[i1 * push.vertexStride + 2]);
+	float3 P2 = float3(positionBuffer[i2 * push.vertexStride + 0], positionBuffer[i2 * push.vertexStride + 1], positionBuffer[i2 * push.vertexStride + 2]);
 
 	
 	BVHPrimitive bvhprim;
@@ -57,7 +61,7 @@ void main(uint3 DTid : SV_DispatchThreadID, uint groupIndex : SV_GroupIndex)
 	bvhprim.y2 = P2.y;
 	bvhprim.z2 = P2.z;
 
-	uint primitiveID = g_cbBVH.primitiveOffset + prim.primitiveIndex;
+	uint primitiveID = prim.primitiveIndex;
 
 	//primitiveBuffer.Store<BVHPrimitive>(primitiveID * sizeof(BVHPrimitive), bvhprim);
 	primitiveBuffer[primitiveID] = bvhprim;
@@ -68,7 +72,7 @@ void main(uint3 DTid : SV_DispatchThreadID, uint groupIndex : SV_GroupIndex)
 	float3 minAABB = min(P0, min(P1, P2));
 	float3 maxAABB = max(P0, max(P1, P2));
 	float3 centerAABB = (minAABB + maxAABB) * 0.5f;
-	const uint mortoncode = morton3D((centerAABB - g_cbBVH.aabb_min) * g_cbBVH.aabb_extents_rcp);
+	const uint mortoncode = morton3D((centerAABB - push.aabb_min) * push.aabb_extents_rcp);
 	primitiveMortonBuffer[primitiveID] = (float)mortoncode; // convert to float before sorting
 
 }

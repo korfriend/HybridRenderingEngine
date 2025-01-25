@@ -1,6 +1,7 @@
 #include "gpures_helper.h"
 #include "D3DCompiler.h"
 #include "hlsl/ShaderInterop_BVH.h"
+#include "BVHUpdate.h"
 #include <iostream>
 #include <fstream>
 
@@ -12,6 +13,10 @@ namespace grd_helper
 {
 	static GpuDX11CommonParameters* g_pvmCommonParams = NULL;
 	static VmGpuManager* g_pCGpuManager = NULL;
+
+	static ID3D11Buffer* pushConstant = nullptr;
+	static ID3D11ShaderResourceView* srvPushConstant = nullptr;
+	static ID3D11Buffer* pushConstant_write = nullptr;
 }
 
 #include <DirectXColors.h>
@@ -351,8 +356,31 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		CREATE_AND_SET(CB_Emitter);
 		CREATE_AND_SET(CB_Undercut);
 		CREATE_AND_SET(CB_SortConstants);
-		CREATE_AND_SET(BVHPushConstants);
+		//CREATE_AND_SET(BVHPushConstants);
 	}
+
+	{
+		D3D11_BUFFER_DESC bd;
+		bd.Usage = D3D11_USAGE_DEFAULT;
+		bd.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+		bd.CPUAccessFlags = 0u;
+		bd.ByteWidth = 32u;
+		bd.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+		bd.StructureByteStride = 32u;
+		g_pvmCommonParams->dx11Device->CreateBuffer(&bd, nullptr, &pushConstant);
+
+		D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+		srv_desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
+		srv_desc.BufferEx.NumElements = 1;
+		srv_desc.Format = DXGI_FORMAT::DXGI_FORMAT_UNKNOWN;
+		g_pvmCommonParams->dx11Device->CreateShaderResourceView(pushConstant, &srv_desc, &srvPushConstant);
+
+		bd.Usage = D3D11_USAGE_STAGING;
+		bd.BindFlags = 0u;
+		bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+		g_pvmCommonParams->dx11Device->CreateBuffer(&bd, nullptr, &pushConstant_write);
+	}
+
 	if (hr != S_OK)
 	{
 		vmlog::LogErr("error : basic dx11 resources!");
@@ -801,6 +829,10 @@ void grd_helper::DeinitializePresettings()
 		g_pvmCommonParams->dx11DeviceImmContext->ClearState();
 	}
 
+	VMSAFE_RELEASE(srvPushConstant);
+	VMSAFE_RELEASE(pushConstant);
+	VMSAFE_RELEASE(pushConstant_write);
+
 	g_pvmCommonParams->Delete();
 
 	if (g_pvmCommonParams->dx11DeviceImmContext)
@@ -814,6 +846,25 @@ void grd_helper::DeinitializePresettings()
 	memset(&g_pvmCommonParams->dx11_adapter, NULL, sizeof(DXGI_ADAPTER_DESC));
 	g_pvmCommonParams->dx11_featureLevel = D3D_FEATURE_LEVEL_9_1;
 	g_pvmCommonParams->is_initialized = false;
+}
+
+const ID3D11ShaderResourceView* grd_helper::GetPushContantSRV()
+{
+	return srvPushConstant;
+}
+
+void grd_helper::PushConstants(const void* data, uint size, uint offset)
+{
+	assert(size % sizeof(uint32_t) == 0);
+	assert(offset % sizeof(uint32_t) == 0);
+
+	D3D11_MAPPED_SUBRESOURCE mapped_pushConstants;
+	g_pvmCommonParams->dx11DeviceImmContext->Map(pushConstant_write, 0, D3D11_MAP_WRITE, 0, &mapped_pushConstants);
+	BVHPushConstants* cbData = (BVHPushConstants*)mapped_pushConstants.pData;
+	memcpy((uint8_t*)mapped_pushConstants.pData + offset, &data, size);
+	g_pvmCommonParams->dx11DeviceImmContext->Unmap(pushConstant_write, 0);
+
+	g_pvmCommonParams->dx11DeviceImmContext->CopyResource(pushConstant, pushConstant_write);
 }
 
 int __UpdateBlocks(GpuRes& gres, const VmVObjectVolume* vobj, const string& vmode, const DXGI_FORMAT dxformat, LocalProgress* progress)
@@ -2036,6 +2087,18 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 	}
 
 	if (hasTextureMap) *hasTextureMap = has_texture_img;
+
+	// BVH
+	GpuRes gres_bvhNodeBuffer;
+	gres_bvhNodeBuffer.vm_src_id = pobj->GetObjectID();
+	gres_bvhNodeBuffer.res_name = string("GPUBVH::BVHNodeBuffer"); 
+	g_pCGpuManager->UpdateGpuResource(gres_bvhNodeBuffer);
+	unsigned long long _gpu_gen_timg = gres_bvhNodeBuffer.res_values.GetParam("LAST_UPDATE_TIME", (ullong)0);
+	unsigned long long _cpu_gen_timg = pobj->GetContentUpdateTime();
+	if (prim_data->ptype == EvmPrimitiveType::PrimitiveTypeTRIANGLE && _gpu_gen_timg < _cpu_gen_timg)
+	{
+		bvh::UpdateGeometryGPUBVH(g_pCGpuManager, g_pvmCommonParams, pobj);
+	}
 
 	return true;
 }

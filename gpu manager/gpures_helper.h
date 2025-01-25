@@ -50,6 +50,10 @@ namespace grd_helper
 #define NUM_MATERIALS 6
 	static string g_materials[NUM_MATERIALS] = { "MAP_KA", "MAP_KD", "MAP_KS", "MAP_NS", "MAP_BUMP", "MAP_D" };
 
+	const ID3D11ShaderResourceView* GetPushContantSRV();
+
+	void PushConstants(const void* data, uint size, uint offset);
+
 	static bool is_test_out = false;
 
 	struct COMRES_INDICATOR
@@ -88,28 +92,6 @@ namespace grd_helper
 	//typedef map<COMRES_INDICATOR, ID3D11DeviceChild*, value_cmp> GCRMAP;
 	typedef map<string, ID3D11DeviceChild*> GCRMAP;
 	typedef map<string, ID3D11Resource*> CONSTBUFMAP;
-
-	struct GPUBVH
-	{
-		// Mesh Object BVH intersection resources:
-		int objId = 0;
-		ID3D11Buffer* bvhNodeBuffer = NULL;
-		ID3D11Buffer* bvhParentBuffer = NULL;
-		ID3D11Buffer* bvhFlagBuffer = NULL;
-		ID3D11Buffer* primitiveCounterBuffer = NULL;
-		ID3D11Buffer* primitiveIDBuffer = NULL;
-		ID3D11Buffer* primitiveBuffer = NULL;
-		ID3D11Buffer* primitiveMortonBuffer = NULL;
-		uint32_t primitiveCapacity = 0;
-		//bool IsValid() const { return primitiveCounterBuffer.IsValid(); }
-
-		void Update();
-		void Build() const;
-
-		void Clear();
-
-		static void Initialize();
-	};
 
 	struct GpuDX11CommonParameters
 	{

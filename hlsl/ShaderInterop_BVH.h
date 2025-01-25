@@ -79,7 +79,7 @@ struct BVHPushConstants
 	float3 aabb_min;
 	uint primitiveCount;
 	float3 aabb_extents_rcp;	// enclosing AABB 1.0f / abs(max - min)
-	uint padding0;
+	uint vertexStride;
 };
 
 static const uint BVH_BUILDER_GROUPSIZE = 64;

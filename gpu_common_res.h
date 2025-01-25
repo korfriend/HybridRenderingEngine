@@ -1,12 +1,10 @@
 #pragma once
 #include "GpuManager.h"
 #include "resource.h"
-//#include <d3dx9math.h>	// For Math and Structure
 #include <DirectXMath.h>
 #include <d3d11.h>
 #include <d3d11_3.h>
 #include <d3d12.h>
-//#include <d3dx11.h>
 
 using namespace std;
 using namespace vmmath;
