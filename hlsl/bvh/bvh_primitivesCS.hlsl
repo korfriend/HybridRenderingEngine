@@ -53,20 +53,15 @@ void main(uint3 DTid : SV_DispatchThreadID, uint groupIndex : SV_GroupIndex)
 	bvhprim.packed_prim = prim.pack2();
 	bvhprim.flags = ~0u;
 
-	//bvhprim.x0 = P0.x;
-	//bvhprim.y0 = P0.y;
-	//bvhprim.z0 = P0.z;
-	//bvhprim.x1 = P1.x;
-	//bvhprim.y1 = P1.y;
-	//bvhprim.z1 = P1.z;
-	//bvhprim.x2 = P2.x;
-	//bvhprim.y2 = P2.y;
-	//bvhprim.z2 = P2.z;
-
-
-	bvhprim.p0 = P0;
-	bvhprim.p1 = P1;
-	bvhprim.p2 = P2;
+	bvhprim.x0 = P0.x;
+	bvhprim.y0 = P0.y;
+	bvhprim.z0 = P0.z;
+	bvhprim.x1 = P1.x;
+	bvhprim.y1 = P1.y;
+	bvhprim.z1 = P1.z;
+	bvhprim.x2 = P2.x;
+	bvhprim.y2 = P2.y;
+	bvhprim.z2 = P2.z;
 
 	uint primitiveID = prim.primitiveIndex;
 
@@ -79,8 +74,7 @@ void main(uint3 DTid : SV_DispatchThreadID, uint groupIndex : SV_GroupIndex)
 	float3 minAABB = min(P0, min(P1, P2));
 	float3 maxAABB = max(P0, max(P1, P2));
 	float3 centerAABB = (minAABB + maxAABB) * 0.5f;
-	//const uint mortoncode = morton3D((centerAABB - push.aabb_min) * push.aabb_extents_rcp);
-	const uint mortoncode = morton3D((centerAABB - float3(-1.59993887, -1.59993887, -8.50000000)) * float3(0.312505990, 0.312505990, 0.117647059));
+	const uint mortoncode = morton3D((centerAABB - push.aabb_min) * push.aabb_extents_rcp);
 	primitiveMortonBuffer[primitiveID] = (float)mortoncode; // convert to float before sorting
 
 }

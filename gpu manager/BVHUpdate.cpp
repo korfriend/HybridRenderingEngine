@@ -203,6 +203,24 @@ namespace bvh {
 		}
 
 		__ID3D11DeviceContext* dx11DeviceImmContext = dx11CommonParams->dx11DeviceImmContext;
+		//// BVH 버퍼 초기화
+		//{
+		//	const UINT zero[4] = { 0, 0, 0, 0 };
+		//	const UINT invalid[4] = { ~0u, ~0u, ~0u, ~0u };
+		//
+		//	// gres_bvhNodeBuffer는 float 값들이라 다르게 초기화 필요
+		//	dx11DeviceImmContext->ClearUnorderedAccessViewUint(
+		//		(ID3D11UnorderedAccessView*)gres_bvhFlagBuffer.alloc_res_ptrs[DTYPE_UAV], zero);
+		//	dx11DeviceImmContext->ClearUnorderedAccessViewUint(
+		//		(ID3D11UnorderedAccessView*)gres_bvhParentBuffer.alloc_res_ptrs[DTYPE_UAV], invalid);
+		//	dx11DeviceImmContext->ClearUnorderedAccessViewUint(
+		//		(ID3D11UnorderedAccessView*)gres_primitiveIDBuffer.alloc_res_ptrs[DTYPE_UAV], invalid);
+		//	dx11DeviceImmContext->ClearUnorderedAccessViewUint(
+		//		(ID3D11UnorderedAccessView*)gres_primitiveMortonBuffer.alloc_res_ptrs[DTYPE_UAV], zero);
+		//
+		//	// primitive buffer와 node buffer는 구조체라서 compute shader로 초기화하는 게 좋을 수 있음
+		//	// 또는 Map으로 CPU에서 초기화
+		//}
 
 		// ----- build ----- 
 		dx11CommonParams->GpuProfile("BVH Rebuild");
@@ -256,11 +274,11 @@ namespace bvh {
 			dx11DeviceImmContext->CSSetShaderResources(9, 1, (ID3D11ShaderResourceView* const*)&srv_push);
 			grd_helper::Fence();
 
-			primitiveCount += push.primitiveCount;
+			primitiveCount = totalTriangles;
 
 			dx11DeviceImmContext->CSSetShader(GETCS(BVH_Primitives_cs_5_0), NULL, 0);
 			grd_helper::Fence();
-			dx11DeviceImmContext->Dispatch((push.primitiveCount + BVH_BUILDER_GROUPSIZE - 1) / BVH_BUILDER_GROUPSIZE,
+			dx11DeviceImmContext->Dispatch((primitiveCount + BVH_BUILDER_GROUPSIZE - 1) / BVH_BUILDER_GROUPSIZE,
 				1,
 				1);
 			grd_helper::Fence();
@@ -292,6 +310,7 @@ namespace bvh {
 			grd_helper::Fence();
 			gpulib::sort::Sort(gpuManager, dx11CommonParams,
 				primitiveCount, gres_primitiveMortonBuffer, gres_primitiveCounterBuffer, 0, gres_primitiveIDBuffer);
+			grd_helper::Fence(); 
 
 			//dx11DeviceImmContext->Begin(query);
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 10, dx11UAVs_NULL, NULL);
@@ -333,14 +352,17 @@ namespace bvh {
 
 		// BVH - Propagate AABB
 		{
+			uint treeDepth = (uint)ceil(log2(primitiveCount));
+			vzlog("**** treeDepth : %d", treeDepth);
+
 			ID3D11UnorderedAccessView* uavs[2] = {
-				  (ID3D11UnorderedAccessView*)gres_bvhNodeBuffer.alloc_res_ptrs[DTYPE_UAV]
+					(ID3D11UnorderedAccessView*)gres_bvhNodeBuffer.alloc_res_ptrs[DTYPE_UAV]
 				, (ID3D11UnorderedAccessView*)gres_bvhFlagBuffer.alloc_res_ptrs[DTYPE_UAV]
 			};
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, arraysize(uavs), uavs, nullptr);
 
 			ID3D11ShaderResourceView* srvs[4] = {
-				  (ID3D11ShaderResourceView*)gres_primitiveCounterBuffer.alloc_res_ptrs[DTYPE_SRV]
+					(ID3D11ShaderResourceView*)gres_primitiveCounterBuffer.alloc_res_ptrs[DTYPE_SRV]
 				, (ID3D11ShaderResourceView*)gres_primitiveIDBuffer.alloc_res_ptrs[DTYPE_SRV]
 				, (ID3D11ShaderResourceView*)gres_primitiveBuffer.alloc_res_ptrs[DTYPE_SRV]
 				, (ID3D11ShaderResourceView*)gres_bvhParentBuffer.alloc_res_ptrs[DTYPE_SRV]
@@ -349,9 +371,11 @@ namespace bvh {
 			grd_helper::Fence();
 
 			dx11DeviceImmContext->CSSetShader(GETCS(BVH_Propagateaabb_cs_5_0), NULL, 0);
-			dx11DeviceImmContext->Dispatch((primitiveCount + BVH_BUILDER_GROUPSIZE - 1) / BVH_BUILDER_GROUPSIZE,
-				1,
-				1);
+			for (int i = 0; i < treeDepth; i++) {
+				dx11DeviceImmContext->Dispatch((primitiveCount + BVH_BUILDER_GROUPSIZE - 1) / BVH_BUILDER_GROUPSIZE,
+					1,
+					1);
+			}
 			grd_helper::Fence();
 
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 10, dx11UAVs_NULL, NULL);
@@ -457,7 +481,6 @@ namespace bvh {
 			return true;
 		}
 #endif
-
 		dx11DeviceImmContext->Flush();
 		grd_helper::Fence();
 

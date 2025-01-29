@@ -875,9 +875,6 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			//assert(pobj->GetBVHTree() != NULL);
 			PrimitiveData* prim_data = pobj->GetPrimitiveData();
 
-			XMFLOAT3* pp = (XMFLOAT3*)prim_data->GetVerticeDefinition("POSITION");
-
-
 			// note that the actor is visible (already checked)
 #pragma region Actor Parameters
 			bool has_texture_img = actor->GetParam("_bool_HasTextureMap", false); 

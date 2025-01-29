@@ -102,39 +102,23 @@ struct
 #endif
 	BVHPrimitive
 {
-	//uint2 packed_prim;
-	//uint flags;
-	//float x0;
-	//
-	//float y0;
-	//float z0;
-	//float x1;
-	//float y1;
-	//
-	//float z1;
-	//float x2;
-	//float y2;
-	//float z2;
+	uint2 packed_prim;
+	uint flags;
+	float x0;
 
-	//float3 v0() { return float3(x0, y0, z0); }
-	//float3 v1() { return float3(x1, y1, z1); }
-	//float3 v2() { return float3(x2, y2, z2); }
+	float y0;
+	float z0;
+	float x1;
+	float y1;
 
-	uint2 packed_prim;   // 8 bytes
-	uint flags;          // 4 bytes
-	uint padding;        // 4 bytes (added)
+	float z1;
+	float x2;
+	float y2;
+	float z2;
 
-	float3 p0;    // 12 bytes
-	float padding1;      // 4 bytes (added)
-	float3 p1;    // 12 bytes
-	float padding2;      // 4 bytes (added)
-	float3 p2;    // 12 bytes
-	float padding3;      // 4 bytes (added)
-
-	float3 v0() { return p0; }
-	float3 v1() { return p1; }
-	float3 v2() { return p2; }
-
+	float3 v0() { return float3(x0, y0, z0); }
+	float3 v1() { return float3(x1, y1, z1); }
+	float3 v2() { return float3(x2, y2, z2); }
 
 #ifndef __cplusplus
 	PrimitiveID primitiveID()
