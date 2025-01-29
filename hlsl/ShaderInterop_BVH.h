@@ -9,6 +9,14 @@ struct PrimitiveID
 	uint subsetIndex;
 	bool maybe_clustered;
 
+	//inline void init()
+	//{
+	//	primitiveIndex = ~0u;
+	//	instanceIndex = ~0u;
+	//	subsetIndex = ~0u;
+	//	maybe_clustered = false;
+	//}
+
 	// These packing methods don't need meshlets, but they are packed into 64 bits:
 	inline uint2 pack2()
 	{
@@ -88,25 +96,45 @@ static const uint BVH_BUILDER_GROUPSIZE = 64;
 static const uint BVH_PRIMITIVE_FLAG_DOUBLE_SIDED = 1 << 8;
 static const uint BVH_PRIMITIVE_FLAG_TRANSPARENT = 1 << 9;
 
-struct BVHPrimitive
+struct 
+#ifdef __cplusplus
+	alignas(16) 
+#endif
+	BVHPrimitive
 {
-	uint2 packed_prim;
-	uint flags;
-	float x0;
+	//uint2 packed_prim;
+	//uint flags;
+	//float x0;
+	//
+	//float y0;
+	//float z0;
+	//float x1;
+	//float y1;
+	//
+	//float z1;
+	//float x2;
+	//float y2;
+	//float z2;
 
-	float y0;
-	float z0;
-	float x1;
-	float y1;
+	//float3 v0() { return float3(x0, y0, z0); }
+	//float3 v1() { return float3(x1, y1, z1); }
+	//float3 v2() { return float3(x2, y2, z2); }
 
-	float z1;
-	float x2;
-	float y2;
-	float z2;
+	uint2 packed_prim;   // 8 bytes
+	uint flags;          // 4 bytes
+	uint padding;        // 4 bytes (added)
 
-	float3 v0() { return float3(x0, y0, z0); }
-	float3 v1() { return float3(x1, y1, z1); }
-	float3 v2() { return float3(x2, y2, z2); }
+	float3 p0;    // 12 bytes
+	float padding1;      // 4 bytes (added)
+	float3 p1;    // 12 bytes
+	float padding2;      // 4 bytes (added)
+	float3 p2;    // 12 bytes
+	float padding3;      // 4 bytes (added)
+
+	float3 v0() { return p0; }
+	float3 v1() { return p1; }
+	float3 v2() { return p2; }
+
 
 #ifndef __cplusplus
 	PrimitiveID primitiveID()

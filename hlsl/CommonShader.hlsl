@@ -145,7 +145,7 @@ struct HxCB_PolygonObject
 	// 24th bit : 0 (static alpha) 1 (dynamic alpha using mask t50) ... mode 2
 	// 31~32th bit : max components for dashed line : 0 ==> x, 1 ==> y, 2 ==> z
 	uint pobj_flag;
-	uint num_letters;
+	uint num_letters;	// for slicer (rayprocessing.hlsl), vertexStride
 	float dash_interval;
 	float depth_thres; // for outline!
 

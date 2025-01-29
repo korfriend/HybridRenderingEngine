@@ -1,4 +1,7 @@
 #include "RendererHeader.h"
+#include "vzm2/Backlog.h"
+
+#include "hlsl/ShaderInterop_BVH.h"
 
 bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	VmGpuManager* gpu_manager,
@@ -163,7 +166,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 #define PS_NUM 5
 #define SET_PS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::PIXEL_SHADER, NAME), __S, true)
 #else
-#define CS_NUM 6
+#define CS_NUM 10
 #define SET_CS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::COMPUTE_SHADER, NAME), __S, true)
 #endif
 #define SET_VS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, NAME), __S, true)
@@ -263,9 +266,14 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		string strNames_CS[CS_NUM] = {
 			   "ThickSlicePathTracer_cs_5_0"
 			  ,"CurvedThickSlicePathTracer_cs_5_0"
-			  ,"SliceOutline_cs_5_0"
 			  ,"PickingThickSlice_cs_5_0"
 			  ,"PickingCurvedThickSlice_cs_5_0"
+			  ,"ThickSlicePathTracer_GPUBVH_cs_5_0"
+			  ,"CurvedThickSlicePathTracer_GPUBVH_cs_5_0"
+			  ,"PickingThickSlice_GPUBVH_cs_5_0"
+			  ,"PickingCurvedThickSlice_GPUBVH_cs_5_0"
+
+			  ,"SliceOutline_cs_5_0"
 			  ,"OIT_SKBZ_RESOLVE_cs_5_0"
 		};
 		for (int i = 0; i < CS_NUM; i++)
@@ -738,6 +746,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 #ifdef DX10_0
 			pobj->GetBVHTree() == NULL ||
 #endif
+			prim_data->num_prims < 10 ||
 			prim_data->ptype != PrimitiveTypeTRIANGLE)
 			continue;
 
@@ -839,7 +848,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	int count_call_render = 0; 
 
 #define NUM_UAVs 5
-	auto PathTracer = [&dx11CommonParams, &dx11DeviceImmContext, &_fncontainer, &dx11LI_P, &dx11LI_PN, &dx11LI_PT, &dx11LI_PNT, &dx11LI_PTTT, &dx11VShader_P,
+	auto PathTracer = [&dx11CommonParams, &dx11DeviceImmContext, &gpu_manager, &_fncontainer, &dx11LI_P, &dx11LI_PN, &dx11LI_PT, &dx11LI_PNT, &dx11LI_PTTT, &dx11VShader_P,
 		&dx11VShader_PN, &dx11VShader_PT, &dx11VShader_PNT, &dx11VShader_PTTT, 
 #ifdef DX10_0
 		&gres_fb_rgba2, &gres_fb_depthcs2, &gres_quad,
@@ -865,6 +874,10 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			VmVObjectPrimitive* pobj = (VmVObjectPrimitive*)actor->GetGeometryRes();
 			//assert(pobj->GetBVHTree() != NULL);
 			PrimitiveData* prim_data = pobj->GetPrimitiveData();
+
+			XMFLOAT3* pp = (XMFLOAT3*)prim_data->GetVerticeDefinition("POSITION");
+
+
 			// note that the actor is visible (already checked)
 #pragma region Actor Parameters
 			bool has_texture_img = actor->GetParam("_bool_HasTextureMap", false); 
@@ -966,6 +979,8 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 				if (camForcedOutlinePixelThickness > 0) {
 					cbPolygonObj.pix_thickness = camForcedOutlinePixelThickness;
 				}
+
+				cbPolygonObj.num_letters = prim_data->GetNumVertexDefinitions() * 3;
 			//}
 			
 			D3D11_MAPPED_SUBRESOURCE mappedResPobjData;
@@ -1022,8 +1037,67 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 				}
 				else
 				{
-					// TODO
-...
+					GpuRes gres_primitiveCounterBuffer;
+					gres_primitiveCounterBuffer.vm_src_id = pobj->GetObjectID();
+					gres_primitiveCounterBuffer.res_name = string("GPUBVH::primitiveCounterBuffer");
+					GpuRes gres_bvhNodeBuffer;
+					gres_bvhNodeBuffer.vm_src_id = pobj->GetObjectID();
+					gres_bvhNodeBuffer.res_name = string("GPUBVH::BVHNodeBuffer");
+					GpuRes gres_bvhParentBuffer;
+					gres_bvhParentBuffer.vm_src_id = pobj->GetObjectID();
+					gres_bvhParentBuffer.res_name = string("GPUBVH::BVHParentBuffer");
+					GpuRes gres_bvhFlagBuffer;
+					gres_bvhFlagBuffer.vm_src_id = pobj->GetObjectID();
+					gres_bvhFlagBuffer.res_name = string("GPUBVH::BVHFlagBuffer");
+					GpuRes gres_primitiveIDBuffer;
+					gres_primitiveIDBuffer.vm_src_id = pobj->GetObjectID();
+					gres_primitiveIDBuffer.res_name = string("GPUBVH::primitiveIDBuffer");
+					GpuRes gres_primitiveBuffer;
+					gres_primitiveBuffer.vm_src_id = pobj->GetObjectID();
+					gres_primitiveBuffer.res_name = string("GPUBVH::primitiveBuffer");
+					GpuRes gres_primitiveMortonBuffer;
+					gres_primitiveMortonBuffer.vm_src_id = pobj->GetObjectID();
+					gres_primitiveMortonBuffer.res_name = string("GPUBVH::primitiveMortonBuffer");
+
+					vzlog_assert(gpu_manager->UpdateGpuResource(gres_primitiveCounterBuffer), "gres_primitiveCounterBuffer");
+					vzlog_assert(gpu_manager->UpdateGpuResource(gres_bvhNodeBuffer), "gres_bvhNodeBuffer");
+					vzlog_assert(gpu_manager->UpdateGpuResource(gres_bvhParentBuffer), "gres_bvhParentBuffer");
+					vzlog_assert(gpu_manager->UpdateGpuResource(gres_bvhFlagBuffer), "gres_bvhFlagBuffer");
+					vzlog_assert(gpu_manager->UpdateGpuResource(gres_primitiveIDBuffer), "gres_primitiveIDBuffer");
+					vzlog_assert(gpu_manager->UpdateGpuResource(gres_primitiveBuffer), "gres_primitiveBuffer");
+					vzlog_assert(gpu_manager->UpdateGpuResource(gres_primitiveMortonBuffer), "gres_primitiveMortonBuffer");
+
+					SET_SHADER_RES(0, 1, (ID3D11ShaderResourceView**)&gres_primitiveCounterBuffer.alloc_res_ptrs[DTYPE_SRV]);
+					SET_SHADER_RES(1, 1, (ID3D11ShaderResourceView**)&gres_primitiveIDBuffer.alloc_res_ptrs[DTYPE_SRV]);
+					SET_SHADER_RES(2, 1, (ID3D11ShaderResourceView**)&gres_primitiveMortonBuffer.alloc_res_ptrs[DTYPE_SRV]);
+					SET_SHADER_RES(3, 1, (ID3D11ShaderResourceView**)&gres_bvhNodeBuffer.alloc_res_ptrs[DTYPE_SRV]);
+					SET_SHADER_RES(4, 1, (ID3D11ShaderResourceView**)&gres_primitiveBuffer.alloc_res_ptrs[DTYPE_SRV]);
+					SET_SHADER_RES(5, 1, (ID3D11ShaderResourceView**)&gres_bvhParentBuffer.alloc_res_ptrs[DTYPE_SRV]);
+					SET_SHADER_RES(6, 1, (ID3D11ShaderResourceView**)&gres_bvhFlagBuffer.alloc_res_ptrs[DTYPE_SRV]);
+
+					// IASetVertexBuffers, SET_SHADER_RES 둘 다 동시에 가능?
+					SET_SHADER_RES(10, 1, (ID3D11ShaderResourceView**)&gres_vtx.alloc_res_ptrs[DTYPE_SRV]);
+					SET_SHADER_RES(11, 1, (ID3D11ShaderResourceView**)&gres_idx.alloc_res_ptrs[DTYPE_SRV]);
+
+					BVHPushConstants push;
+					push.primitiveCount = prim_data->num_prims;
+					push.vertexStride = prim_data->GetNumVertexDefinitions() * 3;
+
+					geometrics::AABB aabb(XMFLOAT3(prim_data->aabb_os.pos_min.x, prim_data->aabb_os.pos_min.y, prim_data->aabb_os.pos_min.z),
+						XMFLOAT3(prim_data->aabb_os.pos_max.x, prim_data->aabb_os.pos_max.y, prim_data->aabb_os.pos_max.z));
+					push.aabb_min = aabb.getMin();
+					push.aabb_extents_rcp = aabb.getWidth();
+					push.aabb_extents_rcp.x = 1.f / push.aabb_extents_rcp.x;
+					push.aabb_extents_rcp.y = 1.f / push.aabb_extents_rcp.y;
+					push.aabb_extents_rcp.z = 1.f / push.aabb_extents_rcp.z;
+
+					grd_helper::PushConstants(&push, sizeof(BVHPushConstants), 0);
+					//dx11DeviceImmContext->Map(cbuf_BVHPushConstants, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_pushConstants);
+					//BVHPushConstants* cbData = (BVHPushConstants*)mapped_pushConstants.pData;
+					//memcpy(cbData, &push, sizeof(BVHPushConstants));
+					//dx11DeviceImmContext->Unmap(cbuf_BVHPushConstants, 0);
+					const ID3D11ShaderResourceView* srv_push = grd_helper::GetPushContantSRV();
+					dx11DeviceImmContext->CSSetShaderResources(100, 1, (ID3D11ShaderResourceView* const*)&srv_push);
 				}
 
 #ifdef DX10_0
@@ -1063,7 +1137,14 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 					dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_picking_buffer.alloc_res_ptrs[DTYPE_RES], (ID3D11Texture2D*)gres_picking_buffer2.alloc_res_ptrs[DTYPE_RES]);
 #else
 					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs, dx11UAVs, NULL);
-					SET_SHADER(curved_slicer ? GETCS(PickingCurvedThickSlice_cs_5_0) : GETCS(PickingThickSlice_cs_5_0), NULL, 0);
+					if (isLegacyBVH)
+					{
+						SET_SHADER(curved_slicer ? GETCS(PickingCurvedThickSlice_cs_5_0) : GETCS(PickingThickSlice_cs_5_0), NULL, 0);
+					}
+					else
+					{
+						SET_SHADER(curved_slicer ? GETCS(PickingCurvedThickSlice_GPUBVH_cs_5_0) : GETCS(PickingThickSlice_GPUBVH_cs_5_0), NULL, 0);
+					}
 					dx11DeviceImmContext->Dispatch(1, 1, 1);
 					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs, dx11UAVs_NULL, NULL);
 #endif
@@ -1116,9 +1197,18 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 							(ID3D11Texture2D*)gres_fb_depthcs2.alloc_res_ptrs[DTYPE_RES]);
 					}
 #else
-					SET_SHADER(
-						curved_slicer ? GETCS(CurvedThickSlicePathTracer_cs_5_0) : GETCS(ThickSlicePathTracer_cs_5_0),
-						NULL, 0);
+					if (isLegacyBVH)
+					{
+						SET_SHADER(
+							curved_slicer ? GETCS(CurvedThickSlicePathTracer_cs_5_0) : GETCS(ThickSlicePathTracer_cs_5_0),
+							NULL, 0);
+					}
+					else
+					{
+						SET_SHADER(
+							curved_slicer ? GETCS(CurvedThickSlicePathTracer_GPUBVH_cs_5_0) : GETCS(ThickSlicePathTracer_GPUBVH_cs_5_0),
+							NULL, 0);
+					}
 					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs, dx11UAVs, NULL);
 					dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
 

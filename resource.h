@@ -218,7 +218,13 @@
 #define IDR_RCDATA60101					  60101
 #define IDR_RCDATA60102					  60102
 #define IDR_RCDATA60103					  60103
-#define IDR_RCDATA60104					  60104
+
+#define IDR_RCDATA60105					  60105
+
+#define IDR_RCDATA60110					  60110
+#define IDR_RCDATA60111					  60111
+#define IDR_RCDATA60112					  60112
+#define IDR_RCDATA60113					  60113
 
 #define IDR_RCDATA9100					  9100
 #define IDR_RCDATA9101					  9101

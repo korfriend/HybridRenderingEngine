@@ -139,6 +139,9 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 	for (int i = 0; i < MAXSTAMPS; i++)
 		g_pvmCommonParams->dx11Device->CreateQuery(&qr_desc, &g_pvmCommonParams->dx11qr_timestamps[i]);
 
+	qr_desc.Query = D3D11_QUERY_EVENT;
+	g_pvmCommonParams->dx11Device->CreateQuery(&qr_desc, &g_pvmCommonParams->dx11qr_fenceQuery);
+
 	HRESULT hr = S_OK;
 	// HLSL 에서 대체하는 방법 찾아 보기.
 	{
@@ -784,9 +787,15 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60100), "ThickSlicePathTracer_cs_5_0", "cs_5_0"), ThickSlicePathTracer_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60101), "CurvedThickSlicePathTracer_cs_5_0", "cs_5_0"), CurvedThickSlicePathTracer_cs_5_0);
-		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60102), "SliceOutline_cs_5_0", "cs_5_0"), SliceOutline_cs_5_0);
-		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60103), "PickingThickSlice_cs_5_0", "cs_5_0"), PickingThickSlice_cs_5_0);
-		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60104), "PickingCurvedThickSlice_cs_5_0", "cs_5_0"), PickingCurvedThickSlice_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60102), "PickingThickSlice_cs_5_0", "cs_5_0"), PickingThickSlice_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60103), "PickingCurvedThickSlice_cs_5_0", "cs_5_0"), PickingCurvedThickSlice_cs_5_0);
+
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60110), "ThickSlicePathTracer_GPUBVH_cs_5_0", "cs_5_0"), ThickSlicePathTracer_GPUBVH_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60111), "CurvedThickSlicePathTracer_GPUBVH_cs_5_0", "cs_5_0"), CurvedThickSlicePathTracer_GPUBVH_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60112), "PickingThickSlice_GPUBVH_cs_5_0", "cs_5_0"), PickingThickSlice_GPUBVH_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60113), "PickingCurvedThickSlice_GPUBVH_cs_5_0", "cs_5_0"), PickingCurvedThickSlice_GPUBVH_cs_5_0);
+
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA60105), "SliceOutline_cs_5_0", "cs_5_0"), SliceOutline_cs_5_0);
 
 #pragma region Particle
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA71000), "PCE_BlobRayMarching_cs_5_0", "cs_5_0"), PCE_BlobRayMarching_cs_5_0);
@@ -861,10 +870,45 @@ void grd_helper::PushConstants(const void* data, uint size, uint offset)
 	D3D11_MAPPED_SUBRESOURCE mapped_pushConstants;
 	g_pvmCommonParams->dx11DeviceImmContext->Map(pushConstant_write, 0, D3D11_MAP_WRITE, 0, &mapped_pushConstants);
 	BVHPushConstants* cbData = (BVHPushConstants*)mapped_pushConstants.pData;
-	memcpy((uint8_t*)mapped_pushConstants.pData + offset, &data, size);
+	memcpy((uint8_t*)mapped_pushConstants.pData + offset, data, size);
 	g_pvmCommonParams->dx11DeviceImmContext->Unmap(pushConstant_write, 0);
+	g_pvmCommonParams->dx11DeviceImmContext->Flush();
+	Fence();
 
 	g_pvmCommonParams->dx11DeviceImmContext->CopyResource(pushConstant, pushConstant_write);
+	g_pvmCommonParams->dx11DeviceImmContext->Flush();
+	Fence();
+}
+
+void grd_helper::CheckReusability(GpuRes& gres, VmObject* resObj, bool& update_data, bool& regen_data,
+	const vmobjects::VmParamMap<std::string, std::any>& res_new_values)
+{
+	unsigned long long _gpu_gen_timg = gres.res_values.GetParam("LAST_UPDATE_TIME", (ullong)0);
+	unsigned long long _cpu_gen_timg = resObj->GetContentUpdateTime();
+	if (_gpu_gen_timg < _cpu_gen_timg)
+	{
+		// now, at least update
+		update_data = true;
+		bool is_reuse_memory = resObj->GetObjParam("_bool_ReuseGpuMemory", false);
+
+		//vmlog::LogInfo(">>> OBJ ID : " + std::to_string(resObj->GetObjectID()) + ", RES TYPE : " + gres.res_name + ", reuseTag : " + (is_reuse_memory ? "true" : "false"));
+		if (!is_reuse_memory)
+		{
+			regen_data = true;
+			// add properties
+			for (auto it = res_new_values.begin(); it != res_new_values.end(); it++)
+				gres.res_values.SetParam(it->first, it->second);
+		}
+	}
+};
+
+void grd_helper::Fence()
+{
+	g_pvmCommonParams->dx11DeviceImmContext->End(g_pvmCommonParams->dx11qr_fenceQuery);
+	BOOL query_finished = FALSE;
+	while (S_OK != g_pvmCommonParams->dx11DeviceImmContext->GetData(g_pvmCommonParams->dx11qr_fenceQuery, &query_finished, sizeof(query_finished), 0) || !query_finished) {
+		Sleep(0);
+	}
 }
 
 int __UpdateBlocks(GpuRes& gres, const VmVObjectVolume* vobj, const string& vmode, const DXGI_FORMAT dxformat, LocalProgress* progress)
@@ -1542,28 +1586,6 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 {
 	PrimitiveData* prim_data = ((VmVObjectPrimitive*)pobj)->GetPrimitiveData();
 
-	auto CheckReusability = [](GpuRes& gres, VmObject* resObj, bool& update_data, bool& regen_data,
-		const vmobjects::VmParamMap<std::string, std::any>& res_new_values)
-	{
-		unsigned long long _gpu_gen_timg = gres.res_values.GetParam("LAST_UPDATE_TIME", (ullong)0);
-		unsigned long long _cpu_gen_timg = resObj->GetContentUpdateTime();
-		if (_gpu_gen_timg < _cpu_gen_timg)
-		{
-			// now, at least update
-			update_data = true;
-			bool is_reuse_memory = resObj->GetObjParam("_bool_ReuseGpuMemory", false);
-			
-			//vmlog::LogInfo(">>> OBJ ID : " + std::to_string(resObj->GetObjectID()) + ", RES TYPE : " + gres.res_name + ", reuseTag : " + (is_reuse_memory ? "true" : "false"));
-			if (!is_reuse_memory)
-			{
-				regen_data = true;
-				// add properties
-				for (auto it = res_new_values.begin(); it != res_new_values.end(); it++)
-					gres.res_values.SetParam(it->first, it->second);
-			}
-		}
-	};
-
 	bool update_data = pobj->GetObjParam("_bool_UpdateData", false);
 	// always
 	{
@@ -1944,7 +1966,7 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 			{
 				double Ns = pobj->GetObjParam("_float_Ns", (double)0);
 
-				auto update_tex_res = [&Ns, &CheckReusability, &update_data, &pobj](GpuRes& gres_tex, const string& mat_name, const vmint2& tex_res_size, const int byte_stride, const byte* texture_res)
+				auto update_tex_res = [&Ns, &update_data, &pobj](GpuRes& gres_tex, const string& mat_name, const vmint2& tex_res_size, const int byte_stride, const byte* texture_res)
 				{
 					auto upload_single_teximg = [&tex_res_size, &byte_stride, &texture_res](GpuRes& gres_tex)
 					{
@@ -2097,6 +2119,7 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 	unsigned long long _cpu_gen_timg = pobj->GetContentUpdateTime();
 	if (prim_data->ptype == EvmPrimitiveType::PrimitiveTypeTRIANGLE && _gpu_gen_timg < _cpu_gen_timg)
 	{
+		bvh::UpdateGeometryGPUBVH(g_pCGpuManager, g_pvmCommonParams, pobj);
 		bvh::UpdateGeometryGPUBVH(g_pCGpuManager, g_pvmCommonParams, pobj);
 	}
 

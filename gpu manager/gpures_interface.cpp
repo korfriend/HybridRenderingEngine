@@ -1,4 +1,5 @@
 #include "../gpu_common_res.h"
+#include "vzm2/Backlog.h"
 #include "gpures_interface.h"
 
 //#include <d3dx9math.h>	// For Math and Structure
@@ -591,10 +592,14 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		uint stride_bytes = 0;
 		switch ((DXGI_FORMAT)GetOption("FORMAT"))
 		{
-		case DXGI_FORMAT_R32_SINT: stride_bytes = sizeof(int); break;
-		case DXGI_FORMAT_R32_UINT: stride_bytes = sizeof(uint); break;
-		case DXGI_FORMAT_R32_FLOAT: stride_bytes = sizeof(float); break;
-		case DXGI_FORMAT_D32_FLOAT:	stride_bytes = sizeof(float); break;
+		case DXGI_FORMAT_R32_TYPELESS:
+		case DXGI_FORMAT_R32_SINT: 
+		case DXGI_FORMAT_R32_UINT: 
+		case DXGI_FORMAT_R32_FLOAT: 
+		case DXGI_FORMAT_D32_FLOAT:
+			stride_bytes = 4;
+			break;
+		case DXGI_FORMAT_R32G32B32_FLOAT: stride_bytes = sizeof(vmfloat3); break;
 		case DXGI_FORMAT_R32G32B32A32_FLOAT: stride_bytes = sizeof(vmfloat4); break;
 		case DXGI_FORMAT_R32G32_FLOAT: stride_bytes = sizeof(vmfloat2); break;
 		case DXGI_FORMAT_R8G8B8A8_UNORM: stride_bytes = sizeof(vmbyte4); break;
@@ -607,20 +612,21 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		case DXGI_FORMAT_R16_SINT: stride_bytes = sizeof(short); break;
 		case DXGI_FORMAT_UNKNOWN: stride_bytes = gres.res_values.GetParam("STRIDE_BYTES", (uint)0); break;
 		default:
-			vmlog::LogErr("__GenerateGpuResource NOT SUPPORTED FORMAT!!");
+			vzlog_error("__GenerateGpuResource NOT SUPPORTED FORMAT!!");
+			assert(0);
 			return 0;
 		}
 		return stride_bytes;
 	};
 
+	uint num_elements = gres.res_values.GetParam("NUM_ELEMENTS", (uint)0);
+	uint stride_bytes = gres.res_values.GetParam("STRIDE_BYTES", (uint)0);
 	switch (gres.rtype)
 	{
 	case RTYPE_BUFFER:
 	{
 		// GetOption("FORMAT") ==> needed for VIEW creation
 		// vertex, index, ...
-		uint num_elements = gres.res_values.GetParam("NUM_ELEMENTS", (uint)0);
-		uint stride_bytes = gres.res_values.GetParam("STRIDE_BYTES", (uint)0);
 		D3D11_BUFFER_DESC desc_buf;
 		ZeroMemory(&desc_buf, sizeof(D3D11_BUFFER_DESC));
 		desc_buf.ByteWidth = stride_bytes * num_elements;
@@ -721,13 +727,15 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 
 	// CREATE VIEWS
 	uint bind_flag = GetOption("BIND_FLAG");
+	DXGI_FORMAT format = (DXGI_FORMAT)GetOption("FORMAT");
+	uint view_elements = num_elements * (stride_bytes / GetSizeFormat(format));
 	if (bind_flag & D3D11_BIND_RENDER_TARGET)
 	{
 		if (gres.rtype == RTYPE_TEXTURE2D)
 		{
 			D3D11_RENDER_TARGET_VIEW_DESC descRTV;
 			ZeroMemory(&descRTV, sizeof(D3D11_RENDER_TARGET_VIEW_DESC));
-			descRTV.Format = (DXGI_FORMAT)GetOption("FORMAT");
+			descRTV.Format = format;
 			descRTV.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
 			descRTV.Texture2D.MipSlice = 0;
 			ID3D11View* pdx11View = NULL;
@@ -738,10 +746,10 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		{
 			D3D11_RENDER_TARGET_VIEW_DESC descRTV;
 			ZeroMemory(&descRTV, sizeof(D3D11_RENDER_TARGET_VIEW_DESC));
-			descRTV.Format = (DXGI_FORMAT)GetOption("FORMAT");
+			descRTV.Format = format;
 			descRTV.ViewDimension = D3D11_RTV_DIMENSION_BUFFER;
 			descRTV.Buffer.FirstElement = 0;
-			descRTV.Buffer.NumElements = gres.res_values.GetParam("NUM_ELEMENTS", (uint)0);
+			descRTV.Buffer.NumElements = view_elements;
 
 			ID3D11View* pdx11View = NULL;
 			g_pdx11Device->CreateRenderTargetView((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], &descRTV, (ID3D11RenderTargetView**)&pdx11View);
@@ -762,7 +770,7 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		}
 		D3D11_DEPTH_STENCIL_VIEW_DESC descDSV;
 		ZeroMemory(&descDSV, sizeof(D3D11_DEPTH_STENCIL_VIEW_DESC));
-		descDSV.Format = (DXGI_FORMAT)GetOption("FORMAT");
+		descDSV.Format = format;
 		descDSV.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
 		descDSV.Flags = 0;
 		descDSV.Texture2D.MipSlice = 0;
@@ -774,14 +782,14 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 	{
 		D3D11_SHADER_RESOURCE_VIEW_DESC descSRV;
 		ZeroMemory(&descSRV, sizeof(D3D11_SHADER_RESOURCE_VIEW_DESC));
-		descSRV.Format = (DXGI_FORMAT)GetOption("FORMAT");
+		descSRV.Format = format;
 
 		switch (gres.rtype)
 		{
 		case RTYPE_BUFFER:
 			descSRV.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
 			descSRV.BufferEx.FirstElement = 0;
-			descSRV.BufferEx.NumElements = gres.res_values.GetParam("NUM_ELEMENTS", (uint)0);
+			descSRV.BufferEx.NumElements = view_elements;
 
 			// DOJO TO DO // 
 			// RAW ADDRESSED BUFFER ... (with stride... vertex type...) NUM_ELEMENTS ?? BYTES or VERTEX?
@@ -834,13 +842,13 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 	{
 		D3D11_UNORDERED_ACCESS_VIEW_DESC descUAV;
 		ZeroMemory(&descUAV, sizeof(D3D11_UNORDERED_ACCESS_VIEW_DESC));
-		descUAV.Format = (DXGI_FORMAT)GetOption("FORMAT");
+		descUAV.Format = format;
 		switch (gres.rtype)
 		{
 		case RTYPE_BUFFER:
 			descUAV.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
 			descUAV.Buffer.FirstElement = 0;
-			descUAV.Buffer.NumElements = gres.res_values.GetParam("NUM_ELEMENTS", (uint)0);
+			descUAV.Buffer.NumElements = view_elements;
 			if (GetOption("RAW_ACCESS") & 0x1) descUAV.Buffer.Flags = D3D11_BUFFER_UAV_FLAG_RAW;
 			break;
 		case RTYPE_TEXTURE2D:

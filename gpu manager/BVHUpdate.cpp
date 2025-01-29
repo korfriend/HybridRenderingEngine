@@ -36,47 +36,54 @@ namespace bvh {
 		uint totalTriangles = primitive->num_prims;
 
 		GpuRes gres_primitiveCounterBuffer;
-		//GpuRes gres_primitiveCounterBuffer_system;
 		GpuRes gres_primitiveCounterBuffer_write;
 		gres_primitiveCounterBuffer.vm_src_id = pobj->GetObjectID();
 		gres_primitiveCounterBuffer.res_name = string("GPUBVH::primitiveCounterBuffer");
-		if (totalTriangles > 0 && !gpuManager->UpdateGpuResource(gres_primitiveCounterBuffer))
+		gres_primitiveCounterBuffer_write.vm_src_id = pobj->GetObjectID();
+		gres_primitiveCounterBuffer_write.res_name = string("GPUBVH::primitiveCounterBuffer_WRITE");
+		if (totalTriangles > 0)
 		{
-			uint stride_bytes = sizeof(uint);
-			gres_primitiveCounterBuffer.rtype = RTYPE_BUFFER;
-			gres_primitiveCounterBuffer.options["USAGE"] = D3D11_USAGE_DEFAULT;
-			gres_primitiveCounterBuffer.options["CPU_ACCESS_FLAG"] = 0u;
-			gres_primitiveCounterBuffer.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
-			gres_primitiveCounterBuffer.options["FORMAT"] = DXGI_FORMAT_R32_TYPELESS;
-			gres_primitiveCounterBuffer.options["RAW_ACCESS"] = 1;
-			gres_primitiveCounterBuffer.res_values.SetParam("NUM_ELEMENTS", (uint)1);
-			gres_primitiveCounterBuffer.res_values.SetParam("STRIDE_BYTES", (uint)stride_bytes);
+			if (!gpuManager->UpdateGpuResource(gres_primitiveCounterBuffer))
+			{
+				uint stride_bytes = sizeof(uint);
+				gres_primitiveCounterBuffer.rtype = RTYPE_BUFFER;
+				gres_primitiveCounterBuffer.options["USAGE"] = D3D11_USAGE_DEFAULT;
+				gres_primitiveCounterBuffer.options["CPU_ACCESS_FLAG"] = 0u;
+				gres_primitiveCounterBuffer.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
+				gres_primitiveCounterBuffer.options["FORMAT"] = DXGI_FORMAT_R32_TYPELESS;
+				gres_primitiveCounterBuffer.options["RAW_ACCESS"] = 1;
+				gres_primitiveCounterBuffer.res_values.SetParam("NUM_ELEMENTS", (uint)1);
+				gres_primitiveCounterBuffer.res_values.SetParam("STRIDE_BYTES", (uint)stride_bytes);
 
-			gpuManager->GenerateGpuResource(gres_primitiveCounterBuffer);
+				gpuManager->GenerateGpuResource(gres_primitiveCounterBuffer);
 
 
-			//gres_primitiveCounterBuffer_system = gres_primitiveCounterBuffer;
-			//gres_primitiveCounterBuffer_system.res_name = string("GPUBVH::primitiveCounterBuffer_SYSTEM");
-			//gres_primitiveCounterBuffer_system.options["USAGE"] = D3D11_USAGE_STAGING;
-			//gres_primitiveCounterBuffer_system.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_READ;
-			//gres_primitiveCounterBuffer_system.options["BIND_FLAG"] = 0u;
-			//gres_primitiveCounterBuffer_system.options["RAW_ACCESS"] = 0;
-			//
-			//gpuManager->GenerateGpuResource(gres_primitiveCounterBuffer_system);
+				//gres_primitiveCounterBuffer_system = gres_primitiveCounterBuffer;
+				//gres_primitiveCounterBuffer_system.res_name = string("GPUBVH::primitiveCounterBuffer_SYSTEM");
+				//gres_primitiveCounterBuffer_system.options["USAGE"] = D3D11_USAGE_STAGING;
+				//gres_primitiveCounterBuffer_system.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_READ;
+				//gres_primitiveCounterBuffer_system.options["BIND_FLAG"] = 0u;
+				//gres_primitiveCounterBuffer_system.options["RAW_ACCESS"] = 0;
+				//
+				//gpuManager->GenerateGpuResource(gres_primitiveCounterBuffer_system);
 
-			gres_primitiveCounterBuffer_write = gres_primitiveCounterBuffer;
-			gres_primitiveCounterBuffer_write.res_name = string("GPUBVH::primitiveCounterBuffer_DYNAMIC");
-			gres_primitiveCounterBuffer_write.options["USAGE"] = D3D11_USAGE_STAGING;// D3D11_USAGE_DYNAMIC;
-			gres_primitiveCounterBuffer_write.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
-			gres_primitiveCounterBuffer_write.options["BIND_FLAG"] = 0u;
-			gres_primitiveCounterBuffer_write.options["RAW_ACCESS"] = 0;
+				gres_primitiveCounterBuffer_write = gres_primitiveCounterBuffer;
+				gres_primitiveCounterBuffer_write.res_name = string("GPUBVH::primitiveCounterBuffer_WRITE");
+				gres_primitiveCounterBuffer_write.options["USAGE"] = D3D11_USAGE_STAGING;// D3D11_USAGE_DYNAMIC;
+				gres_primitiveCounterBuffer_write.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
+				gres_primitiveCounterBuffer_write.options["BIND_FLAG"] = 0u;
+				gres_primitiveCounterBuffer_write.options["RAW_ACCESS"] = 0;
 
-			gpuManager->GenerateGpuResource(gres_primitiveCounterBuffer_write);
+				gpuManager->GenerateGpuResource(gres_primitiveCounterBuffer_write);
+			}
+			else
+			{
+				assert(gpuManager->UpdateGpuResource(gres_primitiveCounterBuffer_write));
+			}
 		}
 		else
 		{
 			gpuManager->ReleaseGpuResource(gres_primitiveCounterBuffer, false);
-			//gpuManager->ReleaseGpuResource(gres_primitiveCounterBuffer_system, false);
 			gpuManager->ReleaseGpuResource(gres_primitiveCounterBuffer_write, false);
 			return false;
 		}
@@ -165,6 +172,25 @@ namespace bvh {
 			gres_primitiveMortonBuffer.res_values.SetParam("NUM_ELEMENTS", (uint)primitive_capacity);
 			gres_primitiveMortonBuffer.res_values.SetParam("STRIDE_BYTES", (uint)sizeof(float));
 			gpuManager->GenerateGpuResource(gres_primitiveMortonBuffer);
+
+//#define BVH_GEN_DEBUG
+#ifdef BVH_GEN_DEBUG
+			auto generateDubugBuffer = [&gpuManager](GpuRes& gres)
+				{
+					GpuRes gres_debug = gres;
+					gres_debug.res_name += "_DEBUG";
+					gres_debug.options["USAGE"] = D3D11_USAGE_STAGING;
+					gres_debug.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_READ;
+					gres_debug.options["BIND_FLAG"] = 0u;
+					gpuManager->GenerateGpuResource(gres_debug);
+				};
+			generateDubugBuffer(gres_bvhNodeBuffer);
+			generateDubugBuffer(gres_bvhParentBuffer);
+			generateDubugBuffer(gres_bvhFlagBuffer);
+			generateDubugBuffer(gres_primitiveIDBuffer);
+			generateDubugBuffer(gres_primitiveBuffer);
+			generateDubugBuffer(gres_primitiveMortonBuffer);
+#endif
 		}
 		else
 		{
@@ -190,6 +216,7 @@ namespace bvh {
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 10, dx11UAVs_NULL, NULL);
 		ID3D11ShaderResourceView* dx11SRVs_NULL[10] = { };
 		dx11DeviceImmContext->CSSetShaderResources(0, 10, dx11SRVs_NULL);
+		grd_helper::Fence();
 
 		// BVH - Primitive (GEOMETRY-ONLY) Builder //
 		{
@@ -210,8 +237,8 @@ namespace bvh {
 			push.primitiveCount = totalTriangles;
 			push.vertexStride = primitive->GetNumVertexDefinitions() * 3;
 
-			geometrics::AABB aabb(XMFLOAT3(primitive->aabb_os.pos_min.x, primitive->aabb_os.pos_min.x, primitive->aabb_os.pos_min.x), 
-				XMFLOAT3(primitive->aabb_os.pos_max.x, primitive->aabb_os.pos_max.x, primitive->aabb_os.pos_max.x));
+			geometrics::AABB aabb(XMFLOAT3(primitive->aabb_os.pos_min.x, primitive->aabb_os.pos_min.y, primitive->aabb_os.pos_min.z), 
+				XMFLOAT3(primitive->aabb_os.pos_max.x, primitive->aabb_os.pos_max.y, primitive->aabb_os.pos_max.z));
 			push.aabb_min = aabb.getMin();
 			push.aabb_extents_rcp = aabb.getWidth();
 			push.aabb_extents_rcp.x = 1.f / push.aabb_extents_rcp.x;
@@ -219,24 +246,31 @@ namespace bvh {
 			push.aabb_extents_rcp.z = 1.f / push.aabb_extents_rcp.z;
 
 			grd_helper::PushConstants(&push, sizeof(BVHPushConstants), 0);
+			grd_helper::Fence();
+
 			//dx11DeviceImmContext->Map(cbuf_BVHPushConstants, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_pushConstants);
 			//BVHPushConstants* cbData = (BVHPushConstants*)mapped_pushConstants.pData;
 			//memcpy(cbData, &push, sizeof(BVHPushConstants));
 			//dx11DeviceImmContext->Unmap(cbuf_BVHPushConstants, 0);
 			const ID3D11ShaderResourceView* srv_push = grd_helper::GetPushContantSRV();
-			dx11DeviceImmContext->CSSetShaderResources(100, 1, (ID3D11ShaderResourceView* const*)&srv_push);
+			dx11DeviceImmContext->CSSetShaderResources(9, 1, (ID3D11ShaderResourceView* const*)&srv_push);
+			grd_helper::Fence();
 
 			primitiveCount += push.primitiveCount;
 
 			dx11DeviceImmContext->CSSetShader(GETCS(BVH_Primitives_cs_5_0), NULL, 0);
+			grd_helper::Fence();
 			dx11DeviceImmContext->Dispatch((push.primitiveCount + BVH_BUILDER_GROUPSIZE - 1) / BVH_BUILDER_GROUPSIZE,
 				1,
 				1);
-			dx11DeviceImmContext->Flush();
+			grd_helper::Fence();
 
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 10, dx11UAVs_NULL, NULL);
 			dx11DeviceImmContext->CSSetShaderResources(0, 10, dx11SRVs_NULL);
+			dx11DeviceImmContext->Flush();
+			grd_helper::Fence();
 		}
+
 
 		// update primitiveCounterBuffer
 		{
@@ -244,19 +278,26 @@ namespace bvh {
 			dx11DeviceImmContext->Map((ID3D11Resource*)gres_primitiveCounterBuffer_write.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_WRITE, 0, &d11MappedRes);
 			*(uint*)d11MappedRes.pData = primitiveCount;
 			dx11DeviceImmContext->Unmap((ID3D11Resource*)gres_primitiveCounterBuffer_write.alloc_res_ptrs[DTYPE_RES], 0);
+			dx11DeviceImmContext->Flush();
+			grd_helper::Fence();
 
 			dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_primitiveCounterBuffer.alloc_res_ptrs[DTYPE_RES], 
 				(ID3D11Buffer*)gres_primitiveCounterBuffer_write.alloc_res_ptrs[DTYPE_RES]);
+			dx11DeviceImmContext->Flush();
+			grd_helper::Fence();
 		}
 
 		// BVH - Sort Primitive Mortons
 		{
+			grd_helper::Fence();
 			gpulib::sort::Sort(gpuManager, dx11CommonParams,
 				primitiveCount, gres_primitiveMortonBuffer, gres_primitiveCounterBuffer, 0, gres_primitiveIDBuffer);
 
+			//dx11DeviceImmContext->Begin(query);
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 10, dx11UAVs_NULL, NULL);
 			dx11DeviceImmContext->CSSetShaderResources(0, 10, dx11SRVs_NULL);
-
+			dx11DeviceImmContext->Flush();
+			grd_helper::Fence();
 		}
 
 		// BVH - Build Hierarchy
@@ -274,16 +315,20 @@ namespace bvh {
 				, (ID3D11ShaderResourceView*)gres_primitiveMortonBuffer.alloc_res_ptrs[DTYPE_SRV]
 			};
 			dx11DeviceImmContext->CSSetShaderResources(0, arraysize(srvs), srvs);
+			grd_helper::Fence();
 
 
-			dx11DeviceImmContext->CSSetShader(GETCS(BVH_Hierarchy_cs_5_0), NULL, 0); 
+			dx11DeviceImmContext->CSSetShader(GETCS(BVH_Hierarchy_cs_5_0), NULL, 0);
+
 			dx11DeviceImmContext->Dispatch((primitiveCount + BVH_BUILDER_GROUPSIZE - 1) / BVH_BUILDER_GROUPSIZE,
 				1,
 				1);
-			dx11DeviceImmContext->Flush();
+			grd_helper::Fence();
 
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 10, dx11UAVs_NULL, NULL);
 			dx11DeviceImmContext->CSSetShaderResources(0, 10, dx11SRVs_NULL);
+			dx11DeviceImmContext->Flush();
+			grd_helper::Fence();
 		}
 
 		// BVH - Propagate AABB
@@ -301,19 +346,120 @@ namespace bvh {
 				, (ID3D11ShaderResourceView*)gres_bvhParentBuffer.alloc_res_ptrs[DTYPE_SRV]
 			};
 			dx11DeviceImmContext->CSSetShaderResources(0, arraysize(srvs), srvs);
+			grd_helper::Fence();
 
 			dx11DeviceImmContext->CSSetShader(GETCS(BVH_Propagateaabb_cs_5_0), NULL, 0);
 			dx11DeviceImmContext->Dispatch((primitiveCount + BVH_BUILDER_GROUPSIZE - 1) / BVH_BUILDER_GROUPSIZE,
 				1,
 				1);
-			dx11DeviceImmContext->Flush();
+			grd_helper::Fence();
 
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 10, dx11UAVs_NULL, NULL);
 			dx11DeviceImmContext->CSSetShaderResources(0, 10, dx11SRVs_NULL);
+			dx11DeviceImmContext->Flush();
+			grd_helper::Fence();
 		}
+
 		dx11DeviceImmContext->CSSetShaderResources(100, 1, dx11SRVs_NULL);
+		grd_helper::Fence();
 
 		dx11CommonParams->GpuProfile("BVH Rebuild", true);
+
+#ifdef BVH_GEN_DEBUG
+		if (primitive->num_vtx < 1000)
+			return true;
+
+		auto readDubugBuffer = [&gpuManager, &dx11DeviceImmContext](GpuRes& gres)
+			{
+				GpuRes gres_debug = gres;
+				gres_debug.res_name += "_DEBUG";
+				vzlog_assert(gpuManager->UpdateGpuResource(gres_debug), "gres_debug");
+
+				dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_debug.alloc_res_ptrs[DTYPE_RES],
+					(ID3D11Buffer*)gres.alloc_res_ptrs[DTYPE_RES]);
+
+				return gres_debug;
+
+			};
+
+		XMFLOAT3* pp = (XMFLOAT3*)primitive->GetVerticeDefinition("POSITION");
+
+		D3D11_MAPPED_SUBRESOURCE d11MappedRes;
+		GpuRes gres_bvhNodeBuffer_DEBUG = readDubugBuffer(gres_bvhNodeBuffer);
+		dx11DeviceImmContext->Map((ID3D11Resource*)gres_bvhNodeBuffer_DEBUG.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, 0, &d11MappedRes);
+		BVHNode bvh_nodes[10];
+		memcpy(bvh_nodes, d11MappedRes.pData, sizeof(BVHNode) * 10);
+		dx11DeviceImmContext->Unmap((ID3D11Resource*)gres_bvhNodeBuffer_DEBUG.alloc_res_ptrs[DTYPE_RES], 0);
+
+		GpuRes gres_bvhParentBuffer_DEBUG = readDubugBuffer(gres_bvhParentBuffer);
+		dx11DeviceImmContext->Map((ID3D11Resource*)gres_bvhParentBuffer_DEBUG.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, 0, &d11MappedRes);
+		uint bvh_parents[10];
+		memcpy(bvh_parents, d11MappedRes.pData, sizeof(uint) * 10);
+		dx11DeviceImmContext->Unmap((ID3D11Resource*)gres_bvhParentBuffer_DEBUG.alloc_res_ptrs[DTYPE_RES], 0);
+
+		GpuRes gres_bvhFlagBuffer_DEBUG = readDubugBuffer(gres_bvhFlagBuffer);
+		dx11DeviceImmContext->Map((ID3D11Resource*)gres_bvhFlagBuffer_DEBUG.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, 0, &d11MappedRes);
+		uint bvh_flags[10];
+		memcpy(bvh_flags, d11MappedRes.pData, sizeof(uint) * 10);
+		dx11DeviceImmContext->Unmap((ID3D11Resource*)gres_bvhFlagBuffer_DEBUG.alloc_res_ptrs[DTYPE_RES], 0);
+
+		GpuRes gres_primitiveIDBuffer_DEBUG = readDubugBuffer(gres_primitiveIDBuffer);
+		dx11DeviceImmContext->Map((ID3D11Resource*)gres_primitiveIDBuffer_DEBUG.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, 0, &d11MappedRes);
+		uint bvh_prim_IDs[10];
+		memcpy(bvh_prim_IDs, d11MappedRes.pData, sizeof(uint) * 10);
+		dx11DeviceImmContext->Unmap((ID3D11Resource*)gres_primitiveIDBuffer_DEBUG.alloc_res_ptrs[DTYPE_RES], 0);
+
+		GpuRes gres_primitiveBuffer_DEBUG = readDubugBuffer(gres_primitiveBuffer);
+		dx11DeviceImmContext->Map((ID3D11Resource*)gres_primitiveBuffer_DEBUG.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, 0, &d11MappedRes);
+		BVHPrimitive bvh_prims[1000];
+		memcpy(bvh_prims, d11MappedRes.pData, sizeof(BVHPrimitive) * 1000);
+		dx11DeviceImmContext->Unmap((ID3D11Resource*)gres_primitiveBuffer_DEBUG.alloc_res_ptrs[DTYPE_RES], 0);
+
+		GpuRes gres_primitiveMortonBuffer_DEBUG = readDubugBuffer(gres_primitiveMortonBuffer);
+		dx11DeviceImmContext->Map((ID3D11Resource*)gres_primitiveMortonBuffer_DEBUG.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, 0, &d11MappedRes);
+		float bvh_mortons[10];
+		memcpy(bvh_mortons, d11MappedRes.pData, sizeof(float) * 10);
+		dx11DeviceImmContext->Unmap((ID3D11Resource*)gres_primitiveMortonBuffer_DEBUG.alloc_res_ptrs[DTYPE_RES], 0);
+		
+		
+		
+		struct RayDesc
+		{
+			float3 Origin;
+			float TMin;
+			float3 Direction;
+			float TMax;
+		};
+
+		RayDesc ray;
+		ray.Origin = float3(0, 0, -1);
+		ray.Direction = float3(0.01, 0.01, -0.9);
+		ray.TMin = 0.00001;
+		ray.TMax = FLT_MAX;
+
+		const float3 rcpDirection = float3(1. / ray.Direction.x, 1. / ray.Direction.y, 1. / ray.Direction.z);
+
+		const float t0 = (bvh_nodes[0].min.x - ray.Origin.x) * rcpDirection.x;
+		const float t1 = (bvh_nodes[0].max.x - ray.Origin.x) * rcpDirection.x;
+		const float t2 = (bvh_nodes[0].min.y - ray.Origin.y) * rcpDirection.y;
+		const float t3 = (bvh_nodes[0].max.y - ray.Origin.y) * rcpDirection.y;
+		const float t4 = (bvh_nodes[0].min.z - ray.Origin.z) * rcpDirection.z;
+		const float t5 = (bvh_nodes[0].max.z - ray.Origin.z) * rcpDirection.z;
+		const float tmin = max(max(min(t0, t1), min(t2, t3)), min(t4, t5)); // close intersection point's distance on ray
+		const float tmax = min(min(max(t0, t1), max(t2, t3)), max(t4, t5)); // far intersection point's distance on ray
+
+		if (tmax < 0 || tmin > tmax || tmin > FLT_MAX) // this also checks if a better primitive was already hit or not and skips if yes
+		{
+			return false;
+		}
+		else
+		{
+			return true;
+		}
+#endif
+
+		dx11DeviceImmContext->Flush();
+		grd_helper::Fence();
 
 		return true;
 	}

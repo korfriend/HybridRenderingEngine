@@ -100,6 +100,7 @@ namespace grd_helper
 		DXGI_ADAPTER_DESC dx11_adapter;
 
 #define MAXSTAMPS 50
+		ID3D11Query* dx11qr_fenceQuery;
 		ID3D11Query* dx11qr_disjoint;
 		ID3D11Query* dx11qr_timestamps[MAXSTAMPS];
 		map<string, vmint2> profile_map;
@@ -253,6 +254,7 @@ namespace grd_helper
 			for (int i = 0; i < MAXSTAMPS; i++)
 				dx11qr_timestamps[i] = NULL;
 			dx11qr_disjoint = NULL;
+			dx11qr_fenceQuery = nullptr;
 		}
 
 		bool gpu_profile = false;
@@ -342,6 +344,11 @@ namespace grd_helper
 					dx11qr_timestamps[i] = NULL;
 				dx11qr_disjoint = NULL;
 			}
+			if (dx11qr_fenceQuery)
+			{
+				dx11qr_fenceQuery->Release();
+				dx11qr_fenceQuery = nullptr;
+			}
 		}
 	};
 
@@ -406,6 +413,10 @@ namespace grd_helper
 
 	int InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonParameters* gpu_params);
 	void DeinitializePresettings();
+
+	void CheckReusability(GpuRes& gres, VmObject* resObj, bool& update_data, bool& regen_data,
+		const vmobjects::VmParamMap<std::string, std::any>& res_new_values);
+	void Fence();
 
 	// volume/block structure
 	bool UpdateOtfBlocks(GpuRes& gres, VmVObjectVolume* main_vobj, VmVObjectVolume* mask_vobj,
