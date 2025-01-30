@@ -1802,10 +1802,10 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 			v_rgba.a = min(0.3, v_rgba.a);
 
 		float zthickness = 0.1f;
-		//if (disableSolidFill) {
-		//	v_rgba = float4(0, 0, 0, 0.01);
-		//	zthickness = 0.f;
-		//}
+		if (disableSolidFill) {
+			v_rgba = float4(0, 0, 0, 0.01);
+			zthickness = 0.f;
+		}
 
 		Fragment frag;
 		frag.i_vis = ConvertFloat4ToUInt(v_rgba); // current
