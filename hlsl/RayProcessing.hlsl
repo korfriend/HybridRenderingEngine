@@ -1692,13 +1692,13 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 #else
 				bool localInside = hit.is_backface;
 #endif
-				if (localInside)
+				if (localInside)// || is_backface_prev == localInside)
 				{
 					//float3 v = hitDistance * ray_dir_unit_os;
 					thickness_through_os += hitDistance;// length(TransformVector(v, g_cbPobj.mat_os2ws));
 					hitCount++;
 				}
-
+				is_backface_prev = localInside;
 			}
 			//fragment_vis[ss_xy] = float4((float3)(hitDistsWS[2] - 30) / 30.f, 1);
 			//fragment_vis[ss_xy] = float4((float3)(hitCount) / HITBUFFERSIZE, 1);

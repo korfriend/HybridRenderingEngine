@@ -745,8 +745,9 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		if (prim_data->GetVerticeDefinition("POSITION") == NULL || 
 #ifdef DX10_0
 			pobj->GetBVHTree() == NULL ||
+#else
+			!pobj->GetBVH().IsValid() ||
 #endif
-			prim_data->num_prims < 10 ||
 			prim_data->ptype != PrimitiveTypeTRIANGLE)
 			continue;
 
