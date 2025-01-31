@@ -1576,7 +1576,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 	// backward check
 	bool hit_on_backward_ray = false;
 	float backward_hit_depth = FLT_MAX;
-	float last_layer_depth = FLT_MAX; // 
+	float last_layer_depth = -1.f; // 
 	bool is_front_backward_face = false;
 	{
 		float3 ray_backward_origin_os = ray_orig_os + ray_dir_unit_os * planeThickness_os;
@@ -1622,14 +1622,16 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 #define HITBUFFERSIZE 5
 		bool is_backface_prev = !is_front_forward_face;
 		uint hitCount = 0; // just for debugging
-		float hitDistsWS[HITBUFFERSIZE];
-		if (hit_on_backward_ray && last_layer_depth > 0)
+		//float hitDistsWS[HITBUFFERSIZE];
+		if (last_layer_depth > 0)
 		{
 			if (is_backface_prev)
 			{
 				//float3 forward_hit_pos_ws = TransformPoint(forward_hit_pos_os, g_cbPobj.mat_os2ws); 
-				thickness_through_os = forward_hit_depth;// length(ray_orig_ws - forward_hit_pos_ws);
+				thickness_through_os = forward_hit_depth;
 			}
+
+			float ray_march_dist = forward_hit_depth;
 
 			[loop]
 			for (uint i = 0; i < HITBUFFERSIZE; i++)
@@ -1678,7 +1680,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 				hitDistance = hit.distance;
 
 				ray.Origin += ray.Direction * hit.distance;
-				ray.TMin = 0.01;// ray_tmin; // small offset!
+				ray.TMin = ray_tmin; // small offset!
 				ray.TMax = ray_tmax;
 
 #endif
@@ -1686,22 +1688,36 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 				{
 					break;
 				}
+				ray_march_dist += hitDistance;
 
 #ifdef BVH_LEGACY
 				bool localInside = dot(trinormal, test_raydir.xyz) > 0;
 #else
 				bool localInside = hit.is_backface;
 #endif
-				if (localInside)// || is_backface_prev == localInside)
+				if (localInside)
 				{
-					//float3 v = hitDistance * ray_dir_unit_os;
-					thickness_through_os += hitDistance;// length(TransformVector(v, g_cbPobj.mat_os2ws));
+					if (ray_march_dist < planeThickness_os)
+					{
+						thickness_through_os += hitDistance;
+					}
+					else
+					{
+						thickness_through_os += hitDistance - (ray_march_dist - planeThickness_os);
+					}
 					hitCount++;
+				}
+				if (ray_march_dist >= planeThickness_os)
+				{
+					break;
 				}
 				is_backface_prev = localInside;
 			}
 			//fragment_vis[ss_xy] = float4((float3)(hitDistsWS[2] - 30) / 30.f, 1);
 			//fragment_vis[ss_xy] = float4((float3)(hitCount) / HITBUFFERSIZE, 1);
+			//return;
+
+			//fragment_vis[ss_xy] = float4(thickness_through_os / (planeThickness_os), 0, 0, 1);
 			//return;
 		}
 		else if (!is_front_backward_face)
@@ -1711,7 +1727,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 	}
 
 	//float3 posFirstWS, posLastWS;
-	float zdepth0 = -1.f; // WS
+	float zdepth0 = -1.f, zdepth1 = -1.f; // WS
 	if (isInsideOnPlane) {
 		if (planeThickness == 0) {
 
@@ -1720,6 +1736,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 			}
 
 			zdepth0 = 0;
+			zdepth1 = 0;
 			thickness_through_os = 0;
 		}
 		else { // planeThickness > 0
@@ -1730,13 +1747,32 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 				//fragment_vis[ss_xy] = float4(1, 0, 0, 1);
 				__EXIT;
 			}
+
+			if (last_layer_depth > 0) {
+				float3 vray1_os = last_layer_depth * ray_dir_unit_os;
+				zdepth1 = length(TransformVector(vray1_os, g_cbPobj.mat_os2ws));
+			}
+			else
+			{
+				zdepth1 = planeThickness;
+			}
 		}
 	}
 	else { // outside
-		zdepth0 = forward_hit_depth;
+		float3 vray0_os = min(forward_hit_depth, planeThickness_os) * ray_dir_unit_os;
+		zdepth0 = length(TransformVector(vray0_os, g_cbPobj.mat_os2ws));
 		if (zdepth0 > planeThickness) {
-			//fragment_vis[ss_xy] = float4(1, 1, 0, 1);
+			//fragment_vis[ss_xy] = float4(0, 1, 0, 1);
 			__EXIT;
+		}
+
+		if (last_layer_depth > 0) {
+			float3 vray1_os = last_layer_depth * ray_dir_unit_os;
+			zdepth1 = length(TransformVector(vray1_os, g_cbPobj.mat_os2ws));
+		}
+		else
+		{
+			zdepth1 = planeThickness;
 		}
 	}
 
@@ -1849,7 +1885,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 		if (v_rgba.a < 0.01)
 			return;
 		// always to k-buf not render-out buffer
-		float4 v_rgba0 = v_rgba;// , v_rgba1 = v_rgba;
+		float4 v_rgba0 = v_rgba, v_rgba1 = v_rgba;
 
 		// DOJO TO consider...
 		// preserve the original alpha (i.e., v_rgba.a) or not..????
@@ -1858,19 +1894,25 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 		v_rgba0.a *= v_rgba0.a;
 		v_rgba0.rgb *= v_rgba0.a;
 		//v_rgba0.a = v_rgba.a;
-		float vz_thickness = GetVZThickness(zdepth0, g_cbPobj.vz_thickness);
+		float vz_thickness = zdepth1 - zdepth0;// GetVZThickness(zdepth0, g_cbPobj.vz_thickness);
+		//if (zdepth1 >= planeThickness)
+		//	fragment_vis[ss_xy] = float4((float3)thickness_through_os / (planeThickness_os), 1);
+		//else
+		//	fragment_vis[ss_xy] = float4(1, 1, 0, 1);
+		//return;
+		//k_value
+		Fill_kBuffer(ss_xy, 2, v_rgba0, zdepth1, vz_thickness);
+		//
+		/*
+		v_rgba1.a *= min(thickness_through_os / (planeThickness_os) + 0.1f, 1.0f);
+		v_rgba1.a *= v_rgba1.a;
+		v_rgba1.rgb *= v_rgba1.a;
+		//v_rgba1.a = v_rgba.a;
+		vz_thickness = GetVZThickness(last_layer_depth, g_cbPobj.vz_thickness);
 		
-		////k_value
-		Fill_kBuffer(ss_xy, 2, v_rgba0, zdepth0, vz_thickness);
-		//
-		//v_rgba1.a *= min((planeThickness - zdepth1 + zThickness) / planeThickness + 0.1f, 1.0f);
-		//v_rgba1.a *= v_rgba1.a;
-		//v_rgba1.rgb *= v_rgba1.a;
-		////v_rgba1.a = v_rgba.a;
-		//vz_thickness = GetVZThickness(zdepth1, g_cbPobj.vz_thickness);
-		//
-		////k_value
-		//Fill_kBuffer(ss_xy, 2, v_rgba1, zdepth1, vz_thickness);
+		//k_value
+		Fill_kBuffer(ss_xy, 2, v_rgba1, last_layer_depth, vz_thickness);
+		/**/
 	}
 
 	return;
