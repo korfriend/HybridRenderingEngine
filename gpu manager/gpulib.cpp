@@ -40,12 +40,10 @@ void sort::Sort(VmGpuManager* gpu_manager,
 		cbData->job_params = job_params;
 		dx11DeviceImmContext->Unmap(cbuf_sort, 0);
 		dx11DeviceImmContext->CSSetConstantBuffers(13, 1, &cbuf_sort);
-		grd_helper::Fence();
 	};
 
 	dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&indexBuffer_write.alloc_res_ptrs[DTYPE_UAV], NULL);
 	dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 1, (ID3D11UnorderedAccessView**)&indirectBuffer.alloc_res_ptrs[DTYPE_UAV], NULL);
-	grd_helper::Fence();
 
 	ID3D11ShaderResourceView* srvs[] = {
 		(ID3D11ShaderResourceView*)counterBuffer_read.alloc_res_ptrs[DTYPE_SRV],
@@ -151,5 +149,4 @@ void sort::Sort(VmGpuManager* gpu_manager,
 	dx11DeviceImmContext->CSSetShaderResources(0, 2, srvnulls);
 	ID3D11UnorderedAccessView* uavnulls[2] = {};
 	dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 2, uavnulls, NULL);
-	grd_helper::Fence();
 }

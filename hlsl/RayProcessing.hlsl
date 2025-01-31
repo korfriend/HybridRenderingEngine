@@ -1,10 +1,10 @@
 #if DX10_0 == 1
+#define BVH_LEGACY
 #define __EXIT return out_ps
 #else
 #define __EXIT return
 #endif
 
-//#define BVH_LEGACY
 
 #ifdef BVH_LEGACY
 
@@ -1550,7 +1550,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 		float4 test_rayorig = float4(ray_orig_os, ray_tmin);
 		float4 test_raydir = float4(ray_dir_unit_os, ray_tmax);
 		intersectBVHandTriangles(test_rayorig, test_raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, forward_hit_depth, debugbingo, trinormal, false);
-		is_front_backward_face = dot(trinormal, test_raydir.xyz) < 0;
+		is_front_forward_face = dot(trinormal, test_raydir.xyz) < 0;
 #else
 		RayDesc ray;
 		ray.Origin = ray_orig_os;

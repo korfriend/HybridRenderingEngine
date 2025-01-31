@@ -873,7 +873,6 @@ void grd_helper::PushConstants(const void* data, uint size, uint offset)
 	memcpy((uint8_t*)mapped_pushConstants.pData + offset, data, size);
 	g_pvmCommonParams->dx11DeviceImmContext->Unmap(pushConstant_write, 0);
 	g_pvmCommonParams->dx11DeviceImmContext->Flush();
-	Fence();
 
 	g_pvmCommonParams->dx11DeviceImmContext->CopyResource(pushConstant, pushConstant_write);
 	g_pvmCommonParams->dx11DeviceImmContext->Flush();
@@ -2110,6 +2109,7 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 
 	if (hasTextureMap) *hasTextureMap = has_texture_img;
 
+#ifndef DX10_0
 	// BVH
 	GpuRes gres_bvhNodeBuffer;
 	gres_bvhNodeBuffer.vm_src_id = pobj->GetObjectID();
@@ -2121,6 +2121,7 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 	{
 		bvh::UpdateGeometryGPUBVH(g_pCGpuManager, g_pvmCommonParams, pobj);
 	}
+#endif
 
 	return true;
 }

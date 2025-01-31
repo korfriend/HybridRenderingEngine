@@ -234,7 +234,6 @@ namespace bvh {
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 10, dx11UAVs_NULL, NULL);
 		ID3D11ShaderResourceView* dx11SRVs_NULL[10] = { };
 		dx11DeviceImmContext->CSSetShaderResources(0, 10, dx11SRVs_NULL);
-		grd_helper::Fence();
 
 		// BVH - Primitive (GEOMETRY-ONLY) Builder //
 		{
@@ -264,7 +263,6 @@ namespace bvh {
 			push.aabb_extents_rcp.z = 1.f / push.aabb_extents_rcp.z;
 
 			grd_helper::PushConstants(&push, sizeof(BVHPushConstants), 0);
-			grd_helper::Fence();
 
 			//dx11DeviceImmContext->Map(cbuf_BVHPushConstants, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_pushConstants);
 			//BVHPushConstants* cbData = (BVHPushConstants*)mapped_pushConstants.pData;
@@ -272,16 +270,13 @@ namespace bvh {
 			//dx11DeviceImmContext->Unmap(cbuf_BVHPushConstants, 0);
 			const ID3D11ShaderResourceView* srv_push = grd_helper::GetPushContantSRV();
 			dx11DeviceImmContext->CSSetShaderResources(9, 1, (ID3D11ShaderResourceView* const*)&srv_push);
-			grd_helper::Fence();
 
 			primitiveCount = totalTriangles;
 
 			dx11DeviceImmContext->CSSetShader(GETCS(BVH_Primitives_cs_5_0), NULL, 0);
-			grd_helper::Fence();
 			dx11DeviceImmContext->Dispatch((primitiveCount + BVH_BUILDER_GROUPSIZE - 1) / BVH_BUILDER_GROUPSIZE,
 				1,
 				1);
-			grd_helper::Fence();
 
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 10, dx11UAVs_NULL, NULL);
 			dx11DeviceImmContext->CSSetShaderResources(0, 10, dx11SRVs_NULL);
@@ -297,7 +292,6 @@ namespace bvh {
 			*(uint*)d11MappedRes.pData = primitiveCount;
 			dx11DeviceImmContext->Unmap((ID3D11Resource*)gres_primitiveCounterBuffer_write.alloc_res_ptrs[DTYPE_RES], 0);
 			dx11DeviceImmContext->Flush();
-			grd_helper::Fence();
 
 			dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_primitiveCounterBuffer.alloc_res_ptrs[DTYPE_RES], 
 				(ID3D11Buffer*)gres_primitiveCounterBuffer_write.alloc_res_ptrs[DTYPE_RES]);
@@ -307,16 +301,12 @@ namespace bvh {
 
 		// BVH - Sort Primitive Mortons
 		{
-			grd_helper::Fence();
 			gpulib::sort::Sort(gpuManager, dx11CommonParams,
 				primitiveCount, gres_primitiveMortonBuffer, gres_primitiveCounterBuffer, 0, gres_primitiveIDBuffer);
-			grd_helper::Fence(); 
 
-			//dx11DeviceImmContext->Begin(query);
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 10, dx11UAVs_NULL, NULL);
 			dx11DeviceImmContext->CSSetShaderResources(0, 10, dx11SRVs_NULL);
 			dx11DeviceImmContext->Flush();
-			grd_helper::Fence();
 		}
 
 		// BVH - Build Hierarchy
@@ -334,7 +324,6 @@ namespace bvh {
 				, (ID3D11ShaderResourceView*)gres_primitiveMortonBuffer.alloc_res_ptrs[DTYPE_SRV]
 			};
 			dx11DeviceImmContext->CSSetShaderResources(0, arraysize(srvs), srvs);
-			grd_helper::Fence();
 
 
 			dx11DeviceImmContext->CSSetShader(GETCS(BVH_Hierarchy_cs_5_0), NULL, 0);
@@ -342,7 +331,6 @@ namespace bvh {
 			dx11DeviceImmContext->Dispatch((primitiveCount + BVH_BUILDER_GROUPSIZE - 1) / BVH_BUILDER_GROUPSIZE,
 				1,
 				1);
-			grd_helper::Fence();
 
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 10, dx11UAVs_NULL, NULL);
 			dx11DeviceImmContext->CSSetShaderResources(0, 10, dx11SRVs_NULL);
@@ -352,8 +340,31 @@ namespace bvh {
 
 		// BVH - Propagate AABB
 		{
+			// for example in depth of 4
+			// 
+			// Level 3:     A 
+			//            /   \
+			// Level 2:  B     C
+			//          / \   / \
+			// Level 1: D   E F   G
+			//         /\  /\ /\  /\
+			// Level 0: Leaf nodes
+			//
+			// First pass:
+			// When D's children arrive at D -> one child returns, but the other completes D and can propagate to B
+			// When E's children arrive at E -> one child returns, the other completes E
+			// When F's children arrive at F -> one child returns, but the other completes F and can propagate to C
+			// When G's children arrive at G -> one child returns, the other completes G
+			//
+			// Second pass:
+			// Propagation from E to B (B is complete)
+			// Propagation from G to C(C is complete)
+			// ...and I said a third pass would be needed for B and C to propagate to A, but actually either B or C can reach A in the second pass!
+			// 
+			// In my implementation, for robustness propagation of AABBs, use MAX tree depth!
+
 			uint treeDepth = (uint)ceil(log2(primitiveCount));
-			vzlog("**** treeDepth : %d", treeDepth);
+			vzlog("(%d)'s Max TreeDepth: % d", pobj->GetObjectID(), treeDepth);
 
 			ID3D11UnorderedAccessView* uavs[2] = {
 					(ID3D11UnorderedAccessView*)gres_bvhNodeBuffer.alloc_res_ptrs[DTYPE_UAV]
@@ -368,7 +379,6 @@ namespace bvh {
 				, (ID3D11ShaderResourceView*)gres_bvhParentBuffer.alloc_res_ptrs[DTYPE_SRV]
 			};
 			dx11DeviceImmContext->CSSetShaderResources(0, arraysize(srvs), srvs);
-			grd_helper::Fence();
 
 			dx11DeviceImmContext->CSSetShader(GETCS(BVH_Propagateaabb_cs_5_0), NULL, 0);
 			for (int i = 0; i < treeDepth; i++) {
@@ -376,16 +386,12 @@ namespace bvh {
 					1,
 					1);
 			}
-			grd_helper::Fence();
 
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 10, dx11UAVs_NULL, NULL);
 			dx11DeviceImmContext->CSSetShaderResources(0, 10, dx11SRVs_NULL);
 			dx11DeviceImmContext->Flush();
 			grd_helper::Fence();
 		}
-
-		dx11DeviceImmContext->CSSetShaderResources(100, 1, dx11SRVs_NULL);
-		grd_helper::Fence();
 
 		dx11CommonParams->GpuProfile("BVH Rebuild", true);
 
@@ -481,8 +487,6 @@ namespace bvh {
 			return true;
 		}
 #endif
-		dx11DeviceImmContext->Flush();
-		grd_helper::Fence();
 
 		return true;
 	}

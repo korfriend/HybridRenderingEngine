@@ -26,8 +26,8 @@ fxc /E GS_Surfels /T gs_4_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs_4_0
 fxc /E GS_ThickPoints_Pixels /T gs_4_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs_4_0/GS_ThickPoints_gs_4_0
 fxc /E GS_ThickLines /T gs_4_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs_4_0/GS_ThickLines_gs_4_0
 
-fxc /E ThickSlicePathTracer /T ps_4_0 ./hlsl/RayProcessing.hlsl /Fo ./shader_compiled_objs_4_0/PickingThickSlice_ps_4_0 /D CURVEDPLANE=0 /D PICKING=1 /D PATHTR_USE_KBUF=1 /D DX10_0=1
-fxc /E ThickSlicePathTracer /T ps_4_0 ./hlsl/RayProcessing.hlsl /Fo ./shader_compiled_objs_4_0/PickingCurvedThickSlice_ps_4_0 /D CURVEDPLANE=1 /D PICKING=1 /D PATHTR_USE_KBUF=1 /D DX10_0=1
+fxc /E ThickSlicePathTracer /T ps_4_0 ./hlsl/RayProcessing.hlsl /Fo ./shader_compiled_objs_4_0/PickingThickSlice_ps_4_0 /D CURVEDPLANE=0 /D PICKING=1 /D PATHTR_USE_KBUF=1 /D DX10_0=1 
+fxc /E ThickSlicePathTracer /T ps_4_0 ./hlsl/RayProcessing.hlsl /Fo ./shader_compiled_objs_4_0/PickingCurvedThickSlice_ps_4_0 /D CURVEDPLANE=1 /D PICKING=1 /D PATHTR_USE_KBUF=1 /D DX10_0=1 
 
 fxc /E ThickSlicePathTracer /T ps_4_0 ./hlsl/RayProcessing.hlsl /Fo ./shader_compiled_objs_4_0/ThickSlicePathTracer_ps_4_0 /D FRAG_MERGING=0 /D CURVEDPLANE=0 /D DX10_0=1
 fxc /E ThickSlicePathTracer /T ps_4_0 ./hlsl/RayProcessing.hlsl /Fo ./shader_compiled_objs_4_0/CurvedThickSlicePathTracer_ps_4_0 /D FRAG_MERGING=0 /D CURVEDPLANE=1 /D DX10_0=1
