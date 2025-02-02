@@ -317,20 +317,20 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 		fs[k] = f;
 	}
 
-	// new custom add check! (e.g., SS DVR)
-	if (BitCheck(g_cbCamState.cam_flag, 11))
-	{
-		Fragment f;
-		f.i_vis = external_rgba[DTid.xy];
-		f.z = external_zdepth[DTid.xy];
-#if !defined(FRAG_MERGING) || FRAG_MERGING == 1
-		f.zthick = external_zthick[DTid.xy];
-		f.opacity_sum = 0;
-#endif
-		fs[frag_cnt] = f;
-
-		frag_cnt++;
-	}
+//	// new custom add check! (e.g., SS DVR)
+//	if (BitCheck(g_cbCamState.cam_flag, 11))
+//	{
+//		Fragment f;
+//		f.i_vis = external_rgba[DTid.xy];
+//		f.z = external_zdepth[DTid.xy];
+//#if !defined(FRAG_MERGING) || FRAG_MERGING == 1
+//		f.zthick = external_zthick[DTid.xy];
+//		f.opacity_sum = 0;
+//#endif
+//		fs[frag_cnt] = f;
+//
+//		frag_cnt++;
+//	}
 
 	sort(frag_cnt, fs, Fragment);
 

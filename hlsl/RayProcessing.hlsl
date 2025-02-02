@@ -41,43 +41,6 @@ struct Ray {
 	//Ray(float3 o_, float3 d_) { orig = o_; dir = d_; }
 };
 
-struct Sphere {
-
-	float rad;				// radius 
-	float3 pos, emi, col;	// position, emission, color 
-	Refl_t refl;			// reflection type (DIFFuse, SPECular, REFRactive)
-
-	float intersect(const Ray r) { // returns distance, 0 if nohit 
-
-		// ray/sphere intersection
-		float3 op = pos - r.orig;
-		float t, epsilon = 0.01f;
-		float b = dot(op, r.dir);
-		float disc = b * b - dot(op, op) + rad * rad; // discriminant of quadratic formula
-		if (disc < 0) return 0; else disc = sqrt(disc);
-		return (t = b - disc) > epsilon ? t : ((t = b + disc) > epsilon ? t : 0.0f);
-	}
-};
-
-static Sphere spheres[] = {
-	// sun
-	//{ 10000, { 50.0f, 40.8f, -1060 }, { 0.3, 0.3, 0.3 }, { 0.175f, 0.175f, 0.25f }, DIFF }, // sky   0.003, 0.003, 0.003	
-	//{ 4.5, { 0.0f, 12.5, 0 }, { 6, 4, 1 }, { .6f, .6f, 0.6f }, DIFF },  /// lightsource	
-	{ 10000.02, { 50.0f, -10001.35, 0 }, { 0.0, 0.0, 0 }, { 0.3f, 0.3f, 0.3f }, DIFF }, // ground  300/-301.0
-	//{ 10000, { 50.0f, -10000.1, 0 }, { 0, 0, 0 }, { 0.3f, 0.3f, 0.3f }, DIFF }, // double shell to prevent light leaking
-	//{ 110000, { 50.0f, -110048.5, 0 }, { 3.6, 2.0, 0.2 }, { 0.f, 0.f, 0.f }, DIFF },  // horizon brightener
-
-	//{ 0.5, { 30.0f, 180.5, 42 }, { 0, 0, 0 }, { .6f, .6f, 0.6f }, DIFF },  // small sphere 1  
-	//{ 0.8, { 2.0f, 0.f, 0 }, { 0.0, 0.0, 0.0 }, { 0.8f, 0.8f, 0.8f }, SPEC },  // small sphere 2
-	//{ 0.8, { -3.0f, 0.f, 0 }, { 0.0, 0.0, 0.0 }, { 0.0f, 0.0f, 0.2f }, COAT },  // small sphere 2
-	{ 2.5, { -6.0f, 0.5f, 0.0f }, { 0.0, 0.0, 0.0 }, { 0.9f, 0.9f, 0.9f }, SPEC },  // small sphere 2
-	//{ 0.6, { -10.0f, -2.f, 1.0f }, { 0.0, 0.0, 0.0 }, { 0.8f, 0.8f, 0.8f }, DIFF },  // small sphere 2
-	//{ 0.8, { -1.0f, -0.7f, 4.0f }, { 0.0, 0.0, 0.0 }, { 0.8f, 0.8f, 0.8f }, REFR },  // small sphere 2
-	//{ 9.4, { 9.0f, 0.f, -9.0f }, { 0.0, 0.0, 0.0 }, { 0.8f, 0.8f, 0.f }, DIFF },  // small sphere 2
-	//{ 22, { 105.0f, 22, 24 }, { 0, 0, 0 }, { 0.9f, 0.9f, 0.9f }, DIFF }, // small sphere 3
-};
-
-
 //  RAY BOX INTERSECTION ROUTINES
 
 // Experimentally determined best mix of float/int/video minmax instructions for Kepler.
@@ -192,6 +155,7 @@ StructuredBuffer<BVHPrimitive> primitiveBuffer : register(t4);
 StructuredBuffer<uint> bvhParentBuffer : register(t5);
 StructuredBuffer<uint> bvhFlagBuffer : register(t6);
 
+// TRY THIS!! 
 Buffer<float> vertexBuffer : register(t10);
 Buffer<uint> indexBuffer : register(t11);
 
@@ -204,6 +168,7 @@ Buffer<float3> buf_curveTangents : register(t31);
 
 // magic values
 #define WILDCARD_DEPTH_OUTLINE 0x12345678
+#define WILDCARD_DEPTH_OUTLINE_DIRTY 0x12345679
 #define OUTSIDE_PLANE 0x87654321
 
 struct PS_FILL_OUTPUT_NO_DS
@@ -215,6 +180,8 @@ struct PS_FILL_OUTPUT_NO_DS
 	//float ds_z : SV_Depth;
 };
 
+Texture2D<float> prev_fragment_zdepth : register(t21);
+
 #if DX10_0 == 1
 //#include "Sr_Common.hlsl"
 #include "./kbuf/Sr_Kbuf.hlsl"
@@ -224,7 +191,6 @@ struct PS_FILL_OUTPUT_NO_DS
 // USE PIXEL SHADER //
 // USE PS_FILL_OUTPUT //
 Texture2D prev_fragment_vis : register(t20);
-Texture2D<float> prev_fragment_zdepth : register(t21);
 
 #else
 #include "./kbuf/Sr_Kbuf.hlsl"
@@ -1137,9 +1103,15 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 		__EXIT;
 
 	float fvPrev = fragment_zdepth[ss_xy];// asfloat(ConvertFloat4ToUInt(v_rgba));
-	uint wildcard_v = asuint(fvPrev);
-	if (wildcard_v == WILDCARD_DEPTH_OUTLINE)
+	if (asuint(fvPrev) == WILDCARD_DEPTH_OUTLINE)
 		__EXIT;
+
+	if (fragment_counter[ss_xy] == WILDCARD_DEPTH_OUTLINE_DIRTY)
+	{
+		fragment_counter[ss_xy] = 1;
+		fragment_zdepth[ss_xy] = asfloat(WILDCARD_DEPTH_OUTLINE);
+		__EXIT;
+	}
 	
 	fragment_zdepth[ss_xy] = asfloat(OUTSIDE_PLANE);
 	//__EXIT;
@@ -1244,10 +1216,8 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 #ifdef BVH_LEGACY
 	float3 trinormal = float3(0, 0, 0);
 #endif
-	float ray_tmin = 0.0001f;
+	float ray_tmin = 0.0001f; // MAGIC VALUE
 	float ray_tmax = 1e20; // use thickness!!
-	float ray_tmin2 = 0.0001f;
-	float ray_tmax2 = 1e20; // use thickness!!
 
 	// intersect all triangles in the scene stored in BVH
 	int debugbingo = 0;
@@ -1262,6 +1232,12 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 		pos_ip_ws = pos_ip_ws + ray_dir_unit_ws * planeThickness * 0.5f;
 		planeThickness = 0;
 		//return;
+	}
+
+	if (planeThickness == 0)
+	{
+		// this is for rubust signed distance computation
+		ray_tmin = 0;
 	}
 
 	// clipping //
@@ -1396,8 +1372,8 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 #if PICKING == 1 
 			if (localInside) checkCountInsideVertical++;
 #else
-			//isInsideOnPlane = localInside && isInsideOnPlane;
-			isInsideOnPlane = localInside || isInsideOnPlane;
+			isInsideOnPlane = localInside && isInsideOnPlane;
+			//isInsideOnPlane = localInside || isInsideOnPlane;
 #endif
 
 			float3 posHitOS = test_rayorig.xyz + hitDistance * test_raydir.xyz;
@@ -1488,8 +1464,8 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 #if PICKING == 1 
 			if (localInside) checkCountInsideHorizon++;
 #else
-			//isInsideOnPlane = localInside && isInsideOnPlane;
-			isInsideOnPlane = localInside || isInsideOnPlane;
+			isInsideOnPlane = localInside && isInsideOnPlane;
+			//isInsideOnPlane = localInside || isInsideOnPlane;
 #endif
 
 			float3 posHitOS = test_rayorig.xyz + hitDistance * test_raydir.xyz;
@@ -1537,7 +1513,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 #else
 		fragment_zdepth[ss_xy] = minDistOnPlane;
 #endif
-		//__EXIT;
+		//__EXIT; // DO NOT finish here (for solid filling)
 	}
 #endif
 
@@ -1758,11 +1734,14 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 			}
 		}
 	}
-	else { // outside
+	else {
+		if (planeThickness == 0) {
+			return;
+		}
+		// outside
 		float3 vray0_os = min(forward_hit_depth, planeThickness_os) * ray_dir_unit_os;
 		zdepth0 = length(TransformVector(vray0_os, g_cbPobj.mat_os2ws));
 		if (zdepth0 > planeThickness) {
-			//fragment_vis[ss_xy] = float4(0, 1, 0, 1);
 			__EXIT;
 		}
 
@@ -1832,6 +1811,8 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 #else
 	if (planeThickness == 0)
 	{
+		//fragment_vis[ss_xy] = float4(1, 0, 0, 1);
+		//return;
 		float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
 		v_rgba.a = 1;
 		if (planeThickness == 0.f)
@@ -1842,6 +1823,8 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 			v_rgba = float4(0, 0, 0, 0.01);
 			zthickness = 0.f;
 		}
+
+		v_rgba.rgb *= v_rgba.a;
 
 		Fragment frag;
 		frag.i_vis = ConvertFloat4ToUInt(v_rgba); // current
@@ -1891,7 +1874,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 		// preserve the original alpha (i.e., v_rgba.a) or not..????
 		//v_rgba0.a *= min(thickness_through_os / (last_layer_depth - zdepth0) + 0.1f, 1.0f);
 		v_rgba0.a *= min(thickness_through_os / (planeThickness_os) + 0.1f, 1.0f);
-		v_rgba0.a *= v_rgba0.a;
+		//v_rgba0.a *= v_rgba0.a; // heuristic 
 		v_rgba0.rgb *= v_rgba0.a;
 		//v_rgba0.a = v_rgba.a;
 		float vz_thickness = zdepth1 - zdepth0;// GetVZThickness(zdepth0, g_cbPobj.vz_thickness);
@@ -1901,6 +1884,8 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 		//	fragment_vis[ss_xy] = float4(1, 1, 0, 1);
 		//return;
 		//k_value
+		//if (v_rgba0.a < 1 / 255.f || vz_thickness == 0)
+		//	__EXIT;
 		Fill_kBuffer(ss_xy, 2, v_rgba0, zdepth1, vz_thickness);
 		//
 		/*
@@ -1963,23 +1948,85 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 
 //#define WILDCARD_DEPTH_OUTLINE 777888
 ///#define OUTSIDE_PLANE 777788
+inline bool WildcardPassCheck(uint wildcard_v, float sd)
+{
+#if DX10_0 == 1
+	if (wildcard_v == WILDCARD_DEPTH_OUTLINE || wildcard_v == OUTSIDE_PLANE)
+		return false;
+#else
+	if (wildcard_v == WILDCARD_DEPTH_OUTLINE || asuint(sd) == OUTSIDE_PLANE)
+		return false;
+#endif
+	return true;
+}
+
+inline float LineAlpha(float v)
+{
+	float distAbs = abs(v);
+	if (distAbs >= g_cbPobj.pix_thickness)
+		return 0;
+
+	return max(min(g_cbPobj.pix_thickness - distAbs, 1.f), 0); // AA option
+}
+
 float TestAlpha(float v) {
 	uint wildcard_v = asuint(v);
 	if (wildcard_v == WILDCARD_DEPTH_OUTLINE || wildcard_v == OUTSIDE_PLANE)
 		return 0;
 
-	const float lingThres = g_cbPobj.pix_thickness;
+	const float lineThres = g_cbPobj.pix_thickness;
 	float distAbs = abs(v);
-	if (distAbs >= lingThres)
+	if (distAbs >= lineThres)
 		return 0;
 
-	return max(min(lingThres - distAbs, 1.f), 0); // AA option
+	return max(min(lineThres - distAbs, 1.f), 0); // AA option
+}
+
+float getAlpha(float sd, float sd_neighbor[8], float thickness) {
+	// 현재 픽셀이 contour 근처인지 확인
+	if (abs(sd) > thickness)
+		return 0.0;
+
+	// 부호가 바뀌는 edge 찾기
+	int signChanges = 0;
+	for (int i = 0; i < 8; i++) {
+		if (sign(sd) != sign(sd_neighbor[i])) {
+			signChanges++;
+		}
+	}
+
+	// contour가 지나가는 정도를 계산
+	float base = 1.0 - abs(sd) / thickness;
+	float edgeFactor = float(signChanges) / 8.0;
+
+	return base * lerp(0.5, 1.0, edgeFactor);
+}
+
+float getAlpha2(float sd, float thickness) {
+	float smoothWidth = 1.0; // 부드러운 정도를 조절
+	return smoothstep(thickness, thickness - smoothWidth, abs(sd));
+}
+
+float getAlpha1(float sd, float thickness) {
+	//float thickness = 1.0; // 원하는 두께 조절 (1.0이면 기본, 값을 키우면 전환 범위가 넓어짐)
+	float aa = fwidth(sd);
+	return 1.0 - smoothstep(0.0, thickness * aa, abs(sd));
+	
+}
+
+float getAlpha3(float sd, float sd_neighbors[8], float thickness) {
+	// 좌우, 상하 방향의 중앙 차분으로 gradient 근사
+	float dx = 0.5 * (sd_neighbors[0] - sd_neighbors[2]);
+	float dy = 0.5 * (sd_neighbors[1] - sd_neighbors[3]);
+	float aa = length(float2(dx, dy));  // 변화율 (anti-aliasing 너비)
+	float alpha = 1.0 - smoothstep(0.0, aa * thickness, abs(sd));
+	return saturate(alpha);
 }
 
 
 #if PICKING != 1
 #if DX10_0 == 1
-PS_FILL_OUTPUT_NO_DS Outline2D(VS_OUTPUT input)
+PS_FILL_OUTPUT_NO_DS Outline2D(VS_OUTPUT input) 
 #else
 [numthreads(GRIDSIZE, GRIDSIZE, 1)]
 void Outline2D(uint3 DTid : SV_DispatchThreadID)
@@ -1988,55 +2035,100 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 #if DX10_0 == 1
 	int2 ss_xy = int2(input.f4PosSS.xy);
 	PS_FILL_OUTPUT_NO_DS out_ps;
-	//out_ps.ds_z = 0;
 	out_ps.color = prev_fragment_vis[ss_xy];
 	out_ps.depthcs = prev_fragment_zdepth[ss_xy];
-	float fvcur = out_ps.depthcs;
-
-	float fvcur1 = prev_fragment_zdepth[ss_xy + int2(1, 0)];
-	float fvcur2 = prev_fragment_zdepth[ss_xy + int2(0, 1)];
-	float fvcur3 = prev_fragment_zdepth[ss_xy + int2(-1, 0)];
-	float fvcur4 = prev_fragment_zdepth[ss_xy + int2(0, -1)];
-	
-	//if (out_ps.depthcs == WILDCARD_DEPTH_OUTLINE)
-	//	return out_ps;
-	//out_ps.color = (float4)1;
-	//out_ps.depthcs = 1;
-	//return out_ps;
+	float sd = out_ps.depthcs;
 #else
 	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
 		return;
 	int2 ss_xy = int2(DTid.xy);
-	float fvcur = fragment_zdepth[ss_xy];
-
-	float fvcur1 = fragment_zdepth[ss_xy + int2(1, 0)];
-	float fvcur2 = fragment_zdepth[ss_xy + int2(0, 1)];
-	float fvcur3 = fragment_zdepth[ss_xy + int2(-1, 0)];
-	float fvcur4 = fragment_zdepth[ss_xy + int2(0, -1)];
+	float sd = prev_fragment_zdepth[ss_xy];
 #endif
+	uint wildcard_v = asuint(sd);
+	if (wildcard_v == WILDCARD_DEPTH_OUTLINE || wildcard_v == OUTSIDE_PLANE)
+		__EXIT;
 
-	float a = TestAlpha(fvcur);
-	if (a == 0) {
-		//fragment_vis[ss_xy] = float4(1, 1, 0, 1);
-		//fragment_zdepth[ss_xy] = asfloat(WILDCARD_DEPTH_OUTLINE);
+	//float sd_neighbors[8] = {
+	//	prev_fragment_zdepth[ss_xy + int2(1, 0)],
+	//	prev_fragment_zdepth[ss_xy + int2(0, 1)],
+	//	prev_fragment_zdepth[ss_xy + int2(-1, 0)],
+	//	prev_fragment_zdepth[ss_xy + int2(0, -1)],
+	//	prev_fragment_zdepth[ss_xy + int2(-1, -1)],
+	//	prev_fragment_zdepth[ss_xy + int2(1, 1)],
+	//	prev_fragment_zdepth[ss_xy + int2(1, -1)],
+	//	prev_fragment_zdepth[ss_xy + int2(-1, 1)],
+	//};
+
+
+	// half16 사용...
+//#define NEW_TEST
+#ifdef NEW_TEST
+	
+	//float a_acc = LineAlpha(sd);
+	//uint count = 1;
+	//
+	[loop]
+	for (uint i = 0; i < 8; i++)
+	{
+		wildcard_v = asuint(sd_neighbors[i]);
+		if (wildcard_v == WILDCARD_DEPTH_OUTLINE || wildcard_v == OUTSIDE_PLANE)
+			__EXIT;
+	}
+	//
+	//float a = a_acc / (float)count;
+	//if (a < 0.5) {
+	//	__EXIT;
+	//}
+	//a = 1;
+
+	//float a_cc = getAlpha1(sd, g_cbPobj.pix_thickness);
+	//uint count = 0;
+	//[loop]
+	//for (uint i = 0; i < 8; i++)
+	//{
+	//	float a_test = sd_neighbors[i];// 
+	//	if (WildcardPassCheck(a_test))
+	//	{
+	//		a_cc += a_test;
+	//		a += getAlpha1(sd_neighbors[i], g_cbPobj.pix_thickness);
+	//		count++;
+	//	}
+	//}
+	//a /= count;
+	float a = getAlpha(sd, sd_neighbors, g_cbPobj.pix_thickness);
+	if (a < 0.1)
+	{
 		__EXIT;
 	}
-	//__EXIT;
 
-	float a1 = TestAlpha(fvcur1);
-	float a2 = TestAlpha(fvcur2);
-	float a3 = TestAlpha(fvcur3);
-	float a4 = TestAlpha(fvcur4);
+	if (sd * sd_neighbors[0] < 0 || sd * sd_neighbors[1] < 0 || sd * sd_neighbors[2] < 0 || sd * sd_neighbors[3] < 0)
+		a = 1.f;
 
-	if (a1 <= a && a2 <= a && a3 <= a && a4 <= a && 1.f > a) {
+#else
 
-		if (fvcur * fvcur1 < 0 || fvcur * fvcur2 < 0 || fvcur * fvcur3 < 0 || fvcur * fvcur4 < 0)
-			a = 1.f;
+	float a = TestAlpha(sd);
+	if (a == 0) {
+		__EXIT;
 	}
+	
+	//float a1 = TestAlpha(sd_neighbors[0]);
+	//float a2 = TestAlpha(sd_neighbors[1]);
+	//float a3 = TestAlpha(sd_neighbors[2]);
+	//float a4 = TestAlpha(sd_neighbors[3]);
+	//
+	//if (a1 <= a && a2 <= a && a3 <= a && a4 <= a && 1.f > a) {
+	//
+	//	if (sd * sd_neighbors[0] < 0 || sd * sd_neighbors[1] < 0 || sd * sd_neighbors[2] < 0 || sd * sd_neighbors[3] < 0)
+	//		a = 1.f;
+	//}
+#endif
 
 	float4 outline_color = float4(g_cbPobj.Kd, 1);
-	outline_color.a = a;
+	outline_color.a = a;// *a; // heuristic aliasing 
 	outline_color.rgb *= outline_color.a;
+	//outline_color.rgb *= outline_color.a;
+	//outline_color.rgb *= outline_color.a;
+	//outline_color.rgb *= outline_color.a;
 
 	//outline_color = float4(fvcur / 1000, fvcur / 1000, fvcur / 1000, 1);
 
@@ -2049,6 +2141,7 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 	bool disableSolidFill = BitCheck(g_cbPobj.pobj_flag, 6);
 
 #if DX10_0 == 1
+	//out_ps.ds_z = 0;
 	//out_ps.ds_z = input.f4PosSS.z;
 	out_ps.color = outline_color;
 	out_ps.depthcs = asfloat(WILDCARD_DEPTH_OUTLINE);
@@ -2056,11 +2149,13 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 	return out_ps;
 #else
 	fragment_vis[ss_xy] = outline_color;
-	fragment_zdepth[ss_xy] = asfloat(WILDCARD_DEPTH_OUTLINE);
+	//fragment_zdepth[ss_xy] = asfloat(WILDCARD_DEPTH_OUTLINE);
 
 	// to do 
 	if (disableSolidFill)
 		Fill_kBuffer(ss_xy, g_cbCamState.k_value, outline_color, 0.01f, g_cbCamState.far_plane);
+
+	fragment_counter[ss_xy] = WILDCARD_DEPTH_OUTLINE_DIRTY;
 #endif
 }
 

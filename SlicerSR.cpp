@@ -476,12 +476,6 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_rgba, iobj, "SYSTEM_OUT_RGBA", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_SYSOUT);
 	grd_helper::UpdateFrameBuffer(gres_fb_sys_depthcs, iobj, "SYSTEM_OUT_DEPTH", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R32_FLOAT, UPFB_SYSOUT);
 
-	const int max_cutlines = 10000;
-	GpuRes gres_cutlines_buffer, gres_cutlines_system_buffer;
-	grd_helper::UpdateFrameBuffer(gres_cutlines_buffer, iobj, "BUFFER_RW_CUTLINES_GSO_BUF", RTYPE_BUFFER,
-		D3D11_BIND_STREAM_OUTPUT, DXGI_FORMAT_R32G32B32A32_FLOAT, UPFB_NFPP_BUFFERSIZE, max_cutlines);
-	grd_helper::UpdateFrameBuffer(gres_cutlines_system_buffer, iobj, "SYSTEM_OUT_RW_CUTLINES_GSO_BUF", RTYPE_BUFFER,
-		NULL, DXGI_FORMAT_R32G32B32A32_FLOAT, UPFB_SYSOUT | UPFB_NFPP_BUFFERSIZE, max_cutlines);
 #pragma endregion 
 
 	uint num_grid_x = __BLOCKSIZE == 1 ? fb_size_cur.x : (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
@@ -814,13 +808,6 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
 		dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV], planeThickness > 0 ? clr_float_fltmax_4 : clr_float_zero_4);
 
-		if (!curved_slicer && planeThickness == 0.f) 
-		{
-			static std::vector<vmfloat4> clearDataUnit(max_cutlines, vmfloat4(0, 0, 0, 0));//make sure that this thing is aligned
-			dx11CommonParams->dx11DeviceImmContext->UpdateSubresource(
-				(ID3D11Buffer*)gres_cutlines_buffer.alloc_res_ptrs[DTYPE_RES]
-				, 0, NULL, &clearDataUnit[0], sizeof(vmfloat4) * clearDataUnit.size(), sizeof(vmfloat4) * clearDataUnit.size());
-		}
 	}
 	dx11CommonParams->GpuProfile("Clear for Slicer Render - SR", true);
 #pragma endregion 
@@ -856,7 +843,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 #else
 		&gres_fb_counter, &gres_fb_k_buffer, 
 #endif	
-		&gres_picking_buffer, &gres_fb_rgba, &gres_fb_depthcs, &gres_cutlines_buffer,
+		&gres_picking_buffer, &gres_fb_rgba, &gres_fb_depthcs, 
 		&cbuf_cam_state, &cbuf_env_state, &cbuf_clip, &cbuf_pobj, &cbuf_vobj, &cbuf_reffect, &cbuf_tmap, &cbuf_hsmask,
 		&num_grid_x, &num_grid_y, &matWS2PS, &matWS2SS, &matSS2WS, 
 		&light_src, &default_phong_lighting_coeff, &default_point_thickness, &default_surfel_size, &default_line_thickness, &default_color_cmmobj, &use_spinlock_pixsynch, &use_blending_option_MomentOIT,
@@ -1211,8 +1198,11 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 					dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
 
 					if (planeThickness == 0.f || noSlicerFill) {
+						dx11DeviceImmContext->CSSetUnorderedAccessViews(4, 1, dx11UAVs_NULL, NULL);
+						SET_SHADER_RES(21, 1, (ID3D11ShaderResourceView**)&gres_fb_depthcs.alloc_res_ptrs[DTYPE_SRV]);
 						SET_SHADER(GETCS(SliceOutline_cs_5_0), NULL, 0);
 						dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+						SET_SHADER_RES(20, 2, dx11SRVs_NULL);
 					}
 					//else if (planeThickness > 0.f) 
 					//{
@@ -1227,94 +1217,94 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			}
 
 			// cutPlane
-			if (0) {
-				// Lines Cuttins
-#pragma region // Setting Rasterization Stages
-				ID3D11InputLayout* dx11InputLayer_Target = NULL;
-				ID3D11VertexShader* dx11VS_Target = NULL;
-				ID3D11GeometryShader* dx11GS_Target = NULL;
-				//ID3D11PixelShader* dx11PS_Target = NULL;
-				ID3D11RasterizerState2* dx11RState_TargetObj = NULL;
-				uint offset = 0;
-				D3D_PRIMITIVE_TOPOLOGY pobj_topology_type;
-
-				if (prim_data->GetVerticeDefinition("NORMAL"))
-				{
-					if (prim_data->GetVerticeDefinition("TEXCOORD0"))
-					{
-						// PNT (here, T is used as color)
-						dx11InputLayer_Target = dx11LI_PNT;
-						dx11VS_Target = dx11VShader_PNT;
-					}
-					else
-					{
-						// PN
-						dx11InputLayer_Target = dx11LI_PN;
-						dx11VS_Target = dx11VShader_PN;
-					}
-				}
-				else if (prim_data->GetVerticeDefinition("TEXCOORD0"))
-				{
-					if (prim_data->GetVerticeDefinition("TEXCOORD2"))
-					{
-						dx11InputLayer_Target = dx11LI_PTTT;
-						dx11VS_Target = dx11VShader_PTTT;
-					}
-					else
-					{
-						dx11InputLayer_Target = dx11LI_PT;
-						dx11VS_Target = dx11VShader_PT;
-					}
-				}
-				else
-				{
-					// P
-					dx11InputLayer_Target = dx11LI_P;
-					dx11VS_Target = dx11VShader_P;
-				}
-
-				assert(prim_data->ptype == PrimitiveTypeTRIANGLE);
-
-				if (prim_data->is_stripe)
-					pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
-				else
-					pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-
-				dx11RState_TargetObj = GETRASTER(SOLID_NONE);
-
-				ID3D11Buffer* dx11BufferTargetPrim = (ID3D11Buffer*)gres_vtx.alloc_res_ptrs[DTYPE_RES];
-				ID3D11Buffer* dx11IndiceTargetPrim = NULL;
-				uint stride_inputlayer = sizeof(vmfloat3) * (uint)prim_data->GetNumVertexDefinitions();
-				dx11DeviceImmContext->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&dx11BufferTargetPrim, &stride_inputlayer, &offset);
-				if (prim_data->vidx_buffer != NULL)
-				{
-					dx11IndiceTargetPrim = (ID3D11Buffer*)gres_idx.alloc_res_ptrs[DTYPE_RES];
-					dx11DeviceImmContext->IASetIndexBuffer(dx11IndiceTargetPrim, DXGI_FORMAT_R32_UINT, 0);
-				}
-
-				dx11DeviceImmContext->IASetInputLayout(dx11InputLayer_Target);
-				dx11DeviceImmContext->VSSetShader(dx11VS_Target, NULL, 0);
-				dx11DeviceImmContext->GSSetShader(dx11GS_Target, NULL, 0);
-				dx11DeviceImmContext->RSSetState(dx11RState_TargetObj);
-				dx11DeviceImmContext->IASetPrimitiveTopology(pobj_topology_type);
-				dx11DeviceImmContext->PSSetShader(NULL, NULL, 0);
-#pragma endregion 
-
-#pragma region // GEO RENDERING PASS
-
-				// https://stackoverflow.com/questions/12606556/how-do-you-use-geometry-shader-with-output-stream
-				dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(ALWAYS), 0);
-
-				dx11DeviceImmContext->SOSetTargets(1, (ID3D11Buffer**)&gres_cutlines_buffer.alloc_res_ptrs[DTYPE_RES], &offset);
-
-				if (prim_data->is_stripe || prim_data->vidx_buffer == NULL)
-					dx11DeviceImmContext->Draw(prim_data->num_vtx, 0);
-				else
-					dx11DeviceImmContext->DrawIndexed(prim_data->num_vidx, 0, 0);
-
-				dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, NULL, 2, NUM_UAVs, dx11UAVs_NULL, 0);
-#pragma endregion // GEO RENDERING PASS
-			}
+//			if (0) {
+//				// Lines Cuttins
+//#pragma region // Setting Rasterization Stages
+//				ID3D11InputLayout* dx11InputLayer_Target = NULL;
+//				ID3D11VertexShader* dx11VS_Target = NULL;
+//				ID3D11GeometryShader* dx11GS_Target = NULL;
+//				//ID3D11PixelShader* dx11PS_Target = NULL;
+//				ID3D11RasterizerState2* dx11RState_TargetObj = NULL;
+//				uint offset = 0;
+//				D3D_PRIMITIVE_TOPOLOGY pobj_topology_type;
+//
+//				if (prim_data->GetVerticeDefinition("NORMAL"))
+//				{
+//					if (prim_data->GetVerticeDefinition("TEXCOORD0"))
+//					{
+//						// PNT (here, T is used as color)
+//						dx11InputLayer_Target = dx11LI_PNT;
+//						dx11VS_Target = dx11VShader_PNT;
+//					}
+//					else
+//					{
+//						// PN
+//						dx11InputLayer_Target = dx11LI_PN;
+//						dx11VS_Target = dx11VShader_PN;
+//					}
+//				}
+//				else if (prim_data->GetVerticeDefinition("TEXCOORD0"))
+//				{
+//					if (prim_data->GetVerticeDefinition("TEXCOORD2"))
+//					{
+//						dx11InputLayer_Target = dx11LI_PTTT;
+//						dx11VS_Target = dx11VShader_PTTT;
+//					}
+//					else
+//					{
+//						dx11InputLayer_Target = dx11LI_PT;
+//						dx11VS_Target = dx11VShader_PT;
+//					}
+//				}
+//				else
+//				{
+//					// P
+//					dx11InputLayer_Target = dx11LI_P;
+//					dx11VS_Target = dx11VShader_P;
+//				}
+//
+//				assert(prim_data->ptype == PrimitiveTypeTRIANGLE);
+//
+//				if (prim_data->is_stripe)
+//					pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+//				else
+//					pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+//
+//				dx11RState_TargetObj = GETRASTER(SOLID_NONE);
+//
+//				ID3D11Buffer* dx11BufferTargetPrim = (ID3D11Buffer*)gres_vtx.alloc_res_ptrs[DTYPE_RES];
+//				ID3D11Buffer* dx11IndiceTargetPrim = NULL;
+//				uint stride_inputlayer = sizeof(vmfloat3) * (uint)prim_data->GetNumVertexDefinitions();
+//				dx11DeviceImmContext->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&dx11BufferTargetPrim, &stride_inputlayer, &offset);
+//				if (prim_data->vidx_buffer != NULL)
+//				{
+//					dx11IndiceTargetPrim = (ID3D11Buffer*)gres_idx.alloc_res_ptrs[DTYPE_RES];
+//					dx11DeviceImmContext->IASetIndexBuffer(dx11IndiceTargetPrim, DXGI_FORMAT_R32_UINT, 0);
+//				}
+//
+//				dx11DeviceImmContext->IASetInputLayout(dx11InputLayer_Target);
+//				dx11DeviceImmContext->VSSetShader(dx11VS_Target, NULL, 0);
+//				dx11DeviceImmContext->GSSetShader(dx11GS_Target, NULL, 0);
+//				dx11DeviceImmContext->RSSetState(dx11RState_TargetObj);
+//				dx11DeviceImmContext->IASetPrimitiveTopology(pobj_topology_type);
+//				dx11DeviceImmContext->PSSetShader(NULL, NULL, 0);
+//#pragma endregion 
+//
+//#pragma region // GEO RENDERING PASS
+//
+//				// https://stackoverflow.com/questions/12606556/how-do-you-use-geometry-shader-with-output-stream
+//				dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(ALWAYS), 0);
+//
+//				dx11DeviceImmContext->SOSetTargets(1, (ID3D11Buffer**)&gres_cutlines_buffer.alloc_res_ptrs[DTYPE_RES], &offset);
+//
+//				if (prim_data->is_stripe || prim_data->vidx_buffer == NULL)
+//					dx11DeviceImmContext->Draw(prim_data->num_vtx, 0);
+//				else
+//					dx11DeviceImmContext->DrawIndexed(prim_data->num_vidx, 0, 0);
+//
+//				dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVsNULL, NULL, 2, NUM_UAVs, dx11UAVs_NULL, 0);
+//#pragma endregion // GEO RENDERING PASS
+//			}
 			count_call_render++;
 		}
 	};
