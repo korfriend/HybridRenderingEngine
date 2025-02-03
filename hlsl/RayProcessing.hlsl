@@ -518,13 +518,13 @@ int intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 	}
 
 	// Traversal loop.
-	[loop]
+	[allow_uav_condition]
 	while ((uint)nodeAddr != EntrypointSentinel)
 	{
 		// Traverse internal nodes until all SIMD lanes have found a leaf.
 
 		bool searchingLeaf = true; // required for warp efficiency
-		[loop]
+		[allow_uav_condition]
 		while (nodeAddr >= 0 && (uint)nodeAddr != EntrypointSentinel)
 		{
 			// Fetch AABBs of the two child nodes.
@@ -1482,7 +1482,6 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 		}
 	}
 
-
 #if PICKING == 1 
 	if (planeThickness == 0) {
 		if (minDistOnPlane * minDistOnPlane < 4.5 * 4.5 || checkCountInsideHorizon == 2 || checkCountInsideVertical == 2)
@@ -1607,7 +1606,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 
 			float ray_march_dist = forward_hit_depth;
 
-			[loop]
+			[allow_uav_condition]
 			for (uint i = 0; i < HITBUFFERSIZE; i++)
 			{
 #ifdef BVH_LEGACY
@@ -2163,7 +2162,6 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 	fragment_vis[ss_xy] = outline_color;
 	//fragment_zdepth[ss_xy] = asfloat(WILDCARD_DEPTH_OUTLINE);
 
-	// to do 
 	if (disableSolidFill) {
 		//if (outline_color.a < 0)
 		//outline_color = float4(1 * outline_color.a, 0, 0, outline_color.a);
