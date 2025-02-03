@@ -630,9 +630,6 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 	vmmat44f camClipMatWS2BS = _fncontainer->fnParams.GetParam("_matrix44f_MatrixClipWS2BS", vmmat44f(1));
 	std::set<int> camClipperFreeActors = _fncontainer->fnParams.GetParam("_set_int_CamClipperFreeActors", std::set<int>());
 
-	bool is_system_out = false;
-	if (is_final_renderer) is_system_out = true;
-
 	bool only_surface_test = _fncontainer->fnParams.GetParam("_bool_OnlySurfaceTest", false);
 	bool test_consoleout = _fncontainer->fnParams.GetParam("_bool_TestConsoleOut", false);
 	bool test_fps_profiling = _fncontainer->fnParams.GetParam("_bool_TestFpsProfile", false);

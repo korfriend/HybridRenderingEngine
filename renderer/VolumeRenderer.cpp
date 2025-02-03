@@ -138,7 +138,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		if (grd_helper::GetEnginePath(enginePath)) {
 			hlslobj_path = enginePath;
 		}
-		string hlslobj_path_4_0 = hlslobj_path + "shader_compiled_objs_4_0\\";
+		//string hlslobj_path_4_0 = hlslobj_path + "shader_compiled_objs_4_0\\";
 
 #ifdef DX10_0
 		hlslobj_path += "shader_compiled_objs_4_0\\";
@@ -156,7 +156,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			   "VR_RAYMAX_ps_4_0"
 			  ,"VR_RAYMIN_ps_4_0"
 			  ,"VR_RAYSUM_ps_4_0"
-			   "VR_DEFAULT_ps_4_0"
+			  ,"VR_DEFAULT_ps_4_0"
 			  ,"VR_OPAQUE_ps_4_0"
 			  ,"VR_CONTEXT_ps_4_0"
 			  ,"VR_MULTIOTF_ps_4_0"

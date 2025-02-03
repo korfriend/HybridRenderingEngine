@@ -61,10 +61,10 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	// note planeThickness is defined in WS
 	float planeThickness = _fncontainer->fnParams.GetParam("_float_PlaneThickness", 0.f);
 
-	bool is_system_out = false;
-	// note : planeThickness == 0 calls CPU renderer which uses system-out buffer
-	if (is_final_renderer || planeThickness <= 0.f) is_system_out = true;
-	//is_system_out = true;
+	bool is_render_out = false;
+	// note : planeThickness == 0 calls CPU renderer which uses render-out buffer
+	if (is_final_renderer || (planeThickness <= 0.f && !is_final_renderer)) is_render_out = true;
+	is_render_out = false;
 
 	bool only_surface_test = _fncontainer->fnParams.GetParam("_bool_OnlySurfaceTest", false);
 	bool test_consoleout = _fncontainer->fnParams.GetParam("_bool_TestConsoleOut", false);
@@ -1321,7 +1321,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 //	cbCamState.far_plane = planeThickness;
 //#endif
 	cbCamState.far_plane = planeThickness;
-	if (!is_system_out) {
+	if (!is_render_out) {
 		// which means the k-buffer will be used for the following renderer
 		// stores the fragments into the k-buffer and do not store the rendering result into RT
 		cbCamState.cam_flag |= (0x1 << 3);
@@ -1424,7 +1424,9 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 
 #ifdef DX10_0
 #else
-		if (planeThickness > 0) {
+		if (planeThickness > 0 
+			//|| (planeThickness == 0 && is_final_renderer)
+			) {
 			// to do ...
 			UINT UAVInitialCounts = 0;
 			ID3D11UnorderedAccessView* dx11UAVs_2nd_pass[3] = {

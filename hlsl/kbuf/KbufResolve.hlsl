@@ -263,7 +263,11 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 		// ==> therefore, we do not clear the k-buffer here, reducing the overhead of memory-write.
 		return;
 	}
-	//return;
+	if (frag_cnt == 0x12345679) // WILDCARD_DEPTH_OUTLINE_DIRTY
+	{
+		frag_cnt = 1;
+		fragment_counter[DTid.xy] = 1;
+	}
 #ifdef DEBUG__
 	else if (frag_cnt == 1)
 	{
@@ -307,6 +311,8 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 	float vz_thickness = GetHotspotThickness((int2)DTid);
 	vz_thickness = max(vz_thickness, g_cbCamState.cam_vz_thickness);
 
+	uint valid_count = 0;
+
 	Fragment fs[LOCAL_SIZE];
 	[loop]
 	for (uint k = 0; k < frag_cnt; k++)
@@ -314,8 +320,13 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 		// note that k-buffer is cleared as zeros by mask-checking
 		Fragment f;
 		GET_FRAG(f, addr_base, k);
+		if (f.i_vis != 0)
+		{
+			valid_count++;
+		}
 		fs[k] = f;
 	}
+	frag_cnt = valid_count;
 
 //	// new custom add check! (e.g., SS DVR)
 //	if (BitCheck(g_cbCamState.cam_flag, 11))
@@ -335,6 +346,7 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 	sort(frag_cnt, fs, Fragment);
 
 	//fragment_blendout[DTid.xy] = ConvertUIntToFloat4(fs[0].i_vis);
+	//fragment_blendout[DTid.xy] = float4(1, 0, 0, 1);
 	//return;
 
 	//if (frag_cnt == 2)

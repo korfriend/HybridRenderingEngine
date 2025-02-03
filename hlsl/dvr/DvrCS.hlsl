@@ -575,6 +575,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	output.depthcs = FLT_MAX;
 	output.color = (float4)0;
 	//output.ds_z = input.f4PosSS.z;
+	//return output;
 
 	uint2 tex2d_xy = uint2(input.f4PosSS.xy);
 
@@ -585,6 +586,8 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	if (prev_vis.a > 0) {
 		num_frags = 1;
 		prev_depthcs = prev_fragment_zdepth[tex2d_xy];
+		if (asuint(prev_depthcs) == 0x12345678) // WILDCARD_DEPTH_OUTLINE
+			prev_depthcs = 0.001;
 		Fragment f;
 		f.i_vis = ConvertFloat4ToUInt(prev_vis);
 		f.z = prev_depthcs;
@@ -623,6 +626,11 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	uint vr_hit_enc = fragment_counter[DTid.xy] >> VR_ENC_BIT_SHIFT;
 #else
 	uint num_frags = fragment_counter[DTid.xy];
+
+	if (num_frags == 0x12345679) {
+		num_frags = 1;
+	}
+
 	uint vr_hit_enc = num_frags >> VR_ENC_BIT_SHIFT;
 	num_frags = num_frags & 0xFFF;
 #endif
@@ -649,6 +657,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 //	uint pixel_offset = sr_offsettable_buf[pixel_id];
 //	uint addr_base = pixel_offset * 4 * 2;
 //#else
+	// TEST
 
 	bool isSlicer = BitCheck(g_cbCamState.cam_flag, 10);
 	uint addr_base = 0;
@@ -689,7 +698,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	int layer_count = 0;
 
 	[loop]
-    for (int i = 0; i < (int)num_frags; i++)
+    for (int i = 0; i < (int)min(num_frags, 1); i++)
     {
         uint i_vis = 0;
 		Fragment f;
@@ -714,6 +723,16 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		vis_out += vis_in * (1.f - vis_out.a);
     }
 	num_frags = layer_count;
+
+	//if (fragment_counter[DTid.xy] == 0x12345678) {
+	//	fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
+	//	return;
+	//}
+	//
+	//if (fragment_counter[DTid.xy] == 0x87654321) {
+	//	fragment_vis[tex2d_xy] = float4(0, 0, 1, 1);
+	//	return;
+	//}
 
 #ifdef MDVR_TEST
 	if (vis_prev.a > 0)
@@ -1424,6 +1443,9 @@ void VR_SURFACE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #else
 	vr_fragment_1sthit_write[DTid.xy] = depth_hit;
 	uint fcnt = fragment_counter[DTid.xy];
+	if (fcnt == 0x12345679) {
+		fcnt = 1;
+	}
 	// 2 : on the clip plane
 	// 1 : outside the clip plane
 	// 0 : outside the volume
@@ -1489,6 +1511,9 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	uint addr_base = pixel_id * bytes_frags_per_pixel;
 
 	uint num_frags = fragment_counter[DTid.xy];
+	if (num_frags == 0x12345679) {
+		num_frags = 1;
+	}
 	num_frags = num_frags & 0xFFF;
 
 	//if (num_frags == 0)

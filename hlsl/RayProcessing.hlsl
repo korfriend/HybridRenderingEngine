@@ -1080,11 +1080,9 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 	out_ps.color = prev_fragment_vis[prev_load_index];
 #if PICKING != 1
 	out_ps.depthcs = prev_fragment_zdepth[prev_load_index];
-	float fvPrev = prev_fragment_zdepth[prev_load_index];
-	uint wildcard_v = asuint(fvPrev);
+	uint wildcard_v = asuint(out_ps.depthcs);
 	if (wildcard_v == WILDCARD_DEPTH_OUTLINE)
 		__EXIT;
-
 	out_ps.depthcs = asfloat(OUTSIDE_PLANE);
 #endif
 
@@ -1261,12 +1259,12 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 	float3 r1 = TransformPoint(ray_dir_unit_ws, g_cbPobj.mat_ws2os);
 	//float3 ray_dir_unit_os = normalize(TransformVector(ray_dir_unit_ws, g_cbPobj.mat_ws2os));
 	float3 ray_dir_unit_os = normalize(r1 - r0);
-	if (ray_orig_os.z == 0) ray_orig_os.z = 0.001234f; // trick... for avoiding zero block skipping error
-	if (ray_orig_os.y == 0) ray_orig_os.y = 0.001234f; // trick... for avoiding zero block skipping error
-	if (ray_orig_os.x == 0) ray_orig_os.x = 0.001234f; // trick... for avoiding zero block skipping error
-	if (ray_dir_unit_os.z == 0) ray_dir_unit_os.z = 0.001234f; // trick... for avoiding zero block skipping error
-	if (ray_dir_unit_os.y == 0) ray_dir_unit_os.y = 0.001234f; // trick... for avoiding zero block skipping error
-	if (ray_dir_unit_os.x == 0) ray_dir_unit_os.x = 0.001234f; // trick... for avoiding zero block skipping error
+	if (ray_orig_os.z == 0) ray_orig_os.z = 0.0001234f; // trick... for avoiding zero block skipping error
+	if (ray_orig_os.y == 0) ray_orig_os.y = 0.0001234f; // trick... for avoiding zero block skipping error
+	if (ray_orig_os.x == 0) ray_orig_os.x = 0.0001234f; // trick... for avoiding zero block skipping error
+	if (ray_dir_unit_os.z == 0) ray_dir_unit_os.z = 0.0001234f; // trick... for avoiding zero block skipping error
+	if (ray_dir_unit_os.y == 0) ray_dir_unit_os.y = 0.0001234f; // trick... for avoiding zero block skipping error
+	if (ray_dir_unit_os.x == 0) ray_dir_unit_os.x = 0.0001234f; // trick... for avoiding zero block skipping error
 	
 	bool isInsideOnPlane = false;
 	int checkCountInsideHorizon = 0;
@@ -1292,7 +1290,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 	float3 f3PosSampleWS_C_nbr = f3PosSampleWS_C0_nbr * (1.f - fInterpolateRatio_nbr) + f3PosSampleWS_C1_nbr * fInterpolateRatio_nbr;
 
 	//sif (iPosSampleCOS_nbr < 0 || iPosSampleCOS_nbr >= iPlaneSizeX)
-	//s	__EXIT;
+	//	__EXIT;
 	float pixelSpace = length(f3PosSampleWS_C_ - f3PosSampleWS_C_nbr) * 1.5; // 1.5 for heuristic correction of curve
 	//pixelSpace = length(f3VecSampleUpWS);
 #endif
@@ -1736,7 +1734,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 	}
 	else {
 		if (planeThickness == 0) {
-			return;
+			__EXIT;
 		}
 		// outside
 		float3 vray0_os = min(forward_hit_depth, planeThickness_os) * ray_dir_unit_os;
@@ -1760,8 +1758,6 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 	//	fragment_vis[ss_xy] = float4((float3)saturate(thickness_through_os / (planeThickness_os)), 1);
 	//	return;
 	//}
-	//fragment_vis[ss_xy] = float4(0, 0, 0, 1);
-	//return;
 
 #if PICKING == 1 // NO DEFINED DX10_0
 	uint fc = 0;
@@ -1801,18 +1797,19 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 	{
 		v_rgba.a = min(0.3, v_rgba.a);
 		if (disableSolidFill)
-			v_rgba = float4(0, 0, 0, 0.001);
+			v_rgba = float4(0, 0, 0, 0.01);
+
+		v_rgba.rgb *= v_rgba.a;
+
 		out_ps.color = MixOpt(v_rgba, v_rgba.a, out_ps.color, out_ps.color.a);
 		out_ps.depthcs = minDistOnPlane;
-		if (g_cbCamState.far_plane > 0) out_ps.depthcs = g_cbCamState.far_plane * 0.5f;
+		//if (g_cbCamState.far_plane > 0) out_ps.depthcs = g_cbCamState.far_plane * 0.5f;
 	}
 
 	__EXIT;
 #else
 	if (planeThickness == 0)
 	{
-		//fragment_vis[ss_xy] = float4(1, 0, 0, 1);
-		//return;
 		float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
 		v_rgba.a = 1;
 		if (planeThickness == 0.f)
@@ -1853,12 +1850,13 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 
 		//bool store_to_kbuf = BitCheck(g_cbCamState.cam_flag, 3) && planeThickness > 0;
 		SET_FRAG(addr_base, 0, fragMerge);
+		//Fill_kBuffer(ss_xy, 2, v_rgba0, zdepth1, vz_thickness);
 
 		//if (!store_to_kbuf)
 		fragment_vis[ss_xy] = v_rgba;
 
 		fragment_counter[ss_xy] = 1;
-		fragment_zdepth[ss_xy] = minDistOnPlane;
+		//fragment_zdepth[ss_xy] = minDistOnPlane;
 	}
 	else 
 	{
@@ -1868,16 +1866,29 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 		if (v_rgba.a < 0.01)
 			return;
 		// always to k-buf not render-out buffer
-		float4 v_rgba0 = v_rgba, v_rgba1 = v_rgba;
+		float4 v_rgba0 = v_rgba;// , v_rgba1 = v_rgba;
 
 		// DOJO TO consider...
 		// preserve the original alpha (i.e., v_rgba.a) or not..????
 		//v_rgba0.a *= min(thickness_through_os / (last_layer_depth - zdepth0) + 0.1f, 1.0f);
-		v_rgba0.a *= min(thickness_through_os / (planeThickness_os) + 0.1f, 1.0f);
+		v_rgba0.a *= saturate(thickness_through_os / (planeThickness_os) + 0.1f);
+		if (v_rgba0.a < 0.01)
+			return;
 		//v_rgba0.a *= v_rgba0.a; // heuristic 
 		v_rgba0.rgb *= v_rgba0.a;
 		//v_rgba0.a = v_rgba.a;
+
+		if (zdepth1 >= planeThickness) // to avoid unexpected frustom culling!
+		{
+			zdepth1 = planeThickness - 0.001f;
+		}
+
 		float vz_thickness = zdepth1 - zdepth0;// GetVZThickness(zdepth0, g_cbPobj.vz_thickness);
+		//if (vz_thickness >= planeThickness)
+		//{
+		//	fragment_vis[ss_xy] = float4(1, 0, 0, 1);
+		//	return;
+		//}
 		//if (zdepth1 >= planeThickness)
 		//	fragment_vis[ss_xy] = float4((float3)thickness_through_os / (planeThickness_os), 1);
 		//else
@@ -1886,6 +1897,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 		//k_value
 		//if (v_rgba0.a < 1 / 255.f || vz_thickness == 0)
 		//	__EXIT;
+		//if (v_rgba0.a >= 1.f) v_rgba0.a = 0.999f;
 		Fill_kBuffer(ss_xy, 2, v_rgba0, zdepth1, vz_thickness);
 		//
 		/*
@@ -2107,7 +2119,7 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 #else
 
 	float a = TestAlpha(sd);
-	if (a == 0) {
+	if (a <= 0.01) {
 		__EXIT;
 	}
 	
@@ -2128,7 +2140,7 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 	outline_color.rgb *= outline_color.a;
 	//outline_color.rgb *= outline_color.a;
 	//outline_color.rgb *= outline_color.a;
-	//outline_color.rgb *= outline_color.a;
+	//outline_color.rgb *= outline_color.a; 
 
 	//outline_color = float4(fvcur / 1000, fvcur / 1000, fvcur / 1000, 1);
 
@@ -2152,10 +2164,16 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 	//fragment_zdepth[ss_xy] = asfloat(WILDCARD_DEPTH_OUTLINE);
 
 	// to do 
-	if (disableSolidFill)
-		Fill_kBuffer(ss_xy, g_cbCamState.k_value, outline_color, 0.01f, g_cbCamState.far_plane);
+	if (disableSolidFill) {
+		//if (outline_color.a < 0)
+		//outline_color = float4(1 * outline_color.a, 0, 0, outline_color.a);
+		Fill_kBuffer(ss_xy, g_cbCamState.k_value, outline_color, 0.0001, max(g_cbCamState.far_plane, 0.1));
+	}
 
-	fragment_counter[ss_xy] = WILDCARD_DEPTH_OUTLINE_DIRTY;
+	//if (a > 0.01)
+	{
+		fragment_counter[ss_xy] = WILDCARD_DEPTH_OUTLINE_DIRTY;
+	}
 #endif
 }
 
