@@ -1546,6 +1546,12 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 		__EXIT;
 	}
 
+	if (!isInsideOnPlane && forward_hit_depth > planeThickness_os)
+	{
+		//fragment_vis[ss_xy] = float4(1, 1, 0, 1);
+		__EXIT;
+	}
+
 	// backward check
 	bool hit_on_backward_ray = false;
 	float backward_hit_depth = FLT_MAX;
