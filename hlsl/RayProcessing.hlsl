@@ -1722,10 +1722,42 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 			//float3 posFirstWS, posLastWS;
 			//posFirstWS = pos_ip_ws;
 			zdepth0 = 0;
-			if (thickness_through_os < 0) {
-				//fragment_vis[ss_xy] = float4(1, 0, 0, 1);
-				__EXIT;
+
+			if (!is_front_forward_face)
+			{
+				float backward_dist = 0;
+#ifdef BVH_LEGACY
+				float4 test_rayorig = float4(ray_orig_os, ray_tmin);
+				float4 test_raydir = float4(-ray_dir_unit_os, ray_tmax);
+				intersectBVHandTriangles(test_rayorig, test_raydir, buf_gpuNodes, buf_gpuTriWoops, buf_gpuTriIndices, hitTriIdx, backward_dist, debugbingo, trinormal, false);
+				bool localInside = dot(trinormal, test_raydir.xyz) > 0;
+#else
+				RayDesc ray;
+				ray.Origin = ray_orig_os;
+				ray.Direction = -ray_dir_unit_os;
+				ray.TMin = ray_tmin;
+				ray.TMax = ray_tmax;
+
+				RayHit hit = TraceRay_Closest(ray);
+				hitTriIdx = hit.distance >= FLT_MAX - 1 ? -1 : hit.primitiveID.primitiveIndex;
+				backward_dist = hit.distance;
+				bool localInside = hit.is_backface;
+#endif
+				if (hitTriIdx >= 0 && localInside)
+				{
+					float3 vray0_os = backward_dist * ray_dir_unit_os;
+					zdepth0 = -length(TransformVector(vray0_os, g_cbPobj.mat_os2ws));
+					//fragment_vis[ss_xy] = float4(1, 1, 0, 1);
+					//__EXIT;
+				}
 			}
+			//fragment_vis[ss_xy] = float4(1, 1, 0, 1);
+			//__EXIT;
+
+			//if (thickness_through_os < 0) {
+			//	//fragment_vis[ss_xy] = float4(1, 0, 0, 1);
+			//	__EXIT;
+			//}
 
 			if (last_layer_depth > 0) {
 				float3 vray1_os = last_layer_depth * ray_dir_unit_os;
