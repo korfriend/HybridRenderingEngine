@@ -31,7 +31,9 @@
 //#define __VERSION "1.12" // released at 22.08.08
 //#define __VERSION "1.13" // released at 22.12.05
 //#define __VERSION "1.20" // released at 23.04.03
-#define __VERSION "1.31" // released at 25.01.24
+//#define __VERSION "1.30" // released at 25.02.04
+//#define __VERSION "1.31" // released at 25.02.07
+#define __VERSION "1.32" // released at 25.02.08
 
 #define _HAS_STD_BYTE 0
 
