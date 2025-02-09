@@ -39,8 +39,10 @@ namespace bvh {
 		GpuRes gres_primitiveCounterBuffer_write;
 		gres_primitiveCounterBuffer.vm_src_id = pobj->GetObjectID();
 		gres_primitiveCounterBuffer.res_name = string("GPUBVH::primitiveCounterBuffer");
+		//gres_primitiveCounterBuffer.options["Update LAST_UPDATE_TIME"] = 1u;
 		gres_primitiveCounterBuffer_write.vm_src_id = pobj->GetObjectID();
 		gres_primitiveCounterBuffer_write.res_name = string("GPUBVH::primitiveCounterBuffer_WRITE");
+		//gres_primitiveCounterBuffer_write.options["Update LAST_UPDATE_TIME"] = 1u;
 		if (totalTriangles > 0)
 		{
 			if (!gpuManager->UpdateGpuResource(gres_primitiveCounterBuffer))
@@ -91,21 +93,27 @@ namespace bvh {
 		GpuRes gres_bvhNodeBuffer;
 		gres_bvhNodeBuffer.vm_src_id = pobj->GetObjectID();
 		gres_bvhNodeBuffer.res_name = string("GPUBVH::BVHNodeBuffer");
+		gres_bvhNodeBuffer.options["Update LAST_UPDATE_TIME"] = 1u;
 		GpuRes gres_bvhParentBuffer;
 		gres_bvhParentBuffer.vm_src_id = pobj->GetObjectID();
 		gres_bvhParentBuffer.res_name = string("GPUBVH::BVHParentBuffer");
+		gres_bvhParentBuffer.options["Update LAST_UPDATE_TIME"] = 1u;
 		GpuRes gres_bvhFlagBuffer;
 		gres_bvhFlagBuffer.vm_src_id = pobj->GetObjectID();
 		gres_bvhFlagBuffer.res_name = string("GPUBVH::BVHFlagBuffer");
+		gres_bvhFlagBuffer.options["Update LAST_UPDATE_TIME"] = 1u;
 		GpuRes gres_primitiveIDBuffer;
 		gres_primitiveIDBuffer.vm_src_id = pobj->GetObjectID();
 		gres_primitiveIDBuffer.res_name = string("GPUBVH::primitiveIDBuffer");
+		gres_primitiveIDBuffer.options["Update LAST_UPDATE_TIME"] = 1u;
 		GpuRes gres_primitiveBuffer;
 		gres_primitiveBuffer.vm_src_id = pobj->GetObjectID();
 		gres_primitiveBuffer.res_name = string("GPUBVH::primitiveBuffer");
+		gres_primitiveBuffer.options["Update LAST_UPDATE_TIME"] = 1u;
 		GpuRes gres_primitiveMortonBuffer;
 		gres_primitiveMortonBuffer.vm_src_id = pobj->GetObjectID();
 		gres_primitiveMortonBuffer.res_name = string("GPUBVH::primitiveMortonBuffer");
+		gres_primitiveMortonBuffer.options["Update LAST_UPDATE_TIME"] = 1u;
 
 		uint primitive_capacity = pobj->GetObjParam("primitiveCapacity", 0u);
 		if (totalTriangles > primitive_capacity)

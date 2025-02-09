@@ -555,6 +555,11 @@ bool __UpdateGpuResource(GpuRes& gres)
 	
 	//gres.alloc_res_ptrs = itrResDX11->second.alloc_res_ptrs;
 
+	if (gres.options["Update LAST_UPDATE_TIME"] == 1u)
+	{
+		itrResDX11->second.res_values.SetParam("LAST_UPDATE_TIME", vmhelpers::GetCurrentTimePack());
+	}
+
 	gres = itrResDX11->second;
 
 	return true;
