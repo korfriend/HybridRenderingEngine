@@ -64,7 +64,7 @@ inline uint morton3D(in float3 pos)
 
 #ifdef __cplusplus // not invoking shader compiler, but included in engine source
 
-#include "../vzm2/Math.h"
+#include "../vzm2/vzMath.h"
 
 using float3x3 = XMFLOAT3X3;
 using float4x4 = XMFLOAT4X4;

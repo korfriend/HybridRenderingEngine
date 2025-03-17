@@ -18,6 +18,10 @@ namespace vz::jobsystem
 	UTIL_EXPORT void Initialize(uint32_t maxThreadCount = ~0u);
 	UTIL_EXPORT void ShutDown();
 
+	// Returns true if the job system is shutting down
+	//	Long-running (multi-frame) jobs should ideally check this and exit themselves if true
+	bool IsShuttingDown();
+
 	struct JobArgs
 	{
 		uint32_t jobIndex;		// job index relative to dispatch (like SV_DispatchThreadID in HLSL)
@@ -41,15 +45,18 @@ namespace vz::jobsystem
 	{
 		volatile long counter = 0;
 		Priority priority = Priority::High;
-
-		const uint32_t magicChecker = MAGIC_CHECK_VALUE;
+		bool IsAvailable() const { return magicChecker_ == MAGIC_CHECK_VALUE; }
+	private:
+		const uint32_t magicChecker_ = MAGIC_CHECK_VALUE;
 	};
 
 	struct contextConcurrency
 	{
 		uint32_t concurrentID = 0;
 
-		const uint32_t magicChecker = MAGIC_CHECK_VALUE;
+		bool IsAvailable() const { return magicChecker_ == MAGIC_CHECK_VALUE; }
+	private:
+		const uint32_t magicChecker_ = MAGIC_CHECK_VALUE;
 	};
 
 	UTIL_EXPORT uint32_t GetThreadCount(Priority priority = Priority::High);

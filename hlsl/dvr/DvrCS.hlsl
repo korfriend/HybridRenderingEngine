@@ -1283,9 +1283,9 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #else
 #if FRAG_MERGING == 1
 	Fragment f_dly = fs[0]; // if no frag, the z-depth is infinite
-	INTERMIX(vis_out, idx_dlayer, num_frags, vis_otf, depth_begin, hits_t.y - hits_t.x, fs, merging_beta);
+	INTERMIX(vis_out, idx_dlayer, num_frags, vis_otf, depth_sample, hits_t.y - hits_t.x, fs, merging_beta);
 #else
-	INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_otf, depth_begin, fs);
+	INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_otf, depth_sample, fs);
 #endif
 	REMAINING_MIX(vis_out, idx_dlayer, num_frags, fs);
 #endif
