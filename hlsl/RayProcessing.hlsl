@@ -854,12 +854,12 @@ inline void IntersectTriangle(
 
 	float3 tvec = ray.Origin - prim.v0();
 	float u = dot(tvec, pvec) * invDet;
-	if (u < 0 || u > 1)
+	if (u < -eps || u > 1 + eps)
 		return;
 
 	float3 qvec = cross(tvec, v0v1);
 	float v = dot(ray.Direction, qvec) * invDet;
-	if (v < 0 || u + v > 1)
+	if (v < -eps || u + v > 1 + eps)
 		return;
 
 	float t = dot(v0v2, qvec) * invDet;
@@ -916,12 +916,9 @@ inline bool IntersectNode(
 // Returns the closest hit primitive if any (useful for generic trace). If nothing was hit, then rayHit.distance will be equal to FLT_MAX
 inline RayHit TraceRay_Closest(RayDesc ray, uint groupIndex = 0)
 {
-	if (ray.Origin.x == 0) ray.Origin.x = 0.0001234f; // trick... for avoiding zero block skipping error
-	if (ray.Origin.y == 0) ray.Origin.y = 0.0001234f; // trick... for avoiding zero block skipping error
-	if (ray.Origin.z == 0) ray.Origin.z = 0.0001234f; // trick... for avoiding zero block skipping error
-	if (ray.Direction.x == 0) ray.Direction.x = 0.0001234f; // trick... for avoiding zero block skipping error
-	if (ray.Direction.y == 0) ray.Direction.y = 0.0001234f; // trick... for avoiding zero block skipping error
-	if (ray.Direction.z == 0) ray.Direction.z = 0.0001234f; // trick... for avoiding zero block skipping error
+	if (abs(ray.Direction.x) < eps) ray.Direction.x = 0.0001234f; // trick... for avoiding zero block skipping error
+	if (abs(ray.Direction.y) < eps) ray.Direction.y = 0.0001234f; // trick... for avoiding zero block skipping error
+	if (abs(ray.Direction.z) < eps) ray.Direction.z = 0.0001234f; // trick... for avoiding zero block skipping error
 
 	const float3 rcpDirection = rcp(ray.Direction);
 
@@ -1148,7 +1145,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 #ifdef BVH_LEGACY
 	float3 trinormal = float3(0, 0, 0);
 #endif
-	float ray_tmin = 0.0001f; // MAGIC VALUE
+	float ray_tmin = 0;// 0.0001f; // MAGIC VALUE
 	float ray_tmax = 1e20; // use thickness!!
 
 	// intersect all triangles in the scene stored in BVH
@@ -1452,6 +1449,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 	bool hit_on_forward_ray = false;
 	float forward_hit_depth = FLT_MAX;
 	bool is_front_forward_face = false;
+	ray_tmin = 0.0001f; // MAGIC VALUE
 	{
 #ifdef BVH_LEGACY
 		float4 test_rayorig = float4(ray_orig_os, ray_tmin);
@@ -1532,7 +1530,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 		ray.TMax = ray_tmax;
 #endif
 
-#define HITBUFFERSIZE 5
+#define HITBUFFERSIZE 3
 		bool is_backface_prev = !is_front_forward_face;
 		uint hitCount = 0; // just for debugging
 		//float hitDistsWS[HITBUFFERSIZE];
