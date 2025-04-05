@@ -646,6 +646,7 @@ float3 ComputeDeviation(float3 pos, float3 nrl)
 
             //if (numSamples > 10)
             //    return float3(1, 1, 1);
+            [allow_uav_condition]
             [loop]
             for (int i = 1; i < numSamples; i++)
             {
@@ -655,6 +656,7 @@ float3 ComputeDeviation(float3 pos, float3 nrl)
 
                 if (blkSkip.blk_value > 0)
                 {
+                    [allow_uav_condition]
                     [loop]
                     for (int j = 0; j <= blkSkip.num_skip_steps; j++)
                     {
@@ -686,6 +688,7 @@ float3 ComputeDeviation(float3 pos, float3 nrl)
         else
         {
             // The polygonal surface is inside the volume surface
+            [allow_uav_condition]
             [loop]
             for (int i = 1; i < numSamples; i++)
             {

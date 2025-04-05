@@ -159,6 +159,7 @@ void OIT_RESOLVE_OLD(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, u
 	uint cnt_sorted_ztsurf = 0, i = 0;
 #if FRAG_MERGING == 1
     // merge self-overlapping surfaces to thickness surfaces
+	[allow_uav_condition]
     [loop]	
     for (i = 0; i < (uint)valid_frag_cnt; i++)
     {
