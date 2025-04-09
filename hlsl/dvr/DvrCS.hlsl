@@ -308,7 +308,6 @@ void Find1stSampleHit(inout int step, const float3 pos_ray_start_ws, const float
         return;
     }
 
-	[allow_uav_condition]
 	[loop]
     for (int i = 1; i < num_ray_samples; i++)
     {
@@ -319,7 +318,6 @@ void Find1stSampleHit(inout int step, const float3 pos_ray_start_ws, const float
 		[branch]
         if (blkSkip.blk_value > 0)
         {
-			[allow_uav_condition]
 	        [loop]
             for (int k = 0; k <= blkSkip.num_skip_steps; k++)
             {
@@ -1094,7 +1092,6 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	//return;
 	float depth_sample = depth_hit;
 
-	[allow_uav_condition]
 	[loop]
 	for (i = start_idx; i < num_ray_samples; i++)
 	{
@@ -1104,7 +1101,6 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 		if (blkSkip.blk_value > 0)
 		{
-			[allow_uav_condition]
 			[loop]
 			for (int j = 0; j <= blkSkip.num_skip_steps; j++)
 			{
@@ -1818,7 +1814,6 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 	//fragment_vis[cip_xy] = vis_out;
 	//return;
 
-	[allow_uav_condition]
 	[loop]
 	for (i = start_idx; i < num_new_ray_samples; i++) 
 	{
@@ -1828,7 +1823,6 @@ void CurvedSlicer(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint
 
 		if (blkSkip.blk_value > 0)
 		{
-			[allow_uav_condition]
 			[loop]
 			//for (int j = 0; j <= blkSkip.num_skip_steps && i + j < num_new_ray_samples; j++)
 			for (int j = 0; j <= blkSkip.num_skip_steps; j++)

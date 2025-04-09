@@ -254,14 +254,12 @@ int DEBUGintersectBVHandTriangles(const in float4 rayorig, const in float4 raydi
 	hitIndex = -1;  // No triangle intersected so far.
 	hitT = raydir.w;
 
-	[allow_uav_condition]
 	[loop]
 	while ((uint)nodeAddr != EntrypointSentinel) // EntrypointSentinel = 0x76543210 
 	{
 		// Traverse internal nodes until all SIMD lanes have found a leaf.
 
 		bool searchingLeaf = true; // flag required to increase efficiency of threads in warp
-		[allow_uav_condition]
 		[loop]
 		while (nodeAddr >= 0 && (uint)nodeAddr != EntrypointSentinel)
 		{
@@ -365,12 +363,10 @@ int DEBUGintersectBVHandTriangles(const in float4 rayorig, const in float4 raydi
 		/// LEAF NODE / TRIANGLE INTERSECTION
 		///////////////////////////////////////
 
-		[allow_uav_condition]
 		[loop]
 		while (leafAddr < 0)  // if leafAddr is negative, it points to an actual leafnode (when positive or 0 it's an innernode
 		{
 			// leafAddr is stored as negative number, see cidx[i] = ~triWoopData.getSize(); in CudaBVH.cpp
-			[allow_uav_condition]
 			[loop]
 			for (int triAddr = ~leafAddr;; triAddr += 3)
 			{    // no defined upper limit for loop, continues until leaf terminator code 0x80000000 is encountered
@@ -653,14 +649,12 @@ int intersectBVHandTriangles(const float4 rayorig, const float4 raydir,
 		//////////////////////////////////////
 
 		// Process postponed leaf nodes.
-		[allow_uav_condition]
 		[loop]
 		while (leafAddr < 0)  /// if leafAddr is negative, it points to an actual leafnode (when positive or 0 it's an innernode)
 		{
 			// Intersect the ray against each triangle using Sven Woop's algorithm.
 			// Woop ray triangle intersection: Woop triangles are unit triangles. Each ray
 			// must be transformed to "unit triangle space", before testing for intersection
-			[allow_uav_condition]
 			[loop]
 			for (int triAddr = ~leafAddr;; triAddr += 3)  // triAddr is index in triWoop array (and bitwise complement of leafAddr)
 			{ // no defined upper limit for loop, continues until leaf terminator code 0x80000000 is encountered
@@ -2055,7 +2049,6 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 	//float a_acc = LineAlpha(sd);
 	//uint count = 1;
 	//
-	[allow_uav_condition]
 	[loop]
 	for (uint i = 0; i < 8; i++)
 	{
