@@ -29,7 +29,9 @@ namespace vz::backlog
 		None, // SPDLOG_LEVEL_OFF
 	};
 
-	extern "C" UTIL_EXPORT void intialize(const std::string& coreName = "VizMotive", const std::string& logFileName = "EngineApi.log");
+	extern "C" UTIL_EXPORT void intialize(const std::string& coreName = "VizMotive", const std::string& logFileName = "EngineApi.log", const std::string& userLogPath = "");
+
+	extern "C" UTIL_EXPORT bool isValidApiLog();
 
 	extern "C" UTIL_EXPORT void clear();
 
