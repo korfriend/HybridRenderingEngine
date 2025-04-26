@@ -606,10 +606,14 @@ float _random(float2 v) { return floatConstruct(hash(asuint(v))); }
 float _random(float3 v) { return floatConstruct(hash(asuint(v))); }
 float _random(float4 v) { return floatConstruct(hash(asuint(v))); }
 
+//#define OPACITY_CORRECTION
+
 float4 LoadOtfBuf(const in int sample_value, const in Buffer<float4> buf_otf, const in float opacity_correction)
 {
 	float4 vis_otf = buf_otf[sample_value];
-	vis_otf.a *= opacity_correction;
+#ifdef OPACITY_CORRECTION
+	vis_otf.a = 1.0 - pow(abs(1.0 - vis_otf.a), opacity_correction);
+#endif
 #if VR_MODE == 1
 	vis_otf.a = 1.f;
 #endif
@@ -620,7 +624,9 @@ float4 LoadOtfBuf(const in int sample_value, const in Buffer<float4> buf_otf, co
 float4 LoadSlabOtfBuf_Avg(const in int sample_v, const in int sample_prev, const in Buffer<float4> buf_otf, const in float opacity_correction)
 {
 	float4 vis_otf = (buf_otf[sample_prev] + buf_otf[sample_v]) * 0.5f;
-	vis_otf.a *= opacity_correction;
+#ifdef OPACITY_CORRECTION
+	vis_otf.a = 1.0 - pow(abs(1.0 - vis_otf.a), opacity_correction);
+#endif
 	vis_otf.rgb *= vis_otf.a; // associate color
 	return vis_otf;
 }
@@ -639,8 +645,10 @@ float4 LoadSlabOtfBuf_PreInt(const int sample_v, int sample_prev, const Buffer<f
 	float4 f4OtfColorNext = buf_preintotf[sample_v];
 
 	vis_otf.rgb = (f4OtfColorNext.rgb - f4OtfColorPrev.rgb) * divDiff;
-	//vis_otf.a = 1.f - exp(-(f4OtfColorNext.a - f4OtfColorPrev.a) * divDiff * opacity_correction)
-	vis_otf.a = (f4OtfColorNext.a - f4OtfColorPrev.a) * divDiff * opacity_correction;
+	vis_otf.a = (f4OtfColorNext.a - f4OtfColorPrev.a) * divDiff;
+#ifdef OPACITY_CORRECTION
+	vis_otf.a = 1.0 - pow(abs(1.f - vis_otf.a), opacity_correction);
+#endif
 #if VR_MODE == 1
 	vis_otf.a = 1.f;
 #endif
@@ -651,7 +659,9 @@ float4 LoadSlabOtfBuf_PreInt(const int sample_v, int sample_prev, const Buffer<f
 float4 LoadOtfBufId(const in int sample_v, const in Buffer<float4> buf_otf, const in float opacity_correction, const in int id)
 {
 	float4 vis_otf = buf_otf[sample_v + id * g_cbTmap.tmap_size_x];
-	vis_otf.a *= opacity_correction;
+#ifdef OPACITY_CORRECTION
+	vis_otf.a = 1.0 - pow(1.0 - vis_otf.a, opacity_correction);
+#endif
 #if VR_MODE == 1
 	vis_otf.a = 1.f;
 #endif
@@ -663,19 +673,21 @@ float4 LoadSlabOtfBufId_PreInt(const int sample_v, int sample_prev, const Buffer
 {
 	float4 vis_otf = (float4)0;
 
-	if (sample_v == sample_prev) sample_prev++;
+	if (sample_v == sample_prev) sample_prev--;
 
 	int diff = sample_v - sample_prev;
 
 	float divDiff = 1.f / (float)diff;
 
-	int offset = id * g_cbTmap.tmap_size_x;
+	int offset = id* g_cbTmap.tmap_size_x;
 	float4 f4OtfColorPrev = buf_preintotf[sample_prev + offset];
 	float4 f4OtfColorNext = buf_preintotf[sample_v + offset];
 
 	vis_otf.rgb = (f4OtfColorNext.rgb - f4OtfColorPrev.rgb) * divDiff;
-	//vis_otf.a = 1.f - exp(-(f4OtfColorNext.a - f4OtfColorPrev.a) * divDiff * opacity_correction)
-	vis_otf.a = (f4OtfColorNext.a - f4OtfColorPrev.a) * divDiff * opacity_correction;
+	vis_otf.a = (f4OtfColorNext.a - f4OtfColorPrev.a)* divDiff;
+#ifdef OPACITY_CORRECTION
+	vis_otf.a = 1.0 - pow(1.0 - vis_otf.a, opacity_correction);
+#endif
 	vis_otf.rgb *= vis_otf.a; // associate color
 	return vis_otf;
 }

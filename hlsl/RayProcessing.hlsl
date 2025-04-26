@@ -854,12 +854,14 @@ inline void IntersectTriangle(
 
 	float3 tvec = ray.Origin - prim.v0();
 	float u = dot(tvec, pvec) * invDet;
-	if (u < -eps || u > 1 + eps)
+	//if (u < -eps || u > 1 + eps)
+	if (u < 0 || u > 1)
 		return;
 
 	float3 qvec = cross(tvec, v0v1);
 	float v = dot(ray.Direction, qvec) * invDet;
-	if (v < -eps || u + v > 1 + eps)
+	//if (v < -eps || u + v > 1 + eps)
+	if (v < 0 || u + v > 1)
 		return;
 
 	float t = dot(v0v2, qvec) * invDet;
@@ -916,9 +918,10 @@ inline bool IntersectNode(
 // Returns the closest hit primitive if any (useful for generic trace). If nothing was hit, then rayHit.distance will be equal to FLT_MAX
 inline RayHit TraceRay_Closest(RayDesc ray, uint groupIndex = 0)
 {
-	if (abs(ray.Direction.x) < eps) ray.Direction.x = 0.0001234f; // trick... for avoiding zero block skipping error
-	if (abs(ray.Direction.y) < eps) ray.Direction.y = 0.0001234f; // trick... for avoiding zero block skipping error
-	if (abs(ray.Direction.z) < eps) ray.Direction.z = 0.0001234f; // trick... for avoiding zero block skipping error
+	const float MIN_DIR = 1e-5f;
+	ray.Direction.x = (abs(ray.Direction.x) < MIN_DIR) ? (ray.Direction.x >= 0 ? MIN_DIR : -MIN_DIR) : ray.Direction.x;
+	ray.Direction.y = (abs(ray.Direction.y) < MIN_DIR) ? (ray.Direction.y >= 0 ? MIN_DIR : -MIN_DIR) : ray.Direction.y;
+	ray.Direction.z = (abs(ray.Direction.z) < MIN_DIR) ? (ray.Direction.z >= 0 ? MIN_DIR : -MIN_DIR) : ray.Direction.z;
 
 	const float3 rcpDirection = rcp(ray.Direction);
 
@@ -935,12 +938,13 @@ inline RayHit TraceRay_Closest(RayDesc ray, uint groupIndex = 0)
 
 	// push root node
 	stack[stackpos++][groupIndex] = 0;
-
+	
+	const uint MAX_ITERATIONS = 10000u; // 좀 더 큰 값으로 설정
 	uint count = 0;
 
 	[allow_uav_condition]
 	[loop]
-	while (stackpos > 0 && count < 5000u) {
+	while (stackpos > 0 && count < MAX_ITERATIONS) {
 		// pop untraversed node
 		const uint nodeIndex = stack[--stackpos][groupIndex];
 
@@ -953,28 +957,47 @@ inline RayHit TraceRay_Closest(RayDesc ray, uint groupIndex = 0)
 			{
 				// Leaf node
 				const uint primitiveID = node.LeftChildIndex;
-				//const BVHPrimitive prim = primitiveBuffer.Load<BVHPrimitive>(primitiveID * sizeof(BVHPrimitive));
 				const BVHPrimitive prim = primitiveBuffer[primitiveID];
-				//if (prim.flags & mask)
-				{
-					IntersectTriangle(ray, bestHit, prim);
-				}
+				IntersectTriangle(ray, bestHit, prim);
 			}
 			else
 			{
+				uint firstChild, secondChild;
+
+				float3 nodeCentroid = (node.min + node.max) * 0.5f;
+				bool direction = dot(ray.Direction, nodeCentroid - ray.Origin) > 0;
+
+				if (direction) {
+					firstChild = node.LeftChildIndex;
+					secondChild = node.RightChildIndex;
+				}
+				else {
+					firstChild = node.RightChildIndex;
+					secondChild = node.LeftChildIndex;
+				}
+
+				if (stackpos < RAYTRACE_STACKSIZE - 1) { 
+					stack[stackpos++][groupIndex] = secondChild;
+					stack[stackpos++][groupIndex] = firstChild;
+				}
+				else {
+					stack[stackpos++][groupIndex] = firstChild;
+				}
+
+
 				// Internal node
-				if (stackpos < RAYTRACE_STACKSIZE - 1)
-				{
-					// push left child
-					stack[stackpos++][groupIndex] = node.LeftChildIndex;
-					// push right child
-					stack[stackpos++][groupIndex] = node.RightChildIndex;
-				}
-				else
-				{
-					// stack overflow, terminate
-					break;
-				}
+				//if (stackpos < RAYTRACE_STACKSIZE - 1)
+				//{
+				//	// push left child
+				//	stack[stackpos++][groupIndex] = node.LeftChildIndex;
+				//	// push right child
+				//	stack[stackpos++][groupIndex] = node.RightChildIndex;
+				//}
+				//else
+				//{
+				//	// stack overflow, terminate
+				//	break;
+				//}
 			}
 
 		}

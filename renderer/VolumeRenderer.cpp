@@ -766,6 +766,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		if (mask_vol_obj != NULL)
 		{
 			if (ray_cast_type == __RM_VISVOLMASK) {
+
 				vobj = mask_vol_obj;
 				mask_vol_obj = NULL;
 				vol_data = vobj->GetVolumeData();
@@ -864,6 +865,14 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			//cbVolumeObj.vec_grad_y *= 2.f;
 			//cbVolumeObj.vec_grad_z *= 2.f;
 		}
+
+		// TEST
+		//{
+		//	float early_ray_termination = _fncontainer->fnParams.GetParam("_float_EarlyRayTermination", 0.4f);
+		//	cbVolumeObj.v_dummy0 = *(uint*)&early_ray_termination;
+		//}
+
+
 		cbVolumeObj.pb_shading_factor = material_phongCoeffs;
 		cbVolumeObj.vobj_flag |= (int)showOutline << 1;
 		if (is_ghost_mode) {

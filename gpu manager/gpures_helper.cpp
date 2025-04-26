@@ -903,11 +903,11 @@ void grd_helper::CheckReusability(GpuRes& gres, VmObject* resObj, bool& update_d
 
 void grd_helper::Fence()
 {
-	g_pvmCommonParams->dx11DeviceImmContext->End(g_pvmCommonParams->dx11qr_fenceQuery);
-	BOOL query_finished = FALSE;
-	while (S_OK != g_pvmCommonParams->dx11DeviceImmContext->GetData(g_pvmCommonParams->dx11qr_fenceQuery, &query_finished, sizeof(query_finished), 0) || !query_finished) {
-		Sleep(0);
-	}
+	//g_pvmCommonParams->dx11DeviceImmContext->End(g_pvmCommonParams->dx11qr_fenceQuery);
+	//BOOL query_finished = FALSE;
+	//while (S_OK != g_pvmCommonParams->dx11DeviceImmContext->GetData(g_pvmCommonParams->dx11qr_fenceQuery, &query_finished, sizeof(query_finished), 0) || !query_finished) {
+	//	Sleep(0);
+	//}
 }
 
 int __UpdateBlocks(GpuRes& gres, const VmVObjectVolume* vobj, const string& vmode, const DXGI_FORMAT dxformat, LocalProgress* progress)
@@ -961,9 +961,9 @@ bool grd_helper::UpdateOtfBlocks(GpuRes& gres, VmVObjectVolume* main_vobj, VmVOb
 
 
 	VolumeData* vol_data = main_vobj->GetVolumeData();
-	float value_range = 65535.f;
+	float value_range = 65536.f;
 	if (vol_data->store_dtype.type_bytes == data_type::dtype<byte>().type_bytes) 
-		value_range = 255.f;
+		value_range = 256.f;
 	else assert(vol_data->store_dtype.type_bytes == data_type::dtype<ushort>().type_bytes); 
 
 	float scale_tf2volume = value_range / (float)tmap_data->array_lengths.x;
@@ -2397,14 +2397,23 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 	fTransformVector((vmfloat3*)&cb_volume.vec_grad_y, &vmfloat3(0, grad_offset_dist, 0), &mat_ws2ts);
 	fTransformVector((vmfloat3*)&cb_volume.vec_grad_z, &vmfloat3(0, 0, grad_offset_dist), &mat_ws2ts);
 	
+	float sample_rate = sample_precision;
+	//cb_volume.sample_dist = minDistSample / sample_rate;
+	if (is_xraymode)
+	{
+		cb_volume.opacity_correction = 1.f;
+		cb_volume.sample_dist = minDistSample / sample_rate;
+		cb_volume.v_dummy0 = *(uint*)&cb_volume.opacity_correction;
+	}
+	else
+	{
+		cb_volume.opacity_correction = 1.f;
+		cb_volume.sample_dist = minDistSample;
+		cb_volume.v_dummy0 = *(uint*)&sample_rate;
 
-	//const float sample_rate = 1.f;
-	float sample_rate = sample_precision;// actor->GetParam("_float_SamplePrecisionLevel", 1.0f);
-	cb_volume.opacity_correction = 1.f;
-	cb_volume.sample_dist = minDistSample / sample_rate;
-	// note preintegration technique implies opacity correction w.r.t. sample distance
-	if( is_xraymode ) 
-		cb_volume.opacity_correction /= sample_rate;
+		//cb_volume.sample_dist = minDistSample / sample_rate;
+		//cb_volume.opacity_correction = 1.f / sample_rate;
+	}
 	
 	//cb_volume.vol_size = vmfloat3((float)vol_data->vol_size.x, (float)vol_data->vol_size.y, (float)vol_data->vol_size.z);
 
