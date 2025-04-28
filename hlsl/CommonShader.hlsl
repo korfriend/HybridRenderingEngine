@@ -606,7 +606,7 @@ float _random(float2 v) { return floatConstruct(hash(asuint(v))); }
 float _random(float3 v) { return floatConstruct(hash(asuint(v))); }
 float _random(float4 v) { return floatConstruct(hash(asuint(v))); }
 
-//#define OPACITY_CORRECTION
+#define OPACITY_CORRECTION
 
 float4 LoadOtfBuf(const in int sample_value, const in Buffer<float4> buf_otf, const in float opacity_correction)
 {

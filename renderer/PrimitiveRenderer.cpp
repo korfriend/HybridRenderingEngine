@@ -2612,6 +2612,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 								
 								cb_cam.dir_view_ws = lightDir;
 							};
+
 							CB_CameraState cbCamStateUndercut = cbCamState;
 							std::vector<vmfloat3> aabb_pts;
 							{

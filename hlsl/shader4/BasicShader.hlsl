@@ -77,7 +77,7 @@ PS_FILL_DEPTHCS CastDepthMap(__VS_OUT input)
 
     float3 posLCS = TransformPoint(input.f3PosWS, g_cbUndercut.mat_ws2lcs_udc_map);
 
-    out_ps.depthcs = abs(-posLCS.z);
+    out_ps.depthcs = (-posLCS.z);
     out_ps.ds_z = input.f4PosSS.z;
     return out_ps;
 }

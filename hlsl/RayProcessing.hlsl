@@ -2222,7 +2222,7 @@ void ApplyUndercutColor2(inout float4 v_rgba, in float3 f3PosWS)
 	}
 
 	float3 posLCS = TransformPoint(f3PosWS, g_cbUndercut.mat_ws2lcs_udc_map);
-	float mapDepth = abs(-posLCS.z);
+	float mapDepth = (-posLCS.z);
 
 	float2 wh = float2(g_cbCamState.rt_width, g_cbCamState.rt_height);
 	//float2 uv = posMap.xy / wh;

@@ -2397,7 +2397,7 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 	fTransformVector((vmfloat3*)&cb_volume.vec_grad_y, &vmfloat3(0, grad_offset_dist, 0), &mat_ws2ts);
 	fTransformVector((vmfloat3*)&cb_volume.vec_grad_z, &vmfloat3(0, 0, grad_offset_dist), &mat_ws2ts);
 	
-	float sample_rate = sample_precision;
+	float sample_rate = fabs(sample_precision);
 	//cb_volume.sample_dist = minDistSample / sample_rate;
 	if (is_xraymode)
 	{
@@ -2407,9 +2407,19 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 	}
 	else
 	{
-		cb_volume.opacity_correction = 1.f;
-		cb_volume.sample_dist = minDistSample;
-		cb_volume.v_dummy0 = *(uint*)&sample_rate;
+		if (sample_precision < 0) // modulation
+		{
+			cb_volume.opacity_correction = 1.f;
+			cb_volume.sample_dist = minDistSample / sample_rate;
+			cb_volume.v_dummy0 = *(uint*)&cb_volume.opacity_correction;
+			cb_volume.opacity_correction = 1.f / sample_rate;
+		}
+		else
+		{
+			cb_volume.opacity_correction = 1.f;
+			cb_volume.sample_dist = minDistSample;
+			cb_volume.v_dummy0 = *(uint*)&sample_rate;
+		}
 
 		//cb_volume.sample_dist = minDistSample / sample_rate;
 		//cb_volume.opacity_correction = 1.f / sample_rate;
