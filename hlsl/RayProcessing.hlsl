@@ -2128,8 +2128,9 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 	//}
 #endif
 
-	float4 outline_color = float4(g_cbPobj.Kd, 1);
-	outline_color.a = a;// *a; // heuristic aliasing 
+	//float4 outline_color = float4(g_cbPobj.Kd, 1);
+	float4 outline_color = float4(g_cbPobj.Kd, g_cbPobj.alpha);
+	outline_color.a *= a;// *a; // heuristic aliasing 
 	outline_color.rgb *= outline_color.a;
 	//outline_color.rgb *= outline_color.a;
 	//outline_color.rgb *= outline_color.a;
