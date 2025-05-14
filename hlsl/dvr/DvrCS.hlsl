@@ -693,7 +693,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	int layer_count = 0;
 
 	[loop]
-    for (int i = 0; i < (int)min(num_frags, 1); i++)
+    for (int i = 0; i < (int)num_frags; i++)
     {
         uint i_vis = 0;
 		Fragment f;
