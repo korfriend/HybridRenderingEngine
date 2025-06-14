@@ -1371,7 +1371,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		// id, depth, planePos.xyz
 
 		const int num_picking_objs = (int)picking_buf[0];
-		vzlog("##num picking %d", num_picking_objs);
+		//vzlog("##num picking %d", num_picking_objs);
 
 		for (int i = 1; i <= num_picking_objs; i += 2)
 		{ 
