@@ -795,6 +795,8 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 #ifdef DX10_0
 		dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_picking_buffer.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
 		dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_picking_buffer2.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
+#else
+		dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_picking_buffer.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 #endif
 	}
 	else
@@ -1367,7 +1369,11 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		uint* picking_buf = (uint*)mappedResSysPicking.pData;
 		// note each layer has 5 integer-stored data 
 		// id, depth, planePos.xyz
-		for (int i = 0; i < max_picking_layers; i += 2) 
+
+		const int num_picking_objs = (int)picking_buf[0];
+		vzlog("##num picking %d", num_picking_objs);
+
+		for (int i = 1; i <= num_picking_objs; i += 2)
 		{ 
 			uint obj_id = picking_buf[i];
 			if (obj_id == 0) break;

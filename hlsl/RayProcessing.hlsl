@@ -1055,6 +1055,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 	if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height || g_cbPobj.alpha < 0.001f)
 		__EXIT;
 
+#if PICKING != 1
 	float fvPrev = fragment_zdepth[ss_xy];// asfloat(ConvertFloat4ToUInt(v_rgba));
 	if (asuint(fvPrev) == WILDCARD_DEPTH_OUTLINE)
 		__EXIT;
@@ -1067,6 +1068,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 	}
 	
 	fragment_zdepth[ss_xy] = asfloat(OUTSIDE_PLANE);
+#endif
 	//__EXIT;
 
 	const uint k_value = g_cbCamState.k_value;
@@ -1449,9 +1451,9 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 			out_ps.color.b = 7.f;
 			out_ps.color.a = 77.f;
 #else
-			//InterlockedAdd(fragment_counter[ss_xy], 1, fc);
-			picking_buf[2 * fc + 0] = g_cbPobj.pobj_dummy_0;
-			picking_buf[2 * fc + 1] = asuint(0.f);
+			InterlockedAdd(picking_buf[0], 1, fc);
+			picking_buf[1 + 2 * fc + 0] = g_cbPobj.pobj_dummy_0;
+			picking_buf[1 + 2 * fc + 1] = asuint(0.f);
 #endif
 		}
 		__EXIT;
@@ -1761,9 +1763,9 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 	out_ps.color.a = 77.f;
 	//out_ps.depthcs = zdepth0;
 #else
-	//InterlockedAdd(fragment_counter[ss_xy], 1, fc);
-	picking_buf[2 * fc + 0] = g_cbPobj.pobj_dummy_0;
-	picking_buf[2 * fc + 1] = asuint(zdepth0);
+	InterlockedAdd(picking_buf[0], 1, fc);
+	picking_buf[1 + 2 * fc + 0] = g_cbPobj.pobj_dummy_0;
+	picking_buf[1 + 2 * fc + 1] = asuint(zdepth0);
 #endif
 	//float3 posPlane = pos_ip_ws + ray_dir_unit_ws * (planeThickness * 0.5f);// -fThicknessPosition);
 	//picking_buf[5 * fc + 2] = asuint(posPlane.x);
