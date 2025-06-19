@@ -2642,7 +2642,7 @@ void grd_helper::SetCb_VolumeRenderingEffect(CB_VolumeMaterial& cb_vreffect, VmV
 }
 
 void grd_helper::SetCb_ClipInfo(CB_ClipInfo& cb_clip, VmVObject* obj, VmActor* actor, const int camClipMode, const std::set<int> camClipperFreeActor,
-	const vmmat44f& matCamClipWS2BS, const vmfloat3& matCamClipPlanePos, const vmfloat3& matCamClipPlaneDir)
+	const vmmat44f& matCamClipWS2BS, const vmfloat3& camClipPlanePos, const vmfloat3& camClipPlaneDir)
 {
 	const int obj_id = obj->GetObjectID();
 	bool is_clip_free = obj->GetObjParam("_bool_ClipFree", false);
@@ -2670,8 +2670,8 @@ void grd_helper::SetCb_ClipInfo(CB_ClipInfo& cb_clip, VmVObject* obj, VmActor* a
 			cb_clip.vec_clipplane = actor->GetParam("_float3_VecClipPlaneWS", (vmfloat3)0);
 		}
 		else {
-			cb_clip.pos_clipplane = matCamClipPlanePos;
-			cb_clip.vec_clipplane = matCamClipPlaneDir;
+			cb_clip.pos_clipplane = camClipPlanePos;
+			cb_clip.vec_clipplane = camClipPlaneDir;
 		}
 	}
 	if (cb_clip.clip_flag & 0x2)
