@@ -597,6 +597,10 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 	int num_moments = _fncontainer->fnParams.GetParam("_int_NumQueueLayers", num_moments_old);
 	int num_safe_loopexit = _fncontainer->fnParams.GetParam("_int_SpinLockSafeLoops", (int)10000000);
 	bool is_final_renderer = _fncontainer->fnParams.GetParam("_bool_IsFinalRenderer", true);
+
+	if (_fncontainer->fnParams.GetParam("STORE_RT_IOBJ", false))
+		is_final_renderer = true;
+
 	//double v_discont_depth = _fncontainer->fnParams.GetParam("_float_DiscontDepth", -1.0);
 	float merging_beta = _fncontainer->fnParams.GetParam("_float_MergingBeta", 0.5f);
 	bool blur_SSAO = _fncontainer->fnParams.GetParam("_bool_BlurSSAO", true);

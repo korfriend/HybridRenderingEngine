@@ -326,9 +326,24 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		}
 		else {
 			if (hWnd) gpu_manager->ReleaseDXGI(hWnd);
+
 			int outIndex = planeThickness == 0.f && !is_last_renderer ? 1 : 0; // just for SlicerSR combined with CPU MPR
-			FrameBuffer* fb_rout = (FrameBuffer*)iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, outIndex);
-			FrameBuffer* fb_dout = (FrameBuffer*)iobj->GetFrameBuffer(FrameBufferUsageDEPTH, 0);
+			FrameBuffer *fb_rout, *fb_dout;
+			if (_fncontainer.fnParams.GetParam("STORE_RT_IOBJ", false))
+			{
+				if (!iobj->ReplaceFrameBuffer(FrameBufferUsageRENDEROUT, 1, data_type::dtype<vmbyte4>(), ("SR temp RGBA : defined in vismtv_inbuilt_renderercpu module")))
+					iobj->InsertFrameBuffer(data_type::dtype<vmbyte4>(), FrameBufferUsageRENDEROUT, ("SR temp RGBA : defined in vismtv_inbuilt_renderercpu module"));
+				if (!iobj->ReplaceFrameBuffer(FrameBufferUsageDEPTH, 1, data_type::dtype<float>(), ("SR temp depth : defined in vismtv_inbuilt_renderercpu module")))
+					iobj->InsertFrameBuffer(data_type::dtype<float>(), FrameBufferUsageDEPTH, ("SR temp depth : defined in vismtv_inbuilt_renderercpu module"));
+
+				fb_rout = (FrameBuffer*)iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, 1);
+				fb_dout = (FrameBuffer*)iobj->GetFrameBuffer(FrameBufferUsageDEPTH, 1);
+			}
+			else
+			{
+				fb_rout = (FrameBuffer*)iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, outIndex);
+				fb_dout = (FrameBuffer*)iobj->GetFrameBuffer(FrameBufferUsageDEPTH, 0);
+			}
 
 			if (count_call_render == 0)	// this means that there is no valid rendering pass
 			{
@@ -625,6 +640,12 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 
 		bool isSkipSysFbBupdate = _fncontainer.fnParams.GetParam("_bool_SkipSysFBUpdate", false);
 		if (!isSkipSysFbBupdate) RenderOut();
+	}
+	else if (_fncontainer.fnParams.GetParam("STORE_RT_IOBJ", false) && !is_vr)
+	{
+		RenderOut();
+		LeaveCriticalSection(&cs);
+		return true;
 	}
 
 
