@@ -1191,22 +1191,16 @@ void __GS_ThickLines(VS_OUTPUT input[2], inout TriangleStream<VS_OUTPUT> triangl
     positionPoint1Transformed.w = 1.0f;
 
     //calculate the angle between the 2 points on the screen
-    float3 positionDifference = positionPoint0Transformed.xyz - positionPoint1Transformed.xyz;
-    float3 coordinateSystem = float3(1.0f, 0.0f, 0.0f);
     
-    positionDifference.z = 0.0f;
-    coordinateSystem.z = 0.0f;
-    
-    float fAngle = acos(dot(positionDifference.xy, coordinateSystem.xy) / (length(positionDifference.xy) * length(coordinateSystem.xy)));
-    
-    if (cross(positionDifference, coordinateSystem).z < 0.0f)
-    {
-        fAngle = 2.0f * PI - fAngle;
-    }
-    
-    fAngle *= -1.0f;
-    fAngle -= PI * 0.5f;
-    
+    float2 d = positionPoint0Transformed.xy - positionPoint1Transformed.xy;
+    float  ls = dot(d, d);
+    if (ls < 1e-10) return;           // skip zero-length
+
+    float  cosA = clamp(d.x * rsqrt(ls), -1.0, 1.0);
+    float  fAngle = acos(cosA);
+    if (d.y > 0) fAngle = 2.0f * PI - fAngle;
+    fAngle = -(fAngle + PI * 0.5f);
+        
     const float pixel_thicknessX = g_cbPobj.pix_thickness / (float) g_cbCamState.rt_width;
     const float pixel_thicknessY = g_cbPobj.pix_thickness / (float) g_cbCamState.rt_height;
     //first half circle of the line
