@@ -203,8 +203,8 @@ bool Sample_Volume_And_Check(inout float sample_v, const float3 pos_sample_ts, c
 #elif SCULPT_MASK == 1
 	int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint_clamp, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
     
-	int sculpt_value = (int) (g_cbVobj.vobj_flag >> 24);
-    return (sample_v * g_cbTmap.tmap_size_x) >= min_valid_v && (mask_vint == 0 || mask_vint > sculpt_value);
+	int sculpt_value = (int)(g_cbVobj.vobj_flag >> 24);
+	return (sample_v * g_cbTmap.tmap_size_x) >= min_valid_v && (mask_vint == 0 || mask_vint > sculpt_value);
 #else 
     return (sample_v * g_cbTmap.tmap_size_x) >= min_valid_v;
 #endif
@@ -1213,6 +1213,9 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #if OTF_MASK == 1
 	float3 pos_mask_sample_ts = pos_lucky_sample_ts;
 #endif
+#if SCULPT_MASK == 1
+	int sculpt_value = (int)(g_cbVobj.vobj_flag >> 24);
+#endif
 
 #else // ~(RAYMODE==1 || RAYMODE==2) ... RAYMODE==3
 	float depth_sample = depth_begin + g_cbVobj.sample_dist * (float)(num_ray_samples);
@@ -1238,7 +1241,14 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 			for (int k = 0; k <= blkSkip.num_skip_steps; k++)
 			{
 				float3 pos_sample_in_blk_ts = pos_ray_start_ts + dir_sample_ts * (float)(i + k);
-				float sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_in_blk_ts, 0).r;// *g_cbVobj.value_range;
+#if SCULPT_MASK == 1
+				int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint_clamp, pos_sample_in_blk_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
+				float sample_v = 0;
+				if (mask_vint == 0 || mask_vint > sculpt_value)
+					sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_in_blk_ts, 0).r;
+#else
+				float sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_in_blk_ts, 0).r;
+#endif
 #if RAYMODE == 1
 				if (sample_v > sample_v_prev)
 #else	// ~RM_RAYMAX
@@ -1262,6 +1272,14 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		float sample_mask_v = tex3D_volmask.SampleLevel(g_samplerPoint_clamp, pos_sample_ts, 0).r * g_cbVolObj.mask_value_range;
 		int mask_vint = (int)(sample_mask_v + 0.5f);
 		float4 vis_otf = LoadOtfBufId(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
+#elif SCULPT_MASK == 1
+		int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint_clamp, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
+		int sculpt_value = (int)(g_cbVobj.vobj_flag >> 24);
+		float4 vis_otf = (float4)0;
+		if (mask_vint == 0 || mask_vint > sculpt_value)
+		{
+			vis_otf = LoadOtfBuf(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
+		}
 #else	// OTF_MASK != 1
 		float4 vis_otf = LoadOtfBuf(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
 #endif
@@ -1284,8 +1302,10 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	float sample_mask_v = tex3D_volmask.SampleLevel(g_samplerPoint_clamp, pos_sample_ts, 0).r * g_cbVolObj.mask_value_range;
 	int mask_vint = (int)(sample_mask_v + 0.5f);
 	float4 vis_otf = LoadOtfBufId(sample_v_prev * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
+#elif SCULPT_MASK == 1 && RAYMODE == 3
+	vis_otf = LoadOtfBuf(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
 #else
-	float4 vis_otf = LoadOtfBuf(sample_v_prev* g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
+	float4 vis_otf = LoadOtfBuf(sample_v_prev * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
 #endif
 #endif
 	uint idx_dlayer = 0;

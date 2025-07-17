@@ -195,13 +195,16 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			}
 		}
 #else
-#define CS_NUM 36
+#define CS_NUM 39
 #define SET_CS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::COMPUTE_SHADER, NAME), dx11CShader, true)
 
 		string strNames_CS[CS_NUM] = {
 			   "VR_RAYMAX_cs_5_0"
 			  ,"VR_RAYMIN_cs_5_0"
 			  ,"VR_RAYSUM_cs_5_0"
+			  ,"VR_RAYMAX_SCULPTMASK_cs_5_0"
+			  ,"VR_RAYMIN_SCULPTMASK_cs_5_0"
+			  ,"VR_RAYSUM_SCULPTMASK_cs_5_0"
 			  ,"VR_DEFAULT_cs_5_0"
 			  ,"VR_OPAQUE_cs_5_0"
 			  ,"VR_CONTEXT_cs_5_0"
@@ -687,16 +690,25 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #define __RM_RAYMAX 10
 #define __RM_RAYMIN 11
 #define __RM_RAYSUM 12
+#define __RM_RAYMAX_SCULPTMASK 27
+#define __RM_RAYMIN_SCULPTMASK 28
+#define __RM_RAYSUM_SCULPTMASK 29
 #define __SRV_PTR ID3D11ShaderResourceView* 
 
 		// will change integer to string type 
 		// and its param name 'RaySamplerMode'
 		// also its corresponding cpu renderer
 		bool is_xray_mode = false;
+		bool is_sculpt_mode = false;
 		bool is_modulation_mode = false;
 		vmfloat2 grad_minmax(FLT_MAX, -FLT_MAX);
 		int ray_cast_type = is_last_dvr ? ray_cast_type_global : __RM_OPAQUE;
 		switch (ray_cast_type) {
+		case __RM_RAYMAX_SCULPTMASK:
+		case __RM_RAYMIN_SCULPTMASK:
+		case __RM_RAYSUM_SCULPTMASK: 
+			ray_cast_type -= 17; 
+			is_sculpt_mode = true;
 		case __RM_RAYMAX:
 		case __RM_RAYMIN:
 		case __RM_RAYSUM:
@@ -707,13 +719,15 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		case __RM_SCULPTMASK_MODULATION:
 			GradientMagnitudeAnalysis(grad_minmax, vobj);
 			is_modulation_mode = true;
+			if (ray_cast_type == __RM_SCULPTMASK_MODULATION)
+				is_sculpt_mode = true;
 			break;
-		case __RM_DEFAULT:
-		case __RM_MULTIOTF:
+		case __RM_SCULPTMASK: is_sculpt_mode = true; break;
+		case __RM_DEFAULT:  
+		case __RM_MULTIOTF: 
 		case __RM_VISVOLMASK:
-		case __RM_SCULPTMASK:
-		case __RM_OPAQUE:
-		case __RM_OPAQUE_MULTIOTF:
+		case __RM_OPAQUE: 
+		case __RM_OPAQUE_MULTIOTF: 
 		default: break;
 		}
 
@@ -723,7 +737,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 		bool use_mask_volume = actor->GetParam("_bool_ValidateMaskVolume", false);
 		int sculpt_index = actor->GetParam("_int_SculptingIndex", (int)-1);
-		if (ray_cast_type != __RM_SCULPTMASK && ray_cast_type != __RM_SCULPTMASK_MODULATION)
+		if (!is_sculpt_mode)
 			sculpt_index = -1;
 
 		bool showOutline = actor->GetParam("_bool_ShowOutline", false);
@@ -975,9 +989,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		ID3D11ComputeShader* cshader = NULL;
 		switch (ray_cast_type)
 		{
-		case __RM_RAYMIN: cshader = GETCS(VR_RAYMIN_cs_5_0); break;
-		case __RM_RAYMAX: cshader = GETCS(VR_RAYMAX_cs_5_0); break;
-		case __RM_RAYSUM: cshader = GETCS(VR_RAYSUM_cs_5_0); break;
+		case __RM_RAYMIN: cshader = is_sculpt_mode? GETCS(VR_RAYMIN_SCULPTMASK_cs_5_0) : GETCS(VR_RAYMIN_cs_5_0); break;
+		case __RM_RAYMAX: cshader = is_sculpt_mode? GETCS(VR_RAYMAX_SCULPTMASK_cs_5_0) : GETCS(VR_RAYMAX_cs_5_0); break;
+		case __RM_RAYSUM: cshader = is_sculpt_mode ? GETCS(VR_RAYSUM_SCULPTMASK_cs_5_0) : GETCS(VR_RAYSUM_cs_5_0); break;
 		case __RM_CLIPOPAQUE:
 		case __RM_OPAQUE: 
 			switch (mode_OIT)
@@ -1111,9 +1125,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		SET_SHADER_RES(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]); // search why this does not work
 #endif
 
-		if(ray_cast_type != __RM_RAYMIN
-			&& ray_cast_type != __RM_RAYMAX
-			&& ray_cast_type != __RM_RAYSUM) {
+		if(!is_xray_mode) {
 
 #ifdef DX10_0
 			ID3D11RenderTargetView* dx11RTVs[2] = {
