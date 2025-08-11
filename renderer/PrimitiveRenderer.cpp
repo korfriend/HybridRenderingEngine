@@ -1810,7 +1810,6 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			float cmap_vmin = actor->GetParam("_float_ColorMapVMin", 0.f);
 			float cmap_vmax = actor->GetParam("_float_ColorMapVMax", 1.f);
 			bool cmap_clip = actor->GetParam("_bool_ColorMapClip", false);
-			bool useTriNormal = actor->GetParam("_bool_UseTriNormal", false);
 			int modeUndercut = actor->GetParam("_int_ApplyUnderCut", 0); // 0 : NONE, 1 : RAY_CASTER, 2 : UNDERCUT_MAP
 			vmfloat3 undercutColor(1.f);
 			vmfloat3 undercutDir(0, 0, 1.f);
@@ -2472,7 +2471,21 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			dx11DeviceImmContext->IASetInputLayout(dx11InputLayer_Target);
 			dx11DeviceImmContext->VSSetShader(dx11VS_Target, NULL, 0);
 			if (!is_picking_routine) {
-				if (dx11GS_Target == NULL && useTriNormal) {
+
+				bool use_face_attributes = cbPolygonObj.pobj_flag & 0x6; // bits: 0110 
+
+				if (dx11GS_Target == NULL && use_face_attributes) {
+					dx11DeviceImmContext->GSSetConstantBuffers(1, 1, &cbuf_pobj);
+					uint* face_color_buffer = (uint*)prim_data->GetCustomDefinition("FACECOLOR");
+					if (face_color_buffer)
+					{
+						GpuRes face_color_res;
+						ullong facecolor_update = pobj->GetObjParam("_ullong_Latest_FACECOLOR", (ullong)0);
+						grd_helper::UpdateCustomBuffer(face_color_res, pobj, "FaceColorBuffer", face_color_buffer,
+							prim_data->num_prims, DXGI_FORMAT_R8G8B8A8_UNORM, sizeof(int), NULL, facecolor_update);
+						dx11DeviceImmContext->GSSetShaderResources(30, 1, (ID3D11ShaderResourceView**)&face_color_res.alloc_res_ptrs[DTYPE_SRV]);
+					}
+
 #ifdef DX10_0
 					dx11GS_Target = GETGS(GS_TriNormal_gs_4_0);
 #else

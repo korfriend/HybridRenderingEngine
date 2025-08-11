@@ -2171,7 +2171,9 @@ bool grd_helper::UpdateFrameBuffer(GpuRes& gres,
 		case DXGI_FORMAT_R8_UNORM: stride_bytes = sizeof(byte); break;
 		case DXGI_FORMAT_R8_UINT: stride_bytes = sizeof(byte); break;
 		case DXGI_FORMAT_R16_UNORM: stride_bytes = sizeof(ushort); break;
+		case DXGI_FORMAT_R16G16_UNORM: stride_bytes = sizeof(ushort2); break;
 		case DXGI_FORMAT_R16_UINT: stride_bytes = sizeof(ushort); break;
+		case DXGI_FORMAT_R16G16_UINT: stride_bytes = sizeof(ushort2); break;
 		case DXGI_FORMAT_R32G32B32A32_UINT: stride_bytes = sizeof(vmuint4); break;
 		case DXGI_FORMAT_UNKNOWN: stride_bytes = structured_stride; break;
 		case DXGI_FORMAT_R32_TYPELESS: stride_bytes = sizeof(uint); break;
@@ -2207,7 +2209,7 @@ bool grd_helper::UpdateFrameBuffer(GpuRes& gres,
 	return true;
 }
 
-bool grd_helper::UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string& resName, const void* bufPtr, const int numElements, DXGI_FORMAT dxFormat, const int type_bytes, LocalProgress* progress)
+bool grd_helper::UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string& resName, const void* bufPtr, const int numElements, DXGI_FORMAT dxFormat, const int type_bytes, LocalProgress* progress, ullong cpu_update_custom_time)
 {
 	gres.vm_src_id = srcObj->GetObjectID();
 	gres.res_name = resName;
@@ -2222,7 +2224,7 @@ bool grd_helper::UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string
 
 		needRegen = (nemElementPrev * typeBytesPrev) != ((uint)numElements * (uint)type_bytes);
 
-		ullong _tp_cpu = srcObj->GetContentUpdateTime();
+		ullong _tp_cpu = cpu_update_custom_time == 0 ? srcObj->GetContentUpdateTime() : cpu_update_custom_time;
 		ullong _tp_gpu = srcObj->GetObjParam(updateName, (ullong)0);
 		if (_tp_gpu >= _tp_cpu) {
 			assert(!needRegen);
@@ -2527,8 +2529,20 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 	}
 	else
 	{
-		if (!use_vertex_color)
+		bool use_facecolor = actor->GetParam("_bool_UseFaceColor", false);
+		if (use_facecolor)
+		{
+			cb_polygon.pobj_flag |= (0x1 << 2);
+		}
+
+		if (use_vertex_color || use_facecolor)
 			cb_polygon.pobj_flag |= (0x1 << 3);
+
+
+		if (actor->GetParam("_bool_UseTriNormal", false))
+		{
+			cb_polygon.pobj_flag |= (0x1 << 1);
+		}
 	}
 
 	{
@@ -2540,6 +2554,7 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 		cb_polygon.Ks = actor->GetParam("_float3_Ks", vmfloat3(actor->color)) * illum_model.z;
 		cb_polygon.Ns = actor->GetParam("_float_Ns", (float)1.f);;
 	}
+
 
 	bool abs_diffuse = actor->GetParam("_bool_AbsDiffuse", false); // alpha 값에 따라...??
 	if (!abs_diffuse)

@@ -451,7 +451,7 @@ namespace grd_helper
 		const int num_frags_perpixel = 1,
 		const int structured_stride = 0);
 
-	bool UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string& resName, const void* bufPtr, const int numElements, DXGI_FORMAT dxFormat, const int type_bytes, LocalProgress* progress = NULL);
+	bool UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string& resName, const void* bufPtr, const int numElements, DXGI_FORMAT dxFormat, const int type_bytes, LocalProgress* progress = NULL, ullong cpu_update_custom_time = 0);
 
 #define ZERO_SET(T) T(){memset(this, 0, sizeof(T));}
 
@@ -653,7 +653,9 @@ namespace grd_helper
 		uint tex_map_enum;
 
 		// 1st bit : 0 (shading color to RT) 1 (normal to RT for the purpose of silhouette rendering)
-		// 4th bit : 0 (Set texture0 to texture0) 1 (Set global_color to texture0)
+		// 2nd bit : 0 (no face normal) 1 (use face normal) in GS (flat normal)
+		// 3rd bit : 0 (no face color) 1 (use face color) in GS
+		// 4th bit : 0 (no vertex color) 1 (use vertex color) via vs_output.f3Custom
 		// 6th bit : 0 (Diffuse abs) 1 (Diffuse max)
 		// 7th bit : 0 (slicer with solid filling) 1 (slicer does not fill)
 		// 8th bit : 0 (normal color map) 1 (for windowing slice)

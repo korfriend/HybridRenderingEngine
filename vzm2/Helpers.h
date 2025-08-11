@@ -14,6 +14,9 @@
 #include <Psapi.h> // GetProcessMemoryInfo
 #include <Commdlg.h> // openfile
 #include <comdef.h> // com_error
+#else
+#include <sys/sysinfo.h>
+#include "Utility/portable-file-dialogs.h"
 #endif
 
 namespace vz::helper 
@@ -184,6 +187,16 @@ namespace vz::helper
 			return dataSize;
 		}
 		return 0;
+	}
+
+	inline size_t HashByteData(const uint8_t* data, size_t size)
+	{
+		size_t hash = 0;
+		for (size_t i = 0; i < size; ++i)
+		{
+			hash_combine(hash, data[i]);
+		}
+		return hash;
 	}
 
 	template<template<typename T, typename A> typename vector_interface>
@@ -474,6 +487,29 @@ namespace vz::helper
 			ss += std::to_string((uint32_t)data[i]) + ",";
 		}
 		ss += "\n};\n";
+		return FileWrite(dst_filename, (uint8_t*)ss.c_str(), ss.length());
+	}
+
+	inline bool Bin2CPP(const uint8_t* data, size_t size, const std::string& dst_filename, const char* dataName)
+	{
+		std::string ss;
+		ss += "extern const unsigned char ";
+		ss += dataName;
+		ss += "[] = {";
+		for (size_t i = 0; i < size; ++i)
+		{
+			if (i % 32 == 0)
+			{
+				ss += "\n";
+			}
+			ss += std::to_string((uint32_t)data[i]) + ",";
+		}
+		ss += "\n};\n";
+		ss += "extern const unsigned long long ";
+		ss += dataName;
+		ss += "_size = sizeof(";
+		ss += dataName;
+		ss += ");";
 		return FileWrite(dst_filename, (uint8_t*)ss.c_str(), ss.length());
 	}
 

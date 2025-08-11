@@ -33,7 +33,8 @@
 //#define __VERSION "1.20" // released at 23.04.03
 //#define __VERSION "1.30" // released at 25.02.04
 //#define __VERSION "1.31" // released at 25.02.07
-#define __VERSION "1.32" // released at 25.02.08
+//#define __VERSION "1.32" // released at 25.02.08
+#define __VERSION "1.33" // released at 25.08.11
 
 #define _HAS_STD_BYTE 0
 
@@ -651,7 +652,8 @@ namespace vmobjects
 		 * string ==> POSITION, NORMAL, TEXCOORD[n], ...
 		 * memory 할당된 pointer를 value로 갖고, @ref PrimitiveData::Delete 에서 해제됨.
 		 */
-		std::map<std::string, vmfloat3*> defined_buffers;
+		std::map<std::string, byte*> defined_vtxbuffers;
+		std::map<std::string, byte*> defined_custombuffers;
 	public:
 		/**
 		 * @brief Primitive로 구성 된 객체의 Polygon 의 normal vector 기준의 vertex 배열 방향
@@ -738,11 +740,16 @@ namespace vmobjects
 			}
 			texture_res_info.clear();
 
-			for (std::map<std::string, vmfloat3*>::iterator itrVertex3D = defined_buffers.begin(); itrVertex3D != defined_buffers.end(); itrVertex3D++)
+			for (std::map<std::string, byte*>::iterator itrVertex3D = defined_vtxbuffers.begin(); itrVertex3D != defined_vtxbuffers.end(); itrVertex3D++)
 			{
 				VMSAFE_DELETEARRAY(itrVertex3D->second);
 			}
-			defined_buffers.clear();
+			defined_vtxbuffers.clear();
+			for (std::map<std::string, byte*>::iterator itrVertex3D = defined_custombuffers.begin(); itrVertex3D != defined_custombuffers.end(); itrVertex3D++)
+			{
+				VMSAFE_DELETEARRAY(itrVertex3D->second);
+			}
+			defined_custombuffers.clear();
 		}
 		/*!
 		 * @fn vmfloat3* vmobjects::PrimitiveData::GetVerticeDefinition(const string& vtype)
@@ -752,10 +759,16 @@ namespace vmobjects
 		 * @return vmfloat3 \n vertex buffer 포인터. 없으면 NULL 반환
 		 */
 		vmfloat3* GetVerticeDefinition(const std::string& vtype) {
-			std::map<std::string, vmfloat3*>::iterator itrVtxDef = defined_buffers.find(vtype);
-			if (itrVtxDef == defined_buffers.end())
+			std::map<std::string, byte*>::iterator itrVtxDef = defined_vtxbuffers.find(vtype);
+			if (itrVtxDef == defined_vtxbuffers.end())
 				return NULL;
-			return itrVtxDef->second;
+			return (vmfloat3*)itrVtxDef->second;
+		}
+		byte* GetCustomDefinition(const std::string& vtype) {
+			std::map<std::string, byte*>::iterator itrVtxDef = defined_custombuffers.find(vtype);
+			if (itrVtxDef == defined_custombuffers.end())
+				return NULL;
+			return (byte*)itrVtxDef->second;
 		}
 		/*!
 		 * @fn void vmobjects::PrimitiveData::ReplaceOrAddVerticeDefinition(const string& vtype, vmfloat3* vtx_buffer)
@@ -770,9 +783,18 @@ namespace vmobjects
 			if (vtx_buffer_old != NULL)
 			{
 				VMSAFE_DELETEARRAY(vtx_buffer_old);
-				defined_buffers.erase(vtype);
+				defined_vtxbuffers.erase(vtype);
 			}
-			defined_buffers.insert(std::pair<std::string, vmfloat3*>(vtype, vtx_buffer));
+			defined_vtxbuffers.insert(std::pair<std::string, byte*>(vtype, (byte*)vtx_buffer));
+		}
+		void ReplaceOrAddCustomDefinition(const std::string& vtype, byte* buffer) {
+			byte* buffer_old = GetCustomDefinition(vtype);
+			if (buffer_old != NULL)
+			{
+				VMSAFE_DELETEARRAY(buffer_old);
+				defined_custombuffers.erase(vtype);
+			}
+			defined_custombuffers.insert(std::pair<std::string, byte*>(vtype, (byte*)buffer));
 		}
 		/*!
 		 * @fn int vmobjects::PrimitiveData::GetNumVertexDefinitions()
@@ -781,7 +803,7 @@ namespace vmobjects
 		 */
 		int GetNumVertexDefinitions() const
 		{
-			return (int)defined_buffers.size();
+			return (int)defined_vtxbuffers.size();
 		}
 		/*!
 		 * @fn void vmobjects::PrimitiveData::ClearVertexDefinitionContainer()
@@ -790,7 +812,11 @@ namespace vmobjects
 		 */
 		void ClearVertexDefinitionContainer()
 		{
-			defined_buffers.clear();
+			defined_vtxbuffers.clear();
+		}
+		void ClearCustomDefinitionContainer()
+		{
+			defined_custombuffers.clear();
 		}
 		/*!
 		* @fn void vmobjects::PrimitiveData::ComputeOrthoBoundingBoxWithCurrentValues()

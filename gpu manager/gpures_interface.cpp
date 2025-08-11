@@ -613,7 +613,9 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		case DXGI_FORMAT_R8_UINT: stride_bytes = sizeof(byte); break;
 		case DXGI_FORMAT_R8_SINT: stride_bytes = sizeof(char); break;
 		case DXGI_FORMAT_R16_UNORM: stride_bytes = sizeof(ushort); break;
+		case DXGI_FORMAT_R16G16_UNORM: stride_bytes = sizeof(ushort2); break;
 		case DXGI_FORMAT_R16_UINT: stride_bytes = sizeof(ushort); break;
+		case DXGI_FORMAT_R16G16_UINT: stride_bytes = sizeof(ushort2); break;
 		case DXGI_FORMAT_R16_SINT: stride_bytes = sizeof(short); break;
 		case DXGI_FORMAT_UNKNOWN: stride_bytes = gres.res_values.GetParam("STRIDE_BYTES", (uint)0); break;
 		default:

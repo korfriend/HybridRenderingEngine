@@ -15,6 +15,8 @@ Texture2D g_tex2D_Mat_D : register(t15);
 
 Texture2D g_tex2D_shadowMap : register(t20);
 
+Buffer<unorm float4> g_faceColors : register(t30); 
+
 struct VS_INPUT_PN
 {
     float3 f3PosOS : POSITION;
@@ -888,11 +890,12 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
 #else // __RENDERING_MODE == 0
     float3 Ka, Kd, Ks;
     float Ns = g_cbPobj.Ns;
-    if ((g_cbPobj.pobj_flag & (0x1 << 3)) == 0)
+
+    if (BitCheck(g_cbPobj.pobj_flag, 3))
     {
-        Ka = input.f3Custom * g_cbPobj.Ka.x;
-        Kd = input.f3Custom * g_cbPobj.Ka.y;
-        Ks = input.f3Custom * g_cbPobj.Ka.z;
+        Ka = input.f3Custom;// * g_cbPobj.Ka;
+        Kd = input.f3Custom;// * g_cbPobj.Kd;
+        Ks = input.f3Custom;// * g_cbPobj.Ks;
     }
     else
     {
@@ -901,6 +904,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
         Kd = g_cbPobj.Kd;
         Ks = g_cbPobj.Ks;
     }
+
     if (nor_len > 0)
     {
         Ka *= g_cbEnv.ltint_ambient.rgb;
@@ -982,18 +986,33 @@ static float fThickness = 0.01f;
 //};
 
 [maxvertexcount(42)]
-void GS_TriNormal(triangle VS_OUTPUT input[3], inout TriangleStream<VS_OUTPUT> triangleStream)
+void GS_TriNormal(triangle VS_OUTPUT input[3], inout TriangleStream<VS_OUTPUT> triangleStream, uint primID : SV_PrimitiveID)
 {
     float3 pos0 = input[0].f3PosWS;
     float3 pos1 = input[1].f3PosWS;
     float3 pos2 = input[2].f3PosWS;
 
     float3 normal = normalize(cross(pos1 - pos0, pos2 - pos0));
+    float3 faceColor = (float3)0;
+    if (BitCheck(g_cbPobj.pobj_flag, 2))
+    {
+        faceColor = g_faceColors[primID].rgb;
+    }
+
 
     VS_OUTPUT output[3] = { input[0] , input[1] , input[2] };
     for (uint i = 0; i < 3; i++) {
         VS_OUTPUT output = input[i];
-        output.f3VecNormalWS = normal;
+
+        if (BitCheck(g_cbPobj.pobj_flag, 1))
+        {
+            output.f3VecNormalWS = normal;
+        }
+        if (BitCheck(g_cbPobj.pobj_flag, 2))
+        {
+            output.f3Custom = faceColor;
+        }
+
         triangleStream.Append(output);
     }
     triangleStream.RestartStrip();
