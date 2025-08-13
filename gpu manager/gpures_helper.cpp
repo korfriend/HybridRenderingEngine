@@ -2,6 +2,7 @@
 #include "D3DCompiler.h"
 #include "hlsl/ShaderInterop_BVH.h"
 #include "BVHUpdate.h"
+#include "vzm2/Backlog.h"
 #include <iostream>
 #include <fstream>
 

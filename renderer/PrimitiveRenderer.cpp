@@ -1,5 +1,6 @@
 #include "RendererHeader.h"
 #include "gpulib.h"
+#include "vzm2/Backlog.h"
 
 #define GETDEPTHSTENTIL(NAME) dx11CommonParams->get_depthstencil(#NAME)
 //#include <opencv2/imgproc.hpp>
@@ -2475,6 +2476,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 				bool use_face_attributes = cbPolygonObj.pobj_flag & 0x6; // bits: 0110 
 
 				if (dx11GS_Target == NULL && use_face_attributes) {
+
 					dx11DeviceImmContext->GSSetConstantBuffers(1, 1, &cbuf_pobj);
 					uint* face_color_buffer = (uint*)prim_data->GetCustomDefinition("FACECOLOR");
 					if (face_color_buffer)

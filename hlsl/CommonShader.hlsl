@@ -648,9 +648,9 @@ float4 LoadSlabOtfBuf_PreInt(const int sample_v, int sample_prev, const Buffer<f
 
 	vis_otf.rgb = (f4OtfColorNext.rgb - f4OtfColorPrev.rgb) * divDiff;
 	vis_otf.a = (f4OtfColorNext.a - f4OtfColorPrev.a) * divDiff;
-	vis_otf.a = (vis_otf.a != vis_otf.a) ? 0.0f : vis_otf.a; // trick to avoid precision problem in shader compiler
+	//vis_otf.a = (vis_otf.a != vis_otf.a) ? 0.0f : vis_otf.a; // trick to avoid precision problem in shader compiler
 #ifdef OPACITY_CORRECTION
-	vis_otf.a = 1.0 - pow((1.f - vis_otf.a), opacity_correction);
+	vis_otf.a = 1.0 - pow(abs(1.f - vis_otf.a), opacity_correction);
 #endif
 #if VR_MODE == 1
 	vis_otf.a = 1.f;
@@ -688,9 +688,9 @@ float4 LoadSlabOtfBufId_PreInt(const int sample_v, int sample_prev, const Buffer
 
 	vis_otf.rgb = (f4OtfColorNext.rgb - f4OtfColorPrev.rgb) * divDiff;
 	vis_otf.a = (f4OtfColorNext.a - f4OtfColorPrev.a) * divDiff;
-	vis_otf.a = (vis_otf.a != vis_otf.a) ? 0.0f : vis_otf.a; // trick to avoid precision problem in shader compiler
+	//vis_otf.a = (vis_otf.a != vis_otf.a) ? 0.0f : vis_otf.a; // trick to avoid precision problem in shader compiler
 #ifdef OPACITY_CORRECTION
-	vis_otf.a = 1.0 - pow((1.f - vis_otf.a), opacity_correction);
+	vis_otf.a = 1.0 - pow(abs(1.f - vis_otf.a), opacity_correction);
 #endif
 	vis_otf.rgb *= vis_otf.a; // associate color
 	return vis_otf;
