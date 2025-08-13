@@ -2530,7 +2530,7 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 	else
 	{
 		bool use_facecolor = actor->GetParam("_bool_UseFaceColor", false);
-		if (use_facecolor)
+		if (use_facecolor && pobj_data->GetCustomDefinition("FACECOLOR"))
 		{
 			cb_polygon.pobj_flag |= (0x1 << 2);
 		}

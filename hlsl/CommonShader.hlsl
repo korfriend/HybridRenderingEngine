@@ -637,7 +637,7 @@ float4 LoadSlabOtfBuf_PreInt(const int sample_v, int sample_prev, const Buffer<f
 {
 	float4 vis_otf = (float4)0;
 
-	if (sample_v == sample_prev) sample_prev++;
+	if (sample_v == sample_prev) sample_prev--;
 
 	int diff = sample_v - sample_prev;
 
@@ -648,8 +648,9 @@ float4 LoadSlabOtfBuf_PreInt(const int sample_v, int sample_prev, const Buffer<f
 
 	vis_otf.rgb = (f4OtfColorNext.rgb - f4OtfColorPrev.rgb) * divDiff;
 	vis_otf.a = (f4OtfColorNext.a - f4OtfColorPrev.a) * divDiff;
+	vis_otf.a = (vis_otf.a != vis_otf.a) ? 0.0f : vis_otf.a; // trick to avoid precision problem in shader compiler
 #ifdef OPACITY_CORRECTION
-	vis_otf.a = 1.0 - pow(abs(1.f - vis_otf.a), opacity_correction);
+	vis_otf.a = 1.0 - pow((1.f - vis_otf.a), opacity_correction);
 #endif
 #if VR_MODE == 1
 	vis_otf.a = 1.f;
@@ -681,14 +682,15 @@ float4 LoadSlabOtfBufId_PreInt(const int sample_v, int sample_prev, const Buffer
 
 	float divDiff = 1.f / (float)diff;
 
-	int offset = id* g_cbTmap.tmap_size_x;
+	int offset = id * g_cbTmap.tmap_size_x;
 	float4 f4OtfColorPrev = buf_preintotf[sample_prev + offset];
 	float4 f4OtfColorNext = buf_preintotf[sample_v + offset];
 
 	vis_otf.rgb = (f4OtfColorNext.rgb - f4OtfColorPrev.rgb) * divDiff;
-	vis_otf.a = (f4OtfColorNext.a - f4OtfColorPrev.a)* divDiff;
+	vis_otf.a = (f4OtfColorNext.a - f4OtfColorPrev.a) * divDiff;
+	vis_otf.a = (vis_otf.a != vis_otf.a) ? 0.0f : vis_otf.a; // trick to avoid precision problem in shader compiler
 #ifdef OPACITY_CORRECTION
-	vis_otf.a = 1.0 - pow(1.0 - vis_otf.a, opacity_correction);
+	vis_otf.a = 1.0 - pow((1.f - vis_otf.a), opacity_correction);
 #endif
 	vis_otf.rgb *= vis_otf.a; // associate color
 	return vis_otf;
