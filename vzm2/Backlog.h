@@ -39,6 +39,8 @@ namespace vz::backlog
 
 	extern "C" UTIL_EXPORT void postThreadSafe(const std::string& input, LogLevel level = LogLevel::Info);
 
+	extern "C" UTIL_EXPORT void enableLogDisplay(const bool consoleEnabled = true, const bool fileEnabled = true);
+
 	extern "C" UTIL_EXPORT void setLogLevel(LogLevel newLevel);
 
 	extern "C" UTIL_EXPORT LogLevel getLogLevel();
