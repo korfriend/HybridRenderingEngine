@@ -412,7 +412,7 @@ float4 BlendFloat4AndFloat4(const in float4 fColor1, const in float4 fColor2)
 
 float4 ConvertUIntToFloat4(const uint iColor)
 {
-	// RGBA
+	// BGRA
 	return float4(((iColor >> 16) & 0xFF) / 255.f, ((iColor >> 8) & 0xFF) / 255.f, (iColor & 0xFF) / 255.f, ((iColor >> 24) & 0xFF) / 255.f);
 }
 

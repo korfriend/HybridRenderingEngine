@@ -893,9 +893,9 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
 
     if (BitCheck(g_cbPobj.pobj_flag, 3))
     {
-        Ka = input.f3Custom;// * g_cbPobj.Ka;
-        Kd = input.f3Custom;// * g_cbPobj.Kd;
-        Ks = input.f3Custom;// * g_cbPobj.Ks;
+        Ka = input.f3Custom * g_cbPobj.Ka;
+        Kd = input.f3Custom * g_cbPobj.Kd;
+        Ks = input.f3Custom * g_cbPobj.Ks;
     }
     else
     {
@@ -993,10 +993,12 @@ void GS_TriNormal(triangle VS_OUTPUT input[3], inout TriangleStream<VS_OUTPUT> t
     float3 pos2 = input[2].f3PosWS;
 
     float3 normal = normalize(cross(pos1 - pos0, pos2 - pos0));
-    float3 faceColor = (float3)0;
+    float4 faceColor = (float4)1;
+    uint face_flag = 0xFF;
     if (BitCheck(g_cbPobj.pobj_flag, 2))
     {
-        faceColor = g_faceColors[primID].rgb;
+        faceColor = g_faceColors[primID].rgba;
+        face_flag = (uint)(faceColor.a * 255.f);
     }
 
 
@@ -1010,7 +1012,18 @@ void GS_TriNormal(triangle VS_OUTPUT input[3], inout TriangleStream<VS_OUTPUT> t
         }
         if (BitCheck(g_cbPobj.pobj_flag, 2))
         {
-            output.f3Custom = faceColor;
+            if (face_flag & 0x1)
+            {
+                output.f3Custom = faceColor.rgb;
+            }
+            else
+            {
+                output.f3Custom = ConvertUIntToFloat4(g_cbPobj.pobj_dummy_1).bgr;
+            }
+            if (face_flag & 0x2)
+            {
+                output.f3VecNormalWS = normal;
+            }
         }
 
         triangleStream.Append(output);

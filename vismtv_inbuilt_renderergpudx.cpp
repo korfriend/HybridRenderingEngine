@@ -600,6 +600,28 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 				else if (titem.alignment == "RIGHT") {
 					pDynamicTextFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
 				}
+
+				IDWriteTextLayout* pTextLayout = nullptr;
+				HRESULT hr = g_pDWriteFactory->CreateTextLayout(
+					text_w.c_str(),
+					(UINT32)text_w.length(),
+					pDynamicTextFormat,
+					rSize.width,   
+					rSize.height, 
+					&pTextLayout
+				);
+				
+				if (SUCCEEDED(hr)) {
+					DWRITE_TEXT_METRICS textMetrics;
+					hr = pTextLayout->GetMetrics(&textMetrics);
+					if (SUCCEEDED(hr)) {
+						float actualWidth = textMetrics.width;
+						float actualHeight = textMetrics.height;
+						titem.userData[1] = (int)actualWidth;
+						titem.userData[2] = (int)actualHeight;
+					}
+					pTextLayout->Release();
+				}
 				
 				res2d->pSolidBrush->SetColor(D2D1::ColorF(titem.iColor, titem.alpha)); // D2D1::ColorF::Black
 				const D2D1_RECT_F rectangle1 = D2D1::RectF(titem.posScreenX, titem.posScreenY, rSize.width, rSize.height);

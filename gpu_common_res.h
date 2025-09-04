@@ -69,7 +69,8 @@ inline void __check_and_release(GpuhelperResType res_type, ID3D11DeviceChild* re
 };
 
 //#define DX11_3
-#define TEXTITEM_VERSION 230813
+//#define TEXTITEM_VERSION 230813
+#define TEXTITEM_VERSION 250904
 struct TextItem
 {
 private:
@@ -84,5 +85,6 @@ public:
 	bool isItalic = false;
 	int fontWeight = 4; // 1 : thinest, 4 : regular, 7 : bold, 9 : maximum heavy
 	int posScreenX = 0, posScreenY = 0; // 
+	std::vector<int> userData;
 };
 

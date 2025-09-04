@@ -2481,6 +2481,8 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 	cb_polygon.mat_os2ws = TRANSPOSE(matRS2WS);
 	cb_polygon.mat_ws2os = TRANSPOSE(matWS2RS);
 
+	bool use_facecolor = actor->GetParam("_bool_UseFaceColor", false);
+
 	if (is_annotation_obj)// && prim_data->texture_res)
 	{
 		vmint3 i3TextureWHN = pobj->GetObjParam("_int3_TextureWHN", vmint3(0));
@@ -2530,7 +2532,6 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 	}
 	else
 	{
-		bool use_facecolor = actor->GetParam("_bool_UseFaceColor", false);
 		if (use_facecolor && pobj_data->GetCustomDefinition("FACECOLOR"))
 		{
 			cb_polygon.pobj_flag |= (0x1 << 2);
@@ -2550,10 +2551,17 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 		vmfloat3 illum_model = actor->GetParam("_float3_IllumWavefront", vmfloat3(1));
 		// material setting
 		cb_polygon.alpha = actor->color.a;
-		cb_polygon.Ka = actor->GetParam("_float3_Ka", vmfloat3(actor->color)) * illum_model.x;
-		cb_polygon.Kd = actor->GetParam("_float3_Kd", vmfloat3(actor->color)) * illum_model.y;
-		cb_polygon.Ks = actor->GetParam("_float3_Ks", vmfloat3(actor->color)) * illum_model.z;
+		vmfloat3 material_color = use_facecolor? vmfloat3(1) : vmfloat3(actor->color);
+		cb_polygon.Ka = actor->GetParam("_float3_Ka", material_color) * illum_model.x;
+		cb_polygon.Kd = actor->GetParam("_float3_Kd", material_color) * illum_model.y;
+		cb_polygon.Ks = actor->GetParam("_float3_Ks", material_color) * illum_model.z;
 		cb_polygon.Ns = actor->GetParam("_float_Ns", (float)1.f);;
+
+		cb_polygon.pobj_dummy_1 = 
+			(uint)(actor->color.r * 255.f) | 
+			((uint)(actor->color.g * 255.f) << 8) |
+			((uint)(actor->color.b * 255.f) << 16) |
+			((uint)(actor->color.a * 255.f) << 24);
 	}
 
 
