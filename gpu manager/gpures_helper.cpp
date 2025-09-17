@@ -537,6 +537,8 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90012), "VR_MASKVIS_ps_4_0", "ps_4_0"), VR_MASKVIS_ps_4_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90042), "VR_SCULPTMASK_ps_4_0", "ps_4_0"), VR_SCULPTMASK_ps_4_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90043), "VR_SCULPTMASK_CONTEXT_ps_4_0", "ps_4_0"), VR_SCULPTMASK_CONTEXT_ps_4_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90044), "VR_DEFAULT_SCULPTBITS_ps_4_0", "ps_4_0"), VR_DEFAULT_SCULPTBITS_ps_4_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90045), "VR_CONTEXT_SCULPTBITS_ps_4_0", "ps_4_0"), VR_CONTEXT_SCULPTBITS_ps_4_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90006), "VR_SURFACE_ps_4_0", "ps_4_0"), VR_SURFACE_ps_4_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90150), "SR_QUAD_OUTLINE_ps_4_0", "ps_4_0"), SR_QUAD_OUTLINE_ps_4_0);
@@ -753,8 +755,10 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50012), "VR_MASKVIS_FM_cs_5_0", "cs_5_0"), VR_MASKVIS_FM_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50042), "VR_SCULPTMASK_FM_cs_5_0", "cs_5_0"), VR_SCULPTMASK_FM_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50043), "VR_SCULPTMASK_CONTEXT_FM_cs_5_0", "cs_5_0"), VR_SCULPTMASK_CONTEXT_FM_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50044), "VR_DEFAULT_SCULPTBITS_FM_cs_5_0", "cs_5_0"), VR_DEFAULT_SCULPTBITS_FM_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50045), "VR_CONTEXT_SCULPTBITS_FM_cs_5_0", "cs_5_0"), VR_CONTEXT_SCULPTBITS_FM_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50050), "VR_CINEMATIC_FM_cs_5_0", "cs_5_0"), VR_CINEMATIC_FM_cs_5_0);
-	
+
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50070), "VR_SINGLE_DEFAULT_FM_cs_5_0", "cs_5_0"), VR_SINGLE_DEFAULT_FM_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50071), "VR_SINGLE_OPAQUE_FM_cs_5_0", "cs_5_0"), VR_SINGLE_OPAQUE_FM_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50072), "VR_SINGLE_OPAQUE_MULTIOTF_FM_cs_5_0", "cs_5_0"), VR_SINGLE_OPAQUE_MULTIOTF_FM_cs_5_0);
@@ -764,6 +768,8 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50076), "VR_SINGLE_MASKVIS_FM_cs_5_0", "cs_5_0"), VR_SINGLE_MASKVIS_FM_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50077), "VR_SINGLE_SCULPTMASK_FM_cs_5_0", "cs_5_0"), VR_SINGLE_SCULPTMASK_FM_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50078), "VR_SINGLE_SCULPTMASK_CONTEXT_FM_cs_5_0", "cs_5_0"), VR_SINGLE_SCULPTMASK_CONTEXT_FM_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50080), "VR_SINGLE_DEFAULT_SCULPTBITS_FM_cs_5_0", "cs_5_0"), VR_SINGLE_DEFAULT_SCULPTBITS_FM_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50081), "VR_SINGLE_CONTEXT_SCULPTBITS_FM_cs_5_0", "cs_5_0"), VR_SINGLE_CONTEXT_SCULPTBITS_FM_cs_5_0);
 
 
 
@@ -2437,6 +2443,12 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 	cb_volume.vol_size = vmfloat3(gresVol.res_values.GetParam("WIDTH", (uint)1),
 		gresVol.res_values.GetParam("HEIGHT", (uint)1),
 		gresVol.res_values.GetParam("DEPTH", (uint)1));
+
+	cb_volume.vol_original_size = vmfloat3(
+		(float)vol_data->vol_size.x,
+		(float)vol_data->vol_size.y,
+		(float)vol_data->vol_size.z
+	);
 
 	// from pmapDValueVolume //
 	//float fSamplePrecisionLevel = actor->GetParam("_float_SamplePrecisionLevel", 1.0f);

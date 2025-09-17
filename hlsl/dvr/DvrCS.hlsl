@@ -11,6 +11,7 @@ Buffer<float4> buf_preintotf : register(t13); // unorm 으로 변경하기
 Buffer<float4> buf_windowing : register(t4); // not used here.
 Buffer<int> buf_ids : register(t5); // Mask OTFs // not used here.
 Texture2D<float> vr_fragment_1sthit_read : register(t6);
+Buffer<uint> sculpt_bits : register(t7); 
 
 #if DX10_0 == 1
 Texture2D prev_fragment_vis : register(t20); 
@@ -206,7 +207,16 @@ bool Sample_Volume_And_Check(inout float sample_v, const float3 pos_sample_ts, c
 	int sculpt_value = (int)(g_cbVobj.vobj_flag >> 24);
 	return (sample_v * g_cbTmap.tmap_size_x) >= min_valid_v && (mask_vint == 0 || mask_vint > sculpt_value);
 #else 
-    return (sample_v * g_cbTmap.tmap_size_x) >= min_valid_v;
+#if SCULPT_BITS == 1
+	int3 voxel_id = pos_sample_ts * g_cbVobj.vol_original_size;
+	int wwh = g_cbVobj.vol_original_size.x * g_cbVobj.vol_original_size.y;
+	int bit_id = voxel_id.x + voxel_id.y * g_cbVobj.vol_original_size.x + voxel_id.z * wwh;
+	int mod = bit_id % 32;
+	bool visible = !(bool)(sculpt_bits[bit_id / 32] & (0x1u << mod));
+	return (sample_v * g_cbTmap.tmap_size_x) >= min_valid_v && visible;
+#else
+	return (sample_v * g_cbTmap.tmap_size_x) >= min_valid_v;
+#endif
 #endif
 }
 
@@ -225,8 +235,19 @@ bool Vis_Volume_And_Check(inout float4 vis_otf, inout float sample_v, const floa
     vis_otf = LoadOtfBuf(sample_v * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
     return ((uint)(vis_otf.a * 255.f) > 0) && (mask_vint == 0 || mask_vint > sculpt_value);
 #else 
+
 	vis_otf = LoadOtfBuf(sample_v * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
+#if SCULPT_BITS == 1
+	int3 voxel_id = pos_sample_ts * g_cbVobj.vol_original_size;
+	int wwh = g_cbVobj.vol_original_size.x * g_cbVobj.vol_original_size.y;
+	int bit_id = voxel_id.x + voxel_id.y * g_cbVobj.vol_original_size.x + voxel_id.z * wwh;
+	int mod = bit_id % 32;
+	bool visible = !(bool)(sculpt_bits[bit_id / 32] & (0x1u << mod));
+	return ((uint)(vis_otf.a * 255.f) > 0) && visible;
+#else
     return vis_otf.a >= FLT_OPACITY_MIN__;
+#endif
+
 #endif
 }
 
@@ -250,8 +271,19 @@ bool Vis_Volume_And_Check_Slab(inout float4 vis_otf, inout float sample_v, float
 	vis_otf = LoadSlabOtfBuf_PreInt(sample_v * g_cbTmap.tmap_size_x, sample_prev * g_cbTmap.tmap_size_x, buf_preintotf, g_cbVobj.opacity_correction);
 	return ((uint)(vis_otf.a * 255.f) > 0) && (mask_vint == 0 || mask_vint > sculpt_value);
 #else 
+
 	vis_otf = LoadSlabOtfBuf_PreInt(sample_v * g_cbTmap.tmap_size_x, sample_prev * g_cbTmap.tmap_size_x, buf_preintotf, g_cbVobj.opacity_correction);
+#if SCULPT_BITS == 1
+	int3 voxel_id = pos_sample_ts * g_cbVobj.vol_original_size;
+	int wwh = g_cbVobj.vol_original_size.x * g_cbVobj.vol_original_size.y;
+	int bit_id = voxel_id.x + voxel_id.y * g_cbVobj.vol_original_size.x + voxel_id.z * wwh;
+	int mod = bit_id % 32;
+	bool visible = !(bool)(sculpt_bits[bit_id / 32] & (0x1u << mod));
+	return ((uint)(vis_otf.a * 255.f) > 0) && visible;
+#else
 	return vis_otf.a >= FLT_OPACITY_MIN__;
+#endif
+
 #endif
 }
 #endif
@@ -1248,7 +1280,20 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 				if (mask_vint == 0 || mask_vint > sculpt_value)
 					sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_in_blk_ts, 0).r;
 #else
+
+#if SCULPT_BITS == 1
+				int3 voxel_id = pos_sample_ts * g_cbVobj.vol_original_size;
+				int wwh = g_cbVobj.vol_original_size.x * g_cbVobj.vol_original_size.y;
+				int bit_id = voxel_id.x + voxel_id.y * g_cbVobj.vol_original_size.x + voxel_id.z * wwh;
+				int mod = bit_id % 32;
+				bool visible = !(bool)(sculpt_bits[bit_id / 32] & (0x1u << mod));
+				float sample_v = 0;
+				if (visible)
+					sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_in_blk_ts, 0).r;
+#else
 				float sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_in_blk_ts, 0).r;
+#endif
+
 #endif
 #if RAYMODE == 1
 				if (sample_v > sample_v_prev)
@@ -1282,7 +1327,21 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 			vis_otf = LoadOtfBuf(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
 		}
 #else	// OTF_MASK != 1
+
+
+#if SCULPT_BITS == 1
+		int3 voxel_id = pos_sample_ts * g_cbVobj.vol_original_size;
+		int wwh = g_cbVobj.vol_original_size.x * g_cbVobj.vol_original_size.y;
+		int bit_id = voxel_id.x + voxel_id.y * g_cbVobj.vol_original_size.x + voxel_id.z * wwh;
+		int mod = bit_id % 32;
+		bool visible = !(bool)(sculpt_bits[bit_id / 32] & (0x1u << mod));
+		float4 vis_otf = (float4)0;
+		if (visible)
+			vis_otf = LoadOtfBuf(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
+#else
 		float4 vis_otf = LoadOtfBuf(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
+#endif
+
 #endif
 		// otf sum is necessary for multi-otf case (tooth segmentation-out case)
 		//if (vis_otf.a > 0) // results in discontinuous visibility caused by aliasing problem

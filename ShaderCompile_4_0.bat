@@ -46,6 +46,8 @@ fxc /E RayCasting /T ps_4_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs_4_0
 fxc /E RayCasting /T ps_4_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs_4_0/VR_MASKVIS_ps_4_0 /D RAYMODE=0 /D OTF_MASK=0 /D VR_MODE=3 /D FRAG_MERGING=0 /D DYNAMIC_K_MODE=0 /D LINEAR_MODE=1 /D DX10_0=1
 fxc /E RayCasting /T ps_4_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs_4_0/VR_SCULPTMASK_ps_4_0 /D RAYMODE=0 /D SCULPT_MASK=1 /D VR_MODE=0 /D FRAG_MERGING=0 /D DYNAMIC_K_MODE=0 /D LINEAR_MODE=1 /D DX10_0=1
 fxc /E RayCasting /T ps_4_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs_4_0/VR_SCULPTMASK_CONTEXT_ps_4_0 /D RAYMODE=0 /D SCULPT_MASK=1 /D VR_MODE=2 /D FRAG_MERGING=0 /D DYNAMIC_K_MODE=0 /D LINEAR_MODE=1 /D DX10_0=1
+fxc /E RayCasting /T ps_4_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs_4_0/VR_DEFAULT_SCULPTBITS_ps_4_0 /D RAYMODE=0 /D SCULPT_BITS=1  /D VR_MODE=0 /D FRAG_MERGING=0 /D DYNAMIC_K_MODE=0 /D LINEAR_MODE=1 /D DX10_0=1
+fxc /E RayCasting /T ps_4_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs_4_0/VR_CONTEXT_SCULPTBITS_ps_4_0 /D RAYMODE=0 /D SCULPT_BITS=1  /D VR_MODE=2 /D FRAG_MERGING=0 /D DYNAMIC_K_MODE=0 /D LINEAR_MODE=1 /D DX10_0=1
 
 fxc /E VR_SURFACE /T ps_4_0 ./hlsl/dvr/DvrCS.hlsl /Fo ./shader_compiled_objs_4_0/VR_SURFACE_ps_4_0 /D OTF_MASK=0 /D DX10_0=1
 

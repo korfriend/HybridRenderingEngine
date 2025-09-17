@@ -150,7 +150,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		vmlog::LogInfo("RELOAD HLSL _ VR renderer");
 
 #ifdef DX10_0
-#define PS_NUM 12
+#define PS_NUM 14
 #define SET_PS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::PIXEL_SHADER, NAME), dx11PShader, true)
 
 		string strNames_PS[PS_NUM] = {
@@ -165,6 +165,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			  ,"VR_MASKVIS_ps_4_0"
 			  ,"VR_SCULPTMASK_ps_4_0"
 			  ,"VR_SCULPTMASK_CONTEXT_ps_4_0"
+			  ,"VR_DEFAULT_SCULPTBITS_ps_4_0"
+			  ,"VR_CONTEXT_SCULPTBITS_ps_4_0"
 			  ,"VR_SURFACE_ps_4_0"
 		};
 
@@ -195,7 +197,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			}
 		}
 #else
-#define CS_NUM 39
+#define CS_NUM 43
 #define SET_CS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::COMPUTE_SHADER, NAME), dx11CShader, true)
 
 		string strNames_CS[CS_NUM] = {
@@ -220,6 +222,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			  ,"VR_MASKVIS_FM_cs_5_0"
 			  ,"VR_SCULPTMASK_FM_cs_5_0"
 			  ,"VR_SCULPTMASK_CONTEXT_FM_cs_5_0"
+			  ,"VR_DEFAULT_SCULPTBITS_FM_cs_5_0"
+			  ,"VR_CONTEXT_SCULPTBITS_FM_cs_5_0"
 			  ,"VR_DEFAULT_DKBZ_cs_5_0"
 			  ,"VR_OPAQUE_DKBZ_cs_5_0"
 			  ,"VR_CONTEXT_DKBZ_cs_5_0"
@@ -238,6 +242,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			  ,"VR_SINGLE_MASKVIS_FM_cs_5_0"
 			  ,"VR_SINGLE_SCULPTMASK_FM_cs_5_0"
 			  ,"VR_SINGLE_SCULPTMASK_CONTEXT_FM_cs_5_0"
+			  ,"VR_SINGLE_DEFAULT_SCULPTBITS_FM_cs_5_0"
+			  ,"VR_SINGLE_CONTEXT_SCULPTBITS_FM_cs_5_0"
 		};
 
 		for (int i = 0; i < CS_NUM; i++)
@@ -802,6 +808,18 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			ray_cast_type = __RM_DEFAULT;
 		}
 
+		VmObject* sculptBitPackedObj = (VmVObjectVolume*)actor->GetAssociateRes("SCULPT_PACKEDBITS");
+		GpuRes gres_sculpt_bits;
+		if (sculptBitPackedObj)
+		{
+			vector<uint32_t>* pvtrSculptBitPacked = sculptBitPackedObj->GetObjParamPtr<vector<uint32_t>>("_vlist_UINT_SculptPackedBits");
+			if (pvtrSculptBitPacked)
+			{
+				grd_helper::UpdateCustomBuffer(gres_sculpt_bits, sculptBitPackedObj, "SculptPackedBits", pvtrSculptBitPacked->data(), pvtrSculptBitPacked->size(), DXGI_FORMAT_R32_UINT, 4);
+				SET_SHADER_RES(7, 1, (__SRV_PTR*)&gres_sculpt_bits.alloc_res_ptrs[DTYPE_SRV]);
+			}
+		}
+
 		// down-scaling true when downScaleOption is 
 		// 1 (&&is_modulation_mode)
 		// 2 (&&is_modulation_mode) 
@@ -980,8 +998,12 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		case __RM_MULTIOTF: pshader = GETPS(VR_MULTIOTF_ps_4_0); break;
 		case __RM_MULTIOTF_MODULATION: pshader = GETPS(VR_MULTIOTF_CONTEXT_ps_4_0); break;
 		case __RM_VISVOLMASK: pshader = GETPS(VR_MASKVIS_ps_4_0); break;
-		case __RM_SCULPTMASK: pshader = GETPS(VR_SCULPTMASK_ps_4_0); break;
-		case __RM_SCULPTMASK_MODULATION: pshader = GETPS(VR_SCULPTMASK_CONTEXT_ps_4_0); break;
+		case __RM_SCULPTMASK: pshader = 
+			sculptBitPackedObj? GETPS(VR_DEFAULT_SCULPTBITS_ps_4_0) : GETPS(VR_SCULPTMASK_ps_4_0);
+			break;
+		case __RM_SCULPTMASK_MODULATION: pshader = 
+			sculptBitPackedObj? GETPS(VR_CONTEXT_SCULPTBITS_ps_4_0) : GETPS(VR_SCULPTMASK_CONTEXT_ps_4_0);
+			break;
 		case __RM_DEFAULT:
 		default: pshader = GETPS(VR_DEFAULT_ps_4_0); break;
 		}
@@ -1083,15 +1105,15 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			break;
 		case __RM_SCULPTMASK:
 			if (is_last_dvr)
-				cshader = GETCS(VR_SCULPTMASK_FM_cs_5_0);
+				cshader = sculptBitPackedObj? GETCS(VR_DEFAULT_SCULPTBITS_FM_cs_5_0) : GETCS(VR_SCULPTMASK_FM_cs_5_0);
 			else
-				cshader = GETCS(VR_SINGLE_SCULPTMASK_FM_cs_5_0);
+				cshader = sculptBitPackedObj? GETCS(VR_SINGLE_DEFAULT_SCULPTBITS_FM_cs_5_0) : GETCS(VR_SINGLE_SCULPTMASK_FM_cs_5_0);
 			break;
 		case __RM_SCULPTMASK_MODULATION:
 			if (is_last_dvr)
-				cshader = GETCS(VR_SCULPTMASK_CONTEXT_FM_cs_5_0);
+				cshader = sculptBitPackedObj? GETCS(VR_CONTEXT_SCULPTBITS_FM_cs_5_0) : GETCS(VR_SCULPTMASK_CONTEXT_FM_cs_5_0);
 			else
-				cshader = GETCS(VR_SINGLE_SCULPTMASK_CONTEXT_FM_cs_5_0);
+				cshader = sculptBitPackedObj? GETCS(VR_SINGLE_CONTEXT_SCULPTBITS_FM_cs_5_0) : GETCS(VR_SINGLE_SCULPTMASK_CONTEXT_FM_cs_5_0);
 			break;
 		case __RM_SAMPLETEST:
 			cshader = GETCS(SampleTest_cs_5_0); break;

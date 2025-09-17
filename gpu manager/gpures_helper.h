@@ -720,6 +720,9 @@ namespace grd_helper
 		vmfloat3 mask_vol_size; // volume size stored in GPU memory
 		float mask_value_range;
 
+		vmfloat3 vol_original_size;
+		uint v_dummy2;
+
 		ZERO_SET(CB_VolumeObject)
 	};
 
