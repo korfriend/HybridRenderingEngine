@@ -1003,9 +1003,12 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		ID3D11ComputeShader* cshader = NULL;
 		switch (ray_cast_type)
 		{
-		case __RM_RAYMIN: cshader = is_sculpt_mode? GETCS(VR_RAYMIN_SCULPTMASK_cs_5_0) : GETCS(VR_RAYMIN_cs_5_0); break;
-		case __RM_RAYMAX: cshader = is_sculpt_mode? GETCS(VR_RAYMAX_SCULPTMASK_cs_5_0) : GETCS(VR_RAYMAX_cs_5_0); break;
-		case __RM_RAYSUM: cshader = is_sculpt_mode? GETCS(VR_RAYSUM_SCULPTMASK_cs_5_0) : GETCS(VR_RAYSUM_cs_5_0); break;
+		case __RM_RAYMIN: cshader = is_sculpt_mode? 
+			(sculptBitPackedObj ? GETCS(VR_RAYMIN_SCULPTBITS_cs_5_0) : GETCS(VR_RAYMIN_SCULPTMASK_cs_5_0)) : GETCS(VR_RAYMIN_cs_5_0); break;
+		case __RM_RAYMAX: cshader = is_sculpt_mode? 
+			(sculptBitPackedObj ? GETCS(VR_RAYMAX_SCULPTBITS_cs_5_0) : GETCS(VR_RAYMAX_SCULPTMASK_cs_5_0)) : GETCS(VR_RAYMAX_cs_5_0); break;
+		case __RM_RAYSUM: cshader = is_sculpt_mode? 
+			(sculptBitPackedObj ? GETCS(VR_RAYSUM_SCULPTBITS_cs_5_0) : GETCS(VR_RAYSUM_SCULPTMASK_cs_5_0)) : GETCS(VR_RAYSUM_cs_5_0); break;
 		case __RM_CLIPOPAQUE:
 		case __RM_OPAQUE: 
 			switch (mode_OIT)

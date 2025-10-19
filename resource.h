@@ -168,6 +168,9 @@
 #define IDR_RCDATA51000					  51000
 #define IDR_RCDATA51001					  51001
 #define IDR_RCDATA51002					  51002
+#define IDR_RCDATA51003					  51003
+#define IDR_RCDATA51004					  51004
+#define IDR_RCDATA51005					  51005
 
 #define IDR_RCDATA90000					  90000
 
