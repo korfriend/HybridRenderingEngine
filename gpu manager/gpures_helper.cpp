@@ -1005,43 +1005,7 @@ bool grd_helper::UpdateOtfBlocks(GpuRes& gres, VmVObjectVolume* main_vobj, VmVOb
 	((VmVObjectVolume*)main_vobj)->UpdateTagBlocks(tobj_id, 1, otf_Mm_range, NULL); // update volblk->GetUpdateTime(tobj_id)
 	byte* tag_blks = volblk->GetTaggedActivatedBlocks(tobj_id); // set by OTF values
 
-	//if (use_mask_otf && mask_tmap_ids && num_mask_tmap_ids > 0 && mask_vobj) // Only Cares for Main Block of iLevelBlock
-	//{
-	//	VolumeBlocks* mask_volblk = ((VmVObjectVolume*)mask_vobj)->GetVolumeBlock(blk_level);
-	//
-	//	vmint3 blk_vol_size = mask_volblk->blk_vol_size;
-	//	vmint3 blk_bnd_size = mask_volblk->blk_bnd_size;
-	//	int num_blk_units_x = blk_vol_size.x + blk_bnd_size.x * 2;
-	//	int num_blk_units_y = blk_vol_size.y + blk_bnd_size.y * 2;
-	//	int num_blk_units_z = blk_vol_size.z + blk_bnd_size.z * 2;
-	//	int num_blks = num_blk_units_x * num_blk_units_y * num_blk_units_z;
-	//
-	//	vmbyte2* mask_mM_blk_values = (vmbyte2*)mask_volblk->mM_blks;
-	//	for (int j = 1; j < tmap_data->array_lengths.y; j++)
-	//	{
-	//		ushort usMinOtf = (ushort)min(max(pstTfArchiveMask->valid_min_idx.x, 0), 65535);
-	//		ushort usMaxOtf = (ushort)max(min(pstTfArchiveMask->valid_max_idx.x, 65535), 0);
-	//
-	//		vmushort2* pus2MinMaxMainVolBlocks = (vmushort2*)volblk->mM_blks;
-	//
-	//		for (int iBlkIndex = 0; iBlkIndex < num_blks; iBlkIndex++)
-	//		{
-	//			//if (iSculptValue == 0 || iSculptValue > iSculptIndex)
-	//			vmbyte2 y2MinMaxBlockValue = mask_mM_blk_values[iBlkIndex];
-	//			if (y2MinMaxBlockValue.y >= j)
-	//			{
-	//				vmushort2 us2MinMaxVolBlockValue = pus2MinMaxMainVolBlocks[iBlkIndex];
-	//				if (us2MinMaxVolBlockValue.y < usMinOtf || us2MinMaxVolBlockValue.x > usMaxOtf)
-	//					tag_blks[iBlkIndex] = 0;
-	//				else
-	//					tag_blks[iBlkIndex] = 1;
-	//			}
-	//		}
-	//	}
-	//}
-
 	if (sculpt_value > 0 && mask_vobj)
-	//if (0)
 	{
 		VolumeBlocks* sculpt_volblk = ((VmVObjectVolume*)mask_vobj)->GetVolumeBlock(blk_level);
 		if (sculpt_volblk == NULL)
@@ -2502,7 +2466,6 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 		if (i3TextureWHN.z == 1)
 		{
 			vmfloat3* pos_vtx = pobj_data->GetVerticeDefinition("POSITION");
-			vmfloat3 f3Pos0SS, f3Pos1SS, f3Pos2SS;
 			vmmat44f matOS2SS = matRS2WS * matWS2SS;
 
 			vmfloat3 pos_vtx_0_ss, pos_vtx_1_ss, pos_vtx_2_ss;
@@ -2727,7 +2690,7 @@ void grd_helper::SetCb_ClipInfo(CB_ClipInfo& cb_clip, VmVObject* obj, VmActor* a
 
 void grd_helper::SetCb_HotspotMask(CB_HotspotMask& cb_hsmask, VmFnContainer* _fncontainer, const vmmat44f& matWS2SS)
 {
-	vmfloat3 pos_3dtip_ws = _fncontainer->fnParams.GetParam("_float3_3DTipPos", vmdouble3(0));
+	vmfloat3 pos_3dtip_ws = _fncontainer->fnParams.GetParam("_float3_3DTipPos", vmfloat3(0));
 	bool use_mask_3dtip = _fncontainer->fnParams.GetParam("_bool_UseMask3DTip", false);
 
 	vmdouble4 mask_center_rs_0 = _fncontainer->fnParams.GetParam("_float4_MaskCenterRadius0", vmdouble4(150, 150, 200, 0.5f));
@@ -2771,7 +2734,7 @@ void grd_helper::SetCb_CurvedSlicer(CB_CurvedSlicer& cb_curvedSlicer, VmFnContai
 	float fExCurveThicknessPositionRange = _fncontainer->fnParams.GetParam("_float_CurveThicknessPositionRange", 1.f);
 	float fThicknessRatio = _fncontainer->fnParams.GetParam("_float_ThicknessRatio", 0.f);
 	bool bIsRightSide = _fncontainer->fnParams.GetParam("_bool_IsRightSide", false);
-	float fThicknessPosition = fThicknessRatio * fExCurveThicknessPositionRange * 0.5;
+	float fThicknessPosition = fThicknessRatio * fExCurveThicknessPositionRange * 0.5f;
 	float fPlaneThickness = _fncontainer->fnParams.GetParam("_float_PlaneThickness", 0.f);
 
 	vector<vmfloat3>& vtrCurveInterpolations = *_fncontainer->fnParams.GetParamPtr<vector<vmfloat3>>("_vlist_FLOAT3_CurveInterpolations");

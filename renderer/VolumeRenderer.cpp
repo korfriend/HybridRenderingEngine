@@ -800,8 +800,6 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 					//downScaleOption == 1 || downScaleOption == 3 || downScaleOption == 5
 				);
 				SET_SHADER_RES(2, 1, (__SRV_PTR*)&gres_mask_vol.alloc_res_ptrs[DTYPE_SRV]);
-				
-				//printf("######111 %f√ \n", (double)(clock() - __start) / CLOCKS_PER_SEC);
 			}
 		}
 		else if (ray_cast_type == __RM_MULTIOTF || ray_cast_type == __RM_VISVOLMASK) {
@@ -847,18 +845,14 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		}
 
 		GpuRes gres_tmap_otf, gres_tmap_preintotf;
-		//clock_t __start2 = clock();
 		grd_helper::UpdateTMapBuffer(gres_tmap_otf, tobj_otf, false);
 		grd_helper::UpdateTMapBuffer(gres_tmap_preintotf, tobj_otf, true);
-		//printf("######222 %f√ \n", (double)(clock() - __start2) / CLOCKS_PER_SEC);
 		SET_SHADER_RES(3, 1, (__SRV_PTR*)&gres_tmap_otf.alloc_res_ptrs[DTYPE_SRV]);
 		SET_SHADER_RES(13, 1, (__SRV_PTR*)&gres_tmap_preintotf.alloc_res_ptrs[DTYPE_SRV]);
 
-		VolumeBlocks* vol_blk = vobj->GetVolumeBlock(blk_level);
-		if (vol_blk == NULL)
+		if (vobj->GetVolumeBlock(blk_level) == NULL)
 		{
 			vobj->UpdateVolumeMinMaxBlocks();
-			//vol_blk = vobj->GetVolumeBlock(blk_level);
 		}
 
 		GpuRes gres_volblk_otf, gres_volblk_min, gres_volblk_max;
@@ -876,10 +870,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			}
 		}
 		else {
-			//clock_t __start3 = clock();
 			grd_helper::UpdateOtfBlocks(gres_volblk_otf, vobj, mask_vol_obj, tobj_otf, sculpt_index); // this tagged mask volume is always used even when MIP mode
 			volblk_srv = (__SRV_PTR)gres_volblk_otf.alloc_res_ptrs[DTYPE_SRV];
-			//printf("######333 %f√ \n", (double)(clock() - __start3) / CLOCKS_PER_SEC);
 		}
 		SET_SHADER_RES(1, 1, (__SRV_PTR*)&volblk_srv);
 
