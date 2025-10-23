@@ -80,7 +80,8 @@ namespace bvh {
 			}
 			else
 			{
-				assert(gpuManager->UpdateGpuResource(gres_primitiveCounterBuffer_write));
+				bool success = gpuManager->UpdateGpuResource(gres_primitiveCounterBuffer_write);
+				assert(success);
 			}
 		}
 		else
@@ -202,12 +203,13 @@ namespace bvh {
 		}
 		else
 		{
-			vzlog_assert(gpuManager->UpdateGpuResource(gres_bvhNodeBuffer), "gres_bvhNodeBuffer");
-			vzlog_assert(gpuManager->UpdateGpuResource(gres_bvhParentBuffer), "gres_bvhParentBuffer");
-			vzlog_assert(gpuManager->UpdateGpuResource(gres_bvhFlagBuffer), "gres_bvhFlagBuffer");
-			vzlog_assert(gpuManager->UpdateGpuResource(gres_primitiveIDBuffer), "gres_primitiveIDBuffer");
-			vzlog_assert(gpuManager->UpdateGpuResource(gres_primitiveBuffer), "gres_primitiveBuffer");
-			vzlog_assert(gpuManager->UpdateGpuResource(gres_primitiveMortonBuffer), "gres_primitiveMortonBuffer");
+			bool success = gpuManager->UpdateGpuResource(gres_bvhNodeBuffer);
+			success &= gpuManager->UpdateGpuResource(gres_bvhParentBuffer);
+			success &= gpuManager->UpdateGpuResource(gres_bvhFlagBuffer);
+			success &= gpuManager->UpdateGpuResource(gres_primitiveIDBuffer);
+			success &= gpuManager->UpdateGpuResource(gres_primitiveBuffer);
+			success &= gpuManager->UpdateGpuResource(gres_primitiveMortonBuffer);
+			assert(success);
 		}
 
 		__ID3D11DeviceContext* dx11DeviceImmContext = dx11CommonParams->dx11DeviceImmContext;

@@ -649,7 +649,8 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	GpuRes gres_quad;
 	gres_quad.vm_src_id = 1;
 	gres_quad.res_name = string("PROXY_QUAD");
-	assert(gpu_manager->UpdateGpuResource(gres_quad));
+	bool success = gpu_manager->UpdateGpuResource(gres_quad);
+	assert(success);
 
 	vmmat44f matQaudWS2CS;
 	vmmath::fMatrixWS2CS(&matQaudWS2CS, &vmfloat3(0, 0, 1), &vmfloat3(0, 1, 0), &vmfloat3(0, 0, -1));
@@ -1046,13 +1047,14 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 					gres_primitiveMortonBuffer.vm_src_id = pobj->GetObjectID();
 					gres_primitiveMortonBuffer.res_name = string("GPUBVH::primitiveMortonBuffer");
 
-					vzlog_assert(gpu_manager->UpdateGpuResource(gres_primitiveCounterBuffer), "gres_primitiveCounterBuffer");
-					vzlog_assert(gpu_manager->UpdateGpuResource(gres_bvhNodeBuffer), "gres_bvhNodeBuffer");
-					vzlog_assert(gpu_manager->UpdateGpuResource(gres_bvhParentBuffer), "gres_bvhParentBuffer");
-					vzlog_assert(gpu_manager->UpdateGpuResource(gres_bvhFlagBuffer), "gres_bvhFlagBuffer");
-					vzlog_assert(gpu_manager->UpdateGpuResource(gres_primitiveIDBuffer), "gres_primitiveIDBuffer");
-					vzlog_assert(gpu_manager->UpdateGpuResource(gres_primitiveBuffer), "gres_primitiveBuffer");
-					vzlog_assert(gpu_manager->UpdateGpuResource(gres_primitiveMortonBuffer), "gres_primitiveMortonBuffer");
+					bool success = gpu_manager->UpdateGpuResource(gres_primitiveCounterBuffer);
+					success &= gpu_manager->UpdateGpuResource(gres_bvhNodeBuffer);
+					success &= gpu_manager->UpdateGpuResource(gres_bvhParentBuffer);
+					success &= gpu_manager->UpdateGpuResource(gres_bvhFlagBuffer);
+					success &= gpu_manager->UpdateGpuResource(gres_primitiveIDBuffer);
+					success &= gpu_manager->UpdateGpuResource(gres_primitiveBuffer);
+					success &= gpu_manager->UpdateGpuResource(gres_primitiveMortonBuffer);
+					assert(success);
 
 					SET_SHADER_RES(0, 1, (ID3D11ShaderResourceView**)&gres_primitiveCounterBuffer.alloc_res_ptrs[DTYPE_SRV]);
 					SET_SHADER_RES(1, 1, (ID3D11ShaderResourceView**)&gres_primitiveIDBuffer.alloc_res_ptrs[DTYPE_SRV]);
