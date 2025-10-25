@@ -574,19 +574,13 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		}
 
 		// Draw circle at center (sculpt debug visualization)
+#ifdef SCREEN_DEBUG
 		if (!is_sectional)
 		{
 			D2D1_SIZE_F rSize = res2d->pRenderTarget->GetSize();
 			float centerX = rSize.width / 2.0f;
 			float centerY = rSize.height / 2.0f;
 			float radius = 100.0f; // Circle radius in pixels (matches ProcModules.cpp:700)
-
-			// Draw filled circle with transparency for better visibility
-			//res2d->pSolidBrush->SetColor(D2D1::ColorF(D2D1::ColorF::Yellow, 0.2f));
-			//res2d->pRenderTarget->FillEllipse(
-			//	D2D1::Ellipse(D2D1::Point2F(centerX, centerY), radius, radius),
-			//	res2d->pSolidBrush
-			//);
 
 			// Draw circle outline (bright for debugging)
 			res2d->pSolidBrush->SetColor(D2D1::ColorF(D2D1::ColorF::Yellow, 1.0f));
@@ -610,6 +604,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 				res2d->pSolidBrush, 2.0f
 			);
 		}
+#endif
 
 		vector<TextItem>* textItems = (vector<TextItem>*)_fncontainer.fnParams.GetParam("_vector<TextItem>*_TextItems", (void*)NULL);
 		if (textItems) {
