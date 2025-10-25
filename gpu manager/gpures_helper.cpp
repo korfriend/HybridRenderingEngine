@@ -1402,11 +1402,8 @@ RETRY:
 	sample_offset.y = (float)vol_data->vol_size.y / (float)vol_size_y;
 	sample_offset.z = (float)vol_data->vol_size.z / (float)vol_size_z;
 
+	//vzlog("sample_offset: %f, %f, %f", sample_offset.x, sample_offset.y, sample_offset.z);
 	//printf("GPU Uploaded Volume Size : %d KB (%dx%dx%d) %d bytes\n",
-	//	(int)(vol_size_x * vol_size_y * vol_size_z / 1024.0 * type_size),
-	//	vol_size_x, vol_size_y, vol_size_z, (int)type_size);
-
-	//cout << "************offset*>> " << sample_offset.x << ", " << sample_offset.y << ", " << sample_offset.z << endl;
 
 	bool is_downscaled = sample_offset.x > 1.f || sample_offset.y > 1.f || sample_offset.z > 1.f;
 	//vmint2 gpu_row_depth_pitch = 0;
@@ -2411,10 +2408,10 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 		gresVol.res_values.GetParam("HEIGHT", (uint)1),
 		gresVol.res_values.GetParam("DEPTH", (uint)1));
 
-	cb_volume.vol_original_size = vmfloat3(
-		(float)vol_data->vol_size.x,
-		(float)vol_data->vol_size.y,
-		(float)vol_data->vol_size.z
+	cb_volume.vol_original_size = vmuint3(
+		vol_data->vol_size.x,
+		vol_data->vol_size.y,
+		vol_data->vol_size.z
 	);
 
 	// from pmapDValueVolume //

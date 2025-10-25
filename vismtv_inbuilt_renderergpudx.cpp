@@ -89,7 +89,7 @@ bool InitModule(fncontainer::VmFnContainer& _fncontainer)
 		if (D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &g_pDirect2dFactory) != S_OK)
 			vmlog::LogErr("Failure D2D1CreateFactory!!");
 
-		// IDWriteFactory´Â DWriteCreateFactory ÇÔ¼ö È£Ãâ »ý¼º.
+		// IDWriteFactoryï¿½ï¿½ DWriteCreateFactory ï¿½Ô¼ï¿½ È£ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½.
 		DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(g_pDWriteFactory), reinterpret_cast<IUnknown**>(&g_pDWriteFactory));
 		
 
@@ -111,13 +111,13 @@ bool InitModule(fncontainer::VmFnContainer& _fncontainer)
 
 		IDWriteTextFormat* pTextFormat = NULL;
 		g_pDWriteFactory->CreateTextFormat(
-			L"Comic Sans MS",                  // ÆùÆ® ÆÐ¹Ð¸® ÀÌ¸§ÀÇ ¹®ÀÚ¿­
-			NULL,                        // ÆùÆ® ÄÃ·º¼Ç °´Ã¼, NULL=½Ã½ºÅÛ ÆùÆ® ÄÃ·º¼Ç
-			DWRITE_FONT_WEIGHT_NORMAL,   // ÆùÆ® ±½±â. LIGHT, NORMAL, BOLD µî.
-			DWRITE_FONT_STYLE_NORMAL,    // ÆùÆ® ½ºÅ¸ÀÏ. NORMAL, OBLIQUE, ITALIC.
-			DWRITE_FONT_STRETCH_NORMAL,  // ÆùÆ® °£°Ý. CONDENSED, NORMAL, MEDIUM, EXTEXDED µî.
-			50.f,                          // ÆùÆ® Å©±â.
-			L"",                         // ·ÎÄÉÀÏÀ» ¹®ÀÚ¿­·Î ¸í½Ã.  ¿µ¾î-¹Ì±¹=L"en-us", ÇÑ±¹¾î-ÇÑ±¹=L"ko-kr"
+			L"Comic Sans MS",                  // ï¿½ï¿½Æ® ï¿½Ð¹Ð¸ï¿½ ï¿½Ì¸ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Ú¿ï¿½
+			NULL,                        // ï¿½ï¿½Æ® ï¿½Ã·ï¿½ï¿½ï¿½ ï¿½ï¿½Ã¼, NULL=ï¿½Ã½ï¿½ï¿½ï¿½ ï¿½ï¿½Æ® ï¿½Ã·ï¿½ï¿½ï¿½
+			DWRITE_FONT_WEIGHT_NORMAL,   // ï¿½ï¿½Æ® ï¿½ï¿½ï¿½ï¿½. LIGHT, NORMAL, BOLD ï¿½ï¿½.
+			DWRITE_FONT_STYLE_NORMAL,    // ï¿½ï¿½Æ® ï¿½ï¿½Å¸ï¿½ï¿½. NORMAL, OBLIQUE, ITALIC.
+			DWRITE_FONT_STRETCH_NORMAL,  // ï¿½ï¿½Æ® ï¿½ï¿½ï¿½ï¿½. CONDENSED, NORMAL, MEDIUM, EXTEXDED ï¿½ï¿½.
+			50.f,                          // ï¿½ï¿½Æ® Å©ï¿½ï¿½.
+			L"",                         // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Ú¿ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½.  ï¿½ï¿½ï¿½ï¿½-ï¿½Ì±ï¿½=L"en-us", ï¿½Ñ±ï¿½ï¿½ï¿½-ï¿½Ñ±ï¿½=L"ko-kr"
 			&pTextFormat
 		);
 		g_d2dTextFormatMap["DEFAULT"] = pTextFormat;
@@ -413,7 +413,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 					for (int j = 0; j < fb_size_cur.x; j++)
 					{
 						vmbyte4 rgba = rgba_gpu_buf[j + i * buf_row_pitch];
-						// __PS_MERGE_LAYERS_TO_RENDEROUT ¿¡¼­ INT -> FLOAT4 ·Î µÇ¾î ¹è¿­µÈ color ¿ä¼Ò°¡ µé¾î ¿È. //
+						// __PS_MERGE_LAYERS_TO_RENDEROUT ï¿½ï¿½ï¿½ï¿½ INT -> FLOAT4 ï¿½ï¿½ ï¿½Ç¾ï¿½ ï¿½è¿­ï¿½ï¿½ color ï¿½ï¿½Ò°ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½. //
 
 						// BGRA
 						if (is_rgba)
@@ -573,9 +573,47 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 			);
 		}
 
+		// Draw circle at center (sculpt debug visualization)
+		if (!is_sectional)
+		{
+			D2D1_SIZE_F rSize = res2d->pRenderTarget->GetSize();
+			float centerX = rSize.width / 2.0f;
+			float centerY = rSize.height / 2.0f;
+			float radius = 100.0f; // Circle radius in pixels (matches ProcModules.cpp:700)
+
+			// Draw filled circle with transparency for better visibility
+			//res2d->pSolidBrush->SetColor(D2D1::ColorF(D2D1::ColorF::Yellow, 0.2f));
+			//res2d->pRenderTarget->FillEllipse(
+			//	D2D1::Ellipse(D2D1::Point2F(centerX, centerY), radius, radius),
+			//	res2d->pSolidBrush
+			//);
+
+			// Draw circle outline (bright for debugging)
+			res2d->pSolidBrush->SetColor(D2D1::ColorF(D2D1::ColorF::Yellow, 1.0f));
+			res2d->pRenderTarget->DrawEllipse(
+				D2D1::Ellipse(D2D1::Point2F(centerX, centerY), radius, radius),
+				res2d->pSolidBrush,
+				3.0f, // Thicker stroke for better visibility
+				g_d2dStrokeStyleMap["DEFAULT"]
+			);
+
+			// Draw center crosshair for precise alignment check
+			res2d->pSolidBrush->SetColor(D2D1::ColorF(D2D1::ColorF::Red, 1.0f));
+			res2d->pRenderTarget->DrawLine(
+				D2D1::Point2F(centerX - 10.f, centerY),
+				D2D1::Point2F(centerX + 10.f, centerY),
+				res2d->pSolidBrush, 2.0f
+			);
+			res2d->pRenderTarget->DrawLine(
+				D2D1::Point2F(centerX, centerY - 10.f),
+				D2D1::Point2F(centerX, centerY + 10.f),
+				res2d->pSolidBrush, 2.0f
+			);
+		}
+
 		vector<TextItem>* textItems = (vector<TextItem>*)_fncontainer.fnParams.GetParam("_vector<TextItem>*_TextItems", (void*)NULL);
 		if (textItems) {
-			// IDWriteTextFormat °´Ã¼ »ý¼º.
+			// IDWriteTextFormat ï¿½ï¿½Ã¼ ï¿½ï¿½ï¿½ï¿½.
 			// https://learn.microsoft.com/en-us/windows/win32/Direct2D/how-to--draw-text
 			D2D1_SIZE_F rSize = res2d->pRenderTarget->GetSize();
 			IDWriteTextFormat* textFormat = g_d2dTextFormatMap["DEFAULT"];

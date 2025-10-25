@@ -195,7 +195,7 @@ struct HxCB_VolumeObject
 	float3 mask_vol_size; // volume size stored in GPU memory
 	float mask_value_range;
 
-	float3 vol_original_size;
+	uint3 vol_original_size;
 	uint v_dummy2;
 };
 
