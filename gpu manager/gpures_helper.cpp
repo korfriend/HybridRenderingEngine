@@ -2334,12 +2334,19 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 
 	vmmat44f matWS2VS = matWS2OS * vobj->GetMatrixOS2RSf();
 
-	vmmat44f matVS2TS;
-	vmmat44f matShift, matScale;
-	fMatrixTranslation(&matShift, &vmfloat3(0.5f));
-	fMatrixScaling(&matScale, &vmfloat3(1.f / (float)(vol_data->vol_size.x + vol_data->vox_pitch.x * 0.00f),
-		1.f / (float)(vol_data->vol_size.y + vol_data->vox_pitch.z * 0.00f), 1.f / (float)(vol_data->vol_size.z + vol_data->vox_pitch.z * 0.00f)));
-	matVS2TS = matShift * matScale;
+	vmmat44f matVS2TS, matScale;
+	//vmmat44f matShift;
+	//fMatrixTranslation(&matShift, &vmfloat3(0.5f));
+	//fMatrixScaling(&matScale, &vmfloat3(1.f / (float)(vol_data->vol_size.x + vol_data->vox_pitch.x * 0.00f),
+	//	1.f / (float)(vol_data->vol_size.y + vol_data->vox_pitch.z * 0.00f), 1.f / (float)(vol_data->vol_size.z + vol_data->vox_pitch.z * 0.00f)));
+	//matVS2TS = matShift * matScale;
+	//fMatrixTranslation(&matShift, &vmfloat3(0.5f));
+
+	fMatrixScaling(&matScale, &vmfloat3(1.f / (float)max(vol_data->vol_size.x - 1, 1),
+		1.f / (float)max(vol_data->vol_size.y - 1, 1), 
+		1.f / (float)max(vol_data->vol_size.z - 1, 1)));
+	matVS2TS = matScale;
+
 	vmmat44f mat_ws2ts = matWS2VS * matVS2TS;
 	cb_volume.mat_ws2ts = TRANSPOSE(mat_ws2ts);
 
