@@ -1555,7 +1555,12 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			continue;
 
 		if (is_picking_routine) {
-			if (prim_data->ptype == vmenums::PrimitiveTypeLINE || grd_helper::CollisionCheck(actor->matWS2OS, prim_data->aabb_os, picking_ray_origin, picking_ray_dir))
+
+			vmmat44f matPivot = (actor->GetParam("_matrix44f_Pivot", vmmat44f(1)));
+			vmmat44f matPivot_inv;
+			vmmath::fMatrixInverse(&matPivot_inv, &matPivot);
+			vmmat44f matWS2OS = actor->matWS2OS * matPivot_inv;
+			if (prim_data->ptype == vmenums::PrimitiveTypeLINE || grd_helper::CollisionCheck(matWS2OS, prim_data->aabb_os, picking_ray_origin, picking_ray_dir))
 				general_oit_routine_objs.push_back(actor);
 			//std::cout << "###### obb ray intersection : " << actor->actorId << std::endl;
 			// NOTE THAT is_picking_routine allows only general_oit_routine_objs!!
