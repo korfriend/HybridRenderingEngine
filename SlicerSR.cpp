@@ -136,8 +136,8 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			hlslobj_path += token + "\\";
 			exe_path.erase(0, pos + delimiter.length());
 		}
-		//hlslobj_path += "..\\..\\VmModuleProjects\\hybrid_rendering_engine\\";
-		hlslobj_path += "..\\..\\VmProjects\\hybrid_rendering_engine\\";
+
+		hlslobj_path += "..\\..\\VmProjects\\RendererGPU\\";
 
 		string enginePath;
 		if (grd_helper::GetEnginePath(enginePath)) {
