@@ -1,8 +1,8 @@
 ﻿/**
- * @mainpage    VisMotive Framework
+ * @mainpage    VizMotive Framework
  *
  * @section intro 소개
- *      - VisMotive Framework 을 이루는 Global Data Structures, Helper Functions 그리고 Engine APIs를 설명한다.
+ *      - VizMotive Framework 을 이루는 Global Data Structures, Helper Functions 그리고 Engine APIs를 설명한다.
  *
  * @section CREATEINFO 작성정보
  *      - 작성자      :   김동준
@@ -64,7 +64,7 @@ using namespace vz;
 #endif
 
 /**
- * @brief VisMotive Framework
+ * @brief VizMotive Framework
  */
 
 //=====================================================================
@@ -1213,7 +1213,7 @@ namespace vmobjects
 	struct ObjectArchive;
 	/**
 	 * @class VmObject
-	 * @brief VisMotive Framework Object 의 최상위 class 로 VmObject family 의 공통 parameter 를 갖음
+	 * @brief VizMotive Framework Object 의 최상위 class 로 VmObject family 의 공통 parameter 를 갖음
 	 */ // __vmstaticclass
 	__vmstaticclass VmObject
 	{
