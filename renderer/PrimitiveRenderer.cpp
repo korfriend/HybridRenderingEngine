@@ -1957,16 +1957,12 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 				}
 				cbPolygonObj.pobj_dummy_0 = *(uint*)&fisoValue;
 			}
-			if (use_vertex_color) {
-				cbPolygonObj.Ka = vmfloat3(material_phongCoeffs);
-				cbPolygonObj.Ns *= material_phongCoeffs.w;
-			}
-			else {
-				cbPolygonObj.Ka *= material_phongCoeffs.x;
-				cbPolygonObj.Kd *= material_phongCoeffs.y;
-				cbPolygonObj.Ks *= material_phongCoeffs.z;
-				cbPolygonObj.Ns *= material_phongCoeffs.w;
-			}
+			
+			cbPolygonObj.Ka *= material_phongCoeffs.x;
+			cbPolygonObj.Kd *= material_phongCoeffs.y;
+			cbPolygonObj.Ks *= material_phongCoeffs.z;
+			cbPolygonObj.Ns *= material_phongCoeffs.w;
+
 			if (default_color_cmmobj.x >= 0 && default_color_cmmobj.y >= 0 && default_color_cmmobj.z >= 0)
 				cbPolygonObj.Ka = cbPolygonObj.Kd = cbPolygonObj.Ks = default_color_cmmobj;
 			//if (render_pass == RENDER_GEOPASS::PASS_SILHOUETTE)

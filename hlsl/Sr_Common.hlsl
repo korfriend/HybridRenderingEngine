@@ -132,10 +132,7 @@ VS_OUTPUT CommonVS_PNT(VS_INPUT_PNT input)
     vout.f4PosSS = mul(g_cbPobj.mat_os2ps, float4(input.f3PosOS, 1.f));
     vout.f3PosWS = TransformPoint(input.f3PosOS, g_cbPobj.mat_os2ws);
     vout.f3VecNormalWS = normalize(TransformVector(input.f3VecNormalOS, g_cbPobj.mat_os2ws));
-    //if (g_cbPobj.pobj_flag & (0x1 << 3))
-    //    vout.f3Custom = g_cbPobj.fcolor.rgb;
-    //else
-        vout.f3Custom = input.f3Custom;
+	vout.f3Custom = input.f3Custom;
     //vout.f4PosSS.z -= g_cbPobj.depth_forward_bias;
     return vout;
 }
@@ -601,8 +598,8 @@ float3 ComputeDeviation(float3 pos, float3 nrl)
     // note pos and nrl are defined in WS
     float3 posOS = TransformPoint(pos, g_cbPobj.mat_ws2os);
     float3 posTS = TransformPoint(posOS, g_cbVobj.mat_ws2ts);
-
-    //float4x4 matTS2WS = inverse(g_cbPobj.mat_ws2os) * inverse(g_cbVobj.mat_ws2ts);
+    
+    
 
     nrl = normalize(nrl);
     float3 dirSampleOS = TransformVector(nrl * sampleDist, g_cbPobj.mat_ws2os);
@@ -877,9 +874,9 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
 
     if (nor_len > 0)
     {
-        float3 Ka = v_rgba.rgb * g_cbPobj.Ka;// * 1.15;
-        float3 Kd = v_rgba.rgb * g_cbPobj.Kd;// * 1.15;
-        float3 Ks = v_rgba.rgb * g_cbPobj.Ks;// * 1.15;
+        float3 Ka = v_rgba.rgb * g_cbPobj.Ka;
+        float3 Kd = v_rgba.rgb * g_cbPobj.Kd;
+        float3 Ks = v_rgba.rgb * g_cbPobj.Ks;
         Ka *= g_cbEnv.ltint_ambient.rgb;
         Kd *= g_cbEnv.ltint_diffuse.rgb;
         Ks *= g_cbEnv.ltint_spec.rgb;
