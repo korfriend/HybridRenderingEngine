@@ -596,39 +596,37 @@ float3 ComputeDeviation(float3 pos, float3 nrl)
     float dst_isovalue = asfloat(g_cbPobj.pobj_dummy_0);
 
     // note pos and nrl are defined in WS
+    // g_cbVobj.mat_ws2ts is "_matrix44f_GeoOS2VolOS"'s TS
     float3 posOS = TransformPoint(pos, g_cbPobj.mat_ws2os);
-    float3 posTS = TransformPoint(posOS, g_cbVobj.mat_ws2ts);
-    
-    
+	float3 posTS = TransformPoint(posOS, g_cbVobj.mat_ws2ts); 
 
     nrl = normalize(nrl);
     float3 dirSampleOS = TransformVector(nrl * sampleDist, g_cbPobj.mat_ws2os);
+	float3 dirSampleOS_unit = normalize(dirSampleOS);
     float3 dirSampleTS = TransformVector(dirSampleOS, g_cbVobj.mat_ws2ts);
     //float sampleDistTS = length(dirSampleTS);
+    
+	float3 sampleDirs[2] = { dirSampleTS, -dirSampleTS };
+	float3 sampleDirs_os[2] = { dirSampleOS_unit, -dirSampleOS_unit };
 
-    float3 sampleDirs[2] = { dirSampleTS, -dirSampleTS };
-
-    {
-        //float3 boxMin = float3(0, 0, 0);
-        //float3 boxMax = float3(1, 1, 1);
-        //float2 hits_t = ComputeAaBbHits(posTS, boxMin, boxMax, sampleDirs[0]);
-        //int numSamples = min((int)((hits_t.y - hits_t.x)  + 0.5f), minSampleSteps);
-        //if (numSamples > 150)
-        //    return float3(1, 0, 0);
-        //else 
-        //    return float3(0, 1, 0);
-    }
-
+	bool is_inside = true;
     [loop]
     for (int k = 0; k < 2; k++)
     {
         float3 sampleDir = sampleDirs[k];
 
-        float3 boxMin = float3(0, 0, 0);
-        float3 boxMax = float3(1, 1, 1);
-        float2 hits_t = ComputeAaBbHits(posTS, boxMin, boxMax, sampleDir);
+        //float3 boxMin = float3(0, 0, 0);
+        //float3 boxMax = float3(1, 1, 1);
+        //float2 hits_t = ComputeAaBbHits(posTS, boxMin, boxMax, sampleDir);
+		
+        // here, ws refers to GOS
+		float2 hits_t = ComputeVBoxHits(posOS, sampleDirs_os[k], g_cbVobj.mat_alignedvbox_tr_ws2bs, g_cbVobj.clip_info);
+        
         if (hits_t.y <= hits_t.x)
-            continue;
+		{
+			is_inside = false;            
+			continue;
+		}
 
         int numSamples = (int)(hits_t.y - hits_t.x);
 
@@ -721,6 +719,7 @@ float3 ComputeDeviation(float3 pos, float3 nrl)
     //devMin = abs(devMin);
     //if (devMin > minMapping && devMin < maxMapping)
     //if (devMin > 0 && devMin < maxMapping)
+	if (is_inside)
     {
         float mapValue = ((devMin - minMapping) / (maxMapping - minMapping));
 

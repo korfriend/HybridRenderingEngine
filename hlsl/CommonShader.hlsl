@@ -197,6 +197,8 @@ struct HxCB_VolumeObject
 
 	uint3 vol_original_size;
 	uint v_dummy2;
+	
+	HxCB_ClipInfo clip_info;
 };
 
 struct HxCB_Material // normally for each object

@@ -723,6 +723,8 @@ namespace grd_helper
 		vmuint3 vol_original_size;
 		uint v_dummy2;
 
+		CB_ClipInfo clip_info;
+
 		ZERO_SET(CB_VolumeObject)
 	};
 

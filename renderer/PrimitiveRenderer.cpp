@@ -1854,6 +1854,26 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 				vmmat44f matGeoOS2VolOS = actor->GetParam("_matrix44f_GeoOS2VolOS", vmmat44f(1));
 				CB_VolumeObject cbVolumeObj;
 				grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, matGeoOS2VolOS, gres_vol, 0, 65535.f, 1.f, false);
+
+				VmActor* actor_dstvolume = actor->GetParamPtr<VmActor>("_VmActor_DstVolume");
+				if (actor_dstvolume)
+				{
+					CB_ClipInfo cbClipInfo_vol;
+					grd_helper::SetCb_ClipInfo(cbClipInfo_vol, vobj, actor_dstvolume, camClipMode, camClipperFreeActors, camClipMatWS2BS, camClipPlanePos, camClipPlaneDir);
+					cbVolumeObj.clip_info = cbClipInfo_vol;
+
+					// change volume actor's ws --> mesh's os
+					vmmat44f VOS2GOS;
+					vmmath::fMatrixInverse(&VOS2GOS, &matGeoOS2VolOS);
+					vmmat44f VWS2GOS = actor_dstvolume->matWS2OS * VOS2GOS;
+
+					vmmath::fTransformPoint(&cbVolumeObj.clip_info.pos_clipplane, &cbVolumeObj.clip_info.pos_clipplane, &VWS2GOS);
+					vmmath::fTransformVector(&cbVolumeObj.clip_info.vec_clipplane, &cbVolumeObj.clip_info.vec_clipplane, &VWS2GOS);
+
+					vmmat44f GOS2VWS = matGeoOS2VolOS * actor_dstvolume->matOS2WS;
+					cbVolumeObj.clip_info.mat_clipbox_ws2bs = GOS2VWS * cbVolumeObj.clip_info.mat_clipbox_ws2bs;
+				}
+
 				cbVolumeObj.pb_shading_factor = material_phongCoeffs;
 				D3D11_MAPPED_SUBRESOURCE mappedResVolObj;
 				dx11DeviceImmContext->Map(cbuf_vobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResVolObj);
