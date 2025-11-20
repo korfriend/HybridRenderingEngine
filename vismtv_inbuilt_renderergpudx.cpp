@@ -290,8 +290,6 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		if (is_last_renderer || planeThickness <= 0.f) is_final_render_out = true;
 	}
 
-	vzlog("vismtv_inbuilt_renderergpudx DONE!");
-
 	auto RenderOut = [&iobj, &is_last_renderer, &planeThickness, &_fncontainer, &is_vr]() {
 
 		g_vmCommonParams.GpuProfile("Copyback");
