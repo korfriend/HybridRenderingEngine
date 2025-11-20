@@ -1,6 +1,5 @@
 #include "RendererHeader.h"
 #include "gpulib.h"
-#include "vzm2/Backlog.h"
 
 #define GETDEPTHSTENTIL(NAME) dx11CommonParams->get_depthstencil(#NAME)
 //#include <opencv2/imgproc.hpp>

@@ -1,5 +1,4 @@
 #include "RendererHeader.h"
-#include "vzm2/Backlog.h"
 
 #include "hlsl/ShaderInterop_BVH.h"
 

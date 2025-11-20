@@ -2,6 +2,7 @@
 #define _HAS_STD_BYTE 0
 
 #include "vzm2/CommonInclude.h"
+#include "vzm2/Backlog.h"
 #include "VimCommon.h"
 #include "gpures_helper.h"
 

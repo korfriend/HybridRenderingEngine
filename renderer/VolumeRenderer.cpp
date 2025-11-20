@@ -1,5 +1,4 @@
 #include "RendererHeader.h"
-#include "vzm2/Backlog.h"
 #include <time.h>
 
 using namespace grd_helper;

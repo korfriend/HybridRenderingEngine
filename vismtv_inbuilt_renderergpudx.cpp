@@ -139,6 +139,14 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	std::scoped_lock lock(queue_locker);
 #endif 
 
+#if defined(DX11_3)
+	//vzlog("vismtv_inbuilt_renderergpudx DX11_3 start!");
+#elif defined(DX11_0)
+	//vzlog("vismtv_inbuilt_renderergpudx DX11_0 start!");
+#else
+	//vzlog("vismtv_inbuilt_renderergpudx DX10_0 start!");
+#endif
+
 	if(g_pCGpuManager == NULL)
 	{
 		return false;
@@ -282,7 +290,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		if (is_last_renderer || planeThickness <= 0.f) is_final_render_out = true;
 	}
 
-	
+	vzlog("vismtv_inbuilt_renderergpudx DONE!");
 
 	auto RenderOut = [&iobj, &is_last_renderer, &planeThickness, &_fncontainer, &is_vr]() {
 
