@@ -46,6 +46,9 @@ namespace vz::backlog
 	extern "C" UTIL_EXPORT LogLevel getLogLevel();
 
 	extern "C" UTIL_EXPORT const char* GetLogPath();
+
+	// Add a custom sink to the logger (e.g., for ImGui terminal)
+	extern "C" UTIL_EXPORT void addCustomSink(void* sink_ptr);
 };
 
 namespace vz
