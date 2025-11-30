@@ -553,7 +553,7 @@ float WRITE_DEPTHZ(__VS_OUT input) : SV_Depth
     return z;
 }
 
-float2 BisectionalRefine(const float3 pos_sample_ts, const float3 dir_sample_ts, const int num_refinement,
+float3 BisectionalRefine(const float3 pos_sample_ts, const float3 dir_sample_ts, const int num_refinement,
     const float dst_isovalue, const bool largerCheck)
 {
     float t0 = 0, t1 = 1;
@@ -583,135 +583,134 @@ float2 BisectionalRefine(const float3 pos_sample_ts, const float3 dir_sample_ts,
         }
     }
 
-    return float2(t0, t1);
+	return pos_bis_e_ts; //	float2(t0, t1);
 }
 
-float3 ComputeDeviation(float3 pos, float3 nrl)
+float3 ComputeDeviation(float3 pos, float3 nrl, out bool colored)
 {
     float sampleDist = g_cbVobj.sample_dist;
     float devMin = FLT_COMP_MAX;
     float distMin = FLT_COMP_MAX;
-    int minSampleSteps = 1000000;
 
     float dst_isovalue = asfloat(g_cbPobj.pobj_dummy_0);
 
     // note pos and nrl are defined in WS
-    // g_cbVobj.mat_ws2ts is "_matrix44f_GeoOS2VolOS"'s TS
-    float3 posOS = TransformPoint(pos, g_cbPobj.mat_ws2os);
-	float3 posTS = TransformPoint(posOS, g_cbVobj.mat_ws2ts); 
-
-    nrl = normalize(nrl);
-    float3 dirSampleOS = TransformVector(nrl * sampleDist, g_cbPobj.mat_ws2os);
-	float3 dirSampleOS_unit = normalize(dirSampleOS);
-    float3 dirSampleTS = TransformVector(dirSampleOS, g_cbVobj.mat_ws2ts);
-    //float sampleDistTS = length(dirSampleTS);
+    // g_cbVobj.mat_ws2ts is "os2ts"     
+	float4x4 mat_ws2ts = mul(g_cbVobj.mat_ws2ts, g_cbPobj.mat_ws2os);
+	float3 posTS = TransformPoint(pos, mat_ws2ts);
     
-	float3 sampleDirs[2] = { dirSampleTS, -dirSampleTS };
-	float3 sampleDirs_os[2] = { dirSampleOS_unit, -dirSampleOS_unit };
-
-	bool is_inside = true;
-    [loop]
-    for (int k = 0; k < 2; k++)
-    {
-        float3 sampleDir = sampleDirs[k];
-
-        //float3 boxMin = float3(0, 0, 0);
-        //float3 boxMax = float3(1, 1, 1);
-        //float2 hits_t = ComputeAaBbHits(posTS, boxMin, boxMax, sampleDir);
-		
-        // here, ws refers to GOS
-		float2 hits_t = ComputeVBoxHits(posOS, sampleDirs_os[k], g_cbVobj.mat_alignedvbox_tr_ws2bs, g_cbVobj.clip_info);
-        
-        if (hits_t.y <= hits_t.x)
+	bool is_clipped = false;
+	if (g_cbVobj.clip_info.clip_flag & 0x1)
+	{
+		is_clipped = dot(g_cbVobj.clip_info.vec_clipplane, pos - g_cbVobj.clip_info.pos_clipplane) > 0;
+	}
+	if (g_cbVobj.clip_info.clip_flag & 0x2)
+	{
+		if (!IsInsideClipBox(pos, g_cbVobj.clip_info.mat_clipbox_ws2bs))
 		{
-			is_inside = false;            
-			continue;
+			is_clipped = true;
 		}
+	}
+    
+	if (posTS.x <= 0 || posTS.x >= 1
+        || posTS.y <= 0 || posTS.y >= 1
+        || posTS.z <= 0 || posTS.z >= 1)
+		is_clipped = true;
+        
+	if (!is_clipped)
+	{
+		nrl = normalize(nrl);
+		float3 dirSampleTS = TransformVector(nrl * sampleDist, mat_ws2ts);
+		float sample_dist_ts = length(dirSampleTS);
+    
+		float3 sampleDirs[2] = { dirSampleTS, -dirSampleTS };
+		float3 sampleDirs_unit_ws[2] = { nrl, -nrl };
+        
+		bool is_inside = true;
+		float refVolValue = g_tex3DVolume.SampleLevel(g_samplerLinear, posTS, 0).r;
+        [loop]
+		for (int k = 0; k < 2; k++)
+		{
+			float3 sampleDirUnitWS = sampleDirs_unit_ws[k];
+			float2 hits_t = ComputeVBoxHits(pos, sampleDirUnitWS, g_cbVobj.mat_alignedvbox_tr_ws2bs, g_cbVobj.clip_info);
+        
+			if (hits_t.y <= hits_t.x)
+			{
+				is_inside = false;
+				continue;
+			}
 
-        int numSamples = (int)(hits_t.y - hits_t.x);
+			int numSamples = (int) ((hits_t.y - hits_t.x) / sampleDist);
+            
+			float3 posStartWS = pos + sampleDirUnitWS * hits_t.x; // hits_t.x is almost 0
+			float3 posStartTS = TransformPoint(posStartWS, mat_ws2ts);
+			float3 sampleDir = sampleDirs[k];
 
-        float3 posStartTS = posTS + sampleDir * hits_t.x;	// hits_t.x is almost 0
-        float refVolValue = g_tex3DVolume.SampleLevel(g_samplerLinear, posTS, 0).r;
+			if (refVolValue < dst_isovalue)
+			{                 
+                [loop]
+				for (int i = 1; i < numSamples; i++)
+				{
+					float3 posSampleTS = posStartTS + sampleDir * (float) i;
 
-        if (refVolValue < dst_isovalue)
-        {	// The polygonal surface is outside the volume surface
-            if (minSampleSteps == 100000000)
-            {
-                devMin = -FLT_COMP_MAX;
-                minSampleSteps = 99999999;
-            }
+                    LOAD_BLOCK_INFO(blkSkip, posSampleTS, sampleDir, numSamples, i)
 
-            //if (numSamples > 10)
-            //    return float3(1, 1, 1);
-            [loop]
-            for (int i = 1; i < numSamples; i++)
-            {
-                float3 posSampleTS = posStartTS + sampleDir * (float)i;
+					if (blkSkip.blk_value > 0)
+					{
+                        [loop]
+						for (int j = 0; j <= blkSkip.num_skip_steps; j++)
+						{
+							float3 pos_sample_blk_ts = posStartTS + sampleDir * (float) (i + j);
+							float sampleValue = g_tex3DVolume.SampleLevel(g_samplerLinear_clamp, pos_sample_blk_ts, 0).r;
 
-                LOAD_BLOCK_INFO(blkSkip, posSampleTS, sampleDir, numSamples, i)
-
-                if (blkSkip.blk_value > 0)
-                {
-                    [loop]
-                    for (int j = 0; j <= blkSkip.num_skip_steps; j++)
-                    {
-                        float3 pos_sample_blk_ts = posStartTS + sampleDir * (float)(i + j);
-                        float sampleValue = g_tex3DVolume.SampleLevel(g_samplerLinear_clamp, pos_sample_blk_ts, 0).r;
-
-                        if (sampleValue > dst_isovalue)
-                        {
-                            // Interval bisection
-                            float2 tt = BisectionalRefine(pos_sample_blk_ts, sampleDir, 10, dst_isovalue, true);
-
-                            float steps = (float)(i + j) + hits_t.x + (tt.y - 1.f);// length(f3PosSampleInBlockWS - pos);
-                            float dist = steps * sampleDist;
-                            if (distMin > dist)
-                            {
-                                distMin = dist;
-                                devMin = -dist;
-                                minSampleSteps = steps;
-                            }
-                            i = numSamples;
-                            j = numSamples + blkSkip.num_skip_steps;
-                            break;
-                        }
-                    }
-                }
-                i += blkSkip.num_skip_steps;
-            }
-        }
-        else
-        {
+							if (sampleValue > dst_isovalue)
+							{
+                                // Interval bisection
+								float3 pos_refined_ts = BisectionalRefine(pos_sample_blk_ts, sampleDir, 10, dst_isovalue, true);
+								float dist_ts = length(posTS - pos_refined_ts);
+								float dist = dist_ts / sample_dist_ts * sampleDist;
+								if (distMin > dist)
+								{
+									distMin = dist;
+									devMin = -dist;
+								}
+								i = numSamples;
+								j = numSamples + blkSkip.num_skip_steps;
+								break;
+							}
+						}
+					}
+					i += blkSkip.num_skip_steps;
+				}
+			}
+			else
+			{
             // The polygonal surface is inside the volume surface
-            [loop]
-            for (int i = 1; i < numSamples; i++)
-            {
-                float3 posSampleTS = posStartTS + sampleDir * (float)i;
+                [loop]
+				for (int i = 1; i < numSamples; i++)
+				{
+					float3 posSampleTS = posStartTS + sampleDir * (float) i;
 
-                float sampleValue = g_tex3DVolume.SampleLevel(g_samplerLinear_clamp, posSampleTS, 0).r;
-                if (sampleValue < dst_isovalue)
-                {
-                    float2 tt = BisectionalRefine(posSampleTS, sampleDir, 10, dst_isovalue, false);
+					float sampleValue = g_tex3DVolume.SampleLevel(g_samplerLinear_clamp, posSampleTS, 0).r;
+					if (sampleValue < dst_isovalue)
+					{
+						float3 pos_refined_ts = BisectionalRefine(posSampleTS, sampleDir, 10, dst_isovalue, true);
+						float dist_ts = length(posTS - pos_refined_ts);
+						float dist = dist_ts / sample_dist_ts * sampleDist;
+						if (distMin > dist)
+						{
+							distMin = dist;
+							devMin = dist;
+						}
+						i = numSamples;
+						break;
+					}
+				}
+			}
+		}
+	}
 
-                    float steps = (float)(i) + hits_t.x + (tt.y - 1.f);// length(f3PosSampleInBlockWS - pos);
-                    float dist = steps * sampleDist;
-
-                    //return float3(1, 1, 0);
-                    if (distMin > dist)
-                    {
-                        distMin = dist;
-                        devMin = dist;
-                        minSampleSteps = steps;
-                    }
-                    i = numSamples;
-                    break;
-                }
-            }
-        }
-    }
-
-
-    float3 fColor = (float3)1;// g_cbPobj.Kd;
+    float3 fColor = g_cbPobj.Kd;
 
     float minMapping = g_cbTmap.mapping_v_min;
     float maxMapping = g_cbTmap.mapping_v_max;
@@ -719,9 +718,9 @@ float3 ComputeDeviation(float3 pos, float3 nrl)
     //devMin = abs(devMin);
     //if (devMin > minMapping && devMin < maxMapping)
     //if (devMin > 0 && devMin < maxMapping)
-	if (is_inside)
+	if (!is_clipped)
     {
-        float mapValue = ((devMin - minMapping) / (maxMapping - minMapping));
+		float mapValue = ((devMin - minMapping) / (maxMapping - minMapping));
 
         if (BitCheck(g_cbTmap.flag, 0)) {
             fColor = g_f4bufOTF[(int)(saturate(mapValue) * (g_cbTmap.tmap_size_x - 1))].rgb;
@@ -731,8 +730,9 @@ float3 ComputeDeviation(float3 pos, float3 nrl)
             if (mapValue >= 0 && mapValue <= 1.f) {
                 fColor = g_f4bufOTF[(int)((mapValue) * (g_cbTmap.tmap_size_x - 1))].rgb;
             }
-        }
-    }
+		}
+		colored = true;
+	}
 
     return fColor;
 }
@@ -816,35 +816,48 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     }
 #elif __RENDERING_MODE == 5
     // note g_cbVolObj.mat_ws2ts represents SrcOS2DstTS
-    //float4x4 matSrcWS2DstTS = g_cbVobj.mat_ws2ts * g_cbPobj.mat_ws2os; // use mul instructor!! 	col major 
     float3 posOS = TransformPoint(input.f3PosWS, g_cbPobj.mat_ws2os);
-    float3 posTS = TransformPoint(posOS, g_cbVobj.mat_ws2ts);
-    //float sample_v = g_tex3DVolume.SampleLevel(g_samplerLinear_clamp, posTS, 0).r;
-    //float3 tt = (posTS + (float3)1.0f) * 0.5f;
-    float sample_v = g_tex3DVolume.SampleLevel(g_samplerLinear, posTS, 0).r;
-
-    float3 posVS = posTS * g_cbVobj.vol_size;
-    if (posVS.x <= 1 || posVS.x >= g_cbVobj.vol_size.x - 1
-        || posVS.y <= 1 || posVS.y >= g_cbVobj.vol_size.y - 1
-        || posVS.z <= 1 || posVS.z >= g_cbVobj.vol_size.z - 1)
-        sample_v = -1;
-
-    float4 colorMap = g_f4bufOTF[(int)(sample_v * (g_cbTmap.tmap_size_x - 1))];
-    bool use_vrgb = false;
-    if (BitCheck(g_cbPobj.pobj_flag, 7)) 
+    
+    bool is_clipped = false;
+    if (g_cbVobj.clip_info.clip_flag & 0x1)
     {
-        use_vrgb = true;
-        v_rgba.rgb = colorMap.rgb * colorMap.a;
+        is_clipped = dot(g_cbVobj.clip_info.vec_clipplane, input.f3PosWS - g_cbVobj.clip_info.pos_clipplane) > 0;
     }
-    else 
+    if (g_cbVobj.clip_info.clip_flag & 0x2)
     {
-        if (colorMap.a > 0) 
+        if (!IsInsideClipBox(input.f3PosWS, g_cbVobj.clip_info.mat_clipbox_ws2bs))
+        {
+            is_clipped = true;
+        }
+    }
+    
+    float3 posTS = TransformPoint(posOS, g_cbVobj.mat_ws2ts);   // mat_ws2ts is used as os2ts
+    if (posTS.x <= 0 || posTS.x >= 1
+        || posTS.y <= 0 || posTS.y >= 1
+        || posTS.z <= 0 || posTS.z >= 1)
+        is_clipped = true;
+        
+    bool use_vrgb = false;
+    if (!is_clipped)
+    {
+        float sample_v = g_tex3DVolume.SampleLevel(g_samplerLinear, posTS, 0).r;
+        float4 colorMap = g_f4bufOTF[(int)(sample_v * (g_cbTmap.tmap_size_x - 1))];
+    
+        if (BitCheck(g_cbPobj.pobj_flag, 7)) 
         {
             use_vrgb = true;
             v_rgba.rgb = colorMap.rgb * colorMap.a;
         }
+        else 
+        {
+            if (colorMap.a > 0) 
+            {
+                use_vrgb = true;
+                v_rgba.rgb = colorMap.rgb * colorMap.a;
+            }
+        }
     }
-
+    
     if (nor_len > 0)
     {
         float3 Ka, Kd, Ks;
@@ -865,20 +878,26 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     }
     
 #elif __RENDERING_MODE == 6
+    bool use_vrgb = false;
     if (nor_len > 0)
-        v_rgba.rgb = ComputeDeviation(input.f3PosWS, nor); // note the color is suppposed to be multiplied by g_cbPobj.Kd, Ka, and Ks
-    else
-        v_rgba.rgb = (float3)1;
+        v_rgba.rgb = ComputeDeviation(input.f3PosWS, nor, use_vrgb); // note the color is suppposed to be multiplied by g_cbPobj.Kd, Ka, and Ks
+    
     v_rgba.a = g_cbPobj.alpha;
 
     if (nor_len > 0)
     {
-        float3 Ka = v_rgba.rgb * g_cbPobj.Ka;
-        float3 Kd = v_rgba.rgb * g_cbPobj.Kd;
-        float3 Ks = v_rgba.rgb * g_cbPobj.Ks;
-        Ka *= g_cbEnv.ltint_ambient.rgb;
-        Kd *= g_cbEnv.ltint_diffuse.rgb;
-        Ks *= g_cbEnv.ltint_spec.rgb;
+        float3 Ka, Kd, Ks;
+        Kd = v_rgba.rgb * g_cbEnv.ltint_diffuse.rgb;
+        if (use_vrgb)
+        {
+            Ka = v_rgba.rgb * g_cbEnv.ltint_ambient.rgb;
+            Ks = v_rgba.rgb * g_cbEnv.ltint_spec.rgb;
+        }
+        else
+        {
+            Ka = g_cbPobj.Ka * g_cbEnv.ltint_ambient.rgb;
+            Ks = g_cbPobj.Ks * g_cbEnv.ltint_spec.rgb;
+        }
         float Ns = g_cbPobj.Ns;
         ComputeColor(v_rgba.rgb, Ka, Kd, Ks, Ns, 1.0, input.f3PosWS, view_dir, nor, nor_len);
     }

@@ -1860,17 +1860,6 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 					CB_ClipInfo cbClipInfo_vol;
 					grd_helper::SetCb_ClipInfo(cbClipInfo_vol, vobj, actor_dstvolume, camClipMode, camClipperFreeActors, camClipMatWS2BS, camClipPlanePos, camClipPlaneDir);
 					cbVolumeObj.clip_info = cbClipInfo_vol;
-
-					// change volume actor's ws --> mesh's os
-					vmmat44f VOS2GOS;
-					vmmath::fMatrixInverse(&VOS2GOS, &matGeoOS2VolOS);
-					vmmat44f VWS2GOS = actor_dstvolume->matWS2OS * VOS2GOS;
-
-					vmmath::fTransformPoint(&cbVolumeObj.clip_info.pos_clipplane, &cbVolumeObj.clip_info.pos_clipplane, &VWS2GOS);
-					vmmath::fTransformVector(&cbVolumeObj.clip_info.vec_clipplane, &cbVolumeObj.clip_info.vec_clipplane, &VWS2GOS);
-
-					vmmat44f GOS2VWS = matGeoOS2VolOS * actor_dstvolume->matOS2WS;
-					cbVolumeObj.clip_info.mat_clipbox_ws2bs = GOS2VWS * cbVolumeObj.clip_info.mat_clipbox_ws2bs;
 				}
 
 				cbVolumeObj.pb_shading_factor = material_phongCoeffs;
