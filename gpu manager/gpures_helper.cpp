@@ -1495,8 +1495,14 @@ bool grd_helper::UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, const bool isPre
 		ullong _tp_cpu = tobj->GetContentUpdateTime(); 
 		ullong _tp_gpu = tobj->GetObjParam(updateTimeName, (ullong)0);
 		if (_tp_gpu >= _tp_cpu) {
-			assert(!needRegen);
-			return true;
+			if (needRegen)
+			{
+				vzlog_warning("INCONSISTENT STATE: GPU timestamp is up-to-date but size changed. _tp_cpu(%llu), _tp_gpu(%llu), forcing regeneration", _tp_cpu, _tp_gpu);
+			}
+			else
+			{
+				return true;
+			}
 		}
 	}
 
