@@ -38,6 +38,24 @@
     <ClCompile Include="gpu manager\BVHUpdate.cpp">
       <Filter>gpu manager</Filter>
     </ClCompile>
+    <ClCompile Include="meshpainter\main.cpp">
+      <Filter>meshpainter</Filter>
+    </ClCompile>
+    <ClCompile Include="meshpainter\UnwrapUVs.cpp">
+      <Filter>meshpainter</Filter>
+    </ClCompile>
+    <ClCompile Include="meshpainter\MeshPainter.cpp">
+      <Filter>meshpainter</Filter>
+    </ClCompile>
+    <ClCompile Include="meshpainter\FeedbackTexture.cpp">
+      <Filter>meshpainter</Filter>
+    </ClCompile>
+    <ClCompile Include="meshpainter\TextureTransformer.cpp">
+      <Filter>meshpainter</Filter>
+    </ClCompile>
+    <ClCompile Include="meshpainter\Dilator.cpp">
+      <Filter>meshpainter</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="resource.h">
@@ -93,6 +111,21 @@
     <ClInclude Include="gpu manager\BVHUpdate.h">
       <Filter>gpu manager</Filter>
     </ClInclude>
+    <ClInclude Include="meshpainter\UnwrapUVs.h">
+      <Filter>meshpainter</Filter>
+    </ClInclude>
+    <ClInclude Include="meshpainter\MeshPainter.h">
+      <Filter>meshpainter</Filter>
+    </ClInclude>
+    <ClInclude Include="meshpainter\FeedbackTexture.h">
+      <Filter>meshpainter</Filter>
+    </ClInclude>
+    <ClInclude Include="meshpainter\TextureTransformer.h">
+      <Filter>meshpainter</Filter>
+    </ClInclude>
+    <ClInclude Include="meshpainter\Dilator.h">
+      <Filter>meshpainter</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="hlsl\moment\ComplexAlgebra.hlsli">
@@ -129,9 +162,6 @@
     </Filter>
     <Filter Include="gpu manager">
       <UniqueIdentifier>{3027d6e8-88c4-411c-a3dc-83750d779504}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="gpu manager\legacy">
-      <UniqueIdentifier>{5c3050f7-28fb-43a2-aeda-6c506b4fe8ef}</UniqueIdentifier>
     </Filter>
     <Filter Include="bat">
       <UniqueIdentifier>{a59a4be1-fce7-4f35-96fc-ee08cd7491d0}</UniqueIdentifier>
@@ -171,6 +201,9 @@
     </Filter>
     <Filter Include="vzm2">
       <UniqueIdentifier>{f83226b6-e3b9-490f-8ea3-082947b0f4dd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="meshpainter">
+      <UniqueIdentifier>{4bb308c9-d959-4236-a082-b2e181256eee}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

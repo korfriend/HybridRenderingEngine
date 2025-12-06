@@ -37,6 +37,11 @@
   <ItemGroup>
     <ClCompile Include="gpu manager\BVHUpdate.cpp" />
     <ClCompile Include="gpu manager\gpulib.cpp" />
+    <ClCompile Include="meshpainter\Dilator.cpp" />
+    <ClCompile Include="meshpainter\FeedbackTexture.cpp" />
+    <ClCompile Include="meshpainter\MeshPainter.cpp" />
+    <ClCompile Include="meshpainter\TextureTransformer.cpp" />
+    <ClCompile Include="meshpainter\UnwrapUVs.cpp" />
     <ClCompile Include="SlicerSR.cpp" />
     <ClCompile Include="CurvedSlicerVR.cpp" />
     <ClCompile Include="gpu manager\gpures_helper.cpp" />
@@ -62,6 +67,11 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClInclude>
     <ClInclude Include="hlsl\ShaderInterop_BVH.h" />
+    <ClInclude Include="meshpainter\Dilator.h" />
+    <ClInclude Include="meshpainter\FeedbackTexture.h" />
+    <ClInclude Include="meshpainter\MeshPainter.h" />
+    <ClInclude Include="meshpainter\TextureTransformer.h" />
+    <ClInclude Include="meshpainter\UnwrapUVs.h" />
     <ClInclude Include="renderer\RendererHeader.h" />
     <ClInclude Include="renderer\Sampler.h" />
     <ClInclude Include="resource.h" />
