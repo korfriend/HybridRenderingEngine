@@ -38,9 +38,6 @@
     <ClCompile Include="gpu manager\BVHUpdate.cpp">
       <Filter>gpu manager</Filter>
     </ClCompile>
-    <ClCompile Include="meshpainter\main.cpp">
-      <Filter>meshpainter</Filter>
-    </ClCompile>
     <ClCompile Include="meshpainter\UnwrapUVs.cpp">
       <Filter>meshpainter</Filter>
     </ClCompile>
@@ -50,10 +47,10 @@
     <ClCompile Include="meshpainter\FeedbackTexture.cpp">
       <Filter>meshpainter</Filter>
     </ClCompile>
-    <ClCompile Include="meshpainter\TextureTransformer.cpp">
+    <ClCompile Include="meshpainter\Dilator.cpp">
       <Filter>meshpainter</Filter>
     </ClCompile>
-    <ClCompile Include="meshpainter\Dilator.cpp">
+    <ClCompile Include="meshpainter\PaintResourceManager.cpp">
       <Filter>meshpainter</Filter>
     </ClCompile>
   </ItemGroup>
@@ -120,10 +117,10 @@
     <ClInclude Include="meshpainter\FeedbackTexture.h">
       <Filter>meshpainter</Filter>
     </ClInclude>
-    <ClInclude Include="meshpainter\TextureTransformer.h">
+    <ClInclude Include="meshpainter\Dilator.h">
       <Filter>meshpainter</Filter>
     </ClInclude>
-    <ClInclude Include="meshpainter\Dilator.h">
+    <ClInclude Include="meshpainter\PaintResourceManager.h">
       <Filter>meshpainter</Filter>
     </ClInclude>
   </ItemGroup>
@@ -205,6 +202,9 @@
     <Filter Include="meshpainter">
       <UniqueIdentifier>{4bb308c9-d959-4236-a082-b2e181256eee}</UniqueIdentifier>
     </Filter>
+    <Filter Include="hlsl source code\meshpainter">
+      <UniqueIdentifier>{e16f4a4e-9023-4a29-9067-cba132a4ad24}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="vismtv_inbuilt_renderergpudx.rc">
@@ -280,6 +280,9 @@
     </FxCompile>
     <FxCompile Include="hlsl\bvh\bvh_propagateaabbCS.hlsl">
       <Filter>hlsl source code\BVH</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\meshpainter\MeshPaintShader.hlsl">
+      <Filter>hlsl source code\meshpainter</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>

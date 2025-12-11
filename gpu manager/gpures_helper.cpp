@@ -1,4 +1,6 @@
 #include "gpures_helper.h"
+#include "meshpainter/PaintResourceManager.h"
+#include "meshpainter/UnwrapUVs.h"
 #include "D3DCompiler.h"
 #include "hlsl/ShaderInterop_BVH.h"
 #include "BVHUpdate.h"
@@ -18,6 +20,8 @@ namespace grd_helper
 	static ID3D11Buffer* pushConstant = nullptr;
 	static ID3D11ShaderResourceView* srvPushConstant = nullptr;
 	static ID3D11Buffer* pushConstant_write = nullptr;
+
+	static MeshPainter* meshPainter = nullptr;
 }
 
 #include <DirectXColors.h>
@@ -144,7 +148,7 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 	g_pvmCommonParams->dx11Device->CreateQuery(&qr_desc, &g_pvmCommonParams->dx11qr_fenceQuery);
 
 	HRESULT hr = S_OK;
-	// HLSL ¿¡¼­ ´ëÃ¼ÇÏ´Â ¹æ¹ý Ã£¾Æ º¸±â.
+	// HLSL ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½Ã¼ï¿½Ï´ï¿½ ï¿½ï¿½ï¿½ Ã£ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½.
 	{
 		D3D11_BLEND_DESC descBlend = {};
 		descBlend.AlphaToCoverageEnable = false;
@@ -385,6 +389,69 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		g_pvmCommonParams->dx11Device->CreateBuffer(&bd, nullptr, &pushConstant_write);
 	}
 
+	{
+		meshPainter = new MeshPainter(g_pvmCommonParams->dx11Device, g_pvmCommonParams->dx11DeviceImmContext);
+		meshPainter->initialize(TextureInfo{});
+
+		// Load MeshPainter and Dilator shaders
+		HMODULE hModuleMP = GetModuleHandleA(__DLLNAME);
+		if (hModuleMP)
+		{
+			// Input layout for fullscreen quad: POSITION (float3) + TEXCOORD (float2)
+			D3D11_INPUT_ELEMENT_DESC fullscreenInputLayout[] = {
+				{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+				{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+			};
+
+			// Load shared vertex shader (VS_Fullscreen) - used by both Brush and Dilator
+			ID3D11VertexShader* sharedVS = nullptr;
+			ID3D11InputLayout* sharedLayout = nullptr;
+
+			if (PresetCompiledShader(g_pvmCommonParams->dx11Device, hModuleMP,
+				MAKEINTRESOURCE(IDR_RCDATA80001), "vs_5_0",
+				(ID3D11DeviceChild**)&sharedVS,
+				fullscreenInputLayout, 2, &sharedLayout) == S_OK)
+			{
+				// Load brush pixel shader
+				ID3D11PixelShader* brushPS = nullptr;
+				if (PresetCompiledShader(g_pvmCommonParams->dx11Device, hModuleMP,
+					MAKEINTRESOURCE(IDR_RCDATA80003), "ps_5_0",
+					(ID3D11DeviceChild**)&brushPS, nullptr, 0, nullptr) == S_OK)
+				{
+					meshPainter->setBrushShaders(sharedVS, brushPS, sharedLayout);
+					VMSAFE_RELEASE(brushPS);  // Release after ComPtr takes ownership
+				}
+				else
+				{
+					vmlog::LogWarn("Failed to load MeshPainter brush pixel shader");
+				}
+
+				// Load dilation pixel shader (reuse same VS and InputLayout)
+				ID3D11PixelShader* dilationPS = nullptr;
+				if (PresetCompiledShader(g_pvmCommonParams->dx11Device, hModuleMP,
+					MAKEINTRESOURCE(IDR_RCDATA80008), "ps_5_0",
+					(ID3D11DeviceChild**)&dilationPS, nullptr, 0, nullptr) == S_OK)
+				{
+					meshPainter->setDilationShaders(sharedVS, dilationPS, sharedLayout);
+					VMSAFE_RELEASE(dilationPS);  // Release after ComPtr takes ownership
+				}
+				else
+				{
+					vmlog::LogWarn("Failed to load Dilator pixel shader");
+				}
+
+				// Release shared resources after both have taken ownership
+				VMSAFE_RELEASE(sharedVS);
+				VMSAFE_RELEASE(sharedLayout);
+			}
+			else
+			{
+				vmlog::LogWarn("Failed to load shared fullscreen vertex shader");
+			}
+		}
+	}
+
+
 	if (hr != S_OK)
 	{
 		vmlog::LogErr("error : basic dx11 resources!");
@@ -565,6 +632,11 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11005), "SR_OIT_PTTT_vs_5_0", "vs_5_0", "PTTT", lotypeInputPosTTTex, 4), SR_OIT_PTTT_vs_5_0);
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11006), "SR_OIT_IDX_vs_5_0", "vs_5_0", "", NULL, 4), SR_OIT_IDX_vs_5_0);
 
+		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11040), "SR_OIT_PAINTER_P_vs_5_0", "vs_5_0", "P", NULL, 1), SR_OIT_PAINTER_P_vs_5_0);
+		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11041), "SR_OIT_PAINTER_PN_vs_5_0", "vs_5_0", "PN", NULL, 2), SR_OIT_PAINTER_PN_vs_5_0);
+		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11042), "SR_OIT_PAINTER_PT_vs_5_0", "vs_5_0", "PT", NULL, 2), SR_OIT_PAINTER_PT_vs_5_0);
+		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11043), "SR_OIT_PAINTER_PNT_vs_5_0", "vs_5_0", "PNT", NULL, 3), SR_OIT_PAINTER_PNT_vs_5_0);
+
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10000), "SR_CAST_DEPTHMAP_ps_5_0", "ps_5_0"), SR_CAST_DEPTHMAP_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10150), "SR_QUAD_OUTLINE_ps_5_0", "ps_5_0"), SR_QUAD_OUTLINE_ps_5_0);
 
@@ -576,6 +648,8 @@ int grd_helper::InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonP
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10106), "SR_BASIC_VOLUMEMAP_ps_5_0", "ps_5_0"), SR_BASIC_VOLUMEMAP_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10107), "SR_BASIC_VOLUME_DIST_MAP_ps_5_0", "ps_5_0"), SR_BASIC_VOLUME_DIST_MAP_ps_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10108), "SR_UNDERCUT_ps_5_0", "ps_5_0"), SR_UNDERCUT_ps_5_0);
+
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10111), "SR_BASIC_PHONGBLINN_PAINTER_ps_5_0", "ps_5_0"), SR_BASIC_PHONGBLINN_PAINTER_ps_5_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10201), "PCE_ParticleRenderBasic_ps_5_0", "ps_5_0"), PCE_ParticleRenderBasic_ps_5_0);
 
@@ -845,6 +919,12 @@ void grd_helper::DeinitializePresettings()
 {
 	if (g_pvmCommonParams == NULL) return;
 	if (!g_pvmCommonParams->is_initialized) return;
+
+	if (meshPainter)
+	{
+		delete meshPainter;
+		meshPainter = nullptr;
+	}
 
 	if (g_pvmCommonParams->dx11DeviceImmContext)
 	{
@@ -1643,19 +1723,6 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 				VMSAFE_DELETEARRAY(subres.pSysMem);
 			}
 
-			//ID3D11Buffer* pdx11bufvtx = (ID3D11Buffer*)gres_vtx.alloc_res_ptrs[DTYPE_RES];
-			//D3D11_MAPPED_SUBRESOURCE mappedRes;
-			//g_VmCommonParams.dx11DeviceImmContext->Map(pdx11bufvtx, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedRes);
-			//vmfloat3* vtx_group = (vmfloat3*)mappedRes.pData;
-			//for (uint i = 0; i < prim_data->num_vtx; i++)
-			//{
-			//	for (int j = 0; j < num_vtx_defs; j++)
-			//	{
-			//		vtx_group[i*num_vtx_defs + j] = vtx_def_ptrs[j][i];
-			//	}
-			//}
-			//g_VmCommonParams.dx11DeviceImmContext->Unmap(pdx11bufvtx, NULL);
-
 			pobj->SetObjParam("_bool_UpdateData", false);
 		}
 	}
@@ -1675,12 +1742,6 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 			gres_idx.res_values.SetParam("STRIDE_BYTES", (uint)sizeof(uint));
 
 			g_pCGpuManager->GenerateGpuResource(gres_idx);
-
-			//D3D11_MAPPED_SUBRESOURCE mappedRes;
-			//g_VmCommonParams.dx11DeviceImmContext->Map(pdx11bufidx, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedRes);
-			//uint* vidx_buf = (uint*)mappedRes.pData;
-			//memcpy(vidx_buf, prim_data->vidx_buffer, prim_data->num_vidx * sizeof(uint));
-			//g_VmCommonParams.dx11DeviceImmContext->Unmap(pdx11bufidx, NULL);
 		}
 		else
 		{
@@ -1707,10 +1768,8 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 		}
 	}
 
-	//vmint3 tex_res_size;
-	//((VmVObjectPrimitive*)pobj)->GetCustomParameter("_int3_TextureWHN", data_type::dtype<vmint3>(), &tex_res_size);
-	bool has_texture_img = false;// pobj->GetObjParam("_bool_HasTextureMap", true);
-	
+	bool has_texture_img = false;
+
 	if (prim_data->GetVerticeDefinition("TEXCOORD0") || prim_data->GetVerticeDefinition("TEXCOORD1")) {
 		if (imgObj) {
 			MapTable* imgBuffer = imgObj->GetObjParamPtr<MapTable>("_TableMap_ImageBuffer");
@@ -1793,7 +1852,6 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 		}
 		else if (prim_data->texture_res_info.size() > 0)
 		{
-			imgObj = NULL;
 			has_texture_img = true;
 
 			vmint2 tex_res_size;
@@ -1822,11 +1880,6 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 					for (int h = 0; h < tex_res_size.y; h++)
 						for (int x = 0; x < tex_res_size.x; x++)
 						{
-							//for (int i = 0; i < byte_stride; i++)
-							//	tx_subres[byte_stride_gpu * x + h * subres.SysMemPitch + i + index * subres.SysMemSlicePitch] = texture_res[byte_stride * (x + h * tex_res_size.x) + i];
-							//for (int i = byte_stride; i < byte_stride_gpu; i++)
-							//	tx_subres[byte_stride_gpu * x + h * subres.SysMemPitch + i + index * subres.SysMemSlicePitch] = 255;
-
 							for (int i = 0; i < byte_stride; i++)
 								tx_subres[byte_stride_gpu * (x + h * tex_res_size.x) + index * byte_stride_gpu * tex_res_size.x * tex_res_size.y + i] = texture_res[byte_stride * (x + h * tex_res_size.x) + i];
 							for (int i = byte_stride; i < byte_stride_gpu; i++)
@@ -1834,14 +1887,15 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 						}
 				}
 
-				// ??
 				g_pvmCommonParams->dx11DeviceImmContext->UpdateSubresource(pdx11tx2dres, 0, NULL, subres.pSysMem, subres.SysMemPitch, subres.SysMemSlicePitch);
 				VMSAFE_DELETEARRAY(subres.pSysMem);
 			};
 
 			if (prim_data->GetTexureInfo("MAP_COLOR4", tex_res_size.x, tex_res_size.y, byte_stride, &texture_res) || prim_data->GetTexureInfo("PLY_TEX_MAP_0", tex_res_size.x, tex_res_size.y, byte_stride, &texture_res))
 			{
+				// text in a texture array
 				// cmm case
+
 				GpuRes gres_tex;
 				gres_tex.vm_src_id = pobj->GetObjectID();
 				gres_tex.res_name = string("PRIMITIVE_MODEL_TEX_COLOR4");
@@ -1857,73 +1911,7 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 					gres_tex.res_values.SetParam("HEIGHT", (uint)tex_res_size.y);
 					gres_tex.res_values.SetParam("DEPTH", (uint)prim_data->texture_res_info.size());
 
-					//auto upload_teximg = [&prim_data](GpuRes& gres_tex, D3D11_MAP maptype)
-					//{
-					//	ID3D11Texture2D* pdx11tx2dres = (ID3D11Texture2D*)gres_tex.alloc_res_ptrs[DTYPE_RES];
-					//	D3D11_MAPPED_SUBRESOURCE mappedRes;
-					//	g_VmCommonParams.dx11DeviceImmContext->Map(pdx11tx2dres, 0, maptype, 0, &mappedRes);
-					//	vmbyte4* tx_res = (vmbyte4*)mappedRes.pData;
-					//	int index = 0;
-					//	for (auto it = prim_data->texture_res_info.begin(); it != prim_data->texture_res_info.end(); it++, index++)
-					//	{
-					//		byte* texture_res = get<3>(it->second);
-					//		vmint2 tex_res_size = vmint2(get<0>(it->second), get<1>(it->second));
-					//		int byte_stride = get<2>(it->second);
-					//
-					//		if (byte_stride == 4)
-					//		{
-					//			vmbyte4* tx_res_cpu = (vmbyte4*)texture_res;
-					//			for (int h = 0; h < tex_res_size.y; h++)
-					//				memcpy(&tx_res[h * (mappedRes.RowPitch / 4) + index * (mappedRes.DepthPitch / 4)], &tx_res_cpu[h * tex_res_size.x], tex_res_size.x * sizeof(vmbyte4));
-					//		}
-					//		else
-					//		{
-					//			assert(byte_stride == 3);
-					//			for (int h = 0; h < tex_res_size.y; h++)
-					//				for (int x = 0; x < tex_res_size.x; x++)
-					//				{
-					//					vmbyte4 rgba;
-					//					rgba.r = texture_res[(x + h * tex_res_size.x) * byte_stride + 0];
-					//					rgba.g = texture_res[(x + h * tex_res_size.x) * byte_stride + 1];
-					//					rgba.b = texture_res[(x + h * tex_res_size.x) * byte_stride + 2];
-					//					rgba.a = 255;
-					//					tx_res[x + h * (mappedRes.RowPitch / 4) + index * (mappedRes.DepthPitch / 4)] = rgba;
-					//				}
-					//		}
-					//	}
-					//	g_VmCommonParams.dx11DeviceImmContext->Unmap(pdx11tx2dres, NULL);
-					//};
-
 					g_pCGpuManager->GenerateGpuResource(gres_tex);
-
-					//if (prim_data->texture_res_info.size() == 1)
-					//{
-					//	g_pCGpuManager->GenerateGpuResource(gres_tex);
-					//	upload_teximg(gres_tex, D3D11_MAP_WRITE_DISCARD);
-					//}
-					//else
-					//{
-					//	gres_tex.options["USAGE"] = D3D11_USAGE_DEFAULT;
-					//	gres_tex.options["CPU_ACCESS_FLAG"] = NULL;
-					//	g_pCGpuManager->GenerateGpuResource(gres_tex);
-					//
-					//	// if the texture is array, direct mapping is impossible, so use this tricky copyresource way.
-					//	GpuRes tmp_gres;
-					//	tmp_gres.vm_src_id = pobj->GetObjectID();
-					//	tmp_gres.res_name = string("PRIMITIVE_MODEL_TEX_TEMP");
-					//	tmp_gres.rtype = RTYPE_TEXTURE2D;
-					//	tmp_gres.options["USAGE"] = D3D11_USAGE_STAGING;
-					//	tmp_gres.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
-					//	tmp_gres.options["BIND_FLAG"] = NULL;
-					//	tmp_gres.options["FORMAT"] = DXGI_FORMAT_R8G8B8A8_UNORM;
-					//	tmp_gres.res_dvalues["WIDTH"] = tex_res_size.x;
-					//	tmp_gres.res_dvalues["HEIGHT"] = tex_res_size.y;
-					//	tmp_gres.res_dvalues["DEPTH"] = (double)prim_data->texture_res_info.size();
-					//	g_pCGpuManager->GenerateGpuResource(tmp_gres);
-					//	upload_teximg(tmp_gres, D3D11_MAP_WRITE);
-					//	g_VmCommonParams.dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_tex.alloc_res_ptrs[DTYPE_RES], (ID3D11Texture2D*)tmp_gres.alloc_res_ptrs[DTYPE_RES]);
-					//	g_pCGpuManager->ReleaseGpuResource(tmp_gres, false);
-					//}
 				}
 				else
 				{
@@ -2013,7 +2001,6 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 						upload_single_teximg(gres_tex);
 				};
 
-
 				for (int i = 0; i < NUM_MATERIALS; i++)
 				{
 					if (prim_data->GetTexureInfo(g_materials[i], tex_res_size.x, tex_res_size.y, byte_stride, &texture_res))
@@ -2025,66 +2012,6 @@ bool grd_helper::UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<st
 					}
 				}
 			}
-
-			//if (!g_pCGpuManager->UpdateGpuResource(gres_tex))
-			//{
-			//	gres_tex.rtype = RTYPE_TEXTURE2D;
-			//	gres_tex.options["USAGE"] = D3D11_USAGE_DYNAMIC;
-			//	gres_tex.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
-			//	gres_tex.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
-			//	gres_tex.options["FORMAT"] = DXGI_FORMAT_R8G8B8A8_UNORM;
-			//	gres_tex.res_dvalues["WIDTH"] = tex_res_size.x;
-			//	gres_tex.res_dvalues["HEIGHT"] = tex_res_size.y;
-			//	gres_tex.res_dvalues["DEPTH"] = (double)prim_data->texture_res_info.size();
-			//
-			//	auto upload_teximg = [&prim_data](GpuRes& gres_tex, D3D11_MAP maptype)
-			//	{
-			//		ID3D11Texture2D* pdx11tx2dres = (ID3D11Texture2D*)gres_tex.alloc_res_ptrs[DTYPE_RES];
-			//		D3D11_MAPPED_SUBRESOURCE mappedRes;
-			//		g_VmCommonParams.dx11DeviceImmContext->Map(pdx11tx2dres, 0, maptype, 0, &mappedRes);
-			//		vmbyte4* tx_res = (vmbyte4*)mappedRes.pData;
-			//		for (int i = 0; i < prim_data->texture_res_info.size(); i++)
-			//		{
-			//			void* texture_res;
-			//			vmint3 tex_res_size;
-			//			prim_data->GetTexureInfo(i, tex_res_size.x, tex_res_size.y, tex_res_size.z, &texture_res);
-			//			vmbyte4* tx_res_cpu = (vmbyte4*)texture_res;
-			//
-			//			for (int h = 0; h < tex_res_size.y; h++)
-			//				memcpy(&tx_res[h * (mappedRes.RowPitch / 4) + i * (mappedRes.DepthPitch / 4)], &tx_res_cpu[h * tex_res_size.x], tex_res_size.x * sizeof(vmbyte4));
-			//		}
-			//		g_VmCommonParams.dx11DeviceImmContext->Unmap(pdx11tx2dres, NULL);
-			//	};
-			//
-			//	if (prim_data->texture_res_info.size() == 1)
-			//	{
-			//		g_pCGpuManager->GenerateGpuResource(gres_tex);
-			//		upload_teximg(gres_tex, D3D11_MAP_WRITE_DISCARD);
-			//	}
-			//	else
-			//	{
-			//		gres_tex.options["USAGE"] = D3D11_USAGE_DEFAULT;
-			//		gres_tex.options["CPU_ACCESS_FLAG"] = NULL;
-			//		g_pCGpuManager->GenerateGpuResource(gres_tex);
-			//
-			//		GpuRes tmp_gres;
-			//		tmp_gres.vm_src_id = pobj->GetObjectID();
-			//		tmp_gres.res_name = string("PRIMITIVE_MODEL_TEX_TEMP");
-			//		tmp_gres.rtype = RTYPE_TEXTURE2D;
-			//		tmp_gres.options["USAGE"] = D3D11_USAGE_STAGING;
-			//		tmp_gres.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
-			//		tmp_gres.options["BIND_FLAG"] = NULL;
-			//		tmp_gres.options["FORMAT"] = DXGI_FORMAT_R8G8B8A8_UNORM;
-			//		tmp_gres.res_dvalues["WIDTH"] = tex_res_size.x;
-			//		tmp_gres.res_dvalues["HEIGHT"] = tex_res_size.y;
-			//		tmp_gres.res_dvalues["DEPTH"] = (double)prim_data->texture_res_info.size();
-			//		g_pCGpuManager->GenerateGpuResource(tmp_gres);
-			//		upload_teximg(tmp_gres, D3D11_MAP_WRITE);
-			//		g_VmCommonParams.dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_tex.alloc_res_ptrs[DTYPE_RES], (ID3D11Texture2D*)tmp_gres.alloc_res_ptrs[DTYPE_RES]);
-			//		g_pCGpuManager->ReleaseGpuResource(tmp_gres, false);
-			//	}
-			//	//g_VmCommonParams.dx11DeviceImmContext->Cop
-			//}
 		}
 	}
 
@@ -2233,9 +2160,111 @@ bool grd_helper::UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string
 	return true;
 }
 
-//#define *(vmfloat3*)&
-//#define *(vmfloat4*)&
-//#define *(XMMATRIX*)&
+constexpr size_t FNV1aHash(std::string_view str, size_t hash = 14695981039346656037ULL) {
+	for (char c : str) {
+		hash ^= static_cast<size_t>(c);
+		hash *= 1099511628211ULL;
+	}
+	return hash;
+}
+constexpr static size_t HASH_BLEND_NORMAL = FNV1aHash("NORMAL");
+constexpr static size_t HASH_BLEND_MULTIPLY = FNV1aHash("MULTIPLY");
+constexpr static size_t HASH_BLEND_ADDITIVE = FNV1aHash("ADDITIVE");
+constexpr static size_t HASH_BLEND_OVERLAY = FNV1aHash("OVERLAY");
+constexpr static size_t HASH_BLEND_SOFT_LIGHT = FNV1aHash("SOFT_LIGHT");
+constexpr static size_t HASH_BLEND_SCREEN = FNV1aHash("SCREEN");
+
+bool grd_helper::UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, VmCObject* camObj)
+{
+	if (!actor) 
+		return false;
+	VmVObjectPrimitive* pobj = (VmVObjectPrimitive*)actor->GetGeometryRes();
+	PrimitiveData* prim_data = pobj->GetPrimitiveData();
+	if (!prim_data) 
+		return false;
+	if (prim_data->idx_stride != 3) 
+		return false;
+
+	vmfloat2 paint_pos2d_ss = actor->GetParam("_float2_PaintPosSS", vmfloat2(-1, -1));
+	if (paint_pos2d_ss.x < 0 || paint_pos2d_ss.y < 0) 
+		return false;
+
+	PaintResourceManager* manager = meshPainter->getPaintResourceManager();
+	ActorPaintData* paintRes = manager->getPaintResource(actor->actorId);
+	bool is_regen_res = true;
+	if (paintRes)
+	{
+		is_regen_res = pobj->GetContentUpdateTime() > paintRes->timeStamp;
+	}
+	if (is_regen_res)
+	{
+		std::vector<float> vb_painter_uvs;
+		vmfloat3* vb_pos = prim_data->GetVerticeDefinition("POSITION");
+		UnwrapUVs((const float*)vb_pos, prim_data->num_vtx * 3, prim_data->vidx_buffer, prim_data->num_prims * 3, vb_painter_uvs);
+		paintRes = manager->createPaintResource(actor->actorId, 2048, 2048, vb_painter_uvs);
+	}
+	
+	vmmat44f matPivot = (actor->GetParam("_matrix44f_Pivot", vmmat44f(1)));
+	vmmat44f matRS2WS = matPivot * actor->matOS2WS;
+	geometrics::BVH bvh = pobj->GetBVH();
+
+	vmfloat3 ray_origin, ray_dir;
+	camObj->GetCameraExtStatef(&ray_origin, &ray_dir, NULL);
+	vmfloat3 paint_pos_ws, paint_pos_ss(paint_pos2d_ss.x, paint_pos2d_ss.y, 0);
+	vmmath::fTransformPoint(&paint_pos_ws, &paint_pos_ss, &matSS2WS);
+
+	if (camObj->IsPerspective()) {
+		ray_dir = paint_pos_ws - ray_origin;
+		vmmath::fNormalizeVector(&ray_dir, &ray_dir);
+	}
+	else {
+		ray_origin = paint_pos_ws;
+	}
+	RayHitResult hit = meshPainter->raycastMesh(prim_data, matRS2WS, ray_origin, ray_dir, &bvh);
+	if (!hit.hit)
+		return false;
+	
+	BrushParams brushParams;
+	memcpy(brushParams.position, hit.worldPos, sizeof(float) * 3);
+	*(vmfloat4*)brushParams.color = actor->GetParam("_float4_PaintBrushColor", vmfloat4(1.f, 1.f, 1.f, 1.f));
+	brushParams.size = actor->GetParam("_float_PaintBrushSize", 1.f);
+	brushParams.strength = std::max(std::min(actor->GetParam("_float_PaintBrushStrength", 0.5f), 1.f), 0.f);
+	brushParams.hardness = std::max(std::min(actor->GetParam("_float_PaintBrushHardness", 0.5f), 1.f), 0.f);
+	std::string blendmode_str = actor->GetParam("_string_PaintBrushBlendMode", std::string("NORMAL"));
+	size_t blendmode = FNV1aHash(blendmode_str);
+	switch (blendmode)
+	{
+	case HASH_BLEND_NORMAL: brushParams.blendMode = PaintBlendMode::NORMAL; break;
+	case HASH_BLEND_MULTIPLY: brushParams.blendMode = PaintBlendMode::MULTIPLY; break;
+	case HASH_BLEND_ADDITIVE: brushParams.blendMode = PaintBlendMode::ADDITIVE; break;
+	case HASH_BLEND_OVERLAY: brushParams.blendMode = PaintBlendMode::OVERLAY; break;
+	case HASH_BLEND_SOFT_LIGHT: brushParams.blendMode = PaintBlendMode::SOFT_LIGHT; break;
+	case HASH_BLEND_SCREEN: brushParams.blendMode = PaintBlendMode::SCREEN; break;
+	default:
+		vzlog_error("invalid paint brush mode! (%s)", blendmode_str.c_str());
+		return false;
+	}
+
+	// ë¸ŒëŸ¬ì‹œ íŒŒë¼ë¯¸í„°ì— ì›”ë“œ ìœ„ì¹˜ë¥¼ ì±„ì›Œì„œ ì „ë‹¬
+	BrushParams brush = brushParams;
+	brush.position[0] = hit.worldPos[0];
+	brush.position[1] = hit.worldPos[1];
+	brush.position[2] = hit.worldPos[2];
+
+	// ì‹¤ì œ íŽ˜ì¸íŒ… ìˆ˜í–‰ (UV ê³„ì‚°/í…ìŠ¤ì²˜ ì—…ë°ì´íŠ¸)
+	meshPainter->paintOnActor(actor->actorId, prim_data, matRS2WS, brush, hit);
+
+	// ì—…ë°ì´íŠ¸ëœ íŽ˜ì¸íŠ¸ í…ìŠ¤ì²˜ SRVë¥¼ ë°”ì¸ë”©
+	if (!manager || !manager->hasPaintResource(actor->actorId)) return false;
+
+	ID3D11ShaderResourceView* paintTex2DSRV = manager->getPaintTextureSRV(actor->actorId);
+	ID3D11ShaderResourceView* paintUvSRV = manager->getPaintUVsSRV(actor->actorId);
+	if (!paintTex2DSRV || !paintUvSRV) 
+		return false;
+	g_pvmCommonParams->dx11DeviceImmContext->PSSetShaderResources(60, 1, &paintTex2DSRV); // t60
+	g_pvmCommonParams->dx11DeviceImmContext->VSSetShaderResources(61, 1, &paintUvSRV); // t61
+	return true;
+}
 
 void grd_helper::SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, const vmmat44f& matSS2WS, const vmmat44f& matWS2CS, VmCObject* ccobj, const vmint2& fb_size, const int k_value, const float vz_thickness)
 {
@@ -2434,7 +2463,7 @@ void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vo
 	//	cb_volume.sample_dist /= fSamplePrecisionLevel;
 	//	cb_volume.opacity_correction /= fSamplePrecisionLevel;
 	//}
-	cb_volume.vz_thickness = cb_volume.sample_dist;	// ÇöÀç HLSL Àº Sample Distance ¸¦ °­Á¦·Î »ç¿ë Áß...
+	cb_volume.vz_thickness = cb_volume.sample_dist;	// ï¿½ï¿½ï¿½ï¿½ HLSL ï¿½ï¿½ Sample Distance ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½...
 	cb_volume.iso_value = iso_value;
 
 	//printf("sample_rate : %f\n", sample_rate);
@@ -2491,7 +2520,7 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 				cb_polygon.pobj_flag |= (0x1 << 10);
 			//vmfloat3 f3VecWidth = pos_vtx[1] - pos_vtx[0];
 			//vmfloat3 f3VecHeight = pos_vtx[2] - pos_vtx[0];
-			//fTransformVector(&f3VecWidth, &f3VecWidth, &matOS2SS); // projection term ÀÌ ÀÖ´Â °æ¿ì fTransformVector ¸¸ ¾²¸é ¾È µÊ!!!
+			//fTransformVector(&f3VecWidth, &f3VecWidth, &matOS2SS); // projection term ï¿½ï¿½ ï¿½Ö´ï¿½ ï¿½ï¿½ï¿½ fTransformVector ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½!!!
 			//fTransformVector(&f3VecHeight, &f3VecHeight, &matOS2SS);
 			//fNormalizeVector(&f3VecWidth, &f3VecWidth);
 			//fNormalizeVector(&f3VecHeight, &f3VecHeight);
@@ -2552,8 +2581,7 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 			((uint)(actor->color.a * 255.f) << 24);
 	}
 
-
-	bool abs_diffuse = actor->GetParam("_bool_AbsDiffuse", false); // alpha °ª¿¡ µû¶ó...??
+	bool abs_diffuse = actor->GetParam("_bool_AbsDiffuse", false); // alpha ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½...??
 	if (!abs_diffuse)
 		cb_polygon.pobj_flag |= (0x1 << 5);
 

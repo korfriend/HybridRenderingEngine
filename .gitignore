@@ -273,3 +273,5 @@ __pycache__/
 /CLAUDE.md
 /nul
 /AGENTS.md
+/gpu manager/clean_helper.py
+/gpu manager/fix_helper.py

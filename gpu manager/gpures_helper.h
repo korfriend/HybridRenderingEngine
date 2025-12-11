@@ -1,34 +1,10 @@
 #pragma once
 //#include "GpuManager.h"
 #include "../gpu_common_res.h"
+#include "meshpainter/MeshPainter.h"
 #include <functional>
 
 using namespace fncontainer;
-//#include <map>
-//#define __DX_DEBUG_QUERY
-
-
-#ifdef DX11_3
-#define __ID3D11Device ID3D11Device3
-#define __ID3D11DeviceContext ID3D11DeviceContext3
-#define __DLLNAME "vismtv_inbuilt_renderergpudx.dll"
-#elif defined(DX11_0)
-#define __ID3D11Device ID3D11Device
-#define __ID3D11DeviceContext ID3D11DeviceContext
-#ifdef _DEBUG
-#define __DLLNAME "vismtv_inbuilt_renderergpudx.dll"
-#else
-#define __DLLNAME "vismtv_inbuilt_renderergpudx11_0.dll"
-#endif
-#elif defined(DX10_0)
-#define __ID3D11Device ID3D11Device
-#define __ID3D11DeviceContext ID3D11DeviceContext
-#ifdef _DEBUG
-#define __DLLNAME "vismtv_inbuilt_renderergpudx.dll"
-#else
-#define __DLLNAME "vismtv_inbuilt_renderergpudx10_0.dll"
-#endif
-#endif
 
 #define TRANSPOSE(A) glm::transpose(A)
 
@@ -47,8 +23,9 @@ namespace grd_helper
 		return value == AlignTo(value, alignment);
 	}
 
-#define NUM_MATERIALS 6
-	static string g_materials[NUM_MATERIALS] = { "MAP_KA", "MAP_KD", "MAP_KS", "MAP_NS", "MAP_BUMP", "MAP_D" };
+#define NUM_MATERIALS 6	// primitive-bound texture descriptions 
+
+	static string g_materials[NUM_MATERIALS] = { "MAP_KA", "MAP_KD", "MAP_KS", "MAP_NS", "MAP_BUMP", "MAP_D"};
 
 	const ID3D11ShaderResourceView* GetPushContantSRV();
 
@@ -453,6 +430,8 @@ namespace grd_helper
 
 	bool UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string& resName, const void* bufPtr, const int numElements, DXGI_FORMAT dxFormat, const int type_bytes, LocalProgress* progress = NULL, ullong cpu_update_custom_time = 0);
 
+	bool UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, VmCObject* camObj);
+
 #define ZERO_SET(T) T(){memset(this, 0, sizeof(T));}
 
 #define MAX_LAYERS 8
@@ -650,6 +629,7 @@ namespace grd_helper
 		// 5th bit : g_tex2D_NS
 		// 6th bit : g_tex2D_BUMP
 		// 7th bit : g_tex2D_D
+		// 17th bit : g_tex2D_PAINT
 		uint tex_map_enum;
 
 		// 1st bit : 0 (shading color to RT) 1 (normal to RT for the purpose of silhouette rendering)
@@ -878,8 +858,8 @@ namespace grd_helper
 		uint		icolor;
 	};
 
-	// CS ¿¡¼­ Particle Buffer Update (https://github.com/turanszkij/WickedEngine/blob/2f5631e46aed3e278377a678b9e49714bfd33968/WickedEngine/shaders/emittedparticle_emitCS.hlsl )
-	// VS (rendering ¿ë)
+	// CS Particle Buffer Update (https://github.com/turanszkij/WickedEngine/blob/2f5631e46aed3e278377a678b9e49714bfd33968/WickedEngine/shaders/emittedparticle_emitCS.hlsl )
+	// VS (for rendering)
 	struct CB_Frame
 	{
 		uint		options;					// renderer bool options packed into bitmask (OPTION_BIT_ values)

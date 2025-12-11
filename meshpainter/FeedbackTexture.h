@@ -1,5 +1,5 @@
 #pragma once
-#include "gpures_helper.h"
+#include "../gpu_common_res.h"
 
 #include <string>
 #include <map>
@@ -34,23 +34,10 @@ struct TextureInfo {
 	int height = 0;
 };
 
-// Renderer interface
-class Renderer {
-public:
-	virtual ~Renderer() = default;
-
-	virtual RenderTarget* getRenderTarget() = 0;
-	virtual void setRenderTarget(RenderTarget* target) = 0;
-	virtual void renderFullscreenQuad() = 0;
-
-	virtual __ID3D11Device* getDevice() = 0;
-	virtual __ID3D11DeviceContext* getContext() = 0;
-};
-
 // FeedbackTexture class - manages ping-pong render targets
 class FeedbackTexture {
 public:
-	FeedbackTexture(const TextureInfo& texture, Renderer* renderer);
+	FeedbackTexture(__ID3D11Device* device, __ID3D11DeviceContext* context, const TextureInfo& texture);
 	~FeedbackTexture();
 
 	// Create a new render target
@@ -60,12 +47,17 @@ public:
 	void swap();
 
 	// Perform rendering operation with custom render target
-	using RenderOperationCallback = std::function<void(Renderer*)>;
+	using RenderOperationCallback = std::function<void(__ID3D11DeviceContext*)>;
 	void renderOperation(RenderTarget* destination, RenderOperationCallback callback);
 
 	// Accessors
 	RenderTarget* getRenderTarget() { return renderTarget; }
 	RenderTarget* getOffRenderTarget() { return offRenderTarget; }
+	__ID3D11Device* getDevice() { return device; }
+	__ID3D11DeviceContext* getContext() { return context; }
+
+	// Fullscreen quad rendering
+	void renderFullscreenQuad();
 
 	// Static render target map for export tracking
 	static std::map<std::string, RenderTarget*> renderTargetMap;
@@ -73,7 +65,8 @@ public:
 private:
 	void createFullscreenQuad();
 
-	Renderer* renderer;
+	__ID3D11Device* device;
+	__ID3D11DeviceContext* context;
 	RenderTarget* renderTarget;
 	RenderTarget* offRenderTarget;
 

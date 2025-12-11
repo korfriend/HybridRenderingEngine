@@ -80,8 +80,9 @@ void RenderTarget::unbind(__ID3D11DeviceContext* context) {
 // FeedbackTexture Implementation
 // ============================================================================
 
-FeedbackTexture::FeedbackTexture(const TextureInfo& texture, Renderer* renderer)
-	: renderer(renderer)
+FeedbackTexture::FeedbackTexture(__ID3D11Device* device, __ID3D11DeviceContext* context, const TextureInfo& texture)
+	: device(device)
+	, context(context)
 	, width(texture.width)
 	, height(texture.height)
 {
@@ -94,21 +95,20 @@ FeedbackTexture::FeedbackTexture(const TextureInfo& texture, Renderer* renderer)
 
 	// Initial copy if source texture exists
 	if (texture.srv) {
-		RenderTarget* saveTarget = renderer->getRenderTarget();
-		renderer->setRenderTarget(renderTarget);
+		renderTarget->bind(context);
 
 		// Bind source texture
 		ID3D11ShaderResourceView* srv = texture.srv.Get();
-		renderer->getContext()->PSSetShaderResources(0, 1, &srv);
+		context->PSSetShaderResources(0, 1, &srv);
 
 		// Render quad
-		renderer->renderFullscreenQuad();
+		renderFullscreenQuad();
 
 		// Unbind
 		ID3D11ShaderResourceView* nullSRV = nullptr;
-		renderer->getContext()->PSSetShaderResources(0, 1, &nullSRV);
+		context->PSSetShaderResources(0, 1, &nullSRV);
 
-		renderer->setRenderTarget(saveTarget);
+		RenderTarget::unbind(context);
 	}
 }
 
@@ -125,7 +125,7 @@ FeedbackTexture::~FeedbackTexture() {
 
 RenderTarget* FeedbackTexture::makeTarget() {
 	RenderTarget* rt = new RenderTarget();
-	rt->create(renderer->getDevice(), width, height);
+	rt->create(device, width, height);
 	renderTargetMap[rt->id] = rt;
 	return rt;
 }
@@ -137,13 +137,11 @@ void FeedbackTexture::swap() {
 }
 
 void FeedbackTexture::renderOperation(RenderTarget* destination, RenderOperationCallback callback) {
-	RenderTarget* saveTarg = renderer->getRenderTarget();
+	destination->bind(context);
 
-	renderer->setRenderTarget(destination);
+	callback(context);
 
-	callback(renderer);
-
-	renderer->setRenderTarget(saveTarg);
+	RenderTarget::unbind(context);
 }
 
 void FeedbackTexture::createFullscreenQuad() {
@@ -168,7 +166,7 @@ void FeedbackTexture::createFullscreenQuad() {
 	D3D11_SUBRESOURCE_DATA initData = {};
 	initData.pSysMem = vertices;
 
-	renderer->getDevice()->CreateBuffer(&bd, &initData, quadVB.GetAddressOf());
+	device->CreateBuffer(&bd, &initData, quadVB.GetAddressOf());
 
 	unsigned int indices[] = { 0, 1, 2, 2, 1, 3 };
 
@@ -177,5 +175,17 @@ void FeedbackTexture::createFullscreenQuad() {
 
 	initData.pSysMem = indices;
 
-	renderer->getDevice()->CreateBuffer(&bd, &initData, quadIB.GetAddressOf());
+	device->CreateBuffer(&bd, &initData, quadIB.GetAddressOf());
+}
+
+void FeedbackTexture::renderFullscreenQuad() {
+	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+	UINT stride = sizeof(float) * 5; // 3 floats for position + 2 floats for UV
+	UINT offset = 0;
+	ID3D11Buffer* vb = quadVB.Get();
+	context->IASetVertexBuffers(0, 1, &vb, &stride, &offset);
+	context->IASetIndexBuffer(quadIB.Get(), DXGI_FORMAT_R32_UINT, 0);
+
+	context->DrawIndexed(6, 0, 0);
 }

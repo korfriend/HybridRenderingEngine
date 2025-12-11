@@ -4,6 +4,11 @@ fxc /E CommonVS_PT /T vs_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/SR
 fxc /E CommonVS_PNT /T vs_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/SR_OIT_PNT_vs_5_0 
 fxc /E CommonVS_PTTT /T vs_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/SR_OIT_PTTT_vs_5_0 
 
+fxc /E CommonVS_P /T vs_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/SR_OIT_PAINTER_P_vs_5_0 /D __PAINTER_UV=1
+fxc /E CommonVS_PN /T vs_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/SR_OIT_PAINTER_PN_vs_5_0 /D __PAINTER_UV=1
+fxc /E CommonVS_PT /T vs_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/SR_OIT_PAINTER_PT_vs_5_0 /D __PAINTER_UV=1
+fxc /E CommonVS_PNT /T vs_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/SR_OIT_PAINTER_PNT_vs_5_0 /D __PAINTER_UV=1
+
 fxc /E CastDepthMap /T ps_5_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs/SR_CAST_DEPTHMAP_ps_5_0
 
 fxc /E BasicShader4 /T ps_5_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs/SR_BASIC_PHONGBLINN_ps_5_0 /D __RENDERING_MODE=0 
@@ -14,6 +19,8 @@ fxc /E BasicShader4 /T ps_5_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compi
 fxc /E BasicShader4 /T ps_5_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs/SR_BASIC_VOLUMEMAP_ps_5_0 /D __RENDERING_MODE=5 
 fxc /E BasicShader4 /T ps_5_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs/SR_BASIC_VOLUME_DIST_MAP_ps_5_0 /D __RENDERING_MODE=6 
 fxc /E UndercutShader /T ps_5_0 ./hlsl/RayProcessing.hlsl /Fo ./shader_compiled_objs/SR_UNDERCUT_ps_5_0 /D __RENDERING_MODE=0 /D PATHTR_USE_KBUF=1
+
+fxc /E BasicShader4 /T ps_5_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs/SR_BASIC_PHONGBLINN_PAINTER_ps_5_0 /D __RENDERING_MODE=0 /D __PAINTER_UV=1
 
 fxc /E BasicShader4 /T ps_5_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs/SR_QUAD_OUTLINE_ps_5_0 /D __RENDERING_MODE=100 
 
@@ -143,7 +150,17 @@ fxc /E SortStep /T cs_5_0 ./hlsl/sort/Sort.hlsl /Fo ./shader_compiled_objs/SORT_
 fxc /E SortInner /T cs_5_0 ./hlsl/sort/Sort.hlsl /Fo ./shader_compiled_objs/SORT_Inner_cs_5_0 /D SORT_INNER=1
 
 
-fxc /E main /T cs_5_0 ./hlsl/BVH/bvh_hierarchyCS.hlsl /Fo ./shader_compiled_objs/BVH_Hierarchy_cs_5_0 
-fxc /E main /T cs_5_0 ./hlsl/BVH/bvh_primitivesCS.hlsl /Fo ./shader_compiled_objs/BVH_Primitives_cs_5_0 
-fxc /E main /T cs_5_0 ./hlsl/BVH/bvh_propagateaabbCS.hlsl /Fo ./shader_compiled_objs/BVH_Propagateaabb_cs_5_0 
+fxc /E main /T cs_5_0 ./hlsl/BVH/bvh_hierarchyCS.hlsl /Fo ./shader_compiled_objs/BVH_Hierarchy_cs_5_0
+fxc /E main /T cs_5_0 ./hlsl/BVH/bvh_primitivesCS.hlsl /Fo ./shader_compiled_objs/BVH_Primitives_cs_5_0
+fxc /E main /T cs_5_0 ./hlsl/BVH/bvh_propagateaabbCS.hlsl /Fo ./shader_compiled_objs/BVH_Propagateaabb_cs_5_0
+
+REM MeshPainter Shaders
+fxc /E VS_Fullscreen /T vs_5_0 ./hlsl/meshpainter/MeshPaintShader.hlsl /Fo ./shader_compiled_objs/MP_Fullscreen_vs_5_0
+fxc /E VS_FullscreenQuad /T vs_5_0 ./hlsl/meshpainter/MeshPaintShader.hlsl /Fo ./shader_compiled_objs/MP_FullscreenQuad_vs_5_0
+fxc /E PS_BrushStroke /T ps_5_0 ./hlsl/meshpainter/MeshPaintShader.hlsl /Fo ./shader_compiled_objs/MP_BrushStroke_ps_5_0
+fxc /E PS_BrushStrokeSimple /T ps_5_0 ./hlsl/meshpainter/MeshPaintShader.hlsl /Fo ./shader_compiled_objs/MP_BrushStrokeSimple_ps_5_0
+fxc /E PS_CompositePaint /T ps_5_0 ./hlsl/meshpainter/MeshPaintShader.hlsl /Fo ./shader_compiled_objs/MP_CompositePaint_ps_5_0
+fxc /E PS_Copy /T ps_5_0 ./hlsl/meshpainter/MeshPaintShader.hlsl /Fo ./shader_compiled_objs/MP_Copy_ps_5_0
+fxc /E PS_ClearTransparent /T ps_5_0 ./hlsl/meshpainter/MeshPaintShader.hlsl /Fo ./shader_compiled_objs/MP_ClearTransparent_ps_5_0
+fxc /E PS_Dilate /T ps_5_0 ./hlsl/meshpainter/MeshPaintShader.hlsl /Fo ./shader_compiled_objs/MP_Dilate_ps_5_0
 

@@ -767,7 +767,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 #else
 #define VS_NUM 6
 #define GS_NUM 4
-#define PS_NUM 84
+#define PS_NUM 85
 #define CS_NUM 38
 #endif
 
@@ -977,6 +977,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			,"SR_UNDERCUT_ps_5_0"
 			,"PCE_ParticleRenderBasic_ps_5_0"
 
+			,"SR_BASIC_PHONGBLINN_PAINTER_ps_5_0"
 
 			,"SR_QUAD_OUTLINE_ps_5_0"
 
@@ -1138,6 +1139,11 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 	ID3D11VertexShader* dx11VShader_PNT = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PNT_vs_5_0"));
 	ID3D11VertexShader* dx11VShader_PTTT = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PTTT_vs_5_0"));
 	ID3D11VertexShader* dx11VShader_IDX = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_IDX_vs_5_0"));
+
+	ID3D11VertexShader* dx11VShader_Painter_P = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PAINTER_P_vs_5_0"));
+	ID3D11VertexShader* dx11VShader_Painter_PN = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PAINTER_PN_vs_5_0"));
+	ID3D11VertexShader* dx11VShader_Painter_PT = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PAINTER_PT_vs_5_0"));
+	ID3D11VertexShader* dx11VShader_Painter_PNT = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PAINTER_PNT_vs_5_0"));
 #endif
 	ID3D11Buffer* cbuf_cam_state = dx11CommonParams->get_cbuf("CB_CameraState");
 	ID3D11Buffer* cbuf_env_state = dx11CommonParams->get_cbuf("CB_EnvState");
@@ -1178,7 +1184,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 		|| k_value != k_value_old || num_moments != num_moments_old
 		|| buffer_ex != buffer_ex_old)
 	{
-		gpu_manager->ReleaseGpuResourcesBySrcID(iobj->GetObjectID());	// System Out Æ÷ÇÔ //
+		gpu_manager->ReleaseGpuResourcesBySrcID(iobj->GetObjectID());	// System Out //
 		iobj->SetObjParam("_int2_PreviousScreenSize", fb_size_cur);
 		iobj->SetObjParam("_int_PreviousBufferEx", buffer_ex);
 	}
@@ -1270,8 +1276,6 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 		//	D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32G32B32A32_FLOAT, UPFB_MIPMAP | UPFB_HALF);
 	}
 
-	// RS ¿¡¼­ ½ºÆä¼È·Î »©³»±â
-	// ...
 
 
 	if (mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB)
@@ -1890,6 +1894,8 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 				dx11DeviceImmContext->PSSetConstantBuffers(5, 1, &cbuf_tmap);
 			}
 
+			bool has_painter = grd_helper::UpdatePaintTexture(actor, matSS2WS, cam_obj);
+
 			CB_Material cbRenderEffect;
 			grd_helper::SetCb_RenderingEffect(cbRenderEffect, actor);
 			D3D11_MAPPED_SUBRESOURCE mappedResRenderEffect;
@@ -1951,7 +1957,13 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			cbPolygonObj.pobj_dummy_0 = actor->actorId;// pobj->GetObjectID(); // used for picking
 			grd_helper::SetCb_PolygonObj(cbPolygonObj, pobj, actor, matWS2SS, matWS2PS, is_annotation_obj, use_vertex_color);
 			cbPolygonObj.pobj_flag |= (int)cmap_windowing << 7;
-			
+			if (has_painter)
+			{
+				// MeshPainter: Bind paint texture if available for this actor
+				// Using slot 60 (t60) to avoid conflict with material maps (t10-t15)
+				cbPolygonObj.tex_map_enum |= (0x1 << 17);
+			}
+
 			if (distanceMapMode == 1 && vobj && !is_picking_routine) {
 				VolumeData* volData = vobj->GetVolumeData();
 				float vtypemax = 1.f;
@@ -2123,7 +2135,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 						dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_4_0); // render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES
 #else
 						if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
-							dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_5_0);
+							dx11PS_Target = has_painter ? GETPS(SR_BASIC_PHONGBLINN_PAINTER_ps_5_0) : GETPS(SR_BASIC_PHONGBLINN_ps_5_0);
 						}
 						else {
 							switch (mode_OIT)
@@ -2208,7 +2220,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 							else if ((cbPolygonObj.pobj_flag & (0x1 << 19)) && prim_data->ptype == PrimitiveTypeLINE)
 								dx11PS_Target = GETPS(SR_BASIC_DASHEDLINE_ps_5_0);
 							else
-								dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_5_0);
+								dx11PS_Target = has_painter ? GETPS(SR_BASIC_PHONGBLINN_PAINTER_ps_5_0) : GETPS(SR_BASIC_PHONGBLINN_ps_5_0);
 						}
 						else {
 
@@ -2283,7 +2295,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 					dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_4_0); // render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES
 #else
 					if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
-						dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_5_0);
+						dx11PS_Target = has_painter ? GETPS(SR_BASIC_PHONGBLINN_PAINTER_ps_5_0) : GETPS(SR_BASIC_PHONGBLINN_ps_5_0);
 					}
 					else {
 						switch (mode_OIT)
@@ -2760,7 +2772,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 						break;
 					case RENDER_GEOPASS::PASS_SILHOUETTE:
 						// clear //
-						// to do // º°µµÀÇ RT ¸¦ ¸¸µé¾î µÎ¾î¾ß ÇÑ´Ù.
+						// to do // ë³„ë„ì˜ RT ë¥¼ ë§Œë“¤ì–´ ë‘ì–´ì•¼ í•œë‹¤.
 						//dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
 						//dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVs, dx11DSV, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
 						//dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(LESSEQUAL), 0);
@@ -3307,14 +3319,12 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 								gres_vb_pos.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES * 3 * 4)); // 4 refers to quad
 								gres_vb_pos.res_values.SetParam("STRIDE_BYTES", 4u);
 
-								// D3D11_BIND_VERTEX_BUFFER ´Â shader resource view °¡ ¾È µÇ´Â °ÍÀÏ±î? µÇ³× :)
 								gpu_manager->GenerateGpuResource(gres_vb_pos);
 							}
 							gres_vb_nor = gres_vb_pos;
 							gres_vb_nor.res_name = string("gres_particle_vb_nor");
 							if (!gpu_manager->UpdateGpuResource(gres_vb_nor)) {
 
-								// D3D11_BIND_VERTEX_BUFFER ´Â shader resource view °¡ ¾È µÇ´Â °ÍÀÏ±î? µÇ³× :)
 								gpu_manager->GenerateGpuResource(gres_vb_nor);
 							}
 
@@ -3330,7 +3340,6 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 								gres_vb_tex.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES) * 4u);
 								gres_vb_tex.res_values.SetParam("STRIDE_BYTES", 4u);
 
-								// D3D11_BIND_VERTEX_BUFFER ´Â shader resource view °¡ ¾È µÇ´Â °ÍÀÏ±î? µÇ³× :)
 								gpu_manager->GenerateGpuResource(gres_vb_tex);
 							}
 
@@ -3346,7 +3355,6 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 								gres_vb_color.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES) * 4u);
 								gres_vb_color.res_values.SetParam("STRIDE_BYTES", 4u);
 
-								// D3D11_BIND_VERTEX_BUFFER ´Â shader resource view °¡ ¾È µÇ´Â °ÍÀÏ±î? µÇ³× :)
 								gpu_manager->GenerateGpuResource(gres_vb_color);
 							}
 
@@ -3732,7 +3740,6 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 									gres_vb_pos_sys_test.res_values.SetParam("NUM_ELEMENTS", (uint)(MAX_PARTICLES * 3 * 4)); // 4 refers to quad
 									gres_vb_pos_sys_test.res_values.SetParam("STRIDE_BYTES", 4u);
 
-									// D3D11_BIND_VERTEX_BUFFER ´Â shader resource view °¡ ¾È µÇ´Â °ÍÀÏ±î? µÇ³× :)
 									gpu_manager->GenerateGpuResource(gres_vb_pos_sys_test);
 								}
 								dx11DeviceImmContext->CopyResource((ID3D11Buffer*)gres_vb_pos_sys_test.alloc_res_ptrs[DTYPE_RES], (ID3D11Buffer*)gres_vb_pos.alloc_res_ptrs[DTYPE_RES]);
@@ -4167,11 +4174,6 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 	iobj->SetObjParam("_int_NumCallRenders", count_call_render);
 	dx11CommonParams->GpuProfile("SR Render", true);
 
-	// DF.. K ¹öÆÛ ÀúÀå 
-	// * RENDER 1/2 °¥ ¶§, Ç×»ó.. 
-	// * K ¹öÆÛ·Î ÀúÀå, 
-	// * color ÀúÀå ¿É¼Ç...
-	// * general ¸¸ ÀÖÀ» ¶§, ±×³É Á¾·á				\
 
 #ifndef DX10_0
 	if (check_pixel_transmittance)

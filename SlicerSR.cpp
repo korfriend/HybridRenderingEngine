@@ -159,7 +159,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		dx11CommonParams->dx11DeviceImmContext->PSSetShader(NULL, NULL, 0);
 		dx11CommonParams->dx11DeviceImmContext->CSSetShader(NULL, NULL, 0);
 
-#define VS_NUM 5
+#define VS_NUM 9
 #define GS_NUM 1
 #ifdef DX10_0
 #define PS_NUM 5
@@ -180,6 +180,10 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			  ,"SR_OIT_PT_vs_4_0"
 			  ,"SR_OIT_PNT_vs_4_0"
 			  ,"SR_OIT_PTTT_vs_4_0"
+			  ,"SR_OIT_PAINTER_P_vs_5_0"
+			  ,"SR_OIT_PAINTER_PN_vs_5_0"
+			  ,"SR_OIT_PAINTER_PT_vs_5_0"
+			  ,"SR_OIT_PAINTER_PNT_vs_5_0"
 		};
 #else
 		string strNames_VS[VS_NUM] = {

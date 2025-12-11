@@ -12,6 +12,17 @@ Texture2D g_tex2D_Mat_KS : register(t12);
 Texture2D g_tex2D_Mat_NS : register(t13);
 Texture2D g_tex2D_Mat_BUMP : register(t14);
 Texture2D g_tex2D_Mat_D : register(t15);
+// Paint texture slot (t60)
+Texture2D g_tex2D_Paint : register(t60);
+StructuredBuffer<float2> g_uvBuffer : register(t61);
+
+// Paint blend modes
+#define PAINT_BLEND_NORMAL     0
+#define PAINT_BLEND_MULTIPLY   1
+#define PAINT_BLEND_ADDITIVE   2
+#define PAINT_BLEND_OVERLAY    3
+#define PAINT_BLEND_SOFT_LIGHT 4
+#define PAINT_BLEND_SCREEN     5
 
 Texture2D g_tex2D_shadowMap : register(t20);
 
@@ -21,12 +32,14 @@ struct VS_INPUT_PN
 {
     float3 f3PosOS : POSITION;
     float3 f3VecNormalOS : NORMAL;
+	uint vertexID : SV_VertexID; // vertex index
 };
 
 struct VS_INPUT_PT
 {
     float3 f3PosOS : POSITION;
-    float3 f3Custom : TEXCOORD0;
+	float3 f3Custom : TEXCOORD0;
+	uint vertexID : SV_VertexID; // vertex index
 };
 
 struct VS_INPUT_PTTT
@@ -34,14 +47,16 @@ struct VS_INPUT_PTTT
     float3 f3PosOS : POSITION;
     float3 f3Custom0 : TEXCOORD0;
     float3 f3Custom1 : TEXCOORD1;
-    float3 f3Custom2 : TEXCOORD2;
+	float3 f3Custom2 : TEXCOORD2;
+	uint vertexID : SV_VertexID; // vertex index
 };
 
 struct VS_INPUT_PNT
 {
     float3 f3PosOS : POSITION;
     float3 f3VecNormalOS : NORMAL;
-    float3 f3Custom : TEXCOORD0;
+	float3 f3Custom : TEXCOORD0;
+	uint vertexID : SV_VertexID; // vertex index
 };
 
 struct VS_INPUT_PNTC
@@ -49,7 +64,8 @@ struct VS_INPUT_PNTC
     float3 f3PosOS : POSITION;
     float3 f3VecNormalOS : NORMAL;
     float3 f3UVS : TEXCOORD0;
-    float3 f3Color : COLOR;
+	float3 f3Color : COLOR;
+	uint vertexID : SV_VertexID; // vertex index
 };
 
 struct VS_OUTPUT
@@ -57,7 +73,10 @@ struct VS_OUTPUT
     float4 f4PosSS : SV_POSITION;
     float3 f3VecNormalWS : NORMAL;
     float3 f3PosWS : TEXCOORD0;
-    float3 f3Custom : TEXCOORD1;
+	float3 f3Custom : TEXCOORD1;
+#if __PAINTER_UV == 1
+    float2 f2PaintUV : TEXCOORD2;
+#endif
 };
 
 struct VS_OUTPUT_PNTC
@@ -66,7 +85,10 @@ struct VS_OUTPUT_PNTC
     float3 f3VecNormalWS : NORMAL;
     float3 f3PosWS : TEXCOORD0;
     float3 f3UVS : TEXCOORD1;
-    float3 f3Color : COLOR;
+	float3 f3Color : COLOR;
+#if __PAINTER_UV == 1
+    float2 f2PaintUV : TEXCOORD2;
+#endif
 };
 
 struct VS_OUTPUT_TTT
@@ -82,20 +104,22 @@ struct VS_OUTPUT_TTT
 struct PS_OUTPUT
 {
     float fDepth : SV_Depth; // to avoid Clipping Early-Out-Ocllusion
-
-    //float4 f4Color : SV_TARGET0; // UNORM
-    //float fDepthCS : SV_TARGET1;
 };
 
-VS_OUTPUT CommonVS_P(float3 f3Pos : POSITION)
+VS_OUTPUT CommonVS_P(float3 f3Pos : POSITION, uint vertexID : SV_VertexID)
 {
 	VS_OUTPUT vout = (VS_OUTPUT)0;
 	//vout.f4PosSS = mul(float4(f3Pos, 1.f), g_cbPobj.mat_os2ps);
 	vout.f4PosSS = mul(g_cbPobj.mat_os2ps, float4(f3Pos, 1.f));
     vout.f3PosWS = TransformPoint(f3Pos, g_cbPobj.mat_os2ws);
     vout.f3VecNormalWS = (float3) 0;
-    vout.f3Custom = (float3) 0;//g_cbPobj.fcolor.rgb;
+    vout.f3Custom = (float3) 0;
     //vout.f4PosSS.z -= g_cbPobj.depth_forward_bias;
+    
+#if __PAINTER_UV == 1
+    vout.f2PaintUV = g_uvBuffer[vertexID];
+#endif
+    
     return vout;
 }
 
@@ -108,6 +132,11 @@ VS_OUTPUT CommonVS_PN(VS_INPUT_PN input)
 	vout.f3VecNormalWS = normalize(TransformVector(input.f3VecNormalOS, g_cbPobj.mat_os2ws));
     vout.f3Custom = (float3) 0; //g_cbPobj.fcolor.rgb;
     //vout.f4PosSS.z -= g_cbPobj.depth_forward_bias;
+    
+#if __PAINTER_UV == 1
+    vout.f2PaintUV = g_uvBuffer[input.vertexID];
+#endif
+    
     return vout;
 }
 
@@ -123,6 +152,11 @@ VS_OUTPUT CommonVS_PT(VS_INPUT_PT input)
    // else
         vout.f3Custom = input.f3Custom;
     //vout.f4PosSS.z -= g_cbPobj.depth_forward_bias;
+    
+#if __PAINTER_UV == 1
+    vout.f2PaintUV = g_uvBuffer[input.vertexID];
+#endif
+    
     return vout;
 }
 
@@ -134,6 +168,11 @@ VS_OUTPUT CommonVS_PNT(VS_INPUT_PNT input)
     vout.f3VecNormalWS = normalize(TransformVector(input.f3VecNormalOS, g_cbPobj.mat_os2ws));
 	vout.f3Custom = input.f3Custom;
     //vout.f4PosSS.z -= g_cbPobj.depth_forward_bias;
+    
+#if __PAINTER_UV == 1
+    vout.f2PaintUV = g_uvBuffer[input.vertexID];
+#endif
+    
     return vout;
 }
 
@@ -481,6 +520,50 @@ void TextureMaterialMap(inout float3 Ka, inout float3 Kd, inout float3 Ks, inout
 	if (alpha_wildcard >= 0) d *= alpha_wildcard;
 }
 
+float3 PaintBlendOverlay(float3 base, float3 blend)
+{
+    float3 result;
+    result.r = base.r < 0.5 ? 2.0 * base.r * blend.r : 1.0 - 2.0 * (1.0 - base.r) * (1.0 - blend.r);
+    result.g = base.g < 0.5 ? 2.0 * base.g * blend.g : 1.0 - 2.0 * (1.0 - base.g) * (1.0 - blend.g);
+    result.b = base.b < 0.5 ? 2.0 * base.b * blend.b : 1.0 - 2.0 * (1.0 - base.b) * (1.0 - blend.b);
+    return result;
+}
+
+// Apply paint texture to diffuse color
+void ApplyPaintTexture(inout float3 color, const float2 uv, const uint tex_map_enum, const int blendMode)
+{
+	float4 paintColor = g_tex2D_Paint.SampleLevel(g_samplerLinear_clamp, uv, 0);
+
+	if (paintColor.a > 0.001)
+	{
+		float3 blendedColor;
+
+		switch (blendMode)
+		{
+			case PAINT_BLEND_NORMAL:
+				blendedColor = lerp(color, paintColor.rgb, paintColor.a);
+				break;
+			case PAINT_BLEND_MULTIPLY:
+				blendedColor = lerp(color, color * paintColor.rgb, paintColor.a);
+				break;
+			case PAINT_BLEND_ADDITIVE:
+				blendedColor = lerp(color, saturate(color + paintColor.rgb), paintColor.a);
+				break;
+			case PAINT_BLEND_OVERLAY:
+				blendedColor = lerp(color, PaintBlendOverlay(color, paintColor.rgb), paintColor.a);
+				break;
+			case PAINT_BLEND_SCREEN:
+				blendedColor = lerp(color, 1.0 - (1.0 - color) * (1.0 - paintColor.rgb), paintColor.a);
+				break;
+			default:
+				blendedColor = lerp(color, paintColor.rgb, paintColor.a);
+				break;
+		}
+
+		color = blendedColor;
+	}
+}
+
 void MultiTextMapping(inout float4 v_rgba, inout float depthcs, float2 pos_sample, const in int letter_idx, const in float3 vec_width_ps, const in float3 vec_height_ps)
 {
     //MultiTextMapping(v_rgba, z_depth, input.f3Custom0.xy, (int) (input.f3Custom0.z + 0.5f), input.f3Custom1, input.f3Custom2);
@@ -801,6 +884,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
         float3 Ka = g_cbPobj.Ka, Kd = g_cbPobj.Kd, Ks = g_cbPobj.Ks;
         float Ns = g_cbPobj.Ns, d = 1.0, bump = 1.0;
         TextureMaterialMap(Ka, Kd, Ks, Ns, bump, d, input.f3Custom, g_cbPobj.tex_map_enum);
+
         if (Ns >= 0)
         {
             Ka *= g_cbEnv.ltint_ambient.rgb;
@@ -932,7 +1016,15 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     }
 
 #endif
-
+    
+#if __PAINTER_UV == 1
+    if (g_cbPobj.tex_map_enum & (0x1 << 17))
+    {
+        // Apply paint texture (blend mode 0 = NORMAL by default)
+	    ApplyPaintTexture(v_rgba.rgb, input.f2PaintUV, g_cbPobj.tex_map_enum, PAINT_BLEND_NORMAL);
+    }
+#endif
+    
 #if DX10_0 == 1
     v_rgba.a = 1.f;
 #else

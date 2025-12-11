@@ -22,6 +22,11 @@
 #define IDR_RCDATA11005					  11005
 #define IDR_RCDATA11006					  11006
 
+#define IDR_RCDATA11040					  11040
+#define IDR_RCDATA11041					  11041
+#define IDR_RCDATA11042					  11042
+#define IDR_RCDATA11043					  11043
+
 #define IDR_RCDATA91001					  91001
 #define IDR_RCDATA91002					  91002
 #define IDR_RCDATA91003					  91003
@@ -47,6 +52,8 @@
 #define IDR_RCDATA10106					  10106
 #define IDR_RCDATA10107					  10107
 #define IDR_RCDATA10108					  10108
+
+#define IDR_RCDATA10111					  10111
 
 #define IDR_RCDATA10201					  10201
 
@@ -302,6 +309,16 @@
 #define IDR_RCDATA71005					  71005
 
 #define IDR_RCDATA72000					  72000
+
+// MeshPainter Shaders
+#define IDR_RCDATA80001					  80001
+#define IDR_RCDATA80002					  80002
+#define IDR_RCDATA80003					  80003
+#define IDR_RCDATA80004					  80004
+#define IDR_RCDATA80005					  80005
+#define IDR_RCDATA80006					  80006
+#define IDR_RCDATA80007					  80007
+#define IDR_RCDATA80008					  80008
 
 // Next default values for new objects
 // 

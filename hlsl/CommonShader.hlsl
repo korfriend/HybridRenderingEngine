@@ -130,6 +130,7 @@ struct HxCB_PolygonObject
 	// 5th bit : g_tex2D_NS
 	// 6th bit : g_tex2D_BUMP
 	// 7th bit : g_tex2D_D
+	// 17th bit : g_tex2D_PAINT
 	uint tex_map_enum;
 
 	// 1st bit : 0 (shading color to RT) 1 (normal to RT for the purpose of silhouette rendering)
