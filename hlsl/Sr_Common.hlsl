@@ -806,18 +806,18 @@ float3 ComputeDeviation(float3 pos, float3 nrl, out bool colored)
 		float mapValue = ((devMin - minMapping) / (maxMapping - minMapping));
 
         if (BitCheck(g_cbTmap.flag, 0)) {
-            fColor = g_f4bufOTF[(int)(saturate(mapValue) * (g_cbTmap.tmap_size_x - 1))].rgb;
-        }
+			fColor = g_f4bufOTF[(int) (saturate(mapValue) * (g_cbTmap.tmap_size_x - 1))].rgb * g_cbVobj.pb_shading_factor.y;
+		}
         else
         {
             if (mapValue >= 0 && mapValue <= 1.f) {
-                fColor = g_f4bufOTF[(int)((mapValue) * (g_cbTmap.tmap_size_x - 1))].rgb;
-            }
+				fColor = g_f4bufOTF[(int) ((mapValue) * (g_cbTmap.tmap_size_x - 1))].rgb * g_cbVobj.pb_shading_factor.y;
+			}
 		}
 		colored = true;
 	}
 
-    return fColor;
+	return fColor;
 }
 
 void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
@@ -926,6 +926,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     {
         float sample_v = g_tex3DVolume.SampleLevel(g_samplerLinear, posTS, 0).r;
         float4 colorMap = g_f4bufOTF[(int)(sample_v * (g_cbTmap.tmap_size_x - 1))];
+        colorMap.rgb *= g_cbVobj.pb_shading_factor.y;
     
         if (BitCheck(g_cbPobj.pobj_flag, 7)) 
         {
