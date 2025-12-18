@@ -793,7 +793,7 @@ float3 ComputeDeviation(float3 pos, float3 nrl, out bool colored)
 		}
 	}
 
-    float3 fColor = g_cbPobj.Kd;
+	float3 fColor = g_cbPobj.Kd;
 
     float minMapping = g_cbTmap.mapping_v_min;
     float maxMapping = g_cbTmap.mapping_v_max;
@@ -946,12 +946,12 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     {
         float3 Ka, Kd, Ks;
         Kd = v_rgba.rgb * g_cbEnv.ltint_diffuse.rgb;
-        if (use_vrgb)
-        {
-            Ka = v_rgba.rgb * g_cbEnv.ltint_ambient.rgb;
-            Ks = v_rgba.rgb * g_cbEnv.ltint_spec.rgb;
-        }
-        else
+        //if (use_vrgb)
+        //{
+        //    Ka = v_rgba.rgb * g_cbEnv.ltint_ambient.rgb;
+        //    Ks = v_rgba.rgb * g_cbEnv.ltint_spec.rgb;
+        //}
+        //else
         {
             Ka = g_cbPobj.Ka * g_cbEnv.ltint_ambient.rgb;
             Ks = g_cbPobj.Ks * g_cbEnv.ltint_spec.rgb;
@@ -965,19 +965,17 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     bool use_vrgb = false;
     if (nor_len > 0)
         v_rgba.rgb = ComputeDeviation(input.f3PosWS, nor, use_vrgb); // note the color is suppposed to be multiplied by g_cbPobj.Kd, Ka, and Ks
-    
-    v_rgba.a = g_cbPobj.alpha;
-
+        
     if (nor_len > 0)
     {
         float3 Ka, Kd, Ks;
         Kd = v_rgba.rgb * g_cbEnv.ltint_diffuse.rgb;
-        if (use_vrgb)
-        {
-            Ka = v_rgba.rgb * g_cbEnv.ltint_ambient.rgb;
-            Ks = v_rgba.rgb * g_cbEnv.ltint_spec.rgb;
-        }
-        else
+        //if (use_vrgb)
+        //{
+        //    Ka = v_rgba.rgb * g_cbEnv.ltint_ambient.rgb;
+        //    Ks = v_rgba.rgb * g_cbEnv.ltint_spec.rgb;
+        //}
+        //else
         {
             Ka = g_cbPobj.Ka * g_cbEnv.ltint_ambient.rgb;
             Ks = g_cbPobj.Ks * g_cbEnv.ltint_spec.rgb;
@@ -1008,7 +1006,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     {
         Ka *= g_cbEnv.ltint_ambient.rgb;
         Kd *= g_cbEnv.ltint_diffuse.rgb;
-        Ks *= g_cbEnv.ltint_spec.rgb;
+		Ks *= g_cbEnv.ltint_spec.rgb;
         ComputeColor(v_rgba.rgb, Ka, Kd, Ks, Ns, 1.0, input.f3PosWS, view_dir, nor, nor_len);
     }
     else {
@@ -1022,6 +1020,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     {
         // Apply paint texture (blend mode 0 = NORMAL by default)
 	    ApplyPaintTexture(v_rgba.rgb, input.f2PaintUV, g_cbPobj.tex_map_enum, PAINT_BLEND_NORMAL);
+        //v_rgba.rgb = float3(input.f2PaintUV, 1);
     }
 #endif
     

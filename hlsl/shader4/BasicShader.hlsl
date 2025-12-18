@@ -1,7 +1,7 @@
 #include "../Sr_Common.hlsl"
 
 //[earlydepthstencil]// ==> shader model 5
-PS_FILL_OUTPUT BasicShader4(__VS_OUT input) 
+PS_FILL_OUTPUT BasicShader4(__VS_OUT input)
 {
 	PS_FILL_OUTPUT out_ps;
 	out_ps.ds_z = 1.f; // remove???
