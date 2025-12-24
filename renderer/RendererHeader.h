@@ -29,48 +29,48 @@ using namespace grd_helper;
 
 bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	VmGpuManager* gpu_manager,
-	grd_helper::GpuDX11CommonParameters* dx11CommonParams,
+	grd_helper::PSOManager* psoManager,
 	LocalProgress* progress,
 	double* run_time_ptr);
 
 bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	VmGpuManager* gpu_manager,
-	grd_helper::GpuDX11CommonParameters* dx11CommonParams,
+	grd_helper::PSOManager* psoManager,
 	LocalProgress* progress,
 	double* run_time_ptr);
 
 bool RenderPrimitives(VmFnContainer* _fncontainer,
 	VmGpuManager* gpu_manager,
-	grd_helper::GpuDX11CommonParameters* dx11CommonParams,
+	grd_helper::PSOManager* psoManager,
 	LocalProgress* progress,
 	double* run_time_ptr);
 
 bool RenderVrDLS(VmFnContainer* _fncontainer,
 	VmGpuManager* gpu_manager,
-	grd_helper::GpuDX11CommonParameters* dx11CommonParams,
+	grd_helper::PSOManager* psoManager,
 	LocalProgress* progress,
 	double* run_time_ptr);
 
 bool RenderVrDLS1(VmFnContainer* _fncontainer,
 	VmGpuManager* gpu_manager,
-	grd_helper::GpuDX11CommonParameters* dx11CommonParams,
+	grd_helper::PSOManager* psoManager,
 	LocalProgress* progress,
 	double* run_time_ptr);
 
 bool RenderVrDLS2(VmFnContainer* _fncontainer,
 	VmGpuManager* gpu_manager,
-	grd_helper::GpuDX11CommonParameters* dx11CommonParams,
+	grd_helper::PSOManager* psoManager,
 	LocalProgress* progress,
 	double* run_time_ptr);
 
 void ComputeSSAO(__ID3D11DeviceContext* dx11DeviceImmContext,
-	grd_helper::GpuDX11CommonParameters* dx11CommonParams, VmIObject* iobj,
+	grd_helper::PSOManager* psoManager, VmIObject* iobj,
 	int num_grid_x, int num_grid_y,
 	GpuRes& gres_fb_counter, GpuRes& gres_fb_deep_k_buffer, GpuRes& gres_fb_rgba, bool blur_SSAO,
 	GpuRes& gres_fb_vr_depth, GpuRes& gres_fb_vr_ao, GpuRes& gres_fb_vr_ao_blf, bool involve_vr, bool apply_fragmerge);
 
 void ComputeDOF(__ID3D11DeviceContext* dx11DeviceImmContext,
-	grd_helper::GpuDX11CommonParameters* dx11CommonParams, VmIObject* iobj,
+	grd_helper::PSOManager* psoManager, VmIObject* iobj,
 	int num_grid_x, int num_grid_y,
 	GpuRes& gres_fb_counter, GpuRes& gres_fb_deep_k_buffer, GpuRes& gres_fb_rgba,
 	bool apply_SSAO, bool is_blurred_SSAO, bool apply_fragmerge,

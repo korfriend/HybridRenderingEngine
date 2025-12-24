@@ -37,7 +37,6 @@
   <ItemGroup>
     <ClCompile Include="gpu manager\BVHUpdate.cpp" />
     <ClCompile Include="gpu manager\gpulib.cpp" />
-    <ClCompile Include="meshpainter\Dilator.cpp" />
     <ClCompile Include="meshpainter\FeedbackTexture.cpp" />
     <ClCompile Include="meshpainter\MeshPainter.cpp" />
     <ClCompile Include="meshpainter\PaintResourceManager.cpp" />
@@ -51,8 +50,6 @@
     <ClCompile Include="renderer\VolumeRenderer.cpp" />
     <ClCompile Include="SSRenderer.cpp" />
     <ClCompile Include="vismtv_inbuilt_renderergpudx.cpp" />
-    <ClCompile Include="VolumeRenderer_CUSTOM1.cpp" />
-    <ClCompile Include="VolumeRenderer_CUSTOM2.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="gpu manager\BVHUpdate.h" />
@@ -67,7 +64,6 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClInclude>
     <ClInclude Include="hlsl\ShaderInterop_BVH.h" />
-    <ClInclude Include="meshpainter\Dilator.h" />
     <ClInclude Include="meshpainter\FeedbackTexture.h" />
     <ClInclude Include="meshpainter\MeshPainter.h" />
     <ClInclude Include="meshpainter\PaintResourceManager.h" />

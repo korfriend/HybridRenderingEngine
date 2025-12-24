@@ -4,5 +4,5 @@
 
 namespace bvh
 {
-	bool UpdateGeometryGPUBVH(VmGpuManager* gpuManager, grd_helper::GpuDX11CommonParameters* dx11CommonParams, VmVObjectPrimitive* pobj);
+	bool UpdateGeometryGPUBVH(VmGpuManager* gpuManager, grd_helper::PSOManager* psoManager, VmVObjectPrimitive* pobj);
 }

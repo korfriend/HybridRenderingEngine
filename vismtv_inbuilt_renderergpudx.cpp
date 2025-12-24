@@ -1,5 +1,6 @@
 #include "vismtv_inbuilt_renderergpudx.h"
 //#include "VXDX11Helper.h"
+#include "vzm2/Backlog.h"
 
 #include <d2d1_1.h>
 #include <dwrite.h>
@@ -13,7 +14,7 @@
 
 double g_dProgress = 0;
 double g_dRunTimeVRs = 0;
-grd_helper::GpuDX11CommonParameters g_vmCommonParams;
+grd_helper::PSOManager g_psoManager;
 LocalProgress g_LocalProgress;
 
 VmGpuManager* g_pCGpuManager = NULL;
@@ -65,6 +66,14 @@ bool CheckModuleParameters(fncontainer::VmFnContainer& _fncontainer)
 	return true;
 }
 
+auto checkRefCount = [](IUnknown* obj, const char* name) {
+	if (obj) {
+		obj->AddRef();
+		ULONG count = obj->Release();
+		vzlog("%s refcount: %u", name, count);
+	}
+	};
+
 static CRITICAL_SECTION cs;
 bool InitModule(fncontainer::VmFnContainer& _fncontainer)
 {	
@@ -73,7 +82,7 @@ bool InitModule(fncontainer::VmFnContainer& _fncontainer)
 	if(g_pCGpuManager == NULL)
 		g_pCGpuManager = new VmGpuManager(GpuSdkTypeDX11, __DLLNAME);
 
-	if (grd_helper::InitializePresettings(g_pCGpuManager, &g_vmCommonParams) == -1)
+	if (grd_helper::Initialize(g_pCGpuManager, &g_psoManager) == -1)
 	{
 		vmlog::LogErr("failure new initializer!");
 		DeInitModule(fncontainer::VmFnContainer());
@@ -86,12 +95,17 @@ bool InitModule(fncontainer::VmFnContainer& _fncontainer)
 
 	// Create a Direct2D factory.
 	if (g_pDirect2dFactory == NULL) {
+
+		checkRefCount(g_psoManager.dx11Device, "Before cleanup (dx11Device1)");
+
 		if (D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &g_pDirect2dFactory) != S_OK)
 			vmlog::LogErr("Failure D2D1CreateFactory!!");
 
-		// IDWriteFactory�� DWriteCreateFactory �Լ� ȣ�� ����.
+		checkRefCount(g_psoManager.dx11Device, "Before cleanup (dx11Device2)");
+
 		DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(g_pDWriteFactory), reinterpret_cast<IUnknown**>(&g_pDWriteFactory));
-		
+
+		checkRefCount(g_psoManager.dx11Device, "Before cleanup (dx11Device3)");
 
 		ID2D1StrokeStyle* pStrokeStyle = NULL;
 		HRESULT hr = g_pDirect2dFactory->CreateStrokeStyle(
@@ -108,19 +122,21 @@ bool InitModule(fncontainer::VmFnContainer& _fncontainer)
 			&pStrokeStyle
 		);
 		g_d2dStrokeStyleMap["DEFAULT"] = pStrokeStyle;
+		checkRefCount(g_psoManager.dx11Device, "Before cleanup (dx11Device4)");
 
 		IDWriteTextFormat* pTextFormat = NULL;
 		g_pDWriteFactory->CreateTextFormat(
-			L"Comic Sans MS",                  // ��Ʈ �йи� �̸��� ���ڿ�
-			NULL,                        // ��Ʈ �÷��� ��ü, NULL=�ý��� ��Ʈ �÷���
-			DWRITE_FONT_WEIGHT_NORMAL,   // ��Ʈ ����. LIGHT, NORMAL, BOLD ��.
-			DWRITE_FONT_STYLE_NORMAL,    // ��Ʈ ��Ÿ��. NORMAL, OBLIQUE, ITALIC.
-			DWRITE_FONT_STRETCH_NORMAL,  // ��Ʈ ����. CONDENSED, NORMAL, MEDIUM, EXTEXDED ��.
-			50.f,                          // ��Ʈ ũ��.
-			L"",                         // �������� ���ڿ��� ����.  ����-�̱�=L"en-us", �ѱ���-�ѱ�=L"ko-kr"
+			L"Comic Sans MS",            
+			NULL,
+			DWRITE_FONT_WEIGHT_NORMAL,
+			DWRITE_FONT_STYLE_NORMAL,
+			DWRITE_FONT_STRETCH_NORMAL,
+			50.f,
+			L"",
 			&pTextFormat
 		);
 		g_d2dTextFormatMap["DEFAULT"] = pTextFormat;
+		checkRefCount(g_psoManager.dx11Device, "Before cleanup (dx11Device5)");
 
 		if (hr != S_OK)
 			vmlog::LogErr("D2D Device Setting Error!");
@@ -152,9 +168,9 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		return false;
 	}
 
-	if (g_vmCommonParams.dx11Device == NULL || g_vmCommonParams.dx11DeviceImmContext == NULL)
+	if (g_psoManager.dx11Device == NULL || g_psoManager.dx11DeviceImmContext == NULL)
 	{
-		if (grd_helper::InitializePresettings(g_pCGpuManager, &g_vmCommonParams) == -1)
+		if (grd_helper::Initialize(g_pCGpuManager, &g_psoManager) == -1)
 		{
 			DeInitModule(fncontainer::VmFnContainer());
 			return false;
@@ -162,7 +178,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	}
 
 #ifdef DX11_3
-	if (g_vmCommonParams.dx11_featureLevel < 0xb100) {
+	if (g_psoManager.dx11_featureLevel < 0xb100) {
 		_fncontainer.fnParams.SetParam("_bool_UseSpinLock", true);
 	}
 #else
@@ -218,12 +234,12 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	bool is_picking_routine = _fncontainer.fnParams.GetParam("_bool_IsPickingRoutine", false);
 	bool is_first_renderer = _fncontainer.fnParams.GetParam("_bool_IsFirstRenderer", true);
 	bool is_last_renderer = _fncontainer.fnParams.GetParam("_bool_IsFinalRenderer", true);
-	g_vmCommonParams.gpu_profile = _fncontainer.fnParams.GetParam("_bool_GpuProfile", false);
-	map<string, vmint2>& profile_map = g_vmCommonParams.profile_map;
-	if (g_vmCommonParams.gpu_profile)
+	g_psoManager.gpu_profile = _fncontainer.fnParams.GetParam("_bool_GpuProfile", false);
+	map<string, vmint2>& profile_map = g_psoManager.profile_map;
+	if (g_psoManager.gpu_profile)
 	{
 		int gpu_profilecount = (int)profile_map.size();
-		g_vmCommonParams.dx11DeviceImmContext->Begin(g_vmCommonParams.dx11qr_disjoint);
+		g_psoManager.dx11DeviceImmContext->Begin(g_psoManager.dx11qr_disjoint);
 		//gpu_profilecount++;
 	}
 
@@ -239,7 +255,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 
 	if (is_first_renderer && !is_picking_routine && gpu_query_synch)
 	{
-		g_vmCommonParams.dx11DeviceImmContext->Begin(g_vmCommonParams.dx11qr_disjoint);
+		g_psoManager.dx11DeviceImmContext->Begin(g_psoManager.dx11qr_disjoint);
 		//g_vmCommonParams.dx11DeviceImmContext->End(g_vmCommonParams.dx11qr_timestamps[0]);
 	}
 
@@ -250,14 +266,14 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		switch (vrSlot)
 		{
 		case 1:
-			RenderVrDLS1(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
-			break;
+			//RenderVrDLS1(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
+			//break;
 		case 2:
-			RenderVrDLS2(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
-			break;
+			//RenderVrDLS2(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
+			//break;
 		default:
 		case 0:
-			RenderVrDLS(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
+			RenderVrDLS(&_fncontainer, g_pCGpuManager, &g_psoManager, &g_LocalProgress, &dRuntime);
 			break;
 		}
 		g_dRunTimeVRs += dRuntime;
@@ -269,7 +285,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	{
 		//g_state = 0;
 		double dRuntime = 0;
-		RenderPrimitives(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
+		RenderPrimitives(&_fncontainer, g_pCGpuManager, &g_psoManager, &g_LocalProgress, &dRuntime);
 		g_dRunTimeVRs += dRuntime;
 		if (is_last_renderer) is_final_render_out = true;
 	}
@@ -277,7 +293,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	{
 		assert(curved_slicer == true);
 		double dRuntime = 0;
-		RenderVrCurvedSlicer(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
+		RenderVrCurvedSlicer(&_fncontainer, g_pCGpuManager, &g_psoManager, &g_LocalProgress, &dRuntime);
 		g_dRunTimeVRs += dRuntime;
 		is_final_render_out = true;
 		is_vr = true;
@@ -285,18 +301,18 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	else if (strRendererSource == "SECTIONAL_MESH")
 	{
 		double dRuntime = 0;
-		RenderSrSlicer(&_fncontainer, g_pCGpuManager, &g_vmCommonParams, &g_LocalProgress, &dRuntime);
+		RenderSrSlicer(&_fncontainer, g_pCGpuManager, &g_psoManager, &g_LocalProgress, &dRuntime);
 		g_dRunTimeVRs += dRuntime;
 		if (is_last_renderer || planeThickness <= 0.f) is_final_render_out = true;
 	}
 
 	auto RenderOut = [&iobj, &is_last_renderer, &planeThickness, &_fncontainer, &is_vr]() {
 
-		g_vmCommonParams.GpuProfile("Copyback");
+		g_psoManager.GpuProfile("Copyback");
 
 		VmGpuManager* gpu_manager = g_pCGpuManager;
-		__ID3D11Device* dx11Device = g_vmCommonParams.dx11Device;
-		__ID3D11DeviceContext* dx11DeviceImmContext = g_vmCommonParams.dx11DeviceImmContext;
+		__ID3D11Device* dx11Device = g_psoManager.dx11Device;
+		__ID3D11DeviceContext* dx11DeviceImmContext = g_psoManager.dx11DeviceImmContext;
 
 		HWND hWnd = (HWND)_fncontainer.fnParams.GetParam("_hwnd_WindowHandle", (HWND)NULL);
 		bool is_rgba = _fncontainer.fnParams.GetParam("_bool_IsRGBA", false);
@@ -380,23 +396,23 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 				if (rgba_gpu_buf == NULL || depth_gpu_buf == NULL)
 				{
 #ifdef __DX_DEBUG_QUERY
-					g_vmCommonParams.debug_info_queue->PushEmptyStorageFilter();
+					g_psoManager.debug_info_queue->PushEmptyStorageFilter();
 
-					UINT64 message_count = g_vmCommonParams.debug_info_queue->GetNumStoredMessages();
+					UINT64 message_count = g_psoManager.debug_info_queue->GetNumStoredMessages();
 
 					for (UINT64 i = 0; i < message_count; i++) {
 						SIZE_T message_size = 0;
-						g_vmCommonParams.debug_info_queue->GetMessage(i, nullptr, &message_size); //get the size of the message
+						g_psoManager.debug_info_queue->GetMessage(i, nullptr, &message_size); //get the size of the message
 
 						D3D11_MESSAGE* message = (D3D11_MESSAGE*)malloc(message_size); //allocate enough space
-						g_vmCommonParams.debug_info_queue->GetMessage(i, message, &message_size); //get the actual message
+						g_psoManager.debug_info_queue->GetMessage(i, message, &message_size); //get the actual message
 
 						//do whatever you want to do with it
 						printf("Directx11: %.*s", message->DescriptionByteLength, message->pDescription);
 
 						free(message);
 					}
-					g_vmCommonParams.debug_info_queue->ClearStoredMessages();
+					g_psoManager.debug_info_queue->ClearStoredMessages();
 #endif
 					cout << ("VR ERROR -- OUT") << endl;
 					cout << ("screen : " + to_string(fb_size_cur.x) + " x " + to_string(fb_size_cur.y)) << endl;
@@ -443,7 +459,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 			}
 		}
 
-		g_vmCommonParams.GpuProfile("Copyback", true);
+		g_psoManager.GpuProfile("Copyback", true);
 	};
 
 	if (is_final_render_out && !is_picking_routine)
@@ -473,13 +489,13 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 					, (ID3D11UnorderedAccessView*)gres_fb_2ndlayer_depthcs.alloc_res_ptrs[DTYPE_UAV]
 			};
 
-			__ID3D11Device* dx11Device = g_vmCommonParams.dx11Device;
-			__ID3D11DeviceContext* dx11DeviceImmContext = g_vmCommonParams.dx11DeviceImmContext;
+			__ID3D11Device* dx11Device = g_psoManager.dx11Device;
+			__ID3D11DeviceContext* dx11DeviceImmContext = g_psoManager.dx11DeviceImmContext;
 
 			int dotSize = _fncontainer.fnParams.GetParam("_int_2ndLayerPatternInterval", (int)3);
 			float blendingW = _fncontainer.fnParams.GetParam("_float_2ndLayerBlendingW", 0.2f);
 
-			ID3D11Buffer* cbuf_cam_state = g_vmCommonParams.get_cbuf("CB_CameraState");
+			ID3D11Buffer* cbuf_cam_state = g_psoManager.get_cbuf("CB_CameraState");
 			D3D11_MAPPED_SUBRESOURCE mappedResCamState;
 			dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
 			CB_CameraState* cbCamStateData = (CB_CameraState*)mappedResCamState.pData;
@@ -489,7 +505,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 			dx11DeviceImmContext->Unmap(cbuf_cam_state, 0);
 			dx11DeviceImmContext->CSSetConstantBuffers(0, 1, &cbuf_cam_state);
 
-			ID3D11ComputeShader* dx11CShader = g_vmCommonParams.get_cshader("CS_Blend2ndLayer_cs_5_0");
+			ID3D11ComputeShader* dx11CShader = g_psoManager.get_cshader("CS_Blend2ndLayer_cs_5_0");
 			dx11DeviceImmContext->CSSetShader(dx11CShader, NULL, 0);
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 4, dx11UAVs, (UINT*)(&dx11UAVs));
 
@@ -713,14 +729,14 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	if (is_last_renderer && !is_picking_routine && gpu_query_synch)
 	{
 		//g_vmCommonParams.dx11DeviceImmContext->End(g_vmCommonParams.dx11qr_timestamps[1]);
-		g_vmCommonParams.dx11DeviceImmContext->End(g_vmCommonParams.dx11qr_disjoint);
+		g_psoManager.dx11DeviceImmContext->End(g_psoManager.dx11qr_disjoint);
 
 		// Wait for data to be available
 		static int testConsoleOut = 0;
 		testConsoleOut++;
 		int sleepCount = 0;
 
-		while (g_vmCommonParams.dx11DeviceImmContext->GetData(g_vmCommonParams.dx11qr_disjoint, NULL, 0, 0) == S_FALSE)
+		while (g_psoManager.dx11DeviceImmContext->GetData(g_psoManager.dx11qr_disjoint, NULL, 0, 0) == S_FALSE)
 		{
 			Sleep(1);       // Wait a bit, but give other threads a chance to run
 			//sleepCount++;
@@ -733,7 +749,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 
 			// Check whether timestamps were disjoint during the last frame
 			D3D10_QUERY_DATA_TIMESTAMP_DISJOINT tsDisjoint;
-			g_vmCommonParams.dx11DeviceImmContext->GetData(g_vmCommonParams.dx11qr_disjoint, &tsDisjoint, sizeof(tsDisjoint), 0);
+			g_psoManager.dx11DeviceImmContext->GetData(g_psoManager.dx11qr_disjoint, &tsDisjoint, sizeof(tsDisjoint), 0);
 			if (!tsDisjoint.Disjoint)
 			{
 				/*
@@ -777,19 +793,19 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 
 	g_dProgress = 100;
 
-	if (g_vmCommonParams.gpu_profile)
+	if (g_psoManager.gpu_profile)
 	{
-		g_vmCommonParams.dx11DeviceImmContext->End(g_vmCommonParams.dx11qr_disjoint);
+		g_psoManager.dx11DeviceImmContext->End(g_psoManager.dx11qr_disjoint);
 
 		// Wait for data to be available
-		while (g_vmCommonParams.dx11DeviceImmContext->GetData(g_vmCommonParams.dx11qr_disjoint, NULL, 0, 0) == S_FALSE)
+		while (g_psoManager.dx11DeviceImmContext->GetData(g_psoManager.dx11qr_disjoint, NULL, 0, 0) == S_FALSE)
 		{
 			Sleep(1);       // Wait a bit, but give other threads a chance to run
 		}
 
 		// Check whether timestamps were disjoint during the last frame
 		D3D10_QUERY_DATA_TIMESTAMP_DISJOINT tsDisjoint;
-		g_vmCommonParams.dx11DeviceImmContext->GetData(g_vmCommonParams.dx11qr_disjoint, &tsDisjoint, sizeof(tsDisjoint), 0);
+		g_psoManager.dx11DeviceImmContext->GetData(g_psoManager.dx11qr_disjoint, &tsDisjoint, sizeof(tsDisjoint), 0);
 		if (!tsDisjoint.Disjoint)
 		{
 			auto DisplayDuration = [&tsDisjoint](UINT64 tsS, UINT64 tsE, const string& _test)
@@ -800,8 +816,8 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 
 			for (auto& it : profile_map) {
 				UINT64 ts, te;
-				g_vmCommonParams.dx11DeviceImmContext->GetData(g_vmCommonParams.dx11qr_timestamps[it.second.x], &ts, sizeof(UINT64), 0);
-				g_vmCommonParams.dx11DeviceImmContext->GetData(g_vmCommonParams.dx11qr_timestamps[it.second.y], &te, sizeof(UINT64), 0);
+				g_psoManager.dx11DeviceImmContext->GetData(g_psoManager.dx11qr_timestamps[it.second.x], &ts, sizeof(UINT64), 0);
+				g_psoManager.dx11DeviceImmContext->GetData(g_psoManager.dx11qr_timestamps[it.second.y], &te, sizeof(UINT64), 0);
 
 				DisplayDuration(ts, te, it.first);
 			}
@@ -810,8 +826,8 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 			//{
 			//	auto it = profile_map.find("SR Render");
 			//	UINT64 ts, te;
-			//	dx11DeviceImmContext->GetData(dx11CommonParams->dx11qr_timestamps[it->second.x], &ts, sizeof(UINT64), 0);
-			//	dx11DeviceImmContext->GetData(dx11CommonParams->dx11qr_timestamps[it->second.y], &te, sizeof(UINT64), 0);
+			//	dx11DeviceImmContext->GetData(psoManager->dx11qr_timestamps[it->second.x], &ts, sizeof(UINT64), 0);
+			//	dx11DeviceImmContext->GetData(psoManager->dx11qr_timestamps[it->second.y], &te, sizeof(UINT64), 0);
 			//	ofstream file_rendertime;
 			//	file_rendertime.open(".\\data\\frames_profile_rendertime.txt", std::ios_base::app);
 			//	file_rendertime << float(te - ts) / float(tsDisjoint.Frequency) * 1000.0f << endl;
@@ -847,7 +863,7 @@ void DeInitModule(fncontainer::VmFnContainer& _fncontainer)
 
 
 	// ORDER!!
-	grd_helper::DeinitializePresettings();
+	grd_helper::Deinitialize();
 	VMSAFE_DELETE(g_pCGpuManager);
 }
 

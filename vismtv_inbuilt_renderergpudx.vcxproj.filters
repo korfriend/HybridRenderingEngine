@@ -29,12 +29,6 @@
     <ClCompile Include="gpu manager\gpulib.cpp">
       <Filter>gpu manager</Filter>
     </ClCompile>
-    <ClCompile Include="VolumeRenderer_CUSTOM1.cpp">
-      <Filter>renderer</Filter>
-    </ClCompile>
-    <ClCompile Include="VolumeRenderer_CUSTOM2.cpp">
-      <Filter>renderer</Filter>
-    </ClCompile>
     <ClCompile Include="gpu manager\BVHUpdate.cpp">
       <Filter>gpu manager</Filter>
     </ClCompile>
@@ -45,9 +39,6 @@
       <Filter>meshpainter</Filter>
     </ClCompile>
     <ClCompile Include="meshpainter\FeedbackTexture.cpp">
-      <Filter>meshpainter</Filter>
-    </ClCompile>
-    <ClCompile Include="meshpainter\Dilator.cpp">
       <Filter>meshpainter</Filter>
     </ClCompile>
     <ClCompile Include="meshpainter\PaintResourceManager.cpp">
@@ -115,9 +106,6 @@
       <Filter>meshpainter</Filter>
     </ClInclude>
     <ClInclude Include="meshpainter\FeedbackTexture.h">
-      <Filter>meshpainter</Filter>
-    </ClInclude>
-    <ClInclude Include="meshpainter\Dilator.h">
       <Filter>meshpainter</Filter>
     </ClInclude>
     <ClInclude Include="meshpainter\PaintResourceManager.h">

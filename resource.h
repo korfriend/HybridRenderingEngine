@@ -314,10 +314,10 @@
 #define IDR_RCDATA80001					  80001
 #define IDR_RCDATA80002					  80002
 #define IDR_RCDATA80003					  80003
-#define IDR_RCDATA80004					  80004
-#define IDR_RCDATA80005					  80005
-#define IDR_RCDATA80006					  80006
-#define IDR_RCDATA80007					  80007
+//#define IDR_RCDATA80004					  80004
+//#define IDR_RCDATA80005					  80005
+//#define IDR_RCDATA80006					  80006
+//#define IDR_RCDATA80007					  80007
 #define IDR_RCDATA80008					  80008
 
 // Next default values for new objects

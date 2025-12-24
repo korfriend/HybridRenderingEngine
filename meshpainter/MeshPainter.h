@@ -1,7 +1,6 @@
 #pragma once
 #include "../gpu_common_res.h"
 #include "PaintResourceManager.h"
-#include "Dilator.h"
 #include <wrl/client.h>
 
 using Microsoft::WRL::ComPtr;
@@ -39,84 +38,101 @@ struct RayHitResult {
 	}
 };
 
+struct MeshParams {
+	ID3D11Buffer* vbMesh;
+	ID3D11ShaderResourceView* uvBufferSRV;  // UV buffer for mesh painter (t61)
+	std::string inputLayerDesc;	// "P", "PN", "PT", "PNT", "PNTC"
+	uint stride;
+	uint offset;
+	vmobjects::PrimitiveData* primData;
+};
+
 class MeshPainter {
 public:
 	MeshPainter(__ID3D11Device* device, __ID3D11DeviceContext* context);
 	~MeshPainter();
 
-	void initialize(const TextureInfo& baseTexture);
+	PaintResourceManager* getPaintResourceManager() { return paintManager.get(); }
 
-	PaintResourceManager* getPaintResourceManager() { return paintManager; }
-
-	// Set brush shaders (loaded externally)
-	void setBrushShaders(ID3D11VertexShader* vs, ID3D11PixelShader* ps, ID3D11InputLayout* layout) {
-		brushVS = vs;
-		brushPS = ps;
-		brushInputLayout = layout;
-	}
-
-	// Set dilation shaders (loaded externally)
-	void setDilationShaders(ID3D11VertexShader* vs, ID3D11PixelShader* ps, ID3D11InputLayout* layout) {
-		if (dilator) {
-			dilator->setDilationShaders(vs, ps, layout);
-		}
-	}
+	void loadShaders();
 
 	// Paint on a specific actor at world position
 	// Requires mesh data for UV lookup
 	void paintOnActor(
-		int actorId,
-		const vmobjects::PrimitiveData* primData,
+		int actorId, 
+		const MeshParams& meshParams,
 		const vmmat44f& matOS2WS,
 		const BrushParams& brush,
-		const RayHitResult& hitResult
+		const RayHitResult& hitResult, const bool paint
 	);
 
 	// Compute UV from ray hit on triangle mesh
 	// Returns true if valid UV was computed
+	// If painterUVs is provided, uses painter UVs; otherwise falls back to TEXCOORD0
 	static bool computeUVFromHit(
 		vmobjects::PrimitiveData* primData,
 		int triangleIndex,
 		float baryU, float baryV,
-		float outUV[2]
+		float outUV[2],
+		const std::vector<float>* painterUVs = nullptr
 	);
 
 	// Ray-triangle intersection for picking
 	// Returns hit result with barycentric coordinates
-	static RayHitResult raycastMesh(
+	// If actorId >= 0, uses painter UVs for UV calculation
+	RayHitResult raycastMesh(
 		vmobjects::PrimitiveData* primData,
 		const vmmat44f& matOS2WS,
 		const vmfloat3& rayOrigin,
 		const vmfloat3& rayDir,
-		const geometrics::BVH* bvh
+		const geometrics::BVH* bvh,
+		int actorId = -1
 	);
 
 private:
 	__ID3D11Device* device;
 	__ID3D11DeviceContext* context;
-	PaintResourceManager* paintManager;
 
-	std::unique_ptr<Dilator> dilator;
+	std::unique_ptr<PaintResourceManager> paintManager;
 
 	// Brush shader resources
 	struct BrushConstants {
 		float brushColor[4];     // 16 bytes
-		float brushCenter[2];    // 8 bytes (UV space center)
-		float brushRadius[2];    // 8 bytes (UV space radius x, y)
+
+		float brushCenter[3];    // 12 bytes (world space center)
 		float brushStrength;     // 4 bytes
+
+		float brushRadius[3];    // 12 bytes (world space radius)
 		float brushHardness;     // 4 bytes
+
+		float matOS2WS[16];      // 64 bytes (4x4 matrix)
+
 		int blendMode;           // 4 bytes
-		float padding;           // 4 bytes
-	};  // Total: 48 bytes (multiple of 16)
+		uint painterFlags;          // 4 bytes
+		float padding0;          // 4 bytes
+		float padding1;          // 4 bytes
+	};  // Total: 128 bytes (matches HLSL CB_Brush)
 
 	ComPtr<ID3D11Buffer> brushConstantBuffer;
+
 	ComPtr<ID3D11VertexShader> brushVS;
 	ComPtr<ID3D11PixelShader> brushPS;
-	ComPtr<ID3D11InputLayout> brushInputLayout;
-	ComPtr<ID3D11BlendState> brushBlendState;
+
+	// Input Layouts for brush shader (created from brushVS bytecode)
+	ComPtr<ID3D11InputLayout> brushInputLayout_P;
+	ComPtr<ID3D11InputLayout> brushInputLayout_PN;
+	ComPtr<ID3D11InputLayout> brushInputLayout_PT;
+	ComPtr<ID3D11InputLayout> brushInputLayout_PNT;
+
+	ComPtr<ID3D11VertexShader> dilationVS;	//	quad
+	ComPtr<ID3D11PixelShader> dilationPS;
 
 	void createBrushResources();
-	void loadBrushShaders();
-	void updateBrushConstants(const BrushParams& brush, const float uv[2], float uvRadius[2]);
-	void renderBrushStroke(FeedbackTexture* feedbackTex, const float uv[2], float uvRadius[2]);
+	ID3D11InputLayout* getBrushInputLayout(const std::string& layoutDesc);  // Get input layout by name (P/PN/PT/PNT)
+	void updateBrushConstants(const BrushParams& brush, const float uv[2], float uvRadius[2], const vmmat44f& matOS2WS, const bool paint);
+	void renderBrushStroke(FeedbackTexture* hoverTex,
+		FeedbackTexture* paintTex,
+		const MeshParams& meshParams,
+		const float uv[2], float uvRadius[2]);
+	void applyDilation(FeedbackTexture* sourceFBT);
 };

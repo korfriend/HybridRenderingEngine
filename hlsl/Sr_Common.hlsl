@@ -415,10 +415,6 @@ void ComputeColor(inout float3 color_out, const in float3 Ka, const in float3 Kd
 	{
 		color_out = Ka;
 	}
-	//else
-	//{
-	//	color_out = float3(1, 0, 0);// Ka;
-	//}
 }
 
 void DashedLine(inout float4 v_rgba, inout float depthcs, const in float line_pos, const in float dash_interval, const in bool is_dashed, const in bool traparent_interval)
@@ -793,7 +789,8 @@ float3 ComputeDeviation(float3 pos, float3 nrl, out bool colored)
 		}
 	}
 
-	float3 fColor = g_cbPobj.Kd;
+	float3 f3Color = float3(1, 1, 1);
+	colored = false;
 
     float minMapping = g_cbTmap.mapping_v_min;
     float maxMapping = g_cbTmap.mapping_v_max;
@@ -806,18 +803,19 @@ float3 ComputeDeviation(float3 pos, float3 nrl, out bool colored)
 		float mapValue = ((devMin - minMapping) / (maxMapping - minMapping));
 
         if (BitCheck(g_cbTmap.flag, 0)) {
-			fColor = g_f4bufOTF[(int) (saturate(mapValue) * (g_cbTmap.tmap_size_x - 1))].rgb * g_cbVobj.pb_shading_factor.y;
+			f3Color = g_f4bufOTF[(int) (saturate(mapValue) * (g_cbTmap.tmap_size_x - 1))].rgb;
+			colored = true;
 		}
         else
         {
             if (mapValue >= 0 && mapValue <= 1.f) {
-				fColor = g_f4bufOTF[(int) ((mapValue) * (g_cbTmap.tmap_size_x - 1))].rgb * g_cbVobj.pb_shading_factor.y;
+				f3Color = g_f4bufOTF[(int) ((mapValue) * (g_cbTmap.tmap_size_x - 1))].rgb;
+				colored = true;
 			}
 		}
-		colored = true;
 	}
 
-	return fColor;
+	return f3Color;
 }
 
 void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
@@ -921,67 +919,70 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
         || posTS.z <= 0 || posTS.z >= 1)
         is_clipped = true;
         
-    bool use_vrgb = false;
+    bool colored = false;
+    float3 colorcoded = float3(1, 1, 1);
     if (!is_clipped)
     {
         float sample_v = g_tex3DVolume.SampleLevel(g_samplerLinear, posTS, 0).r;
         float4 colorMap = g_f4bufOTF[(int)(sample_v * (g_cbTmap.tmap_size_x - 1))];
-        colorMap.rgb *= g_cbVobj.pb_shading_factor.y;
-    
+        
         if (BitCheck(g_cbPobj.pobj_flag, 7)) 
         {
-            use_vrgb = true;
-            v_rgba.rgb = colorMap.rgb * colorMap.a;
+            colored = true;
+            colorcoded = colorMap.rgb * colorMap.a;
         }
         else 
         {
             if (colorMap.a > 0) 
             {
-                use_vrgb = true;
-                v_rgba.rgb = colorMap.rgb * colorMap.a;
+                colored = true;
+                colorcoded = colorMap.rgb * colorMap.a;
             }
         }
     }
     
     if (nor_len > 0)
     {
-        float3 Ka, Kd, Ks;
-        Kd = v_rgba.rgb * g_cbEnv.ltint_diffuse.rgb;
-        //if (use_vrgb)
-        //{
-        //    Ka = v_rgba.rgb * g_cbEnv.ltint_ambient.rgb;
-        //    Ks = v_rgba.rgb * g_cbEnv.ltint_spec.rgb;
-        //}
-        //else
+        float3 Ka, Kd, Ks, Ns;
+        if (colored)
+        {
+            Ka = colorcoded * g_cbVobj.pb_shading_factor.x * g_cbEnv.ltint_ambient.rgb;
+            Kd = colorcoded * g_cbVobj.pb_shading_factor.y * g_cbEnv.ltint_diffuse.rgb;
+            Ks = colorcoded * g_cbVobj.pb_shading_factor.z * g_cbEnv.ltint_spec.rgb;
+        }
+        else
         {
             Ka = g_cbPobj.Ka * g_cbEnv.ltint_ambient.rgb;
+            Kd = g_cbPobj.Kd * g_cbEnv.ltint_diffuse.rgb;
             Ks = g_cbPobj.Ks * g_cbEnv.ltint_spec.rgb;
         }
-        float Ns = g_cbPobj.Ns;
+        Ns = g_cbPobj.Ns;
 
         ComputeColor(v_rgba.rgb, Ka, Kd, Ks, Ns, 1.0, input.f3PosWS, view_dir, nor, nor_len);
     }
     
 #elif __RENDERING_MODE == 6
-    bool use_vrgb = false;
+    bool colored = false;
+    float3 colorcoded = float3(1, 1, 1);
     if (nor_len > 0)
-        v_rgba.rgb = ComputeDeviation(input.f3PosWS, nor, use_vrgb); // note the color is suppposed to be multiplied by g_cbPobj.Kd, Ka, and Ks
-        
+        colorcoded = ComputeDeviation(input.f3PosWS, nor, colored); 
+         
     if (nor_len > 0)
     {
-        float3 Ka, Kd, Ks;
-        Kd = v_rgba.rgb * g_cbEnv.ltint_diffuse.rgb;
-        //if (use_vrgb)
-        //{
-        //    Ka = v_rgba.rgb * g_cbEnv.ltint_ambient.rgb;
-        //    Ks = v_rgba.rgb * g_cbEnv.ltint_spec.rgb;
-        //}
-        //else
+        float3 Ka, Kd, Ks, Ns;
+        if (colored)
+        {
+            Ka = colorcoded * g_cbVobj.pb_shading_factor.x * g_cbEnv.ltint_ambient.rgb;
+            Kd = colorcoded * g_cbVobj.pb_shading_factor.y * g_cbEnv.ltint_diffuse.rgb;
+            Ks = colorcoded * g_cbVobj.pb_shading_factor.z * g_cbEnv.ltint_spec.rgb;
+        }
+        else
         {
             Ka = g_cbPobj.Ka * g_cbEnv.ltint_ambient.rgb;
+            Kd = g_cbPobj.Kd * g_cbEnv.ltint_diffuse.rgb;
             Ks = g_cbPobj.Ks * g_cbEnv.ltint_spec.rgb;
         }
-        float Ns = g_cbPobj.Ns;
+        Ns = g_cbPobj.Ns;
         ComputeColor(v_rgba.rgb, Ka, Kd, Ks, Ns, 1.0, input.f3PosWS, view_dir, nor, nor_len);
     }
 
@@ -1021,7 +1022,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     {
         // Apply paint texture (blend mode 0 = NORMAL by default)
 	    ApplyPaintTexture(v_rgba.rgb, input.f2PaintUV, g_cbPobj.tex_map_enum, PAINT_BLEND_NORMAL);
-        //v_rgba.rgb = float3(input.f2PaintUV, 1);
+        //v_rgba.rgb = float3(input.f2PaintUV, 0);
     }
 #endif
     

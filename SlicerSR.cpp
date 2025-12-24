@@ -4,7 +4,7 @@
 
 bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	VmGpuManager* gpu_manager,
-	grd_helper::GpuDX11CommonParameters* dx11CommonParams,
+	grd_helper::PSOManager* psoManager,
 	LocalProgress* progress,
 	double* run_time_ptr)
 {
@@ -154,24 +154,24 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		string prefix_path = hlslobj_path;
 		vmlog::LogInfo("RELOAD HLSL _ SR slicer renderer");
 
-		dx11CommonParams->dx11DeviceImmContext->VSSetShader(NULL, NULL, 0);
-		dx11CommonParams->dx11DeviceImmContext->GSSetShader(NULL, NULL, 0);
-		dx11CommonParams->dx11DeviceImmContext->PSSetShader(NULL, NULL, 0);
-		dx11CommonParams->dx11DeviceImmContext->CSSetShader(NULL, NULL, 0);
+		psoManager->dx11DeviceImmContext->VSSetShader(NULL, NULL, 0);
+		psoManager->dx11DeviceImmContext->GSSetShader(NULL, NULL, 0);
+		psoManager->dx11DeviceImmContext->PSSetShader(NULL, NULL, 0);
+		psoManager->dx11DeviceImmContext->CSSetShader(NULL, NULL, 0);
 
 #define VS_NUM 9
 #define GS_NUM 1
 #ifdef DX10_0
 #define PS_NUM 5
-#define SET_PS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::PIXEL_SHADER, NAME), __S, true)
+#define SET_PS(NAME, __S) psoManager->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::PIXEL_SHADER, NAME), __S, true)
 #else
 #define CS_NUM 10
-#define SET_CS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::COMPUTE_SHADER, NAME), __S, true)
+#define SET_CS(NAME, __S) psoManager->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::COMPUTE_SHADER, NAME), __S, true)
 #endif
-#define SET_VS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, NAME), __S, true)
-#define SET_GS(NAME, __S) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::GEOMETRY_SHADER, NAME), __S, true)
-#define GETRASTER(NAME) dx11CommonParams->get_rasterizer(#NAME)
-#define GETDEPTHSTENTIL(NAME) dx11CommonParams->get_depthstencil(#NAME)
+#define SET_VS(NAME, __S) psoManager->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, NAME), __S, true)
+#define SET_GS(NAME, __S) psoManager->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::GEOMETRY_SHADER, NAME), __S, true)
+#define GETRASTER(NAME) psoManager->get_rasterizer(#NAME)
+#define GETDEPTHSTENTIL(NAME) psoManager->get_depthstencil(#NAME)
 
 #ifdef DX10_0
 		string strNames_VS[VS_NUM] = {
@@ -210,7 +210,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 				fclose(pFile);
 
 				ID3D11VertexShader* dx11VShader = NULL;
-				if (dx11CommonParams->dx11Device->CreateVertexShader(pyRead, ullFileSize, NULL, &dx11VShader) != S_OK)
+				if (psoManager->dx11Device->CreateVertexShader(pyRead, ullFileSize, NULL, &dx11VShader) != S_OK)
 				{
 					VMERRORMESSAGE("SHADER COMPILE FAILURE!");
 				}
@@ -242,7 +242,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 				fclose(pFile);
 
 				ID3D11GeometryShader* dx11GShader = NULL;
-				if (dx11CommonParams->dx11Device->CreateGeometryShader(pyRead, ullFileSize, NULL, &dx11GShader) != S_OK)
+				if (psoManager->dx11Device->CreateGeometryShader(pyRead, ullFileSize, NULL, &dx11GShader) != S_OK)
 				{
 					VMERRORMESSAGE("SHADER COMPILE FAILURE!");
 				}
@@ -296,7 +296,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 
 #ifdef DX10_0
 				ID3D11PixelShader* dx11PShader = NULL;
-				if (dx11CommonParams->dx11Device->CreatePixelShader(pyRead, ullFileSize, NULL, &dx11PShader) != S_OK)
+				if (psoManager->dx11Device->CreatePixelShader(pyRead, ullFileSize, NULL, &dx11PShader) != S_OK)
 				{
 					VMERRORMESSAGE("SHADER COMPILE FAILURE!");
 				}
@@ -306,7 +306,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 				}
 #else
 				ID3D11ComputeShader* dx11CShader = NULL;
-				if (dx11CommonParams->dx11Device->CreateComputeShader(pyRead, ullFileSize, NULL, &dx11CShader) != S_OK)
+				if (psoManager->dx11Device->CreateComputeShader(pyRead, ullFileSize, NULL, &dx11CShader) != S_OK)
 				{
 					VMERRORMESSAGE("SHADER COMPILE FAILURE!");
 				}
@@ -342,7 +342,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 				uint bufferStrides[] = { sizeof(vmfloat3) };
 				int numStrides = sizeof(bufferStrides) / sizeof(uint);
 				ID3D11GeometryShader* dx11GShader = NULL;
-				if (dx11CommonParams->dx11Device->CreateGeometryShaderWithStreamOutput(
+				if (psoManager->dx11Device->CreateGeometryShaderWithStreamOutput(
 					pyRead, ullFileSize, pDecl, numEntries, bufferStrides, numStrides, D3D11_SO_NO_RASTERIZED_STREAM, NULL,
 					(ID3D11GeometryShader**)&dx11GShader) != S_OK)
 				{
@@ -356,38 +356,38 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			}
 		}
 		/**/
-		dx11CommonParams->dx11DeviceImmContext->Flush();
+		psoManager->dx11DeviceImmContext->Flush();
 	}
 
-	ID3D11InputLayout* dx11LI_P = (ID3D11InputLayout*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "P"));
-	ID3D11InputLayout* dx11LI_PN = (ID3D11InputLayout*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "PN"));
-	ID3D11InputLayout* dx11LI_PT = (ID3D11InputLayout*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "PT"));
-	ID3D11InputLayout* dx11LI_PNT = (ID3D11InputLayout*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "PNT"));
-	ID3D11InputLayout* dx11LI_PTTT = (ID3D11InputLayout*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "PTTT"));
+	ID3D11InputLayout* dx11LI_P = (ID3D11InputLayout*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "P"));
+	ID3D11InputLayout* dx11LI_PN = (ID3D11InputLayout*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "PN"));
+	ID3D11InputLayout* dx11LI_PT = (ID3D11InputLayout*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "PT"));
+	ID3D11InputLayout* dx11LI_PNT = (ID3D11InputLayout*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "PNT"));
+	ID3D11InputLayout* dx11LI_PTTT = (ID3D11InputLayout*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "PTTT"));
 
 #ifdef DX10_0
-	ID3D11VertexShader* dx11VShader_P = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_P_vs_4_0"));
-	ID3D11VertexShader* dx11VShader_PN = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PN_vs_4_0"));
-	ID3D11VertexShader* dx11VShader_PT = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PT_vs_4_0"));
-	ID3D11VertexShader* dx11VShader_PNT = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PNT_vs_4_0"));
-	ID3D11VertexShader* dx11VShader_PTTT = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PTTT_vs_4_0"));
+	ID3D11VertexShader* dx11VShader_P = (ID3D11VertexShader*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_P_vs_4_0"));
+	ID3D11VertexShader* dx11VShader_PN = (ID3D11VertexShader*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PN_vs_4_0"));
+	ID3D11VertexShader* dx11VShader_PT = (ID3D11VertexShader*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PT_vs_4_0"));
+	ID3D11VertexShader* dx11VShader_PNT = (ID3D11VertexShader*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PNT_vs_4_0"));
+	ID3D11VertexShader* dx11VShader_PTTT = (ID3D11VertexShader*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PTTT_vs_4_0"));
 #else
-	ID3D11VertexShader* dx11VShader_P = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_P_vs_5_0"));
-	ID3D11VertexShader* dx11VShader_PN = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PN_vs_5_0"));
-	ID3D11VertexShader* dx11VShader_PT = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PT_vs_5_0"));
-	ID3D11VertexShader* dx11VShader_PNT = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PNT_vs_5_0"));
-	ID3D11VertexShader* dx11VShader_PTTT = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PTTT_vs_5_0"));
+	ID3D11VertexShader* dx11VShader_P = (ID3D11VertexShader*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_P_vs_5_0"));
+	ID3D11VertexShader* dx11VShader_PN = (ID3D11VertexShader*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PN_vs_5_0"));
+	ID3D11VertexShader* dx11VShader_PT = (ID3D11VertexShader*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PT_vs_5_0"));
+	ID3D11VertexShader* dx11VShader_PNT = (ID3D11VertexShader*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PNT_vs_5_0"));
+	ID3D11VertexShader* dx11VShader_PTTT = (ID3D11VertexShader*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PTTT_vs_5_0"));
 #endif
 
-	ID3D11Buffer* cbuf_cam_state = dx11CommonParams->get_cbuf("CB_CameraState");
-	ID3D11Buffer* cbuf_env_state = dx11CommonParams->get_cbuf("CB_EnvState");
-	ID3D11Buffer* cbuf_clip = dx11CommonParams->get_cbuf("CB_ClipInfo");
-	ID3D11Buffer* cbuf_pobj = dx11CommonParams->get_cbuf("CB_PolygonObject");
-	ID3D11Buffer* cbuf_vobj = dx11CommonParams->get_cbuf("CB_VolumeObject");
-	ID3D11Buffer* cbuf_reffect = dx11CommonParams->get_cbuf("CB_Material");
-	ID3D11Buffer* cbuf_tmap = dx11CommonParams->get_cbuf("CB_TMAP");
-	ID3D11Buffer* cbuf_hsmask = dx11CommonParams->get_cbuf("CB_HotspotMask");
-	ID3D11Buffer* cbuf_curvedslicer = dx11CommonParams->get_cbuf("CB_CurvedSlicer");
+	ID3D11Buffer* cbuf_cam_state = psoManager->get_cbuf("CB_CameraState");
+	ID3D11Buffer* cbuf_env_state = psoManager->get_cbuf("CB_EnvState");
+	ID3D11Buffer* cbuf_clip = psoManager->get_cbuf("CB_ClipInfo");
+	ID3D11Buffer* cbuf_pobj = psoManager->get_cbuf("CB_PolygonObject");
+	ID3D11Buffer* cbuf_vobj = psoManager->get_cbuf("CB_VolumeObject");
+	ID3D11Buffer* cbuf_reffect = psoManager->get_cbuf("CB_Material");
+	ID3D11Buffer* cbuf_tmap = psoManager->get_cbuf("CB_TMAP");
+	ID3D11Buffer* cbuf_hsmask = psoManager->get_cbuf("CB_HotspotMask");
+	ID3D11Buffer* cbuf_curvedslicer = psoManager->get_cbuf("CB_CurvedSlicer");
 #pragma endregion 
 
 #pragma region // IOBJECT CPU
@@ -405,8 +405,8 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		iobj->InsertFrameBuffer(data_type::dtype<float>(), FrameBufferUsageDEPTH, ("1st hit screen depth frame buffer : defined in vismtv_inbuilt_renderergpudx module"));
 #pragma endregion 
 
-	__ID3D11Device* dx11Device = dx11CommonParams->dx11Device;
-	__ID3D11DeviceContext* dx11DeviceImmContext = dx11CommonParams->dx11DeviceImmContext;
+	__ID3D11Device* dx11Device = psoManager->dx11Device;
+	__ID3D11DeviceContext* dx11DeviceImmContext = psoManager->dx11DeviceImmContext;
 
 #pragma region // IOBJECT GPU
 	vmint2 fb_size_cur;
@@ -471,7 +471,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT | UPFB_NFPP_BUFFERSIZE, max_picking_layers * 2);
 
 		static std::vector<uint> clearDataUnit(max_picking_layers * 3, 0);//make sure that this thing is aligned
-		dx11CommonParams->dx11DeviceImmContext->UpdateSubresource((ID3D11Buffer*)gres_picking_buffer.alloc_res_ptrs[DTYPE_RES]
+		psoManager->dx11DeviceImmContext->UpdateSubresource((ID3D11Buffer*)gres_picking_buffer.alloc_res_ptrs[DTYPE_RES]
 			, 0, NULL, &clearDataUnit[0], sizeof(uint) * clearDataUnit.size(), sizeof(uint) * clearDataUnit.size());
 #endif
 	}
@@ -776,7 +776,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		slicer_actors.push_back(slicer_post_actors[i]);
 	}
 
-	if (dx11CommonParams->gpu_profile)
+	if (psoManager->gpu_profile)
 		cout << "  ** # of slicer actors    : " << slicer_actors.size() << endl;
 #pragma endregion 
 
@@ -786,7 +786,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	ID3D11DepthStencilView* pdxDSVOld = NULL;
 	dx11DeviceImmContext->OMGetRenderTargets(1, &pdxRTVOld, &pdxDSVOld);
 
-	dx11CommonParams->GpuProfile("Clear for Slicer Render - SR");
+	psoManager->GpuProfile("Clear for Slicer Render - SR");
 
 	float flt_max_ = FLT_MAX;
 	uint flt_max_u = *(uint*)&flt_max_;
@@ -815,17 +815,17 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV], planeThickness > 0 ? clr_float_fltmax_4 : clr_float_zero_4);
 
 	}
-	dx11CommonParams->GpuProfile("Clear for Slicer Render - SR", true);
+	psoManager->GpuProfile("Clear for Slicer Render - SR", true);
 #pragma endregion 
 
 
 #pragma region // HLSL Sampler Setting
-	ID3D11SamplerState* sampler_PZ = dx11CommonParams->get_sampler("POINT_ZEROBORDER");
-	ID3D11SamplerState* sampler_LZ = dx11CommonParams->get_sampler("LINEAR_ZEROBORDER");
-	ID3D11SamplerState* sampler_PC = dx11CommonParams->get_sampler("POINT_CLAMP");
-	ID3D11SamplerState* sampler_LC = dx11CommonParams->get_sampler("LINEAR_CLAMP");
-	ID3D11SamplerState* sampler_PW = dx11CommonParams->get_sampler("POINT_WRAP");
-	ID3D11SamplerState* sampler_LW = dx11CommonParams->get_sampler("LINEAR_WRAP");
+	ID3D11SamplerState* sampler_PZ = psoManager->get_sampler("POINT_ZEROBORDER");
+	ID3D11SamplerState* sampler_LZ = psoManager->get_sampler("LINEAR_ZEROBORDER");
+	ID3D11SamplerState* sampler_PC = psoManager->get_sampler("POINT_CLAMP");
+	ID3D11SamplerState* sampler_LC = psoManager->get_sampler("LINEAR_CLAMP");
+	ID3D11SamplerState* sampler_PW = psoManager->get_sampler("POINT_WRAP");
+	ID3D11SamplerState* sampler_LW = psoManager->get_sampler("LINEAR_WRAP");
 
 	SET_SAMPLERS(0, 1, &sampler_LZ);
 	SET_SAMPLERS(1, 1, &sampler_PZ);
@@ -842,7 +842,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	int count_call_render = 0; 
 
 #define NUM_UAVs 5
-	auto PathTracer = [&dx11CommonParams, &dx11DeviceImmContext, &gpu_manager, &_fncontainer, &dx11LI_P, &dx11LI_PN, &dx11LI_PT, &dx11LI_PNT, &dx11LI_PTTT, &dx11VShader_P,
+	auto PathTracer = [&psoManager, &dx11DeviceImmContext, &gpu_manager, &_fncontainer, &dx11LI_P, &dx11LI_PN, &dx11LI_PT, &dx11LI_PNT, &dx11LI_PTTT, &dx11VShader_P,
 		&dx11VShader_PN, &dx11VShader_PT, &dx11VShader_PNT, &dx11VShader_PTTT, 
 #ifdef DX10_0
 		&gres_fb_rgba2, &gres_fb_depthcs2, &gres_quad,
@@ -1342,7 +1342,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	};
 
 	// RENDER BEGIN
-	dx11CommonParams->GpuProfile("Render Slicer");
+	psoManager->GpuProfile("Render Slicer");
 
 	if (is_picking_routine) {
 		cbCamState.iSrCamDummy__1 = (picking_pos_ss.x & 0xFFFF | picking_pos_ss.y << 16);
@@ -1350,7 +1350,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		
 		SetCamConstBuf(cbCamState);
 
-		dx11CommonParams->GpuProfile("Picking");
+		psoManager->GpuProfile("Picking");
 
 		PathTracer(slicer_actors, curved_slicer, is_ghost_mode, true); // is_picking_routine = true
 
@@ -1397,7 +1397,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 #endif
 		dx11DeviceImmContext->Unmap((ID3D11Buffer*)gres_picking_system_buffer.alloc_res_ptrs[DTYPE_RES], 0);
 #pragma endregion copyback to sysmem
-		dx11CommonParams->GpuProfile("Picking", true);
+		psoManager->GpuProfile("Picking", true);
 
 		//if (gpu_profile) {
 		//	cout << "### NUM PICKING LAYERS : " << num_layers << endl;
@@ -1424,10 +1424,10 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		cbCamState.iSrCamDummy__2 = *(uint*)&scale_z_res;
 		SetCamConstBuf(cbCamState);
 
-		dx11CommonParams->GpuProfile("PathTracer");
+		psoManager->GpuProfile("PathTracer");
 		// buffer filling
 		PathTracer(slicer_actors, curved_slicer, is_ghost_mode, false); // is_picking_routine = false
-		dx11CommonParams->GpuProfile("PathTracer", true);
+		psoManager->GpuProfile("PathTracer", true);
 
 		// Set NULL States //
 		//dx11DeviceImmContext->CSSetUnorderedAccessViews(1, NUM_UAVs_GEO, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
@@ -1461,7 +1461,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	}
 
 	iobj->SetObjParam("_int_NumCallRenders", count_call_render);
-	dx11CommonParams->GpuProfile("Render Slicer", true);
+	psoManager->GpuProfile("Render Slicer", true);
 
 	dx11DeviceImmContext->ClearState();
 

@@ -5,7 +5,7 @@
 
 namespace bvh {
 
-	bool UpdateGeometryGPUBVH(VmGpuManager* gpuManager, grd_helper::GpuDX11CommonParameters* dx11CommonParams, VmVObjectPrimitive* pobj)
+	bool UpdateGeometryGPUBVH(VmGpuManager* gpuManager, grd_helper::PSOManager* psoManager, VmVObjectPrimitive* pobj)
 	{
 		PrimitiveData* primitive = pobj->GetPrimitiveData();
 		assert(primitive);
@@ -212,7 +212,7 @@ namespace bvh {
 			assert(success);
 		}
 
-		__ID3D11DeviceContext* dx11DeviceImmContext = dx11CommonParams->dx11DeviceImmContext;
+		__ID3D11DeviceContext* dx11DeviceImmContext = psoManager->dx11DeviceImmContext;
 		//// BVH 버퍼 초기화
 		//{
 		//	const UINT zero[4] = { 0, 0, 0, 0 };
@@ -233,11 +233,11 @@ namespace bvh {
 		//}
 
 		// ----- build ----- 
-		dx11CommonParams->GpuProfile("BVH Rebuild");
+		psoManager->GpuProfile("BVH Rebuild");
 
 		uint32_t primitiveCount = 0;
 
-		//ID3D11Buffer* cbuf_BVHPushConstants = dx11CommonParams->get_cbuf("BVHPushConstants");
+		//ID3D11Buffer* cbuf_BVHPushConstants = psoManager->get_cbuf("BVHPushConstants");
 		//D3D11_MAPPED_SUBRESOURCE mapped_pushConstants;
 
 		ID3D11UnorderedAccessView* dx11UAVs_NULL[10] = { };
@@ -311,7 +311,7 @@ namespace bvh {
 
 		// BVH - Sort Primitive Mortons
 		{
-			gpulib::sort::Sort(gpuManager, dx11CommonParams,
+			gpulib::sort::Sort(gpuManager, psoManager,
 				primitiveCount, gres_primitiveMortonBuffer, gres_primitiveCounterBuffer, 0, gres_primitiveIDBuffer);
 
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 10, dx11UAVs_NULL, NULL);
@@ -403,7 +403,7 @@ namespace bvh {
 			grd_helper::Fence();
 		}
 
-		dx11CommonParams->GpuProfile("BVH Rebuild", true);
+		psoManager->GpuProfile("BVH Rebuild", true);
 
 #ifdef BVH_GEN_DEBUG
 		if (primitive->num_vtx < 1000)

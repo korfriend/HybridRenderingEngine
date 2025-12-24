@@ -63,7 +63,6 @@ public:
 	static std::map<std::string, RenderTarget*> renderTargetMap;
 
 private:
-	void createFullscreenQuad();
 
 	__ID3D11Device* device;
 	__ID3D11DeviceContext* context;
@@ -72,8 +71,4 @@ private:
 
 	int width;
 	int height;
-
-	// Fullscreen quad resources
-	ComPtr<ID3D11Buffer> quadVB;
-	ComPtr<ID3D11Buffer> quadIB;
 };

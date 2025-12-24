@@ -58,11 +58,6 @@ namespace grd_helper
 			string a_str = to_string((int)a.res_type) + "_" + a.res_name;
 			string b_str = to_string((int)b.res_type) + "_" + b.res_name;
 			return a_str < b_str;
-			//if (a_str.compare(b_str) < 0)
-			//	return true;
-			//else if (a_str.compare(b_str) > 0)
-			//	return false;
-			//return false;
 		}
 	};
 
@@ -70,7 +65,7 @@ namespace grd_helper
 	typedef map<string, ID3D11DeviceChild*> GCRMAP;
 	typedef map<string, ID3D11Resource*> CONSTBUFMAP;
 
-	struct GpuDX11CommonParameters
+	struct PSOManager
 	{
 		bool is_initialized;
 		D3D_FEATURE_LEVEL dx11_featureLevel;
@@ -217,7 +212,7 @@ namespace grd_helper
 			return (ID3D11ComputeShader*)safe_get_res(COMRES_INDICATOR(GpuhelperResType::COMPUTE_SHADER, name));
 		}
 
-		GpuDX11CommonParameters()
+		PSOManager()
 		{
 			is_initialized = false;
 			dx11_featureLevel = D3D_FEATURE_LEVEL_9_1;
@@ -388,8 +383,14 @@ namespace grd_helper
 		uint ThreadGroupCountZ;
 	};
 
-	int InitializePresettings(VmGpuManager* pCGpuManager, GpuDX11CommonParameters* gpu_params);
-	void DeinitializePresettings();
+	int Initialize(VmGpuManager* pCGpuManager, PSOManager* gpu_params);
+	void Deinitialize();
+
+	PSOManager* GetPSOManager();
+	MeshPainter* GetMeshPainter();
+
+	HRESULT PresetCompiledShader(__ID3D11Device* pdx11Device, HMODULE hModule, LPCWSTR pSrcResource, LPCSTR strShaderProfile, ID3D11DeviceChild** ppdx11Shader/*out*/
+		, D3D11_INPUT_ELEMENT_DESC* pInputLayoutDesc, uint num_elements, ID3D11InputLayout** ppdx11LayoutInputVS);
 
 	void CheckReusability(GpuRes& gres, VmObject* resObj, bool& update_data, bool& regen_data,
 		const vmobjects::VmParamMap<std::string, std::any>& res_new_values);
@@ -447,40 +448,6 @@ namespace grd_helper
 	{
 		Fragment frags[MAX_LAYERS];
 	};
-
-	//struct RenderObjInfo
-	//{
-	//	VmVObjectPrimitive* pobj;
-	//	bool is_wireframe;
-	//	vmfloat4 fColor;
-	//
-	//	bool is_annotation_obj;
-	//	bool has_texture_img;
-	//	bool use_vertex_color;
-	//	bool abs_diffuse;
-	//	float vzthickness;
-	//	int outline_thickness;
-	//	float outline_depthThres;
-	//	vmfloat3 outline_color;
-	//
-	//	int num_safe_loopexit;
-	//
-	//	RenderObjInfo()
-	//	{
-	//		pobj = NULL;
-	//		is_wireframe = false;
-	//		fColor = vmfloat4(1.f);
-	//		is_annotation_obj = false;
-	//		use_vertex_color = true;
-	//		outline_thickness = 0;
-	//		outline_depthThres = 10000.f;
-	//		outline_color = vmfloat3(1.f, 1.f, 1.f);
-	//		abs_diffuse = false;
-	//		has_texture_img = false;
-	//		vzthickness = 0;
-	//		num_safe_loopexit = 100;
-	//	}
-	//};
 
 	struct LightSource {
 		bool is_on_camera = false; 
@@ -959,7 +926,7 @@ namespace grd_helper
 	bool GetEnginePath(std::string& enginePath);
 }
 
-#define GETVS(NAME) dx11CommonParams->get_vshader(#NAME)
-#define GETPS(NAME) dx11CommonParams->get_pshader(#NAME)
-#define GETGS(NAME) dx11CommonParams->get_gshader(#NAME)
-#define GETCS(NAME) dx11CommonParams->get_cshader(#NAME)
+#define GETVS(NAME) psoManager->get_vshader(#NAME)
+#define GETPS(NAME) psoManager->get_pshader(#NAME)
+#define GETGS(NAME) psoManager->get_gshader(#NAME)
+#define GETCS(NAME) psoManager->get_cshader(#NAME)

@@ -5,7 +5,7 @@ using namespace grd_helper;
 
 
 void sort::Sort(VmGpuManager* gpu_manager,
-	grd_helper::GpuDX11CommonParameters* dx11CommonParams,
+	grd_helper::PSOManager* psoManager,
 	uint32_t maxCount,
 	GpuRes& comparisonBuffer_read,
 	GpuRes& counterBuffer_read,
@@ -29,9 +29,9 @@ void sort::Sort(VmGpuManager* gpu_manager,
 		gpu_manager->GenerateGpuResource(indirectBuffer);
 	}
 	
-	__ID3D11DeviceContext* dx11DeviceImmContext = dx11CommonParams->dx11DeviceImmContext;
+	__ID3D11DeviceContext* dx11DeviceImmContext = psoManager->dx11DeviceImmContext;
 
-	ID3D11Buffer* cbuf_sort = dx11CommonParams->get_cbuf("CB_SortConstants");
+	ID3D11Buffer* cbuf_sort = psoManager->get_cbuf("CB_SortConstants");
 	auto SetSortContants = [&dx11DeviceImmContext, &cbuf_sort](const uint counterReadOffset, const vmint3& job_params) {
 		D3D11_MAPPED_SUBRESOURCE mappedResSortConstants;
 		dx11DeviceImmContext->Map(cbuf_sort, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResSortConstants);

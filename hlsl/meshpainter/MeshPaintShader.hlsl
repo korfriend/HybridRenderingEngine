@@ -8,27 +8,38 @@
 // ============================================================================
 // Samplers
 // ============================================================================
-SamplerState g_samplerLinear : register(s0);
-SamplerState g_samplerPoint : register(s1);
+SamplerState g_samplerLinear : register(s0); // ZeroBoader
+SamplerState g_samplerPoint : register(s1); // ZeroBoader
+SamplerState g_samplerLinear_clamp : register(s2);
+SamplerState g_samplerPoint_clamp : register(s3);
+SamplerState g_samplerLinear_wrap : register(s4);
+SamplerState g_samplerPoint_wrap : register(s5);
 
 // ============================================================================
 // Constant Buffers
 // ============================================================================
 
 // Brush parameters for painting strokes
-cbuffer CB_Brush : register(b0)
+cbuffer CB_Brush : register(b1)
 {
     float4 brushColor;       // RGBA brush color
-    float2 brushCenter;      // UV space center
-    float2 brushRadius;      // UV space radius (x, y)
-    float brushStrength;     // Opacity/strength [0-1]
+    
+	float3 brushCenter; // world space center
+	float brushStrength; // Opacity/strength [0-1]
+    
+    float3 brushRadius;      // world space radius (x, y)
     float brushHardness;     // Edge falloff [0-1]
-    int blendMode;           // PaintBlendMode enum
-    float padding;
+    
+	float4x4 matOS2WS;
+    
+	int blendMode; // PaintBlendMode enum
+	float padding0;
+	float padding1;
+	float padding2;
 };
 
 // Paint layer parameters for compositing
-cbuffer CB_PaintLayer : register(b1)
+cbuffer CB_PaintLayer : register(b2)
 {
     int paintBlendMode;      // Blend mode for compositing
     float paintOpacity;      // Overall layer opacity
@@ -42,6 +53,7 @@ Texture2D<float4> tex2d_base : register(t0);      // Base/diffuse texture
 Texture2D<float4> tex2d_paint : register(t1);     // Paint layer texture
 Texture2D<float4> tex2d_previous : register(t2);  // Previous paint state (for ping-pong)
 
+StructuredBuffer<float2> g_uvBuffer : register(t61);
 // ============================================================================
 // Blend Mode Functions
 // ============================================================================
@@ -136,24 +148,29 @@ float3 ApplyBlendMode(float3 base, float3 blend, float opacity, int mode)
 // Vertex Shader - Fullscreen Quad
 // ============================================================================
 
-struct VS_INPUT
-{
-    float3 position : POSITION;
-    float2 texcoord : TEXCOORD0;
-};
-
 struct VS_OUTPUT
 {
     float4 position : SV_Position;
-    float2 texcoord : TEXCOORD0;
+	float2 texcoord : TEXCOORD0;
+	float3 worldPos : TEXCOORD1;
 };
 
-VS_OUTPUT VS_Fullscreen(VS_INPUT input)
+VS_OUTPUT VS_Brush(float3 position : POSITION, uint vertexID : SV_VertexID)
 {
-    VS_OUTPUT output;
-    output.position = float4(input.position, 1.0);
-    output.texcoord = input.texcoord;
-    return output;
+	VS_OUTPUT output;
+    
+	float2 uv = g_uvBuffer[vertexID];
+      // Use UV as screen position (maps to render target)
+	output.position = float4(uv * 2.0 - 1.0, 0.0, 1.0);
+	output.position.y = -output.position.y; // Flip Y for DX coordinate system
+
+	// Texcoord for sampling previous paint (same UV coordinate system)
+	output.texcoord = uv;
+
+      // Pass world position to pixel shader
+	float4 pos_ws = mul(matOS2WS, float4(position, 1));
+	output.worldPos = pos_ws.xyz / pos_ws.w;
+	return output;
 }
 
 // Alternative: Generate fullscreen quad from vertex ID (no vertex buffer needed)
@@ -177,16 +194,17 @@ VS_OUTPUT VS_FullscreenQuad(uint vertexID : SV_VertexID)
 
 float4 PS_BrushStroke(VS_OUTPUT input) : SV_Target
 {
-    float2 uv = input.texcoord;
+	//return float4(input.texcoord, 0, 1);
+    float3 posWS = input.worldPos;
 
-    // Calculate distance from brush center (in UV space)
-    float2 delta = (uv - brushCenter) / brushRadius;
+    // Calculate distance from brush center
+	float3 delta = (posWS - brushCenter) / 5.f;//brushRadius;
     float dist = length(delta);
 
     // Outside brush radius
     if (dist > 1.0)
         discard;
-
+    
     // Calculate brush falloff based on hardness
     // hardness = 1.0: hard edge, hardness = 0.0: soft edge
     float falloffStart = brushHardness;
@@ -196,32 +214,33 @@ float4 PS_BrushStroke(VS_OUTPUT input) : SV_Target
     float alpha = brushColor.a * brushStrength * falloff;
 
     // Get previous paint value
-    float4 prevPaint = tex2d_previous.Sample(g_samplerLinear, uv);
+	float4 prevPaint = tex2d_previous.Sample(g_samplerPoint, input.texcoord);
 
     // Blend brush stroke with previous paint
-    float3 blendedColor = ApplyBlendMode(prevPaint.rgb, brushColor.rgb, alpha, blendMode);
+	//float3 blendedColor = ApplyBlendMode(prevPaint.rgb, brushColor.rgb, alpha, blendMode);
+	float3 blendedColor = ApplyBlendMode(prevPaint.rgb, float3(0, 1, 0), alpha, blendMode);
     float blendedAlpha = saturate(prevPaint.a + alpha * (1.0 - prevPaint.a));
-
-    return float4(blendedColor, blendedAlpha);
+    
+	return float4(blendedColor, blendedAlpha);
 }
 
 // Simple brush stroke (overwrites with alpha blend)
-float4 PS_BrushStrokeSimple(VS_OUTPUT input) : SV_Target
-{
-    float2 uv = input.texcoord;
-
-    float2 delta = (uv - brushCenter) / brushRadius;
-    float dist = length(delta);
-
-    if (dist > 1.0)
-        discard;
-
-    float falloffStart = brushHardness;
-    float falloff = 1.0 - smoothstep(falloffStart, 1.0, dist);
-    float alpha = brushColor.a * brushStrength * falloff;
-
-    return float4(brushColor.rgb, alpha);
-}
+//float4 PS_BrushStrokeSimple(VS_OUTPUT input) : SV_Target
+//{
+//    float2 uv = input.texcoord;
+//
+//    float2 delta = (uv - brushCenter) / brushRadius;
+//    float dist = length(delta);
+//
+//    if (dist > 1.0)
+//        discard;
+//
+//    float falloffStart = brushHardness;
+//    float falloff = 1.0 - smoothstep(falloffStart, 1.0, dist);
+//    float alpha = brushColor.a * brushStrength * falloff;
+//
+//    return float4(brushColor.rgb, alpha);
+//}
 
 // ============================================================================
 // Pixel Shader - Paint Layer Compositing

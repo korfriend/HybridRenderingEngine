@@ -1,4 +1,5 @@
 #include "PaintResourceManager.h"
+#include "vzm2/Backlog.h"
 #include <iostream>
 
 PaintResourceManager::PaintResourceManager(__ID3D11Device* device, __ID3D11DeviceContext* context)
@@ -21,7 +22,8 @@ ActorPaintData* PaintResourceManager::getPaintResource(int actorId) {
 	return &it->second;
 }
 
-ActorPaintData* PaintResourceManager::createPaintResource(int actorId, int width, int height, const std::vector<float>& vbPainterUVs) {
+ActorPaintData* PaintResourceManager::createPaintResource(int actorId, int width, int height,
+	const std::vector<float>& vbPainterUVs_TriVertex) {
 	auto it = actorPaintResources.find(actorId);
 
 	if (it != actorPaintResources.end()) {
@@ -42,38 +44,40 @@ ActorPaintData* PaintResourceManager::createPaintResource(int actorId, int width
 	ActorPaintData paintData;
 	paintData.width = width;
 	paintData.height = height;
-	paintData.feedbackTexture = std::make_unique<FeedbackTexture>(device, context, emptyTexInfo);
+	paintData.hoverTexture = std::make_unique<FeedbackTexture>(device, context, emptyTexInfo);
+	paintData.paintTexture = std::make_unique<FeedbackTexture>(device, context, emptyTexInfo);
 	paintData.vbUVs = std::make_unique<UVBufferInfo>();
 	paintData.blendMode = PaintBlendMode::NORMAL;
 	paintData.opacity = 1.0f;
 	paintData.isDirty = false;
 
-	paintData.vbUVs->vbPainterUVs = vbPainterUVs;
+	paintData.vbUVs->vbPainterUVs_TriVertex = vbPainterUVs_TriVertex;  // Triangle-vertex indexed UVs (3 UVs per triangle)
 
 	// Create UV StructuredBuffer and SRV
-	if (!vbPainterUVs.empty()) {
-		paintData.vbUVs->numVertrices = static_cast<uint>(vbPainterUVs.size() / 2);  // float2 per vertex
+	if (!vbPainterUVs_TriVertex.empty()) {
+		paintData.vbUVs->numVertrices = static_cast<uint>(vbPainterUVs_TriVertex.size() / 2);  // float2 per UV
 
 		// Create StructuredBuffer (immutable for best GPU performance)
 		D3D11_BUFFER_DESC bufferDesc = {};
 		bufferDesc.Usage = D3D11_USAGE_IMMUTABLE;
-		bufferDesc.ByteWidth = static_cast<UINT>(vbPainterUVs.size() * sizeof(float));
+		bufferDesc.ByteWidth = static_cast<UINT>(vbPainterUVs_TriVertex.size() * sizeof(float));
 		bufferDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
 		bufferDesc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
 		bufferDesc.StructureByteStride = sizeof(float) * 2;  // float2
 
 		D3D11_SUBRESOURCE_DATA initData = {};
-		initData.pSysMem = vbPainterUVs.data();
+		initData.pSysMem = vbPainterUVs_TriVertex.data();
 
 		HRESULT hr = device->CreateBuffer(&bufferDesc, &initData, paintData.vbUVs->buffer.GetAddressOf());
 
 		if (SUCCEEDED(hr)) {
-			// Create SRV
+			// Create SRV for StructuredBuffer
 			D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-			srvDesc.Format = DXGI_FORMAT_UNKNOWN;
-			srvDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
-			srvDesc.Buffer.FirstElement = 0;
-			srvDesc.Buffer.NumElements = paintData.vbUVs->numVertrices;
+			srvDesc.Format = DXGI_FORMAT_UNKNOWN;  // Required for structured buffers
+			srvDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;  // Must use BUFFEREX for StructuredBuffer
+			srvDesc.BufferEx.FirstElement = 0;
+			srvDesc.BufferEx.NumElements = paintData.vbUVs->numVertrices;
+			srvDesc.BufferEx.Flags = 0;  // 0 for StructuredBuffer (D3D11_BUFFEREX_SRV_FLAG_RAW for ByteAddressBuffer)
 
 			device->CreateShaderResourceView(paintData.vbUVs->buffer.Get(), &srvDesc, paintData.vbUVs->srv.GetAddressOf());
 		}
@@ -81,35 +85,34 @@ ActorPaintData* PaintResourceManager::createPaintResource(int actorId, int width
 
 	auto result = actorPaintResources.emplace(actorId, std::move(paintData));
 
-	std::cout << "Created paint texture for actor " << actorId
-	          << " [" << width << "x" << height << "]" << std::endl;
+	vzlog("Created paint texture for actor (%d) [%d][%d]", actorId, width, height);
 
 	return &result.first->second;
 }
 
-ID3D11ShaderResourceView* PaintResourceManager::getPaintTextureSRV(int actorId) {
-	auto it = actorPaintResources.find(actorId);
-	if (it == actorPaintResources.end()) {
-		return nullptr;
-	}
-
-	RenderTarget* rt = it->second.feedbackTexture->getRenderTarget();
-	if (!rt) {
-		return nullptr;
-	}
-
-	return rt->srv.Get();
-}
-
-ID3D11ShaderResourceView* PaintResourceManager::getPaintUVsSRV(int actorId)
-{
-	auto it = actorPaintResources.find(actorId);
-	if (it == actorPaintResources.end()) {
-		return nullptr;
-	}
-
-	return it->second.vbUVs->srv.Get();
-}
+//ID3D11ShaderResourceView* PaintResourceManager::getHoverTextureSRV(int actorId) {
+//	auto it = actorPaintResources.find(actorId);
+//	if (it == actorPaintResources.end()) {
+//		return nullptr;
+//	}
+//
+//	RenderTarget* rt = it->second.hoverTexture->getRenderTarget();
+//	if (!rt) {
+//		return nullptr;
+//	}
+//
+//	return rt->srv.Get();
+//}
+//
+//ID3D11ShaderResourceView* PaintResourceManager::getPainterUVsSRV(int actorId)
+//{
+//	auto it = actorPaintResources.find(actorId);
+//	if (it == actorPaintResources.end()) {
+//		return nullptr;
+//	}
+//
+//	return it->second.vbUVs->srv.Get();
+//}
 
 bool PaintResourceManager::hasPaintResource(int actorId) const {
 	return actorPaintResources.find(actorId) != actorPaintResources.end();
@@ -190,19 +193,4 @@ bool PaintResourceManager::getPaintDimensions(int actorId, int& outWidth, int& o
 	outWidth = it->second.width;
 	outHeight = it->second.height;
 	return true;
-}
-
-RenderTarget* PaintResourceManager::getOffRenderTarget(int actorId) {
-	auto it = actorPaintResources.find(actorId);
-	if (it == actorPaintResources.end()) {
-		return nullptr;
-	}
-	return it->second.feedbackTexture->getOffRenderTarget();
-}
-
-void PaintResourceManager::swapBuffers(int actorId) {
-	auto it = actorPaintResources.find(actorId);
-	if (it != actorPaintResources.end()) {
-		it->second.feedbackTexture->swap();
-	}
 }

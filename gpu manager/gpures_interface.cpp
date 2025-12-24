@@ -205,7 +205,6 @@ bool __InitializeDevice()
 			vmlog::LogInfo("Direct3D 11 Device Creation!");
 #endif
 	}
-
 	catch (std::exception&)
 	{
 		vmlog::LogErr("vismtv_inbuilt_renderergpudx requires DirectX support!");
@@ -235,7 +234,7 @@ bool __InitializeDevice()
 #if (defined(_DEBUG) || defined(DEBUG)) && !defined(SDK_REDISTRIBUTE)
 	// Debug //
 	HRESULT hr = g_pdx11Device->QueryInterface(__uuidof(ID3D11Debug), (void**)(&debugDev));
-	debugDev->ReportLiveDeviceObjects(D3D11_RLDO_IGNORE_INTERNAL );
+	//debugDev->ReportLiveDeviceObjects(D3D11_RLDO_IGNORE_INTERNAL );
 #endif
 
 	// __uuidof(IDXGIDevice), reinterpret_cast<void**>(&g_pdxgiDevice)
@@ -332,7 +331,6 @@ bool __DeinitializeDevice()
 	if (g_pdx11DeviceImmContext == NULL || g_pdx11Device == NULL)
 		return false;
 #endif
-
 	g_pdx11DeviceImmContext->Flush();
 	g_pdx11DeviceImmContext->ClearState();
 	__ReleaseAllGpuResources();
@@ -350,7 +348,7 @@ bool __DeinitializeDevice()
 	VMSAFE_RELEASE(g_pdx11Device);
 
 #if (defined(_DEBUG) || defined(DEBUG)) && !defined(SDK_REDISTRIBUTE)
-	debugDev->ReportLiveDeviceObjects(D3D11_RLDO_IGNORE_INTERNAL );
+	debugDev->ReportLiveDeviceObjects(D3D11_RLDO_DETAIL | D3D11_RLDO_IGNORE_INTERNAL);
 	VMSAFE_RELEASE(debugDev);
 #endif
 
@@ -993,7 +991,7 @@ bool __ReleaseAllGpuResources()
 	//VMSAFE_RELEASE(g_pdx11Device);
 
 #if (defined(_DEBUG) || defined(DEBUG)) && !defined(SDK_REDISTRIBUTE)
-	debugDev->ReportLiveDeviceObjects(D3D11_RLDO_IGNORE_INTERNAL );
+	//debugDev->ReportLiveDeviceObjects(D3D11_RLDO_IGNORE_INTERNAL );
 	//VMSAFE_RELEASE(debugDev);
 #endif
 	//VmInitializeDevice();

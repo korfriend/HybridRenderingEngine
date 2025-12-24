@@ -10,7 +10,7 @@ namespace gpulib {
 		//	counterReadOffset		-	Byte offset into the counter buffer to read the count value (Read Only)
 		//	indexBuffer_write		-	The index list which to sort. Contains index values which can index the sortBase_read buffer. This will be modified (Read + Write)
 		void Sort(VmGpuManager* gpu_manager,
-			grd_helper::GpuDX11CommonParameters* dx11CommonParams,
+			grd_helper::PSOManager* psoManager,
 			uint32_t maxCount,
 			GpuRes& comparisonBuffer_read,
 			GpuRes& counterBuffer_read,

@@ -5,14 +5,14 @@ using namespace grd_helper;
 
 bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	VmGpuManager* gpu_manager,
-	grd_helper::GpuDX11CommonParameters* dx11CommonParams,
+	grd_helper::PSOManager* psoManager,
 	LocalProgress* progress,
 	double* run_time_ptr)
 {
 #ifdef __DX_DEBUG_QUERY
-	if (dx11CommonParams->debug_info_queue == NULL)
-		dx11CommonParams->dx11Device->QueryInterface(__uuidof(ID3D11InfoQueue), (void**)&dx11CommonParams->debug_info_queue);
-	dx11CommonParams->debug_info_queue->PushEmptyStorageFilter();
+	if (psoManager->debug_info_queue == NULL)
+		psoManager->dx11Device->QueryInterface(__uuidof(ID3D11InfoQueue), (void**)&psoManager->debug_info_queue);
+	psoManager->debug_info_queue->PushEmptyStorageFilter();
 #endif
 	
 #pragma region // Parameter Setting //
@@ -124,7 +124,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 
 #ifdef DX10_0
 #define PS_NUM 7
-#define SET_PS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::PIXEL_SHADER, NAME), dx11PShader, true)
+#define SET_PS(NAME) psoManager->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::PIXEL_SHADER, NAME), dx11PShader, true)
 
 		string strNames_PS[PS_NUM] = {
 			   "PanoVR_RAYMAX_ps_4_0"
@@ -151,7 +151,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 				fclose(pFile);
 
 				ID3D11PixelShader* dx11PShader = NULL;
-				if (dx11CommonParams->dx11Device->CreatePixelShader(pyRead, ullFileSize, NULL, &dx11PShader) != S_OK)
+				if (psoManager->dx11Device->CreatePixelShader(pyRead, ullFileSize, NULL, &dx11PShader) != S_OK)
 				{
 					VMERRORMESSAGE("SHADER COMPILE FAILURE!");
 				}
@@ -164,7 +164,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		}
 #else
 #define CS_NUM 8
-#define SET_CS(NAME) dx11CommonParams->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::COMPUTE_SHADER, NAME), dx11CShader, true)
+#define SET_CS(NAME) psoManager->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::COMPUTE_SHADER, NAME), dx11CShader, true)
 
 		string strNames_CS[CS_NUM] = {
 			   "PanoVR_RAYMAX_cs_5_0"
@@ -192,7 +192,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 				fclose(pFile);
 
 				ID3D11ComputeShader* dx11CShader = NULL;
-				if (dx11CommonParams->dx11Device->CreateComputeShader(pyRead, ullFileSize, NULL, &dx11CShader) != S_OK)
+				if (psoManager->dx11Device->CreateComputeShader(pyRead, ullFileSize, NULL, &dx11CShader) != S_OK)
 				{
 					VMERRORMESSAGE("SHADER COMPILE FAILURE!");
 				}
@@ -219,8 +219,8 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		iobj->InsertFrameBuffer(data_type::dtype<float>(), FrameBufferUsageDEPTH, ("1st hit screen depth frame buffer : defined in vismtv_inbuilt_renderergpudx module"));
 #pragma endregion 
 
-	__ID3D11Device* pdx11Device = dx11CommonParams->dx11Device;
-	__ID3D11DeviceContext* dx11DeviceImmContext = dx11CommonParams->dx11DeviceImmContext;
+	__ID3D11Device* pdx11Device = psoManager->dx11Device;
+	__ID3D11DeviceContext* dx11DeviceImmContext = psoManager->dx11DeviceImmContext;
 
 #pragma region // IOBJECT GPU
 	vmint2 fb_size_cur;
@@ -317,22 +317,22 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 #endif
 	}
 
-	ID3D11Buffer* cbuf_cam_state = dx11CommonParams->get_cbuf("CB_CameraState");
-	ID3D11Buffer* cbuf_env_state = dx11CommonParams->get_cbuf("CB_EnvState");
-	ID3D11Buffer* cbuf_clip = dx11CommonParams->get_cbuf("CB_ClipInfo");
-	ID3D11Buffer* cbuf_pobj = dx11CommonParams->get_cbuf("CB_PolygonObject");
-	ID3D11Buffer* cbuf_vobj = dx11CommonParams->get_cbuf("CB_VolumeObject");
-	ID3D11Buffer* cbuf_reffect = dx11CommonParams->get_cbuf("CB_Material");
-	ID3D11Buffer* cbuf_vreffect = dx11CommonParams->get_cbuf("CB_VolumeMaterial");
-	ID3D11Buffer* cbuf_tmap = dx11CommonParams->get_cbuf("CB_TMAP");
-	ID3D11Buffer* cbuf_hsmask = dx11CommonParams->get_cbuf("CB_HotspotMask");
-	ID3D11Buffer* cbuf_curvedslicer = dx11CommonParams->get_cbuf("CB_CurvedSlicer");
+	ID3D11Buffer* cbuf_cam_state = psoManager->get_cbuf("CB_CameraState");
+	ID3D11Buffer* cbuf_env_state = psoManager->get_cbuf("CB_EnvState");
+	ID3D11Buffer* cbuf_clip = psoManager->get_cbuf("CB_ClipInfo");
+	ID3D11Buffer* cbuf_pobj = psoManager->get_cbuf("CB_PolygonObject");
+	ID3D11Buffer* cbuf_vobj = psoManager->get_cbuf("CB_VolumeObject");
+	ID3D11Buffer* cbuf_reffect = psoManager->get_cbuf("CB_Material");
+	ID3D11Buffer* cbuf_vreffect = psoManager->get_cbuf("CB_VolumeMaterial");
+	ID3D11Buffer* cbuf_tmap = psoManager->get_cbuf("CB_TMAP");
+	ID3D11Buffer* cbuf_hsmask = psoManager->get_cbuf("CB_HotspotMask");
+	ID3D11Buffer* cbuf_curvedslicer = psoManager->get_cbuf("CB_CurvedSlicer");
 
 #pragma region // HLSL Sampler Setting
-	ID3D11SamplerState* sampler_PZ = dx11CommonParams->get_sampler("POINT_ZEROBORDER");
-	ID3D11SamplerState* sampler_LZ = dx11CommonParams->get_sampler("LINEAR_ZEROBORDER");
-	ID3D11SamplerState* sampler_PC = dx11CommonParams->get_sampler("POINT_CLAMP");
-	ID3D11SamplerState* sampler_LC = dx11CommonParams->get_sampler("LINEAR_CLAMP");
+	ID3D11SamplerState* sampler_PZ = psoManager->get_sampler("POINT_ZEROBORDER");
+	ID3D11SamplerState* sampler_LZ = psoManager->get_sampler("LINEAR_ZEROBORDER");
+	ID3D11SamplerState* sampler_PC = psoManager->get_sampler("POINT_CLAMP");
+	ID3D11SamplerState* sampler_LC = psoManager->get_sampler("LINEAR_CLAMP");
 
 
 #ifdef DX10_0
@@ -363,8 +363,8 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->VSSetConstantBuffers(1, 1, &cbuf_pobj);
 
 
-		ID3D11InputLayout* dx11LI_P = (ID3D11InputLayout*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "P"));
-		ID3D11VertexShader* dx11VShader_P = (ID3D11VertexShader*)dx11CommonParams->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_P_vs_4_0"));
+		ID3D11InputLayout* dx11LI_P = (ID3D11InputLayout*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "P"));
+		ID3D11VertexShader* dx11VShader_P = (ID3D11VertexShader*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_P_vs_4_0"));
 
 		ID3D11Buffer* dx11BufferTargetPrim = (ID3D11Buffer*)gres_quad.alloc_res_ptrs[DTYPE_RES];
 		//ID3D11Buffer* dx11IndiceTargetPrim = NULL;
@@ -375,9 +375,9 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->VSSetShader(dx11VShader_P, NULL, 0);
 		dx11DeviceImmContext->GSSetShader(NULL, NULL, 0);
 		dx11DeviceImmContext->PSSetShader(NULL, NULL, 0);
-		dx11DeviceImmContext->RSSetState(dx11CommonParams->get_rasterizer("SOLID_NONE"));
+		dx11DeviceImmContext->RSSetState(psoManager->get_rasterizer("SOLID_NONE"));
 		dx11DeviceImmContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-		dx11DeviceImmContext->OMSetDepthStencilState(dx11CommonParams->get_depthstencil("ALWAYS"), 0);
+		dx11DeviceImmContext->OMSetDepthStencilState(psoManager->get_depthstencil("ALWAYS"), 0);
 	}
 	else assert(0);
 
@@ -499,7 +499,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	int count_call_render = iobj->GetObjParam("_int_NumCallRenders", (int)0);
 	bool is_performed_ssao = false;
 
-	dx11CommonParams->GpuProfile("VR Begin");
+	psoManager->GpuProfile("VR Begin");
 
 	for (VmActor* actor : dvr_volumes)
 	{
@@ -776,7 +776,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		//dx11DeviceImmContext->Flush();
 		dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
 #ifdef __DX_DEBUG_QUERY
-		dx11CommonParams->debug_info_queue->PushEmptyStorageFilter();
+		psoManager->debug_info_queue->PushEmptyStorageFilter();
 #endif
 		if (fastRender2x) {
 			SET_SHADER(GETCS(FillDither_cs_5_0), NULL, 0);
@@ -794,7 +794,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	//dx11DeviceImmContext->Flush();
 	//printf("# Textures : %d, # Drawing : %d, # RTBuffer Change : %d, # Merging : %d\n", iNumTexureLayers, iCountRendering, iCountRTBuffers, iCountMerging);
 	
-	dx11CommonParams->GpuProfile("VR Begin", true);
+	psoManager->GpuProfile("VR Begin", true);
 
 	dx11DeviceImmContext->ClearState();
 

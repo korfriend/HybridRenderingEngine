@@ -14,17 +14,24 @@ enum class PaintBlendMode {
 };
 
 struct UVBufferInfo {
-	std::vector<float> vbPainterUVs;
+	std::vector<float> vbPainterUVs_TriVertex;  // Triangle-vertex indexed UVs (3 UVs per triangle)
 	uint numVertrices;
 	ComPtr<ID3D11Buffer> buffer;
 	ComPtr<ID3D11ShaderResourceView> srv;
+
+	~UVBufferInfo()
+	{
+		buffer.Reset();
+		srv.Reset();
+	}
 };
 
 // Per-actor paint data
 struct ActorPaintData {
 	ullong timeStamp = 0;
 	std::unique_ptr<UVBufferInfo> vbUVs;
-	std::unique_ptr<FeedbackTexture> feedbackTexture;
+	std::unique_ptr<FeedbackTexture> hoverTexture;
+	std::unique_ptr<FeedbackTexture> paintTexture;
 	int width = 0;
 	int height = 0;
 	PaintBlendMode blendMode = PaintBlendMode::NORMAL;
@@ -47,12 +54,9 @@ public:
 	PaintResourceManager(__ID3D11Device* device, __ID3D11DeviceContext* context);
 	~PaintResourceManager();
 
-	ActorPaintData* createPaintResource(int actorId, int width, int height, const std::vector<float>& vbPainterUVs);
+	ActorPaintData* createPaintResource(int actorId, int width, int height,
+		const std::vector<float>& vbPainterUVs_TriVertex);
 	ActorPaintData* getPaintResource(int actorId);
-
-	// Get paint SRV for rendering (returns nullptr if no paint exists)
-	ID3D11ShaderResourceView* getPaintTextureSRV(int actorId);
-	ID3D11ShaderResourceView* getPaintUVsSRV(int actorId);
 
 	// Check if actor has paint texture
 	bool hasPaintResource(int actorId) const;
@@ -78,12 +82,6 @@ public:
 
 	// Get paint texture dimensions
 	bool getPaintDimensions(int actorId, int& outWidth, int& outHeight) const;
-
-	// Get the off-render target for painting operations
-	RenderTarget* getOffRenderTarget(int actorId);
-
-	// Swap buffers after painting
-	void swapBuffers(int actorId);
 
 private:
 	__ID3D11Device* device;

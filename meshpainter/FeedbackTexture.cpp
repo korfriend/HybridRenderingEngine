@@ -90,9 +90,6 @@ FeedbackTexture::FeedbackTexture(__ID3D11Device* device, __ID3D11DeviceContext* 
 	renderTarget = makeTarget();
 	offRenderTarget = makeTarget();
 
-	// Create fullscreen quad resources
-	createFullscreenQuad();
-
 	// Initial copy if source texture exists
 	if (texture.srv) {
 		renderTarget->bind(context);
@@ -144,48 +141,16 @@ void FeedbackTexture::renderOperation(RenderTarget* destination, RenderOperation
 	RenderTarget::unbind(context);
 }
 
-void FeedbackTexture::createFullscreenQuad() {
-	struct Vertex {
-		float x, y, z;
-		float u, v;
-	};
-
-	Vertex vertices[] = {
-		{ -1.0f,  1.0f, 0.0f,  0.0f, 0.0f }, // Top-Left
-		{  1.0f,  1.0f, 0.0f,  1.0f, 0.0f }, // Top-Right
-		{ -1.0f, -1.0f, 0.0f,  0.0f, 1.0f }, // Bottom-Left
-		{  1.0f, -1.0f, 0.0f,  1.0f, 1.0f }, // Bottom-Right
-	};
-
-	D3D11_BUFFER_DESC bd = {};
-	bd.Usage = D3D11_USAGE_DEFAULT;
-	bd.ByteWidth = sizeof(Vertex) * 4;
-	bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-	bd.CPUAccessFlags = 0;
-
-	D3D11_SUBRESOURCE_DATA initData = {};
-	initData.pSysMem = vertices;
-
-	device->CreateBuffer(&bd, &initData, quadVB.GetAddressOf());
-
-	unsigned int indices[] = { 0, 1, 2, 2, 1, 3 };
-
-	bd.ByteWidth = sizeof(unsigned int) * 6;
-	bd.BindFlags = D3D11_BIND_INDEX_BUFFER;
-
-	initData.pSysMem = indices;
-
-	device->CreateBuffer(&bd, &initData, quadIB.GetAddressOf());
-}
-
 void FeedbackTexture::renderFullscreenQuad() {
-	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-	UINT stride = sizeof(float) * 5; // 3 floats for position + 2 floats for UV
+	ID3D11Buffer* nullVB = nullptr;
+	UINT stride = 0;
 	UINT offset = 0;
-	ID3D11Buffer* vb = quadVB.Get();
-	context->IASetVertexBuffers(0, 1, &vb, &stride, &offset);
-	context->IASetIndexBuffer(quadIB.Get(), DXGI_FORMAT_R32_UINT, 0);
+	context->IASetVertexBuffers(0, 1, &nullVB, &stride, &offset);
+	context->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
+	context->IASetInputLayout(nullptr);
 
-	context->DrawIndexed(6, 0, 0);
+	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+
+	context->Draw(4, 0);
 }
