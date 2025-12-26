@@ -767,7 +767,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 #else
 #define VS_NUM 6
 #define GS_NUM 4
-#define PS_NUM 85
+#define PS_NUM 86
 #define CS_NUM 38
 #endif
 
@@ -977,6 +977,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			,"PCE_ParticleRenderBasic_ps_5_0"
 
 			,"SR_BASIC_PHONGBLINN_PAINTER_ps_5_0"
+			,"SR_OIT_ABUFFER_PHONGBLINN_PAINTER_ps_5_0"
 
 			,"SR_QUAD_OUTLINE_ps_5_0"
 
@@ -2167,7 +2168,10 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 						else {
 							switch (mode_OIT)
 							{
-							case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
+							case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? 
+								GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) : 
+								(has_painter ? GETPS(SR_OIT_ABUFFER_PHONGBLINN_PAINTER_ps_5_0) : GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0));
+								break;
 							case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0) : GETPS(SR_MOMENT_OIT_PHONGBLINN_ROV_ps_5_0); break;
 							case MFR_MODE::DYNAMIC_KB:
 								if (apply_fragmerge)
@@ -2292,7 +2296,9 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 							else
 								switch (mode_OIT)
 								{
-								case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
+								case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) 
+									: (has_painter ? GETPS(SR_OIT_ABUFFER_PHONGBLINN_PAINTER_ps_5_0) : GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0)); 
+									break;
 								case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0) : GETPS(SR_MOMENT_OIT_PHONGBLINN_ROV_ps_5_0); break;
 								case MFR_MODE::DYNAMIC_KB:
 									if (apply_fragmerge)
@@ -2327,7 +2333,8 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 					else {
 						switch (mode_OIT)
 						{
-						case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0); break;
+						case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) 
+							: (has_painter ? GETPS(SR_OIT_ABUFFER_PHONGBLINN_PAINTER_ps_5_0) : GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0)); break;
 						case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0) : GETPS(SR_MOMENT_OIT_PHONGBLINN_ROV_ps_5_0); break;
 						case MFR_MODE::DYNAMIC_KB:
 							if (apply_fragmerge)

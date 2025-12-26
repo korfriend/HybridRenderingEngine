@@ -41,6 +41,9 @@
     <ClCompile Include="meshpainter\MeshPainter.cpp" />
     <ClCompile Include="meshpainter\PaintResourceManager.cpp" />
     <ClCompile Include="meshpainter\UnwrapUVs.cpp" />
+    <ClCompile Include="meshpainter\xatlas.cpp" />
+    <ClCompile Include="meshpainter\XatlasWrapper.cpp" />
+    <ClCompile Include="meshpainter\UVAtlasWrapper.cpp" />
     <ClCompile Include="SlicerSR.cpp" />
     <ClCompile Include="CurvedSlicerVR.cpp" />
     <ClCompile Include="gpu manager\gpures_helper.cpp" />
@@ -68,6 +71,11 @@
     <ClInclude Include="meshpainter\MeshPainter.h" />
     <ClInclude Include="meshpainter\PaintResourceManager.h" />
     <ClInclude Include="meshpainter\UnwrapUVs.h" />
+    <ClInclude Include="meshpainter\xatlas.h" />
+    <ClInclude Include="meshpainter\xatlas_c.h" />
+    <ClInclude Include="meshpainter\XatlasWrapper.h" />
+    <ClInclude Include="meshpainter\UVAtlasWrapper.h" />
+    <ClInclude Include="meshpainter\uvatlas\UVAtlas.h" />
     <ClInclude Include="renderer\RendererHeader.h" />
     <ClInclude Include="renderer\Sampler.h" />
     <ClInclude Include="resource.h" />
@@ -447,7 +455,7 @@
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>Dwrite.lib;d2d1.lib;d3dcompiler.lib;d3d11.lib;GpuManagerd.lib;CommonUnitsd.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>./meshpainter/uvatlas/UVAtlasd.lib;Dwrite.lib;d2d1.lib;d3dcompiler.lib;d3d11.lib;GpuManagerd.lib;CommonUnitsd.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <DelayLoadDLLs>
       </DelayLoadDLLs>
       <AdditionalLibraryDirectories>$(OPENCV_4)\x64\vc15\lib;</AdditionalLibraryDirectories>
@@ -531,7 +539,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>Dwrite.lib;d2d1.lib;d3dcompiler.lib;d3d11.lib;GpuManager.lib;CommonUnits.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>./meshpainter/uvatlas/UVAtlas.lib;Dwrite.lib;d2d1.lib;d3dcompiler.lib;d3d11.lib;GpuManager.lib;CommonUnits.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PreBuildEvent>
       <Command>
@@ -554,7 +562,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>Dwrite.lib;d2d1.lib;d3dcompiler.lib;d3d11.lib;GpuManager.lib;CommonUnits.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>./meshpainter/uvatlas/UVAtlas.lib;Dwrite.lib;d2d1.lib;d3dcompiler.lib;d3d11.lib;GpuManager.lib;CommonUnits.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PreBuildEvent>
       <Command>
@@ -577,7 +585,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>Dwrite.lib;d2d1.lib;d3dcompiler.lib;d3d11.lib;GpuManager.lib;CommonUnits.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>./meshpainter/uvatlas/UVAtlasd.lib;Dwrite.lib;d2d1.lib;d3dcompiler.lib;d3d11.lib;GpuManager.lib;CommonUnits.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PreBuildEvent>
       <Command>

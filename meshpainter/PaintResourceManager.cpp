@@ -1,4 +1,5 @@
 #include "PaintResourceManager.h"
+#include "gpures_helper.h"
 #include "vzm2/Backlog.h"
 #include <iostream>
 
@@ -82,6 +83,10 @@ ActorPaintData* PaintResourceManager::createPaintResource(int actorId, int width
 			device->CreateShaderResourceView(paintData.vbUVs->buffer.Get(), &srvDesc, paintData.vbUVs->srv.GetAddressOf());
 		}
 	}
+
+	float clr_float_zero_4[4] = { 0, 0, 0, 0 };
+	grd_helper::GetPSOManager()->dx11DeviceImmContext->ClearRenderTargetView(paintData.paintTexture->getRenderTarget()->rtv.Get(), clr_float_zero_4);
+	grd_helper::GetPSOManager()->dx11DeviceImmContext->ClearRenderTargetView(paintData.paintTexture->getOffRenderTarget()->rtv.Get(), clr_float_zero_4);
 
 	auto result = actorPaintResources.emplace(actorId, std::move(paintData));
 

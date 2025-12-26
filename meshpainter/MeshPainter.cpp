@@ -215,9 +215,12 @@ void MeshPainter::paintOnActor(
 	// off-target)
 	renderBrushStroke(hoverTex, paintTex, meshParams, hitResult.uv, uvRadius);
 	hoverTex->swap();
+	paintTex->swap();  // Important: swap paintTex too!
 
 	// Apply dilation to prevent texture bleeding at UV seams
+	// Apply multiple passes to handle wider seam gaps
 	applyDilation(hoverTex);
+	applyDilation(paintTex);
 
 	paintManager->markDirty(actorId);
 }
@@ -509,7 +512,7 @@ void MeshPainter::renderBrushStroke(FeedbackTexture* hoverTex,
 		return;
 
 	RenderTarget* hover_rt = hoverTex->getOffRenderTarget();
-	RenderTarget* paint_rt = hoverTex->getOffRenderTarget();
+	RenderTarget* paint_rt = paintTex->getOffRenderTarget();
 	ID3D11RenderTargetView* rtvPtrs[2] = { hover_rt->rtv.Get(), paint_rt->rtv.Get() };
 	context->OMSetRenderTargets(2, rtvPtrs, nullptr); // No depth stencil for now
 
@@ -555,10 +558,11 @@ void MeshPainter::renderBrushStroke(FeedbackTexture* hoverTex,
 	context->PSSetConstantBuffers(1, 1, &cb);
 
 	// Set blend state
-	float blendFactor[4] = { 0, 0, 0, 0 };
-	ID3D11BlendState* bs = grd_helper::GetPSOManager()->get_blender("ADD");
-	//context->OMSetBlendState(bs, blendFactor, 0xFFFFFFFF);
+	// NULL (opaque) because shader already handles blending with prevPaint
 	context->OMSetBlendState(NULL, NULL, 0xffffffff);
+
+	ID3D11RasterizerState2* rs = grd_helper::GetPSOManager()->get_rasterizer("SOLID_NONE");
+	context->RSSetState(rs);
 		
 	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -602,8 +606,8 @@ void MeshPainter::applyDilation(FeedbackTexture* sourceFBT) {
 		sourceFBT->renderFullscreenQuad();
 
 		// Unbind
-		//ID3D11ShaderResourceView* nullSRV = nullptr;
-		//ctx->PSSetShaderResources(0, 1, &nullSRV);
+		ID3D11ShaderResourceView* nullSRV = nullptr;
+		ctx->PSSetShaderResources(0, 1, &nullSRV);
 		});
 
 	sourceFBT->swap();

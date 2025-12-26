@@ -48,6 +48,9 @@ void UnwrapUVs(
 
 	vzlog("Starting Smart UV Unwrap... %d triangles", (int)triCount);
 
+	// Debug: Track unmapped triangles
+	int totalMappedTriangles = 0;
+
 	if (triCount == 0) {
 		uvs.clear();
 		return;
@@ -77,6 +80,7 @@ void UnwrapUVs(
 	// Step 1: Precompute Face Normals
 	// ============================================================
 	std::vector<Vec3> normals(triCount);
+	int degenerateTriangles = 0;
 
 	for (size_t i = 0; i < triCount; i++) {
 		unsigned int i0, i1, i2;
@@ -92,9 +96,22 @@ void UnwrapUVs(
 
 		// Normal = e1 x e2
 		Vec3 n = e1.cross(e2);
-		n.normalize();
+		float nLength = n.length();
+
+		// Check for degenerate triangle (zero area)
+		if (nLength < 1e-6f) {
+			degenerateTriangles++;
+			// Use fallback normal (Z-up)
+			n.set(0, 0, 1);
+		} else {
+			n.normalize();
+		}
 
 		normals[i] = n;
+	}
+
+	if (degenerateTriangles > 0) {
+		vzlog("WARNING: Found %d degenerate triangles (zero area), using fallback normals", degenerateTriangles);
 	}
 
 	// ============================================================
@@ -102,27 +119,67 @@ void UnwrapUVs(
 	// ============================================================
 	std::vector<std::vector<size_t>> adjacency(triCount);
 
-	if (isIndexed) {
-		std::unordered_map<std::string, std::vector<size_t>> edgeMap;
+	// Build adjacency for both indexed and non-indexed meshes
+	std::unordered_map<std::string, std::vector<size_t>> edgeMap;
 
-		for (size_t i = 0; i < triCount; i++) {
-			unsigned int i0, i1, i2;
-			getTriIndices(i, i0, i1, i2);
-			unsigned int triIndices[3] = { i0, i1, i2 };
+	for (size_t i = 0; i < triCount; i++) {
+		unsigned int i0, i1, i2;
+		getTriIndices(i, i0, i1, i2);
 
-			for (int j = 0; j < 3; j++) {
+		// For non-indexed meshes, vertices are unique per triangle
+		// but we still need to find adjacency by position matching
+		Vec3 v0 = getVertex(i0);
+		Vec3 v1 = getVertex(i1);
+		Vec3 v2 = getVertex(i2);
+
+		// Create edge keys based on vertex positions (for non-indexed)
+		// or vertex indices (for indexed)
+		auto makePositionKey = [](const Vec3& a, const Vec3& b) -> std::string {
+			// Use position-based key for non-indexed meshes
+			// Quantize to epsilon grid to handle floating point precision
+			const float epsilon = 1e-5f;
+			auto quantize = [epsilon](float v) -> int64_t {
+				return (int64_t)std::round(v / epsilon);
+			};
+
+			int64_t ax = quantize(a.x), ay = quantize(a.y), az = quantize(a.z);
+			int64_t bx = quantize(b.x), by = quantize(b.y), bz = quantize(b.z);
+
+			// Ensure consistent ordering
+			if (ax > bx || (ax == bx && ay > by) || (ax == bx && ay == by && az > bz)) {
+				std::swap(ax, bx);
+				std::swap(ay, by);
+				std::swap(az, bz);
+			}
+
+			char buf[128];
+			snprintf(buf, sizeof(buf), "%lld_%lld_%lld_%lld_%lld_%lld",
+				(long long)ax, (long long)ay, (long long)az,
+				(long long)bx, (long long)by, (long long)bz);
+			return std::string(buf);
+		};
+
+		Vec3 verts[3] = { v0, v1, v2 };
+		for (int j = 0; j < 3; j++) {
+			std::string key;
+			if (isIndexed) {
+				// Use vertex indices for indexed meshes
+				unsigned int triIndices[3] = { i0, i1, i2 };
 				unsigned int a = triIndices[j];
 				unsigned int b = triIndices[(j + 1) % 3];
-				std::string key = makeEdgeKey(a, b);
+				key = makeEdgeKey(a, b);
+			} else {
+				// Use vertex positions for non-indexed meshes
+				key = makePositionKey(verts[j], verts[(j + 1) % 3]);
+			}
 
-				auto& list = edgeMap[key];
-				list.push_back(i);
+			auto& list = edgeMap[key];
+			list.push_back(i);
 
-				if (list.size() > 1) {
-					size_t neighbor = list[0];
-					adjacency[i].push_back(neighbor);
-					adjacency[neighbor].push_back(i);
-				}
+			if (list.size() > 1) {
+				size_t neighbor = list[0];
+				adjacency[i].push_back(neighbor);
+				adjacency[neighbor].push_back(i);
 			}
 		}
 	}
@@ -144,6 +201,10 @@ void UnwrapUVs(
 		stack.push(i);
 		visited[i] = 1;
 
+		// Store the seed normal (first triangle's normal) as the chart reference
+		Vec3 seedNormal = normals[i];
+		seedNormal.normalize();
+
 		// Flood Fill
 		while (!stack.empty()) {
 			size_t tIdx = stack.top();
@@ -152,14 +213,15 @@ void UnwrapUVs(
 			chart.triangles.push_back(tIdx);
 			chart.avgNormal.add(normals[tIdx]);
 
-			const Vec3& nA = normals[tIdx];
 			const auto& neighbors = adjacency[tIdx];
 
 			for (size_t nIdx : neighbors) {
 				if (visited[nIdx]) continue;
 
+				// Compare neighbor's normal with the chart's SEED normal (not just adjacent triangle)
+				// This prevents gradual drift that allows opposite-facing triangles in the same chart
 				const Vec3& nB = normals[nIdx];
-				if (nA.dot(nB) > thresholdDot) {
+				if (seedNormal.dot(nB) > thresholdDot) {
 					visited[nIdx] = 1;
 					stack.push(nIdx);
 				}
@@ -170,7 +232,19 @@ void UnwrapUVs(
 		charts.push_back(std::move(chart));
 	}
 
+	// Count total triangles in all charts
+	int chartedTriangles = 0;
+	for (const auto& chart : charts) {
+		chartedTriangles += (int)chart.triangles.size();
+	}
+
 	vzlog("Generated... %d UV charts.", (int)charts.size());
+	vzlog("Chart coverage: %d/%d triangles mapped", chartedTriangles, (int)triCount);
+
+	if (chartedTriangles != triCount) {
+		vzlog("WARNING: %d triangles NOT MAPPED!", (int)triCount - chartedTriangles);
+	}
+
 
 	// ============================================================
 	// Step 4: Project Charts to 2D
@@ -178,9 +252,22 @@ void UnwrapUVs(
 	std::vector<ChartData> chartData;
 	const float totalPadding = 0.02f;
 
+	int degenerateCharts = 0;
 	for (const auto& chart : charts) {
 		// Calculate orthonormal basis from average normal
 		Vec3 N = chart.avgNormal;
+		N.normalize();  // IMPORTANT: Normalize average normal!
+
+		// Check for degenerate chart (zero or near-zero normal)
+		float normalLength = chart.avgNormal.length();
+		if (normalLength < 1e-6f) {
+			vzlog("WARNING: Degenerate chart with %d triangles (zero normal), using fallback XY projection",
+				(int)chart.triangles.size());
+			degenerateCharts++;
+			// Use fallback: project to XY plane
+			N.set(0, 0, 1);
+		}
+
 		Vec3 up(0, 1, 0);
 		if (std::abs(N.dot(up)) > 0.9f) {
 			up.set(1, 0, 0);
@@ -220,6 +307,22 @@ void UnwrapUVs(
 			}
 		}
 
+		// Check for degenerate projection (all vertices projected to a line or point)
+		float chartWidth = uMax - uMin;
+		float chartHeight = vMax - vMin;
+
+		if (chartWidth < 1e-5f || chartHeight < 1e-5f) {
+			vzlog("WARNING: Chart %d has degenerate projection (w=%.6f, h=%.6f), %d triangles",
+				(int)chartData.size(), chartWidth, chartHeight, (int)chart.triangles.size());
+			// Expand to minimum size
+			if (chartWidth < 1e-5f) {
+				uMax = uMin + 0.01f;
+			}
+			if (chartHeight < 1e-5f) {
+				vMax = vMin + 0.01f;
+			}
+		}
+
 		// Normalize local UVs to start from 0
 		for (size_t k = 0; k < cData.localUVs.size(); k += 2) {
 			cData.localUVs[k] -= uMin;
@@ -229,11 +332,15 @@ void UnwrapUVs(
 		cData.width = (uMax - uMin) + totalPadding;
 		cData.height = (vMax - vMin) + totalPadding;
 
-		// Handle degenerate charts
+		// Handle degenerate charts (should not happen after above fix)
 		if (cData.width < 0.001f) cData.width = 0.001f;
 		if (cData.height < 0.001f) cData.height = 0.001f;
 
 		chartData.push_back(std::move(cData));
+	}
+
+	if (degenerateCharts > 0) {
+		vzlog("Processed %d degenerate charts with fallback projection", degenerateCharts);
 	}
 
 	// ============================================================
@@ -244,10 +351,14 @@ void UnwrapUVs(
 		return a.height > b.height;
 	});
 
-	// Calculate total area for target width estimation
+	// Chart spacing in local UV space (will be scaled to final UV space)
+	// This ensures 2-3 texel gap between charts in final texture
+	const float chartGap = 1.0f;  // Gap between charts (local space)
+
+	// Calculate total area including gaps for target width estimation
 	float totalArea = 0;
 	for (const auto& c : chartData) {
-		totalArea += c.width * c.height;
+		totalArea += (c.width + chartGap) * (c.height + chartGap);
 	}
 	float targetWidth = std::sqrt(totalArea) * 1.5f;
 
@@ -257,23 +368,32 @@ void UnwrapUVs(
 	float maxMapWidth = 0;
 
 	for (auto& c : chartData) {
-		// Start new row if current chart doesn't fit
-		if (currentX + c.width > targetWidth) {
+		// Start new row if current chart doesn't fit (including gap)
+		if (currentX + c.width + chartGap > targetWidth) {
 			currentX = 0;
-			currentY += rowHeight;
+			currentY += rowHeight + chartGap;  // Add gap between rows
 			rowHeight = 0;
 		}
 
 		c.x = currentX;
 		c.y = currentY;
 
-		currentX += c.width;
+		currentX += c.width + chartGap;  // Add gap after each chart
 		rowHeight = std::max(rowHeight, c.height);
 		maxMapWidth = std::max(maxMapWidth, currentX);
 	}
 
-	float finalHeight = currentY + rowHeight;
-	float finalScale = 1.0f / std::max(std::max(maxMapWidth, targetWidth), finalHeight);
+	// Calculate final dimensions (maxMapWidth already includes gaps from last chart in row)
+	// But we need to remove the trailing gap from the last chart
+	float finalWidth = maxMapWidth - chartGap;  // Remove trailing gap
+	float finalHeight = currentY + rowHeight;   // Height doesn't have trailing gap issue
+
+	// Add safety margin (5%) to ensure all UVs fit within [0,1]
+	float safetyMargin = 1.05f;
+	float finalScale = 1.0f / (std::max(finalWidth, finalHeight) * safetyMargin);
+
+	vzlog("UV Packing: finalWidth=%.3f, finalHeight=%.3f, finalScale=%.3f (with %.0f%% margin)",
+		finalWidth, finalHeight, finalScale, (safetyMargin - 1.0f) * 100.0f);
 
 	// ============================================================
 	// Step 6: Output Final UVs
@@ -293,6 +413,14 @@ void UnwrapUVs(
 			for (int v = 0; v < 3; v++) {
 				float u = (c.localUVs[luOffset + v * 2] + c.x) * finalScale;
 				float vCoord = (c.localUVs[luOffset + v * 2 + 1] + c.y) * finalScale;
+
+				// Debug: Check if clamping is needed (indicates packing overflow)
+				static bool logged = false;
+				if (!logged && (u < 0.0f || u > 1.0f || vCoord < 0.0f || vCoord > 1.0f)) {
+					vzlog("WARNING: UV out of [0,1] before clamp: u=%.3f, v=%.3f (Chart at x=%.3f, y=%.3f)",
+						u, vCoord, c.x, c.y);
+					logged = true;  // Only log once to avoid spam
+				}
 
 				// Clamp to [0, 1]
 				u = std::max(0.0f, std::min(1.0f, u));

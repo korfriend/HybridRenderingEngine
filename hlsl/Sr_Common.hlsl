@@ -840,6 +840,23 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     nor = input.f3VecNormalWS;
     nor_len = length(nor);
 #endif
+    
+	float3 Ka_pobj = g_cbPobj.Ka;
+	float3 Kd_pobj = g_cbPobj.Kd;
+	float3 Ks_pobj = g_cbPobj.Ks;
+#if __PAINTER_UV == 1
+    if (g_cbPobj.tex_map_enum & (0x1 << 17))
+    {
+	    float4 paintColor = g_tex2D_Paint.SampleLevel(g_samplerLinear_clamp, input.f2PaintUV, 0);
+
+	    if (paintColor.a > 0.001)
+	    {
+		    Ka_pobj = lerp(Ka_pobj, paintColor.rgb, paintColor.a);
+		    Kd_pobj = lerp(Kd_pobj, paintColor.rgb, paintColor.a);
+		    Ks_pobj = lerp(Ks_pobj, paintColor.rgb, paintColor.a);
+        }
+    }
+#endif
 
 #if __RENDERING_MODE == 1
     DashedLine(v_rgba, z_depth, input.f3Custom.x, g_cbPobj.dash_interval, g_cbPobj.pobj_flag & (0x1 << 19), g_cbPobj.pobj_flag & (0x1 << 20));
@@ -868,9 +885,9 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
         else
         {
             //float3 mat_shading = float3(g_cbEnv.ltint_ambient.w, g_cbEnv.ltint_diffuse.w, g_cbEnv.ltint_spec.w);
-            float3 Ka = clr_map.rgb * g_cbEnv.ltint_ambient.rgb * g_cbPobj.Ka;
-            float3 Kd = clr_map.rgb * g_cbEnv.ltint_diffuse.rgb * g_cbPobj.Kd;
-            float3 Ks = clr_map.rgb * g_cbEnv.ltint_spec.rgb * g_cbPobj.Ks;
+            float3 Ka = clr_map.rgb * g_cbEnv.ltint_ambient.rgb * Ka_pobj;
+            float3 Kd = clr_map.rgb * g_cbEnv.ltint_diffuse.rgb * Kd_pobj;
+            float3 Ks = clr_map.rgb * g_cbEnv.ltint_spec.rgb * Ks_pobj;
             float Ns = g_cbPobj.Ns;
             ComputeColor(v_rgba.rgb, Ka, Kd, Ks, Ns, 1.0, input.f3PosWS, view_dir, nor, nor_len);
         }
@@ -879,7 +896,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     }
     else
     {
-        float3 Ka = g_cbPobj.Ka, Kd = g_cbPobj.Kd, Ks = g_cbPobj.Ks;
+        float3 Ka = Ka_pobj, Kd = Kd_pobj, Ks = Ks_pobj;
         float Ns = g_cbPobj.Ns, d = 1.0, bump = 1.0;
         TextureMaterialMap(Ka, Kd, Ks, Ns, bump, d, input.f3Custom, g_cbPobj.tex_map_enum);
 
@@ -952,9 +969,9 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
         }
         else
         {
-            Ka = g_cbPobj.Ka * g_cbEnv.ltint_ambient.rgb;
-            Kd = g_cbPobj.Kd * g_cbEnv.ltint_diffuse.rgb;
-            Ks = g_cbPobj.Ks * g_cbEnv.ltint_spec.rgb;
+            Ka = Ka_pobj * g_cbEnv.ltint_ambient.rgb;
+            Kd = Kd_pobj * g_cbEnv.ltint_diffuse.rgb;
+            Ks = Ks_pobj * g_cbEnv.ltint_spec.rgb;
         }
         Ns = g_cbPobj.Ns;
 
@@ -978,9 +995,9 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
         }
         else
         {
-            Ka = g_cbPobj.Ka * g_cbEnv.ltint_ambient.rgb;
-            Kd = g_cbPobj.Kd * g_cbEnv.ltint_diffuse.rgb;
-            Ks = g_cbPobj.Ks * g_cbEnv.ltint_spec.rgb;
+            Ka = Ka_pobj * g_cbEnv.ltint_ambient.rgb;
+            Kd = Kd_pobj * g_cbEnv.ltint_diffuse.rgb;
+            Ks = Ks_pobj * g_cbEnv.ltint_spec.rgb;
         }
         Ns = g_cbPobj.Ns;
         ComputeColor(v_rgba.rgb, Ka, Kd, Ks, Ns, 1.0, input.f3PosWS, view_dir, nor, nor_len);
@@ -992,17 +1009,17 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
 
     if (BitCheck(g_cbPobj.pobj_flag, 3))
     {
-        Ka = input.f3Custom * g_cbPobj.Ka;
-        Kd = input.f3Custom * g_cbPobj.Kd;
-        Ks = input.f3Custom * g_cbPobj.Ks;
-    }
+        Ka = input.f3Custom * Ka_pobj;
+        Kd = input.f3Custom * Kd_pobj;
+		Ks = input.f3Custom * Ks_pobj;
+	}
     else
     {
         // note g_cbPobj's Ka, Kd, and Ks has already been multiplied by pb_shading_factor.xyz
-        Ka = g_cbPobj.Ka;
-        Kd = g_cbPobj.Kd;
-        Ks = g_cbPobj.Ks;
-    }
+        Ka = Ka_pobj;
+        Kd = Kd_pobj;
+		Ks = Ks_pobj;
+	}
 
     if (nor_len > 0)
     {
@@ -1020,9 +1037,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
 #if __PAINTER_UV == 1
     if (g_cbPobj.tex_map_enum & (0x1 << 17))
     {
-        // Apply paint texture (blend mode 0 = NORMAL by default)
-	    ApplyPaintTexture(v_rgba.rgb, input.f2PaintUV, g_cbPobj.tex_map_enum, PAINT_BLEND_NORMAL);
-        //v_rgba.rgb = float3(input.f2PaintUV, 0);
+	    //v_rgba.rgb = float3(input.f2PaintUV, 0);
     }
 #endif
     

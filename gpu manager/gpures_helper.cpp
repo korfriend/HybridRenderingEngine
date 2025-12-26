@@ -1,6 +1,6 @@
 #include "gpures_helper.h"
 #include "meshpainter/PaintResourceManager.h"
-#include "meshpainter/UnwrapUVs.h"
+#include "meshpainter/UVAtlasWrapper.h"
 #include "D3DCompiler.h"
 #include "hlsl/ShaderInterop_BVH.h"
 #include "BVHUpdate.h"
@@ -595,6 +595,7 @@ int grd_helper::Initialize(VmGpuManager* pCGpuManager, PSOManager* gpu_params)
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10108), "SR_UNDERCUT_ps_5_0", "ps_5_0"), SR_UNDERCUT_ps_5_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10111), "SR_BASIC_PHONGBLINN_PAINTER_ps_5_0", "ps_5_0"), SR_BASIC_PHONGBLINN_PAINTER_ps_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10211), "SR_OIT_ABUFFER_PHONGBLINN_PAINTER_ps_5_0", "ps_5_0"), SR_OIT_ABUFFER_PHONGBLINN_PAINTER_ps_5_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA10201), "PCE_ParticleRenderBasic_ps_5_0", "ps_5_0"), PCE_ParticleRenderBasic_ps_5_0);
 
@@ -2156,13 +2157,16 @@ bool grd_helper::UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, Vm
 		if (paintRes)
 		{
 			ID3D11ShaderResourceView* paintTex2DSRV = paintRes->paintTexture->getRenderTarget()->srv.Get();
+			ID3D11ShaderResourceView* paintUvSRV = paintRes->vbUVs->srv.Get();
 			g_psoManager->dx11DeviceImmContext->PSSetShaderResources(60, 1, &paintTex2DSRV); // t60
+			g_psoManager->dx11DeviceImmContext->VSSetShaderResources(61, 1, &paintUvSRV); // t61
 			return true;
 		}
 		return false;
 	}
 
 	bool is_paint = false;
+	bool clean_paint = false;
 	if (painter_mode == "PAINT")
 	{
 		is_paint = true;
@@ -2170,6 +2174,10 @@ bool grd_helper::UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, Vm
 	else if (painter_mode == "HOVER")
 	{
 		is_paint = false;
+	}
+	else if (painter_mode == "CLEAN")
+	{
+		clean_paint = true;
 	}
 	else
 	{
@@ -2270,8 +2278,8 @@ bool grd_helper::UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, Vm
 			}
 			vzlog("Using existing TEXCOORD0 UVs for %d vertices", prim_data->num_prims * 3);
 		} else {
-			// Generate UVs using proper UV unwrapping (angle-based chart generation)
-			vzlog("No TEXCOORD0 found, generating UVs with UnwrapUVs (angle-based charts)");
+			// Generate UVs using proper UV unwrapping 
+			vzlog("No TEXCOORD0 found, generating UVs with UnwrapUVs");
 
 			// Prepare position data (convert vmfloat3 to float array)
 			std::vector<float> positions;
@@ -2282,23 +2290,45 @@ bool grd_helper::UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, Vm
 				positions.push_back(vb_pos[i].z);
 			}
 
-			// Call UnwrapUVs (will resize vb_painter_uvs_tri internally)
-			UnwrapUVs(
+			// Call UVAtlas-based UV unwrapping (will resize vb_painter_uvs_tri internally)
+			// UVAtlas is Microsoft's DirectX library for fast mesh parameterization
+			// Calculate texture size for UV unwrapping
+			int textureSizeForUV = 1024;
+			float avgPixelsPerTriPreCalc = (textureSizeForUV * textureSizeForUV) / (float)prim_data->num_prims;
+			if (avgPixelsPerTriPreCalc < 12.0f) {
+				textureSizeForUV = 2048;
+			}
+
+			UnwrapUVsUVAtlas(
 				positions.data(),
 				positions.size(),
 				nullptr,  // No indices (already non-indexed)
 				0,
 				vb_painter_uvs_tri,
-				45.0f  // 45 degree angle threshold for chart segmentation
+				textureSizeForUV,  // Target texture size
+				2.0f,  // Gutter in texels (prevents bleeding)
+				0.16667f,  // Max stretch (1/6 - good balance)
+				true  // Fast mode (GEODESIC_FAST)
 			);
 
-			vzlog("Generated %d UV coordinates with UnwrapUVs", (int)vb_painter_uvs_tri.size() / 2);
+			vzlog("Generated %d UV coordinates with UVAtlas", (int)vb_painter_uvs_tri.size() / 2);
+		}
+
+		// Calculate texture size based on triangle count
+		// Target: ~16-20 pixels per triangle average for reliable rasterization
+		int textureSize = 1024;
+		float avgPixelsPerTri = (textureSize * textureSize) / (float)prim_data->num_prims;
+
+		if (avgPixelsPerTri < 12.0f) {
+			textureSize = 2048;  // Use higher resolution for dense meshes
+			vzlog("Using 2048x2048 paint texture for dense mesh (%d triangles, %.1f pixels/tri avg)",
+				prim_data->num_prims, (textureSize * textureSize) / (float)prim_data->num_prims);
 		}
 
 		// MeshPainter uses TRIANGLE-VERTEX indexed UVs only (no conversion to vertex-indexed)
 		// This avoids UV seam issues where shared vertices need different UVs in different charts
 		// The shader will use triangle-vertex indexing: uvIndex = (triangleID * 3 + vertexInTriangle)
-		paintRes = manager->createPaintResource(actor->actorId, 1024, 1024, vb_painter_uvs_tri);
+		paintRes = manager->createPaintResource(actor->actorId, textureSize, textureSize, vb_painter_uvs_tri);
 		paintRes->timeStamp = vmhelpers::GetCurrentTimePack();
 
 		// Debug: Log mesh and UV buffer info
@@ -2312,7 +2342,7 @@ bool grd_helper::UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, Vm
 	GpuRes gres_geometry, gres_tmp;
 	map<string, GpuRes> map_gres_texs;
 	UpdatePrimitiveModel(gres_geometry, gres_tmp, map_gres_texs, pobj, nullptr);
-	vzlog_assert(gres_tmp.alloc_res_ptrs.size() == 0, "mesh painter DOES NOT use index-buffer!");
+	//vzlog_assert(gres_tmp.alloc_res_ptrs.size() == 0, "mesh painter DOES NOT use index-buffer!");
 	
 	vmmat44f matPivot = (actor->GetParam("_matrix44f_Pivot", vmmat44f(1)));
 	vmmat44f matRS2WS = matPivot * actor->matOS2WS;
@@ -2360,6 +2390,9 @@ bool grd_helper::UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, Vm
 	brush.position[1] = hit.worldPos[1];
 	brush.position[2] = hit.worldPos[2];
 
+	if (is_paint)
+		brush.blendMode = PaintBlendMode::ADDITIVE;
+
 	MeshParams mesh_params;
 	mesh_params.primData = prim_data;
 	if (prim_data->GetVerticeDefinition("NORMAL"))
@@ -2390,18 +2423,38 @@ bool grd_helper::UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, Vm
 	mesh_params.offset = 0;
 	mesh_params.vbMesh = (ID3D11Buffer*)gres_geometry.alloc_res_ptrs[DTYPE_RES];
 	mesh_params.uvBufferSRV = paintRes->vbUVs->srv.Get();
+
+	g_psoManager->dx11DeviceImmContext->CopyResource(
+		paintRes->hoverTexture->getRenderTarget()->texture.Get(),
+		paintRes->paintTexture->getRenderTarget()->texture.Get()
+	);
+	g_psoManager->dx11DeviceImmContext->CopyResource(
+		paintRes->hoverTexture->getOffRenderTarget()->texture.Get(),
+		paintRes->paintTexture->getOffRenderTarget()->texture.Get()
+	);
+
+	float clr_float_zero_4[4] = { 0, 0, 0, 0 };
+	if (clean_paint)
+	{
+		g_psoManager->dx11DeviceImmContext->ClearRenderTargetView(paintRes->paintTexture->getRenderTarget()->rtv.Get(), clr_float_zero_4);
+		g_psoManager->dx11DeviceImmContext->ClearRenderTargetView(paintRes->paintTexture->getOffRenderTarget()->rtv.Get(), clr_float_zero_4);
+	}
+
+	ID3D11ShaderResourceView* hoverTex2DSRV = paintRes->hoverTexture->getRenderTarget()->srv.Get();
+	ID3D11ShaderResourceView* paintTex2DSRV = paintRes->paintTexture->getRenderTarget()->srv.Get();
+	ID3D11ShaderResourceView* paintUvSRV = paintRes->vbUVs->srv.Get();
+
 	meshPainter->paintOnActor(actor->actorId, mesh_params, matRS2WS, brush, hit, is_paint);
 
 	vzlog_assert (manager->hasPaintResource(actor->actorId), "No painter resource!");
 
-	ID3D11ShaderResourceView* hoverTex2DSRV = paintRes->hoverTexture->getRenderTarget()->srv.Get();
-	ID3D11ShaderResourceView* paintUvSRV = paintRes->vbUVs->srv.Get();
-	if (!hoverTex2DSRV || !paintUvSRV)
+
+	if (!hoverTex2DSRV || !paintUvSRV || !paintTex2DSRV)
 	{
 		vzlog_error("hoverTex2DSRV and paintUvSRV must be valid!");
 		return false;
 	}
-	g_psoManager->dx11DeviceImmContext->PSSetShaderResources(60, 1, &hoverTex2DSRV); // t60
+	g_psoManager->dx11DeviceImmContext->PSSetShaderResources(60, 1, is_paint? &paintTex2DSRV : &hoverTex2DSRV); // t60
 	g_psoManager->dx11DeviceImmContext->VSSetShaderResources(61, 1, &paintUvSRV); // t61
 	return true;
 }

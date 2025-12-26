@@ -33,9 +33,9 @@ cbuffer CB_Brush : register(b1)
 	float4x4 matOS2WS;
     
 	int blendMode; // PaintBlendMode enum
-	float padding0;
-	float padding1;
-	float padding2;
+	uint painterFlags; // 4 bytes
+	float padding0; // 4 bytes
+	float padding1; // 4 bytes
 };
 
 // Paint layer parameters for compositing
@@ -192,18 +192,24 @@ VS_OUTPUT VS_FullscreenQuad(uint vertexID : SV_VertexID)
 // Pixel Shader - Brush Stroke
 // ============================================================================
 
-float4 PS_BrushStroke(VS_OUTPUT input) : SV_Target
+struct PS_BRUSHOUT
 {
-	//return float4(input.texcoord, 0, 1);
+	float4 hover : SV_TARGET0;
+	float4 paint : SV_TARGET1;
+};
+
+PS_BRUSHOUT PS_BrushStroke(VS_OUTPUT input) : SV_Target
+{
+	PS_BRUSHOUT output;
     float3 posWS = input.worldPos;
 
     // Calculate distance from brush center
-	float3 delta = (posWS - brushCenter) / 5.f;//brushRadius;
+	float3 delta = (posWS - brushCenter) / brushRadius;
     float dist = length(delta);
-
+    
     // Outside brush radius
-    if (dist > 1.0)
-        discard;
+    //if (dist > 1.0)
+    //    discard;
     
     // Calculate brush falloff based on hardness
     // hardness = 1.0: hard edge, hardness = 0.0: soft edge
@@ -212,16 +218,24 @@ float4 PS_BrushStroke(VS_OUTPUT input) : SV_Target
 
     // Apply strength
     float alpha = brushColor.a * brushStrength * falloff;
-
+    
     // Get previous paint value
 	float4 prevPaint = tex2d_previous.Sample(g_samplerPoint, input.texcoord);
-
-    // Blend brush stroke with previous paint
-	//float3 blendedColor = ApplyBlendMode(prevPaint.rgb, brushColor.rgb, alpha, blendMode);
-	float3 blendedColor = ApplyBlendMode(prevPaint.rgb, float3(0, 1, 0), alpha, blendMode);
-    float blendedAlpha = saturate(prevPaint.a + alpha * (1.0 - prevPaint.a));
+	float blendedAlpha = saturate(prevPaint.a + alpha * (1.0 - prevPaint.a));
+	if (painterFlags & 0x1)
+	{
+		float3 blendedColor = ApplyBlendMode(prevPaint.rgb, brushColor.rgb, alpha, blendMode);
+		output.paint = float4(blendedColor, blendedAlpha);
+	}
+	else
+	{
+		output.paint = prevPaint;
+	}
+	float3 blendedHoverColor = ApplyBlendMode(prevPaint.rgb, brushColor.rgb, alpha, blendMode);
+	output.hover = float4(blendedHoverColor, blendedAlpha);
+	//output.hover = float4(input.texcoord, 0, blendedAlpha);
     
-	return float4(blendedColor, blendedAlpha);
+	return output;
 }
 
 // Simple brush stroke (overwrites with alpha blend)
@@ -286,7 +300,8 @@ float4 PS_ClearTransparent(VS_OUTPUT input) : SV_Target
 float4 PS_Dilate(VS_OUTPUT input) : SV_Target
 {
     float2 uv = input.texcoord;
-    float4 center = tex2d_base.Sample(g_samplerPoint, uv);
+	float4 center = tex2d_base.Sample(g_samplerPoint, uv);
+	//return center;
 
     // If this pixel has paint, keep it
     if (center.a > 0.001)
