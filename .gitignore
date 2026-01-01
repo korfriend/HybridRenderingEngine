@@ -275,3 +275,5 @@ __pycache__/
 /AGENTS.md
 /gpu manager/clean_helper.py
 /gpu manager/fix_helper.py
+/o.txt
+/o2.txt
