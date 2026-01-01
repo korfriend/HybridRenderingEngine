@@ -327,12 +327,12 @@ namespace vmhelpers {
 	};
 
 	/*!
-	 * @fn ullong vxhelpers::GetCurrentTimePack()
+	 * @fn uint64_t vxhelpers::GetCurrentTimePack()
 	 * @brief 현재 시간에 대한 정보를 64bit으로 인코딩하여 제공
 	 * @return double \n  0~9 bit : milli-seconds , 10~15 bit : second, 16~21 bit : minute, 22~26 bit : hour,  27~31 bit : day, 32~35 bit : month, 36~65 bit : year
 	 * @remarks
 	*/
-	__staticinline unsigned long long GetCurrentTimePack();
+	__staticinline uint64_t GetCurrentTimePack();
 }
 
 

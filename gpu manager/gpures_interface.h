@@ -13,9 +13,9 @@ using namespace vmgpuinterface;
 
 __vmstatic bool __InitializeDevice();
 __vmstatic bool __DeinitializeDevice();
-__vmstatic bool __GetGpuMemoryBytes(uint* dedicatedGpuMemory, uint* freeMemory);
+__vmstatic bool __GetGpuMemoryBytes(uint32_t* dedicatedGpuMemory, uint32_t* freeMemory);
 __vmstatic bool __GetDeviceInformation(void* devInfo, const string& devSpecification);
-__vmstatic ullong __GetUsedGpuMemorySizeBytes();
+__vmstatic uint64_t __GetUsedGpuMemorySizeBytes();
 __vmstatic bool __UpdateGpuResource(GpuRes& gres);
 __vmstatic int __UpdateGpuResourcesBySrcID(const int src_id, vector<GpuRes>& gres_list);
 

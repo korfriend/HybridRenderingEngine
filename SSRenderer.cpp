@@ -140,7 +140,7 @@ void ComputeDOF(__ID3D11DeviceContext* dx11DeviceImmContext,
 	GpuRes gres_fb_globalminmax, gres_fb_z_minmax_mipmap_nbtex;
 	grd_helper::UpdateFrameBuffer(gres_fb_globalminmax, iobj, "BUFFER_RW_GLOBAL_MINMAX", RTYPE_BUFFER,
 		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, UPFB_NFPP_BUFFERSIZE, 2 * MAX_LAYERS_DOF);
-	uint clr_unit4[4] = { 0, 0, 0, 0 };
+	uint32_t clr_unit4[4] = { 0, 0, 0, 0 };
 	dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_globalminmax.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 
 	grd_helper::UpdateFrameBuffer(gres_fb_z_minmax_mipmap_nbtex, iobj, "TEX_ARRAY_Z_MINMAX_MipMap", RTYPE_TEXTURE2D,
@@ -173,8 +173,8 @@ void ComputeDOF(__ID3D11DeviceContext* dx11DeviceImmContext,
 
 	int half_w = fb_size_cur.x / 4;
 	int half_h = fb_size_cur.y / 4;
-	uint texMm_num_grid_x = __BLOCKSIZE == 1 ? half_w : (uint)ceil(half_w / (float)__BLOCKSIZE);
-	uint texMm_num_grid_y = __BLOCKSIZE == 1 ? half_h : (uint)ceil(half_h / (float)__BLOCKSIZE);
+	uint32_t texMm_num_grid_x = __BLOCKSIZE == 1 ? half_w : (uint32_t)ceil(half_w / (float)__BLOCKSIZE);
+	uint32_t texMm_num_grid_y = __BLOCKSIZE == 1 ? half_h : (uint32_t)ceil(half_h / (float)__BLOCKSIZE);
 	dx11DeviceImmContext->CSSetShader(apply_fragmerge ? GETCS(KB_MINMAXTEXTURE_FM_cs_5_0) : GETCS(KB_MINMAXTEXTURE_cs_5_0), NULL, 0);
 	dx11DeviceImmContext->Dispatch(texMm_num_grid_x, texMm_num_grid_y, 1);
 	

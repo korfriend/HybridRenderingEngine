@@ -156,6 +156,8 @@ struct HxCB_PolygonObject
 	float vz_thickness;
 	uint pobj_dummy_0; // 1) actor_id used for picking, 2) outline color, 3) iso_value (float norm [0,1]) for difference map
 	uint pobj_dummy_1;
+	
+	float4 pb_shading_factor; // x : Ambient, y : Diffuse, z : Specular, w : specular
 };
 
 struct HxCB_VolumeObject

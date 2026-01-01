@@ -21,7 +21,7 @@
 
 namespace vz::helper 
 {
-	constexpr size_t string_hash(const char* input)
+	constexpr size_t string_hash(const int8_t* input)
 	{
 		// https://stackoverflow.com/questions/2111667/compile-time-string-hashing
 		size_t hash = sizeof(size_t) == 8 ? 0xcbf29ce484222325 : 0x811c9dc5;
@@ -40,7 +40,7 @@ namespace vz::helper
 	{
 		std::string result;
 		std::locale loc;
-		for (unsigned int i = 0; i < s.length(); ++i)
+		for (uint32_t i = 0; i < s.length(); ++i)
 		{
 			result += std::toupper(s.at(i), loc);
 		}
@@ -50,7 +50,7 @@ namespace vz::helper
 	{
 		std::string result;
 		std::locale loc;
-		for (unsigned int i = 0; i < s.length(); ++i)
+		for (uint32_t i = 0; i < s.length(); ++i)
 		{
 			result += std::tolower(s.at(i), loc);
 		}
@@ -414,9 +414,9 @@ namespace vz::helper
 	inline std::string GetCacheDirectoryPath()
 	{
 #ifdef PLATFORM_LINUX
-		const char* xdg_cache = std::getenv("XDG_CACHE_HOME");
+		const int8_t* xdg_cache = std::getenv("XDG_CACHE_HOME");
 		if (xdg_cache == nullptr || *xdg_cache == '\0') {
-			const char* home = std::getenv("HOME");
+			const int8_t* home = std::getenv("HOME");
 			if (home != nullptr) {
 				return std::string(home) + "/.cache";
 			}
@@ -505,7 +505,7 @@ namespace vz::helper
 			ss += std::to_string((uint32_t)data[i]) + ",";
 		}
 		ss += "\n};\n";
-		ss += "extern const unsigned long long ";
+		ss += "extern const uint64_t ";
 		ss += dataName;
 		ss += "_size = sizeof(";
 		ss += dataName;
@@ -768,7 +768,7 @@ namespace vz::helper
 
 #ifdef PLATFORM_LINUX
 		if (!pfd::settings::available()) {
-			const char* message = "No dialog backend available";
+			const int8_t* message = "No dialog backend available";
 #ifdef SDL2
 			SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
 				"File dialog error!",
@@ -947,7 +947,7 @@ namespace vz::helper
 			_write((uint8_t)data);
 			return *this;
 		}
-		inline FileWrapper& operator<<(unsigned short data)
+		inline FileWrapper& operator<<(uint16_t data)
 		{
 			_write((uint16_t)data);
 			return *this;
@@ -957,7 +957,7 @@ namespace vz::helper
 			_write((int64_t)data);
 			return *this;
 		}
-		inline FileWrapper& operator<<(unsigned int data)
+		inline FileWrapper& operator<<(uint32_t data)
 		{
 			_write((uint64_t)data);
 			return *this;
@@ -972,12 +972,12 @@ namespace vz::helper
 			_write((uint64_t)data);
 			return *this;
 		}
-		inline FileWrapper& operator<<(long long data)
+		inline FileWrapper& operator<<(int64_t data)
 		{
 			_write((int64_t)data);
 			return *this;
 		}
-		inline FileWrapper& operator<<(unsigned long long data)
+		inline FileWrapper& operator<<(uint64_t data)
 		{
 			_write((uint64_t)data);
 			return *this;
@@ -1087,11 +1087,11 @@ namespace vz::helper
 			data = (unsigned char)temp;
 			return *this;
 		}
-		inline FileWrapper& operator>>(unsigned short& data)
+		inline FileWrapper& operator>>(uint16_t& data)
 		{
 			uint16_t temp;
 			_read(temp);
-			data = (unsigned short)temp;
+			data = (uint16_t)temp;
 			return *this;
 		}
 		inline FileWrapper& operator>>(int& data)
@@ -1101,11 +1101,11 @@ namespace vz::helper
 			data = (int)temp;
 			return *this;
 		}
-		inline FileWrapper& operator>>(unsigned int& data)
+		inline FileWrapper& operator>>(uint32_t& data)
 		{
 			uint64_t temp;
 			_read(temp);
-			data = (unsigned int)temp;
+			data = (uint32_t)temp;
 			return *this;
 		}
 		inline FileWrapper& operator>>(long& data)
@@ -1122,18 +1122,18 @@ namespace vz::helper
 			data = (unsigned long)temp;
 			return *this;
 		}
-		inline FileWrapper& operator>>(long long& data)
+		inline FileWrapper& operator>>(int64_t& data)
 		{
 			int64_t temp;
 			_read(temp);
-			data = (long long)temp;
+			data = (int64_t)temp;
 			return *this;
 		}
-		inline FileWrapper& operator>>(unsigned long long& data)
+		inline FileWrapper& operator>>(uint64_t& data)
 		{
 			uint64_t temp;
 			_read(temp);
-			data = (unsigned long long)temp;
+			data = (uint64_t)temp;
 			return *this;
 		}
 		inline FileWrapper& operator>>(float& data)

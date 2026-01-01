@@ -83,7 +83,7 @@ inline long AtomicAnd(volatile long* ptr, long mask)
 {
 	return _InterlockedAnd(ptr, mask);
 }
-inline long long AtomicAnd(volatile long long* ptr, long long mask)
+inline int64_t AtomicAnd(volatile int64_t* ptr, int64_t mask)
 {
 	return _InterlockedAnd64(ptr, mask);
 }
@@ -91,7 +91,7 @@ inline long AtomicOr(volatile long* ptr, long mask)
 {
 	return _InterlockedOr(ptr, mask);
 }
-inline long long AtomicOr(volatile long long* ptr, long long mask)
+inline int64_t AtomicOr(volatile int64_t* ptr, int64_t mask)
 {
 	return _InterlockedOr64(ptr, mask);
 }
@@ -99,7 +99,7 @@ inline long AtomicXor(volatile long* ptr, long mask)
 {
 	return _InterlockedXor(ptr, mask);
 }
-inline long long AtomicXor(volatile long long* ptr, long long mask)
+inline int64_t AtomicXor(volatile int64_t* ptr, int64_t mask)
 {
 	return _InterlockedXor64(ptr, mask);
 }
@@ -107,15 +107,15 @@ inline long AtomicAdd(volatile long* ptr, long val)
 {
 	return _InterlockedExchangeAdd(ptr, val);
 }
-inline long long AtomicAdd(volatile long long* ptr, long long val)
+inline int64_t AtomicAdd(volatile int64_t* ptr, int64_t val)
 {
 	return _InterlockedExchangeAdd64(ptr, val);
 }
-inline unsigned int countbits(unsigned int value)
+inline uint32_t countbits(uint32_t value)
 {
 	return __popcnt(value);
 }
-inline unsigned long long countbits(unsigned long long value)
+inline uint64_t countbits(uint64_t value)
 {
 	return __popcnt64(value);
 }
@@ -128,7 +128,7 @@ inline unsigned long firstbithigh(unsigned long value)
 	}
 	return 0;
 }
-inline unsigned long firstbithigh(unsigned long long value)
+inline unsigned long firstbithigh(uint64_t value)
 {
 	unsigned long bit_index;
 	if (_BitScanReverse64(&bit_index, value))
@@ -146,7 +146,7 @@ inline unsigned long firstbitlow(unsigned long value)
 	}
 	return 0;
 }
-inline unsigned long firstbitlow(unsigned long long value)
+inline unsigned long firstbitlow(uint64_t value)
 {
 	unsigned long bit_index;
 	if (_BitScanForward64(&bit_index, value))
@@ -161,7 +161,7 @@ inline long AtomicAnd(volatile long* ptr, long mask)
 {
 	return __atomic_fetch_and(ptr, mask, __ATOMIC_SEQ_CST);
 }
-inline long long AtomicAnd(volatile long long* ptr, long long mask)
+inline int64_t AtomicAnd(volatile int64_t* ptr, int64_t mask)
 {
 	return __atomic_fetch_and(ptr, mask, __ATOMIC_SEQ_CST);
 }
@@ -169,7 +169,7 @@ inline long AtomicOr(volatile long* ptr, long mask)
 {
 	return __atomic_fetch_or(ptr, mask, __ATOMIC_SEQ_CST);
 }
-inline long long AtomicOr(volatile long long* ptr, long long mask)
+inline int64_t AtomicOr(volatile int64_t* ptr, int64_t mask)
 {
 	return __atomic_fetch_or(ptr, mask, __ATOMIC_SEQ_CST);
 }
@@ -177,7 +177,7 @@ inline long AtomicXor(volatile long* ptr, long mask)
 {
 	return __atomic_fetch_xor(ptr, mask, __ATOMIC_SEQ_CST);
 }
-inline long long AtomicXor(volatile long long* ptr, long long mask)
+inline int64_t AtomicXor(volatile int64_t* ptr, int64_t mask)
 {
 	return __atomic_fetch_xor(ptr, mask, __ATOMIC_SEQ_CST);
 }
@@ -185,23 +185,23 @@ inline long AtomicAdd(volatile long* ptr, long val)
 {
 	return __atomic_fetch_add(ptr, val, __ATOMIC_SEQ_CST);
 }
-inline long long AtomicAdd(volatile long long* ptr, long long val)
+inline int64_t AtomicAdd(volatile int64_t* ptr, int64_t val)
 {
 	return __atomic_fetch_add(ptr, val, __ATOMIC_SEQ_CST);
 }
-inline unsigned int countbits(unsigned int value)
+inline uint32_t countbits(uint32_t value)
 {
 	return __builtin_popcount(value);
 }
-inline unsigned long long countbits(unsigned long value)
+inline uint64_t countbits(unsigned long value)
 {
 	return __builtin_popcountl(value);
 }
-inline unsigned long long countbits(unsigned long long value)
+inline uint64_t countbits(uint64_t value)
 {
 	return __builtin_popcountll(value);
 }
-inline unsigned long firstbithigh(unsigned int value)
+inline unsigned long firstbithigh(uint32_t value)
 {
 	if (value == 0)
 	{
@@ -217,7 +217,7 @@ inline unsigned long firstbithigh(unsigned long value)
 	}
 	return __builtin_clzl(value);
 }
-inline unsigned long firstbithigh(unsigned long long value)
+inline unsigned long firstbithigh(uint64_t value)
 {
 	if (value == 0)
 	{
@@ -225,7 +225,7 @@ inline unsigned long firstbithigh(unsigned long long value)
 	}
 	return __builtin_clzll(value);
 }
-inline unsigned long firstbitlow(unsigned int value)
+inline unsigned long firstbitlow(uint32_t value)
 {
 	if (value == 0)
 	{
@@ -241,7 +241,7 @@ inline unsigned long firstbitlow(unsigned long value)
 	}
 	return __builtin_ctzl(value);
 }
-inline unsigned long firstbitlow(unsigned long long value)
+inline unsigned long firstbitlow(uint64_t value)
 {
 	if (value == 0)
 	{
@@ -255,9 +255,9 @@ inline long AtomicLoad(const volatile long* ptr)
 {
 	return AtomicOr((volatile long*)ptr, 0);
 }
-inline long long AtomicLoad(const volatile long long* ptr)
+inline int64_t AtomicLoad(const volatile int64_t* ptr)
 {
-	return AtomicOr((volatile long long*)ptr, 0);
+	return AtomicOr((volatile int64_t*)ptr, 0);
 }
 
 // Enable enum flags:
@@ -309,7 +309,7 @@ constexpr bool has_flag(E lhs, E rhs)
 {
 	return (lhs & rhs) == rhs;
 }
-constexpr auto* relative_path(const char* const path)
+constexpr auto* relative_path(const int8_t* const path)
 {
 	const auto* startPosition = path;
 	for (const auto* currentCharacter = path; *currentCharacter != '\0'; ++currentCharacter)

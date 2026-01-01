@@ -24,7 +24,7 @@ void sort::Sort(VmGpuManager* gpu_manager,
 		indirectBuffer.options["FORMAT"] = DXGI_FORMAT_R32_TYPELESS;
 		indirectBuffer.options["RAW_ACCESS"] = 1;
 		indirectBuffer.options["MISC"] = D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
-		indirectBuffer.res_values.SetParam("NUM_ELEMENTS", (uint)sizeof(IndirectDispatchArgs) / 4u);
+		indirectBuffer.res_values.SetParam("NUM_ELEMENTS", (uint32_t)sizeof(IndirectDispatchArgs) / 4u);
 		indirectBuffer.res_values.SetParam("STRIDE_BYTES", 4u);
 		gpu_manager->GenerateGpuResource(indirectBuffer);
 	}
@@ -32,7 +32,7 @@ void sort::Sort(VmGpuManager* gpu_manager,
 	__ID3D11DeviceContext* dx11DeviceImmContext = psoManager->dx11DeviceImmContext;
 
 	ID3D11Buffer* cbuf_sort = psoManager->get_cbuf("CB_SortConstants");
-	auto SetSortContants = [&dx11DeviceImmContext, &cbuf_sort](const uint counterReadOffset, const vmint3& job_params) {
+	auto SetSortContants = [&dx11DeviceImmContext, &cbuf_sort](const uint32_t counterReadOffset, const vmint3& job_params) {
 		D3D11_MAPPED_SUBRESOURCE mappedResSortConstants;
 		dx11DeviceImmContext->Map(cbuf_sort, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResSortConstants);
 		CB_SortConstants* cbData = (CB_SortConstants*)mappedResSortConstants.pData;

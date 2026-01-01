@@ -39,11 +39,8 @@ struct RayHitResult {
 };
 
 struct MeshParams {
-	ID3D11Buffer* vbMesh;
-	ID3D11ShaderResourceView* uvBufferSRV;  // UV buffer for mesh painter (t61)
-	std::string inputLayerDesc;	// "P", "PN", "PT", "PNT", "PNTC"
-	uint stride;
-	uint offset;
+	ID3D11Buffer* vbPos;
+	ID3D11Buffer* vbUV;
 	vmobjects::PrimitiveData* primData;
 };
 
@@ -73,8 +70,7 @@ public:
 		vmobjects::PrimitiveData* primData,
 		int triangleIndex,
 		float baryU, float baryV,
-		float outUV[2],
-		const std::vector<float>* painterUVs = nullptr
+		float outUV[2]
 	);
 
 	// Ray-triangle intersection for picking
@@ -108,7 +104,7 @@ private:
 		float matOS2WS[16];      // 64 bytes (4x4 matrix)
 
 		int blendMode;           // 4 bytes
-		uint painterFlags;          // 4 bytes
+		uint32_t painterFlags;          // 4 bytes
 		float padding0;          // 4 bytes
 		float padding1;          // 4 bytes
 	};  // Total: 128 bytes (matches HLSL CB_Brush)
@@ -119,16 +115,12 @@ private:
 	ComPtr<ID3D11PixelShader> brushPS;
 
 	// Input Layouts for brush shader (created from brushVS bytecode)
-	ComPtr<ID3D11InputLayout> brushInputLayout_P;
-	ComPtr<ID3D11InputLayout> brushInputLayout_PN;
-	ComPtr<ID3D11InputLayout> brushInputLayout_PT;
-	ComPtr<ID3D11InputLayout> brushInputLayout_PNT;
+	ComPtr<ID3D11InputLayout> brushInputLayout;
 
 	ComPtr<ID3D11VertexShader> dilationVS;	//	quad
 	ComPtr<ID3D11PixelShader> dilationPS;
 
 	void createBrushResources();
-	ID3D11InputLayout* getBrushInputLayout(const std::string& layoutDesc);  // Get input layout by name (P/PN/PT/PNT)
 	void updateBrushConstants(const BrushParams& brush, const float uv[2], float uvRadius[2], const vmmat44f& matOS2WS, const bool paint);
 	void renderBrushStroke(FeedbackTexture* hoverTex,
 		FeedbackTexture* paintTex,

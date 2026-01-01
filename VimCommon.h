@@ -36,7 +36,8 @@
 //#define __VERSION "1.32" // released at 25.02.08
 //#define __VERSION "1.33" // released at 25.08.11
 //#define __VERSION "1.40" // released at 25.11.29
-#define __VERSION "1.41" // released at 25.12.01
+//#define __VERSION "1.41" // released at 25.12.01
+#define __VERSION "1.50" // released at 25.12.29
 
 #define _HAS_STD_BYTE 0
 
@@ -97,23 +98,7 @@ using namespace vz;
 #define VM_PI 3.14159265358979323846
 #define VM_fPI    ((float)  3.141592654f)
 
-#ifndef ushort
-	typedef unsigned short ushort;
-#endif
-#ifndef uint
-	typedef unsigned int uint;
-#endif
-#if !defined(byte)
-	//typedef unsigned char byte;
-	//#define byte unsigned char
-#endif
-	//typedef std::byte byte;
-#ifndef ullong
-	typedef unsigned long long ullong;
-#endif
-#ifndef llong
-	typedef long long llong;
-#endif
+#define NUM_VTX_DEFINITIONS 8
 
 	// temp typedefs
 	// our proj math structures are based on glm::
@@ -122,42 +107,15 @@ using namespace vz;
 #include <glm/gtc/constants.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
-typedef struct color4 {
-	union { struct { byte r, g, b, a; }; struct { byte x, y, z, w; }; };
-	color4() { r = g = b = a = (byte)0; };
-	color4(byte _r, byte _g, byte _b, byte _a) { r = _r; g = _g; b = _b; a = _a; };
-} vmbyte4;
-typedef struct color3 {
-	union { struct { byte r, g, b; }; struct { byte x, y, z; }; };
-	color3() { r = g = b = (byte)0; };
-	color3(byte _r, byte _g, byte _b) { r = _r; g = _g; b = _b; };
-} vmbyte3;
-typedef struct char2 {
-	char x, y; char2() { x = y = 0; }
-	char2(char _x, char _y) { x = _x; y = _y; }
-} vmchar2;
-typedef struct byte2 {
-	byte x, y; byte2() { x = y = (byte)0; }
-	byte2(byte _x, byte _y) { x = _x; y = _y; }
-} vmbyte2;
-typedef struct short2 {
-	short x, y; short2() { x = y = 0; }
-	short2(short _x, short _y) { x = _x; y = _y; }
-} vmshort2;
-typedef struct ushort2 {
-	ushort x, y; ushort2() { x = y = 0; }
-	ushort2(ushort _x, ushort _y) { x = _x; y = _y; }
-} vmushort2;
-typedef struct short3 {
-	short x, y, z; short3() { x = y = z = 0; }
-	short3(short _x, short _y, short _z) {
-		x = _x; y = _y; z = _z;
-	}
-} vmshort3;
-typedef struct ushort3 {
-	ushort x, y, z; ushort3() { x = y = z = 0; }
-	ushort3(ushort _x, ushort _y, ushort _z) { x = _x; y = _y; z = _z; }
-} vmushort3;
+
+typedef glm::u8vec4 vmbyte4;
+typedef glm::u8vec3 vmbyte3;
+typedef glm::u8vec2 vmbyte2;
+typedef glm::i8vec2 vmchar2;
+typedef glm::i16vec2 vmshort2;
+typedef glm::u16vec2 vmushort2;
+typedef glm::i16vec3 vmshort3;
+typedef glm::u16vec3 vmushort3;
 typedef glm::ivec2 vmint2;
 typedef glm::ivec3 vmint3;
 typedef glm::ivec4 vmint4;
@@ -172,6 +130,20 @@ typedef glm::fvec3 vmfloat3;
 typedef glm::fvec4 vmfloat4;
 typedef glm::dmat4x4 vmmat44;
 typedef glm::fmat4x4 vmmat44f;
+
+static vmbyte3 Float3ToU8vec3(const vmfloat3& c01)
+{
+	glm::vec3 x = glm::clamp(c01, 0.0f, 1.0f);
+	x = glm::round(x * 255.0f);
+	return glm::u8vec3(x);
+}
+
+static vmbyte4 Float3ToU8vec4(const vmfloat3& c01)
+{
+	glm::vec3 x = glm::clamp(c01, 0.0f, 1.0f);
+	x = glm::round(x * 255.0f);
+	return glm::u8vec4(x.x, x.y, x.z, 255);
+}
 
 #define __VMCVT3__(d, s, t3, tt) d=t3((tt)s.x, (tt)s.y, (tt)s.z)
 #define __OPS__(d, s, op) d=op(d, s)
@@ -567,12 +539,12 @@ namespace vmobjects
 		 * 실제 할당된 y 축 방향 크기 = i3VolumeSize.y + i3SizeExtraBoundary.y*2 \n
 		 * 실제 할당된 z 축 방향 크기 = i3VolumeSize.z + i3SizeExtraBoundary.z*2 \n
 		 * @par ex.
-		 * ushort 512x512x512 Volume에서 (100, 120, 150) index 값 sample \n
+		 * uint16_t 512x512x512 Volume에서 (100, 120, 150) index 값 sample \n
 		 * @par
 		 * >> int iSamplePosX = 100 + i3SizeExtraBoundary.x; \n
 		 * >> int iSamplePosY = 120 + i3SizeExtraBoundary.y; \n
 		 * >> int iSamplePosZ = 150 + i3SizeExtraBoundary.z; \n
-		 * >> ushort usValue = ((ushort**)ppvVolumeSlices)[iSamplePosZ][iSamplePosX + iSamplePosY*(i3VolumeSize.x + i3SizeExtraBoundary.x*2)];
+		 * >> uint16_t usValue = ((uint16_t**)ppvVolumeSlices)[iSamplePosZ][iSamplePosX + iSamplePosY*(i3VolumeSize.x + i3SizeExtraBoundary.x*2)];
 		 */
 		void** vol_slices;
 		/**
@@ -597,7 +569,7 @@ namespace vmobjects
 		/**
 		 * @brief Volume으로 저장되기 전에 정의된 최소값 actual_Mm_values.x, 최대값 actual_Mm_values.y
 		 * @par ex.
-		 * file format float으로 -1.5 ~ 2.5 저장된 볼륨을 ushort 으로 저장할 경우
+		 * file format float으로 -1.5 ~ 2.5 저장된 볼륨을 uint16_t 으로 저장할 경우
 		 * @par
 		 * >> store_Mm_values = vmdouble2(0, 65535), actual_Mm_values = vmdouble2(-1.5, 2.5);
 		 */
@@ -605,10 +577,10 @@ namespace vmobjects
 		/**
 		 * @brief Volume에 대한 Histogram 을 정의하는 array
 		 * @details
-		 * array 크기는 uint(d2MinMaxValue.y - d2MinMaxValue.x + 1.5) \n
+		 * array 크기는 uint32_t(d2MinMaxValue.y - d2MinMaxValue.x + 1.5) \n
 		 * pullHistogram[volume value] = # of voxels
 		 */
-		ullong* histo_values;
+		uint64_t* histo_values;
 		/**
 		 * @brief memory 에 저장된 volume space (샘플 좌표)와 초기 world space 에 배치되는 변환 matrix 정의
 		 */
@@ -627,9 +599,9 @@ namespace vmobjects
 		}
 
 		/**
-		 * @brief Histogram array 의 크기를 얻음, uint(store_Mm_values.y - store_Mm_values.x + 1.5)
+		 * @brief Histogram array 의 크기를 얻음, uint32_t(store_Mm_values.y - store_Mm_values.x + 1.5)
 		 */
-		uint GetHistogramSize() { return (uint)((double)__max(store_Mm_values.y - store_Mm_values.x + 1.5, 1.0)); }
+		uint32_t GetHistogramSize() { return (uint32_t)((double)__max(store_Mm_values.y - store_Mm_values.x + 1.5, 1.0)); }
 		/**
 		 * @brief ppvVolumeSlices array 크기를 얻음, Extra Boundary가 적용된 크기
 		 */
@@ -654,8 +626,8 @@ namespace vmobjects
 		 * string ==> POSITION, NORMAL, TEXCOORD[n], ...
 		 * memory 할당된 pointer를 value로 갖고, @ref PrimitiveData::Delete 에서 해제됨.
 		 */
-		std::map<std::string, byte*> defined_vtxbuffers;
-		std::map<std::string, byte*> defined_custombuffers;
+		std::map<std::string, uint8_t*> defined_vtxbuffers;
+		std::map<std::string, uint8_t*> defined_custombuffers;
 	public:
 		/**
 		 * @brief Primitive로 구성 된 객체의 Polygon 의 normal vector 기준의 vertex 배열 방향
@@ -676,11 +648,11 @@ namespace vmobjects
 		/**
 		 * @brief Primitive로 구성 된 객체의 Polygon 개수
 		 */
-		uint num_prims;
+		uint32_t num_prims;
 		/**
 		 * @brief 하나의 Primitive(Polygon)을 정의하는 index 개수
 		 */
-		uint idx_stride;
+		uint32_t idx_stride;
 		/**
 		 * @brief Vertex의 Index기반으로 Polygon을 정의하기 위한 Index Buffer (puiIndexList) 의 크기
 		 * @details
@@ -689,15 +661,15 @@ namespace vmobjects
 		 * >> else\n
 		 * >>    num_vidx = num_prims * idx_stride;
 		 */
-		uint num_vidx;
+		uint32_t num_vidx;
 		/**
 		 * @brief Vertex의 Index 기반으로 Polygon를 위한 Index Buffer가 정의된 array
 		 */
-		uint* vidx_buffer;
+		uint32_t* vidx_buffer;
 		/**
 		 * @brief Primitive로 구성 된 객체의 Vertex 개수
 		 */
-		uint num_vtx;
+		uint32_t num_vtx;
 		/**
 		 * @brief PrimitiveData 단위의 OS 상에서 정의되는 bounding box
 		 */
@@ -706,9 +678,9 @@ namespace vmobjects
 		 * @brief Texture Resource 에 대한 정보 \n
 		 * <w, h, bytes_stride, res_ptr>
 		 */
-		std::map<std::string, std::tuple<int, int, int, byte*>> texture_res_info;
+		std::map<std::string, std::tuple<int, int, int, uint8_t*>> texture_res_info;
 
-		bool GetTexureInfo(const std::string& desc, int& w, int& h, int& bytes_stride, byte** res_ptr)
+		bool GetTexureInfo(const std::string& desc, int& w, int& h, int& bytes_stride, uint8_t** res_ptr)
 		{
 			auto it = texture_res_info.find(desc);
 			if (it == texture_res_info.end()) return false;
@@ -737,17 +709,17 @@ namespace vmobjects
 			VMSAFE_DELETEARRAY(vidx_buffer);
 			for (auto it = texture_res_info.begin(); it != texture_res_info.end(); it++)
 			{
-				byte* p = std::get<3>(it->second);
+				uint8_t* p = std::get<3>(it->second);
 				VMSAFE_DELETEARRAY(p);
 			}
 			texture_res_info.clear();
 
-			for (std::map<std::string, byte*>::iterator itrVertex3D = defined_vtxbuffers.begin(); itrVertex3D != defined_vtxbuffers.end(); itrVertex3D++)
+			for (std::map<std::string, uint8_t*>::iterator itrVertex3D = defined_vtxbuffers.begin(); itrVertex3D != defined_vtxbuffers.end(); itrVertex3D++)
 			{
 				VMSAFE_DELETEARRAY(itrVertex3D->second);
 			}
 			defined_vtxbuffers.clear();
-			for (std::map<std::string, byte*>::iterator itrVertex3D = defined_custombuffers.begin(); itrVertex3D != defined_custombuffers.end(); itrVertex3D++)
+			for (std::map<std::string, uint8_t*>::iterator itrVertex3D = defined_custombuffers.begin(); itrVertex3D != defined_custombuffers.end(); itrVertex3D++)
 			{
 				VMSAFE_DELETEARRAY(itrVertex3D->second);
 			}
@@ -760,18 +732,35 @@ namespace vmobjects
 		 * keys : POSITION, NORMAL, TEXCOORD[n], ...
 		 * @return vmfloat3 \n vertex buffer 포인터. 없으면 NULL 반환
 		 */
-		vmfloat3* GetVerticeDefinition(const std::string& vtype) {
-			std::map<std::string, byte*>::iterator itrVtxDef = defined_vtxbuffers.find(vtype);
+		template<class T>
+		T* GetVerticeDefinition(const std::string& vtype) {
+			std::map<std::string, uint8_t*>::iterator itrVtxDef = defined_vtxbuffers.find(vtype);
 			if (itrVtxDef == defined_vtxbuffers.end())
 				return NULL;
-			return (vmfloat3*)itrVtxDef->second;
+			return (T*)itrVtxDef->second;
 		}
-		byte* GetCustomDefinition(const std::string& vtype) {
-			std::map<std::string, byte*>::iterator itrVtxDef = defined_custombuffers.find(vtype);
+		uint8_t* GetCustomDefinition(const std::string& vtype) {
+			std::map<std::string, uint8_t*>::iterator itrVtxDef = defined_custombuffers.find(vtype);
 			if (itrVtxDef == defined_custombuffers.end())
 				return NULL;
-			return (byte*)itrVtxDef->second;
+			return (uint8_t*)itrVtxDef->second;
 		}
+
+		template<class T>
+		const T* GetVerticeDefinitionConst(const std::string& vtype) const {
+			std::map<std::string, uint8_t*>::const_iterator itrVtxDef = defined_vtxbuffers.find(vtype);
+			if (itrVtxDef == defined_vtxbuffers.end())
+				return NULL;
+			return (T*)itrVtxDef->second;
+		}
+
+		const uint8_t* GetCustomDefinitionConst(const std::string& vtype) const {
+			std::map<std::string, uint8_t*>::const_iterator itrVtxDef = defined_custombuffers.find(vtype);
+			if (itrVtxDef == defined_custombuffers.end())
+				return NULL;
+			return (uint8_t*)itrVtxDef->second;
+		}
+
 		/*!
 		 * @fn void vmobjects::PrimitiveData::ReplaceOrAddVerticeDefinition(const string& vtype, vmfloat3* vtx_buffer)
 		 * @brief defined_buffers 의 value로 정의된 pointer 반환하는 method,
@@ -780,23 +769,23 @@ namespace vmobjects
 		 * @remarks string vtype 을 키로 갖기 때문에 이미 등록된 vertex definition 이 있을 경우, \n
 		 * 해당 definition 의 vertex pointer 를 메모리에서 해제하고 새로운 vertex pointer 를 등록
 		 */
-		void ReplaceOrAddVerticeDefinition(const std::string& vtype, vmfloat3* vtx_buffer) {
-			vmfloat3* vtx_buffer_old = GetVerticeDefinition(vtype);
+		void ReplaceOrAddVerticeDefinition(const std::string& vtype, void* vtx_buffer) {
+			uint8_t* vtx_buffer_old = GetVerticeDefinition<uint8_t>(vtype);
 			if (vtx_buffer_old != NULL)
 			{
 				VMSAFE_DELETEARRAY(vtx_buffer_old);
 				defined_vtxbuffers.erase(vtype);
 			}
-			defined_vtxbuffers.insert(std::pair<std::string, byte*>(vtype, (byte*)vtx_buffer));
+			defined_vtxbuffers.insert(std::pair<std::string, uint8_t*>(vtype, (uint8_t*)vtx_buffer));
 		}
-		void ReplaceOrAddCustomDefinition(const std::string& vtype, byte* buffer) {
-			byte* buffer_old = GetCustomDefinition(vtype);
+		void ReplaceOrAddCustomDefinition(const std::string& vtype, void* buffer) {
+			uint8_t* buffer_old = GetCustomDefinition(vtype);
 			if (buffer_old != NULL)
 			{
 				VMSAFE_DELETEARRAY(buffer_old);
 				defined_custombuffers.erase(vtype);
 			}
-			defined_custombuffers.insert(std::pair<std::string, byte*>(vtype, (byte*)buffer));
+			defined_custombuffers.insert(std::pair<std::string, uint8_t*>(vtype, (uint8_t*)buffer));
 		}
 		/*!
 		 * @fn int vmobjects::PrimitiveData::GetNumVertexDefinitions()
@@ -827,7 +816,7 @@ namespace vmobjects
 		*/
 		void ComputeOrthoBoundingBoxWithCurrentValues()
 		{
-			vmfloat3* vtx_buffer = GetVerticeDefinition("POSITION");
+			vmfloat3* vtx_buffer = GetVerticeDefinition<vmfloat3>("POSITION");
 			assert(vtx_buffer != NULL && num_vtx > 0);
 
 			aabb_os.pos_min = vmfloat3(DBL_MAX, DBL_MAX, DBL_MAX);
@@ -1011,7 +1000,7 @@ namespace vmobjects
 		 * array의 크기는 block의 전체 개수와 동일, extra boundary을 고려하지 않음 \n
 		 * data type은 2 channel을 갖고 volume type과 같음. x : 최소값, y : 최대값
 		 * @par ex.
-		 * 8x8x8 block을 단위로 정의된 512x512x512 volume (ushort) 에서 OS의 (100, 100, 100) 좌표에 해당하는 block의 최소 최대값 \n
+		 * 8x8x8 block을 단위로 정의된 512x512x512 volume (uint16_t) 에서 OS의 (100, 100, 100) 좌표에 해당하는 block의 최소 최대값 \n
 		 * 이 경우 unitblk_size = vmint3(8, 8, 8), blk_vol_size = (ceil(512/8), ceil(512/8), ceil(512/8)) \n
 		 *
 		 * @par
@@ -1029,19 +1018,19 @@ namespace vmobjects
 		 * resource manager 에서 TObject 삭제 시, 등록된 Volume Object 의 Block 들에 대해 resouece 정리 수행 \n
 		 * VolumeBlocks::GetTaggedActivatedBlocks 와 VolumeBlocks::GetTaggedActivatedBlocks 로 Pointer 작업 가능 \n
 		 * @par ex.
-		 * 8x8x8 block을 단위로 정의된 512x512x512 volume (ushort) 에서 OS의 (100, 100, 100) 좌표에 해당하는 block 의 tag \n
+		 * 8x8x8 block을 단위로 정의된 512x512x512 volume (uint16_t) 에서 OS의 (100, 100, 100) 좌표에 해당하는 block 의 tag \n
 		 * 이 경우 unitblk_size = vmint3(8, 8, 8), blk_vol_size = (ceil(512/8), ceil(512/8), ceil(512/8)) \n
 		 *
 		 * @par
-		 * >> byte* tflag_blks = itratorMap->second;
+		 * >> uint8_t* tflag_blks = itratorMap->second;
 		 * >> vmint3 blk_id = vmint3(floor(100/8), floor(100/8), floor(100/8)); \n
 		 * >> int blk_idx = blk_id.x + blk_bnd_size.x
 		 * >>                     + (blk_id.y + blk_bnd_size.y)*(blk_id.x + 2*blk_bnd_size.x)
 		 * >>                     + (blk_id.z + blk_bnd_size.z)*(blk_id.x + 2*blk_bnd_size.x)*(blk_id.y + 2*blk_bnd_size.y); \n
 		 * >> byte tflag = tflag_blks[blk_idx];
 		 */
-		std::map<int, byte*> tflag_blks_map;
-		std::map<int, ullong> updatetime_map;
+		std::map<int, uint8_t*> tflag_blks_map;
+		std::map<int, uint64_t> updatetime_map;
 
 		/// constructor, 모두 0 (NULL or false)으로 초기화
 		VolumeBlocks() {
@@ -1055,7 +1044,7 @@ namespace vmobjects
 		*/
 		void Delete() {
 			VMSAFE_DELETEARRAY(mM_blks);
-			for (std::map<int, byte*>::iterator itr = tflag_blks_map.begin(); itr != tflag_blks_map.end(); itr++)
+			for (std::map<int, uint8_t*>::iterator itr = tflag_blks_map.begin(); itr != tflag_blks_map.end(); itr++)
 				VMSAFE_DELETEARRAY(itr->second);
 			tflag_blks_map.clear();
 			updatetime_map.clear();
@@ -1063,31 +1052,31 @@ namespace vmobjects
 
 		/*!
 		* @fn void vmobjects::VolumeBlocks::GetTaggedActivatedBlocks(int iTObjectID)
-		* @brief 해당 TObjectID 의 Tagged Activated Blocks (byte* tflag_blks) 포인터를 받음
+		* @brief 해당 TObjectID 의 Tagged Activated Blocks (uint8_t* tflag_blks) 포인터를 받음
 		*/
-		byte* GetTaggedActivatedBlocks(int tobj_id)
+		uint8_t* GetTaggedActivatedBlocks(int tobj_id)
 		{
-			std::map<int, byte*>::iterator itr = tflag_blks_map.find(tobj_id);
+			std::map<int, uint8_t*>::iterator itr = tflag_blks_map.find(tobj_id);
 			if (itr == tflag_blks_map.end())
 				return NULL;
 			return itr->second;
 		}
 
-		ullong GetUpdateTime(int tobj_id)
+		uint64_t GetUpdateTime(int tobj_id)
 		{
-			std::map<int, ullong>::iterator itr = updatetime_map.find(tobj_id);
+			std::map<int, uint64_t>::iterator itr = updatetime_map.find(tobj_id);
 			if (itr == updatetime_map.end())
 				return 0;
 			return itr->second;
 		}
 
 		/*!
-		* @fn void vmobjects::VolumeBlocks::ReplaceOrAddTaggedActivatedBlocks(int tobj_id, byte* tflag_blks)
+		* @fn void vmobjects::VolumeBlocks::ReplaceOrAddTaggedActivatedBlocks(int tobj_id, uint8_t* tflag_blks)
 		* @brief 해당 TObjectID 에 대한 TaggedActivatedBlocks 을 등록
 		*/
-		bool ReplaceOrAddTaggedActivatedBlocks(const int tobj_id, byte* tflag_blks)
+		bool ReplaceOrAddTaggedActivatedBlocks(const int tobj_id, uint8_t* tflag_blks)
 		{
-			std::map<int, byte*>::iterator itr = tflag_blks_map.find(tobj_id);
+			std::map<int, uint8_t*>::iterator itr = tflag_blks_map.find(tobj_id);
 			if (itr != tflag_blks_map.end())
 				VMSAFE_DELETEARRAY(itr->second);
 
@@ -1101,7 +1090,7 @@ namespace vmobjects
 		*/
 		void DeleteTaggedActivatedBlocks(const int tobj_id)
 		{
-			std::map<int, byte*>::iterator itr = tflag_blks_map.find(tobj_id);
+			std::map<int, uint8_t*>::iterator itr = tflag_blks_map.find(tobj_id);
 			if (itr != tflag_blks_map.end())
 			{
 				VMSAFE_DELETEARRAY(itr->second);
@@ -1279,7 +1268,7 @@ namespace vmobjects
 		 */
 		EvmObjectType GetObjectType();
 
-		unsigned long long GetContentUpdateTime();
+		uint64_t GetContentUpdateTime();
 
 		void SetContentUpdateTime();
 		
@@ -1476,7 +1465,7 @@ namespace vmobjects
 		 * @return true : 성공, false : 실패
 		 * @remarks
 		 * 기존에 생성 및 정의되어 있으면 기존 것을 삭제 후 다시 생성 및 정의 \n
-		 * Histogram의 Array(histo_values) 크기는 uint(store_Mm_values.y - store_Mm_values.x + 1.5)으로 정함
+		 * Histogram의 Array(histo_values) 크기는 uint32_t(store_Mm_values.y - store_Mm_values.x + 1.5)으로 정함
 		*/
 		static bool FillHistogram(VolumeData& vol_data, LocalProgress* progress = NULL);
 		static bool FillMinMaxStoreValues(VolumeData& vol_data, LocalProgress* progress = NULL);
@@ -1805,8 +1794,8 @@ namespace vmobjects
 
 		bool HasKDTree(int* num_updated = NULL);
 		void UpdateKDTree(); // just for point cloud
-		uint KDTSearchRadius(const vmfloat3& p_src, const float r_sq, const bool is_sorted, std::vector<std::pair<size_t, float>>& ret_matches);
-		uint KDTSearchKnn(const vmfloat3& p_src, const int k, size_t* out_ids, float* out_dists);
+		uint32_t KDTSearchRadius(const vmfloat3& p_src, const float r_sq, const bool is_sorted, std::vector<std::pair<size_t, float>>& ret_matches);
+		uint32_t KDTSearchKnn(const vmfloat3& p_src, const int k, size_t* out_ids, float* out_dists);
 		
 		void UpdateBVHTree(int min_size = -1, int max_size = -1); // for primitives
 		void* GetBVHTree();
@@ -1839,7 +1828,7 @@ namespace fncontainer
 		vmfloat3 pos = vmfloat3(0), dir = vmfloat3(0, 0, -1), up = vmfloat3(0, 1, 0); // Local coordinates
 		bool is_pointlight = false; // 'true' uses pos_light, 'false' uses dir_light
 		bool is_on_camera = true; // 'true' sets cam params to light source. in this case, it is unnecessary to set pos, dir, and up (ignore these)		
-		ullong timeStamp = 0ull; // will be automatically set 
+		uint64_t timeStamp = 0ull; // will be automatically set 
 
 		//vmfloat3 ambient_color = vmfloat3(1.f);
 		//vmfloat3 diffuse_color = vmfloat3(1.f);

@@ -58,7 +58,7 @@ namespace vmgpuinterface
 		int vm_src_id;
 		std::string res_name;
 		GpuResType rtype;
-		std::map<std::string, uint> options;
+		std::map<std::string, uint32_t> options;
 		vmobjects::VmParamMap<std::string, std::any> res_values;
 		std::map<DesType, void*> alloc_res_ptrs;
 	};
@@ -84,21 +84,21 @@ namespace vmgpuinterface
 		bool GetDeviceInformation(void* dev_info_ptr, const string& dev_specifier);
 		/*!
 		 * @brief GPU memory state를 얻는 함수
-		 * @param dedicated_gpu_mem_bytes [out] \n ullong \n GPU 전용 memory 크기(bytes)를 저장할 unit의 포인터
-		 * @param free_gpu_mem [out] \n ullong \n 현재 사용 가능한 GPU memory 크기(bytes)를 저장할 unit의 포인터
+		 * @param dedicated_gpu_mem_bytes [out] \n uint64_t \n GPU 전용 memory 크기(bytes)를 저장할 unit의 포인터
+		 * @param free_gpu_mem [out] \n uint64_t \n 현재 사용 가능한 GPU memory 크기(bytes)를 저장할 unit의 포인터
 		 * @return bool \n 메모리를 얻는 것이 성공하면 true, 그렇지 않으면 false 반환
 		 */
-		bool GetGpuCurrentMemoryBytes(ullong* dedicated_gpu_mem_bytes/*out*/, ullong* free_gpu_mem/*out*/);
+		bool GetGpuCurrentMemoryBytes(uint64_t* dedicated_gpu_mem_bytes/*out*/, uint64_t* free_gpu_mem/*out*/);
 		/*!
 		 * @brief 현재 Framework에서 사용하고 있는 resource 중 GPU resource로 등록된 크기를 얻음
-		 * @return uint \n Framework에서 사용하고 있는 resource 중 GPU resource로 등록된 크기(bytes) 반환
+		 * @return uint32_t \n Framework에서 사용하고 있는 resource 중 GPU resource로 등록된 크기(bytes) 반환
 		 * @remarks 모든 GPU SDK에 대하여 동작
 		 */
-		ullong GetUsedGpuMemorySizeBytes();
+		uint64_t GetUsedGpuMemorySizeBytes();
 		/*!
 		 * @brief GPU resource로 등록된 자료구조를 얻음
 		 * @param GpuRes [in/out] \n gres \n 내부의 res_name 및 vm_src_id 으로 정의되어 있는 resouece 를 저장
-		 * @return uint \n GPU resource로 등록된 자료구조를 성공적으로 얻으면 true, 그렇지 않으면 false 반환
+		 * @return uint32_t \n GPU resource로 등록된 자료구조를 성공적으로 얻으면 true, 그렇지 않으면 false 반환
 		 * @remarks 모든 GPU SDK에 대하여 동작
 		 */
 		bool UpdateGpuResource(GpuRes& gres/*in-out*/);
@@ -106,7 +106,7 @@ namespace vmgpuinterface
 		 * @brief 해당 VmObject 와 관련된 모든 GPU resource를 얻음
 		 * @param src_id [in] \n int \n VmObject의 ID
 		 * @param gres_list [out] \n vector<GPUResourceArchive*> \n 해당 VXObject 와 관련된 모든 GPU resource가 vector list로 저장
-		 * @return uint \n GPU resource로 등록된 자료구조의 개수
+		 * @return uint32_t \n GPU resource로 등록된 자료구조의 개수
 		 * @remarks 모든 GPU SDK에 대하여 동작
 		 */
 		int UpdateGpuResourcesBySrcID(const int src_id, vector<GpuRes>& gres_list/*out*/);

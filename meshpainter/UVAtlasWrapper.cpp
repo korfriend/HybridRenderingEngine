@@ -229,7 +229,7 @@ void UnwrapUVsUVAtlas(
 	}
 
 	if (FAILED(hr)) {
-		vzlog("ERROR: UVAtlas failed with HRESULT 0x%08X", hr);
+		vzlog_error("ERROR: UVAtlas failed with HRESULT 0x%08X", hr);
 		uvs.clear();
 		return;
 	}
@@ -257,7 +257,7 @@ void UnwrapUVsUVAtlas(
 		}
 
 		if (vertexIndex >= vertexBuffer.size()) {
-			vzlog("ERROR: UVAtlas vertex index out of range: %d >= %d",
+			vzlog_error("ERROR: UVAtlas vertex index out of range: %d >= %d",
 				vertexIndex, (int)vertexBuffer.size());
 			continue;
 		}

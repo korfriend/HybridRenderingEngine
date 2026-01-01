@@ -155,10 +155,6 @@ StructuredBuffer<BVHPrimitive> primitiveBuffer : register(t4);
 StructuredBuffer<uint> bvhParentBuffer : register(t5);
 StructuredBuffer<uint> bvhFlagBuffer : register(t6);
 
-// TRY THIS!! 
-Buffer<float> vertexBuffer : register(t10);
-Buffer<uint> indexBuffer : register(t11);
-
 //StructuredBuffer<BVHPushConstants> pushBVH : register(t100);
 
 #endif // BVH_LEGACY
@@ -207,6 +203,9 @@ RWTexture2D<float> fragment_zdepth : register(u4);
 // modified intersection routine (uses regular instead of woopified triangles) for debugging purposes
 
 #ifdef BVH_LEGACY
+
+Buffer<float> vertexBuffer : register(t10);
+Buffer<uint> indexBuffer : register(t11);
 
 int DEBUGintersectBVHandTriangles(const in float4 rayorig, const in float4 raydir,
 	const in Buffer<float4> gpuNodes, const in Buffer<float4> gpuDebugTris, const in Buffer<int> gpuTriIndices, // const in Buffer<float4> gpuTriWoops,
@@ -773,62 +772,6 @@ inline RayHit CreateRayHit()
 	//hit.primitiveID.init();
 	return hit;
 }
-
-/*
-struct Surface
-{
-	// Fill these yourself:
-	float3 P;
-	float3 N;
-
-	float3 data0;
-	float3 data1;
-	float3 data2;
-
-	float2 bary;
-
-	inline void init()
-	{
-		P = 0;
-		N = 0;
-	}
-
-	bool preload_internal(PrimitiveID prim)
-	{
-		uint startIndex = prim.primitiveIndex * 3;
-		if (startIndex >= primitiveCounterBuffer.Load(0))
-			return false;
-		uint i0 = indexBuffer[startIndex + 0];
-		uint i1 = indexBuffer[startIndex + 1];
-		uint i2 = indexBuffer[startIndex + 2];
-
-		uint vertexStride = g_cbPobj.num_letters;
-
-		uint vtxIndex0 = i0 * vertexStride; //pushBVH[0].vertexStride;
-		uint vtxIndex1 = i1 * vertexStride; //pushBVH[0].vertexStride;
-		uint vtxIndex2 = i2 * vertexStride; //pushBVH[0].vertexStride;
-		data0 = float3(vertexBuffer[vtxIndex0 + 0], vertexBuffer[vtxIndex0 + 1], vertexBuffer[vtxIndex0 + 2]);
-		data1 = float3(vertexBuffer[vtxIndex1 + 0], vertexBuffer[vtxIndex1 + 1], vertexBuffer[vtxIndex1 + 2]);
-		data2 = float3(vertexBuffer[vtxIndex2 + 0], vertexBuffer[vtxIndex2 + 1], vertexBuffer[vtxIndex2 + 2]);
-		return true;
-	}
-
-	bool load(in PrimitiveID prim, in float2 barycentrics)
-	{
-		if (!preload_internal(prim))
-			return false;
-
-		bary = barycentrics;
-
-		P = attribute_at_bary(data0, data1, data2, bary);
-		N = cross(data1 - data0, data2 - data0);
-		N = normalize(N);
-
-		return true;
-	}
-
-};
-/**/
 
 #ifndef RAYTRACE_STACKSIZE
 #define RAYTRACE_STACKSIZE 64

@@ -14,7 +14,6 @@ Texture2D g_tex2D_Mat_BUMP : register(t14);
 Texture2D g_tex2D_Mat_D : register(t15);
 // Paint texture slot (t60)
 Texture2D g_tex2D_Paint : register(t60);
-StructuredBuffer<float2> g_uvBuffer : register(t61);
 
 // Paint blend modes
 #define PAINT_BLEND_NORMAL     0
@@ -28,17 +27,18 @@ Texture2D g_tex2D_shadowMap : register(t20);
 
 Buffer<unorm float4> g_faceColors : register(t30); 
 
-struct VS_INPUT_PN
+struct VS_INPUTS
 {
     float3 f3PosOS : POSITION;
-    float3 f3VecNormalOS : NORMAL;
-	uint vertexID : SV_VertexID; // vertex index
-};
-
-struct VS_INPUT_PT
-{
-    float3 f3PosOS : POSITION;
-	float3 f3Custom : TEXCOORD0;
+#if VSIN_N == 1
+	float3 f3VecNormalOS : NORMAL;
+#endif
+#if VSIN_T == 1
+	float2 f2UV : TEXCOORD0;
+#endif
+#if VSIN_C == 1
+	float4 f4Color : COLOR0;
+#endif
 	uint vertexID : SV_VertexID; // vertex index
 };
 
@@ -51,50 +51,18 @@ struct VS_INPUT_PTTT
 	uint vertexID : SV_VertexID; // vertex index
 };
 
-struct VS_INPUT_PNT
-{
-    float3 f3PosOS : POSITION;
-    float3 f3VecNormalOS : NORMAL;
-	float3 f3Custom : TEXCOORD0;
-	uint vertexID : SV_VertexID; // vertex index
-};
-
-struct VS_INPUT_PNTC
-{
-    float3 f3PosOS : POSITION;
-    float3 f3VecNormalOS : NORMAL;
-    float3 f3UVS : TEXCOORD0;
-	float3 f3Color : COLOR;
-	uint vertexID : SV_VertexID; // vertex index
-};
-
 struct VS_OUTPUT
 {
     float4 f4PosSS : SV_POSITION;
     float3 f3VecNormalWS : NORMAL;
-    float3 f3PosWS : TEXCOORD0;
-	float3 f3Custom : TEXCOORD1;
-#if __PAINTER_UV == 1
-    float2 f2PaintUV : TEXCOORD2;
-#endif
-};
-
-struct VS_OUTPUT_PNTC
-{
-    float4 f4PosSS : SV_POSITION;
-    float3 f3VecNormalWS : NORMAL;
-    float3 f3PosWS : TEXCOORD0;
-    float3 f3UVS : TEXCOORD1;
-	float3 f3Color : COLOR;
-#if __PAINTER_UV == 1
-    float2 f2PaintUV : TEXCOORD2;
-#endif
+	float3 f3PosWS : TEXCOORD0;
+	float2 f2UV : TEXCOORD1;
+	float4 f4Color : COLOR;
 };
 
 struct VS_OUTPUT_TTT
 {
     float4 f4PosSS : SV_POSITION;
-	//float3 f3VecNormalWS : NORMAL;
     float3 f3PosWS : TEXCOORD0;
     float3 f3Custom0 : TEXCOORD1;
     float3 f3Custom1 : TEXCOORD2;
@@ -106,74 +74,23 @@ struct PS_OUTPUT
     float fDepth : SV_Depth; // to avoid Clipping Early-Out-Ocllusion
 };
 
-VS_OUTPUT CommonVS_P(float3 f3Pos : POSITION, uint vertexID : SV_VertexID)
+VS_OUTPUT CommonVS(VS_INPUTS input)
 {
-	VS_OUTPUT vout = (VS_OUTPUT)0;
-	//vout.f4PosSS = mul(float4(f3Pos, 1.f), g_cbPobj.mat_os2ps);
-	vout.f4PosSS = mul(g_cbPobj.mat_os2ps, float4(f3Pos, 1.f));
-    vout.f3PosWS = TransformPoint(f3Pos, g_cbPobj.mat_os2ws);
-    vout.f3VecNormalWS = (float3) 0;
-    vout.f3Custom = (float3) 0;
-    //vout.f4PosSS.z -= g_cbPobj.depth_forward_bias;
-    
-#if __PAINTER_UV == 1
-    vout.f2PaintUV = g_uvBuffer[vertexID];
-#endif
-    
-    return vout;
-}
-
-VS_OUTPUT CommonVS_PN(VS_INPUT_PN input)
-{
-	VS_OUTPUT vout = (VS_OUTPUT)0;
-	//vout.f4PosSS = mul(float4(input.f3PosOS, 1.f), g_cbPobj.mat_os2ps);
+	VS_OUTPUT vout = (VS_OUTPUT) 0;
 	vout.f4PosSS = mul(g_cbPobj.mat_os2ps, float4(input.f3PosOS, 1.f));
-    vout.f3PosWS = TransformPoint(input.f3PosOS, g_cbPobj.mat_os2ws);
+	vout.f3PosWS = TransformPoint(input.f3PosOS, g_cbPobj.mat_os2ws);
+    
+#if VSIN_N == 1
 	vout.f3VecNormalWS = normalize(TransformVector(input.f3VecNormalOS, g_cbPobj.mat_os2ws));
-    vout.f3Custom = (float3) 0; //g_cbPobj.fcolor.rgb;
-    //vout.f4PosSS.z -= g_cbPobj.depth_forward_bias;
-    
-#if __PAINTER_UV == 1
-    vout.f2PaintUV = g_uvBuffer[input.vertexID];
+#endif
+#if VSIN_T == 1
+	vout.f2UV = input.f2UV;
+#endif
+#if VSIN_C == 1
+	vout.f4Color = input.f4Color;
 #endif
     
-    return vout;
-}
-
-VS_OUTPUT CommonVS_PT(VS_INPUT_PT input)
-{
-	VS_OUTPUT vout = (VS_OUTPUT)0;
-	//vout.f4PosSS = mul(float4(input.f3PosOS, 1.f), g_cbPobj.mat_os2ps);
-	vout.f4PosSS = mul(g_cbPobj.mat_os2ps, float4(input.f3PosOS, 1.f));
-    vout.f3PosWS = TransformPoint(input.f3PosOS, g_cbPobj.mat_os2ws);
-    vout.f3VecNormalWS = (float3) 0;
-   // if (g_cbPobj.pobj_flag & (0x1 << 3))
-   //     vout.f3Custom = (float3) 0; //g_cbPobj.fcolor.rgb;
-   // else
-        vout.f3Custom = input.f3Custom;
-    //vout.f4PosSS.z -= g_cbPobj.depth_forward_bias;
-    
-#if __PAINTER_UV == 1
-    vout.f2PaintUV = g_uvBuffer[input.vertexID];
-#endif
-    
-    return vout;
-}
-
-VS_OUTPUT CommonVS_PNT(VS_INPUT_PNT input)
-{
-    VS_OUTPUT vout = (VS_OUTPUT) 0;
-    vout.f4PosSS = mul(g_cbPobj.mat_os2ps, float4(input.f3PosOS, 1.f));
-    vout.f3PosWS = TransformPoint(input.f3PosOS, g_cbPobj.mat_os2ws);
-    vout.f3VecNormalWS = normalize(TransformVector(input.f3VecNormalOS, g_cbPobj.mat_os2ws));
-	vout.f3Custom = input.f3Custom;
-    //vout.f4PosSS.z -= g_cbPobj.depth_forward_bias;
-    
-#if __PAINTER_UV == 1
-    vout.f2PaintUV = g_uvBuffer[input.vertexID];
-#endif
-    
-    return vout;
+	return vout;
 }
 
 VS_OUTPUT_TTT CommonVS_PTTT(VS_INPUT_PTTT input)
@@ -447,7 +364,7 @@ void TextMapping(inout float4 v_rgba, inout float depthcs, float2 pos_sample, co
     if (is_yflip)
         pos_sample.y = 1.f - pos_sample.y;
 
-    float intensity = g_texRgbaArray.SampleLevel(g_samplerLinear, float3(pos_sample, 0), 0).r * v_rgba.a; // a single channl into rgba equally
+    float intensity = g_texRgbaArray.Sample(g_samplerLinear, float3(pos_sample, 0)).r * v_rgba.a; // a single channl into rgba equally
     
     if (intensity == 0)
     {
@@ -461,14 +378,14 @@ void TextMapping(inout float4 v_rgba, inout float depthcs, float2 pos_sample, co
     }
 }
 
-void TextureImgMap(inout float4 v_rgba, const float3 pos_sample)
+void TextureImgMap(inout float4 v_rgba, const float2 uv)
 {
     // always rgba
     // to do // .. mipmap
     //pos_sample.x = 1. - pos_sample.x;
     //pos_sample.y = 1. - pos_sample.y;
     //pos_sample.z = 0;
-    v_rgba = g_texRgbaArray.SampleLevel(g_samplerLinear_wrap, pos_sample, 0).bgra;
+    v_rgba = g_texRgbaArray.Sample(g_samplerLinear_wrap, float3(uv, 0)).bgra;
     //if (img_rgba.a == 0)
     //{
     //    v_rgba = (float4) 0;
@@ -481,7 +398,7 @@ void TextureImgMap(inout float4 v_rgba, const float3 pos_sample)
     //}
 }
     
-void TextureMaterialMap(inout float3 Ka, inout float3 Kd, inout float3 Ks, inout float Ns, inout float bump, inout float d, const float3 pos_sample, const uint tex_map_enum)
+void TextureMaterialMap(inout float3 Ka, inout float3 Kd, inout float3 Ks, inout float Ns, inout float bump, inout float d, const float2 uv, const uint tex_map_enum)
 {
     //Texture2D g_tex2D_Mat_KA : register(t10);
     //Texture2D g_tex2D_Mat_KD : register(t11);
@@ -492,26 +409,26 @@ void TextureMaterialMap(inout float3 Ka, inout float3 Kd, inout float3 Ks, inout
 	float alpha_wildcard = -1;
 	if (tex_map_enum & (0x1 << 1))
 	{
-		float4 load_tex = g_tex2D_Mat_KA.SampleLevel(g_samplerLinear_wrap, pos_sample.xy, 0).bgra;
+        float4 load_tex = g_tex2D_Mat_KA.Sample(g_samplerLinear_wrap, uv).bgra;
 		Ka *= load_tex.rgb;
 		alpha_wildcard = max(alpha_wildcard, load_tex.a);
 	}
 	if (tex_map_enum & (0x1 << 2))
 	{
-		float4 load_tex = g_tex2D_Mat_KD.SampleLevel(g_samplerLinear_wrap, pos_sample.xy, 0).bgra;
+        float4 load_tex = g_tex2D_Mat_KD.Sample(g_samplerLinear_wrap, uv).bgra;
 		Kd *= load_tex.rgb;
 		alpha_wildcard = max(alpha_wildcard, load_tex.a);
 	}
 	if (tex_map_enum & (0x1 << 3))
 	{
-		Ks *= g_tex2D_Mat_KS.SampleLevel(g_samplerLinear_wrap, pos_sample.xy, 0).bgr;
-	}
+        Ks *= g_tex2D_Mat_KS.Sample(g_samplerLinear_wrap, uv).bgr;
+    }
 	if (tex_map_enum & (0x1 << 4))
-		Ns *= g_tex2D_Mat_NS.SampleLevel(g_samplerLinear_wrap, pos_sample.xy, 0).r;
+        Ns *= g_tex2D_Mat_NS.Sample(g_samplerLinear_wrap, uv).r;
 	if (tex_map_enum & (0x1 << 5))
-		bump *= g_tex2D_Mat_BUMP.SampleLevel(g_samplerLinear_wrap, pos_sample.xy, 0).r;
+        bump *= g_tex2D_Mat_BUMP.Sample(g_samplerLinear_wrap, uv).r;
     if (tex_map_enum & (0x1 << 6))
-        d *= g_tex2D_Mat_D.SampleLevel(g_samplerLinear_wrap, pos_sample.xy, 0).r;
+        d *= g_tex2D_Mat_D.Sample(g_samplerLinear_wrap, uv).r;
 
 	if (alpha_wildcard >= 0) d *= alpha_wildcard;
 }
@@ -528,7 +445,7 @@ float3 PaintBlendOverlay(float3 base, float3 blend)
 // Apply paint texture to diffuse color
 void ApplyPaintTexture(inout float3 color, const float2 uv, const uint tex_map_enum, const int blendMode)
 {
-	float4 paintColor = g_tex2D_Paint.SampleLevel(g_samplerLinear_clamp, uv, 0);
+	float4 paintColor = g_tex2D_Paint.Sample(g_samplerLinear_clamp, uv);
 
 	if (paintColor.a > 0.001)
 	{
@@ -560,32 +477,32 @@ void ApplyPaintTexture(inout float3 color, const float2 uv, const uint tex_map_e
 	}
 }
 
-void MultiTextMapping(inout float4 v_rgba, inout float depthcs, float2 pos_sample, const in int letter_idx, const in float3 vec_width_ps, const in float3 vec_height_ps)
+void MultiTextMapping(inout float4 v_rgba, inout float depthcs, float2 uv, const in int letter_idx, const in float3 vec_width_ps, const in float3 vec_height_ps)
 {
     //MultiTextMapping(v_rgba, z_depth, input.f3Custom0.xy, (int) (input.f3Custom0.z + 0.5f), input.f3Custom1, input.f3Custom2);
     // Sample Flip State 0, 1, 2, 3
 
     if (dot(vec_width_ps, float3(1, 0, 0)) < 0)
-        pos_sample.x = 1.f - pos_sample.x;
+        uv.x = 1.f - uv.x;
 	
     float fNumLetters = (float) g_cbPobj.num_letters;
     float fHeightU = 1.f / fNumLetters;
     float fOffsetU = fHeightU * (float) letter_idx;
-    float fLetterU = pos_sample.y / fNumLetters;
+    float fLetterU = uv.y / fNumLetters;
 
     float3 vec_normal = cross(vec_height_ps, vec_width_ps);
     float3 __vec_height_ps = cross(vec_width_ps, vec_normal);
 
     if (dot(__vec_height_ps, float3(0, 1, 0)) < 0)
-        pos_sample.y = fOffsetU + (fHeightU - fLetterU);
+        uv.y = fOffsetU + (fHeightU - fLetterU);
     else
-        pos_sample.y = fOffsetU + fLetterU;
+        uv.y = fOffsetU + fLetterU;
 
-    float intensity = g_texRgbaArray.SampleLevel(g_samplerLinear, float3(pos_sample, 0), 0).r * v_rgba.a; // a single channl into rgba equally
-    //g_tex2DText[float2(pos_sample.x * 207, pos_sample.y * 300)];
-    //g_tex2DText.SampleLevel(g_samplerLinear, pos_sample, 0);
+    float intensity = g_texRgbaArray.Sample(g_samplerLinear, float3(uv, 0)).r * v_rgba.a; // a single channl into rgba equally
+    //g_tex2DText[float2(uv.x * 207, uv.y * 300)];
+    //g_tex2DText.Sample(g_samplerLinear, uv, 0);
     
-    //f4ColorOut = float4(pos_sample, 1, 1);
+    //f4ColorOut = float4(uv, 1, 1);
     //f4ColorOut = float4(g_cbPobj.fcolor.rgb, 1);
 	//return vxOut;
 
@@ -847,32 +764,32 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
 #if __PAINTER_UV == 1
     if (g_cbPobj.tex_map_enum & (0x1 << 17))
     {
-	    float4 paintColor = g_tex2D_Paint.SampleLevel(g_samplerLinear_clamp, input.f2PaintUV, 0);
+	    float4 paintColor = g_tex2D_Paint.Sample(g_samplerLinear_clamp, input.f2UV);
 
 	    if (paintColor.a > 0.001)
 	    {
-		    Ka_pobj = lerp(Ka_pobj, paintColor.rgb, paintColor.a);
-		    Kd_pobj = lerp(Kd_pobj, paintColor.rgb, paintColor.a);
-		    Ks_pobj = lerp(Ks_pobj, paintColor.rgb, paintColor.a);
+		    Ka_pobj = lerp(Ka_pobj, paintColor.rgb * g_cbPobj.pb_shading_factor.x, paintColor.a);
+		    Kd_pobj = lerp(Kd_pobj, paintColor.rgb * g_cbPobj.pb_shading_factor.y, paintColor.a);
+		    Ks_pobj = lerp(Ks_pobj, paintColor.rgb * g_cbPobj.pb_shading_factor.z, paintColor.a);
         }
     }
 #endif
 
 #if __RENDERING_MODE == 1
-    DashedLine(v_rgba, z_depth, input.f3Custom.x, g_cbPobj.dash_interval, g_cbPobj.pobj_flag & (0x1 << 19), g_cbPobj.pobj_flag & (0x1 << 20));
+    DashedLine(v_rgba, z_depth, input.f2UV.x, g_cbPobj.dash_interval, g_cbPobj.pobj_flag & (0x1 << 19), g_cbPobj.pobj_flag & (0x1 << 20));
     if (v_rgba.a <= 0.01) clip(-1);
 #elif __RENDERING_MODE == 2
     MultiTextMapping(v_rgba, z_depth, input.f3Custom0.xy, (int)(input.f3Custom0.z + 0.5f), input.f3Custom1, input.f3Custom2);
     if (v_rgba.a <= 0.01) clip(-1);
 #elif __RENDERING_MODE == 3
-    TextMapping(v_rgba, z_depth, input.f3Custom.xy, g_cbPobj.pobj_flag & (0x1 << 9), g_cbPobj.pobj_flag & (0x1 << 10));
+    TextMapping(v_rgba, z_depth, input.f2UV.xy, g_cbPobj.pobj_flag & (0x1 << 9), g_cbPobj.pobj_flag & (0x1 << 10));
     if (v_rgba.a <= 0.01) clip(-1);
     //v_rgba.a = 1;
 #elif __RENDERING_MODE == 4
     if (g_cbPobj.tex_map_enum == 1)
     {
         float4 clr_map;
-        TextureImgMap(clr_map, input.f3Custom);
+        TextureImgMap(clr_map, input.f2UV);
 
         //clr_map.a g_cbPobj.alpha
 
@@ -898,7 +815,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     {
         float3 Ka = Ka_pobj, Kd = Kd_pobj, Ks = Ks_pobj;
         float Ns = g_cbPobj.Ns, d = 1.0, bump = 1.0;
-        TextureMaterialMap(Ka, Kd, Ks, Ns, bump, d, input.f3Custom, g_cbPobj.tex_map_enum);
+        TextureMaterialMap(Ka, Kd, Ks, Ns, bump, d, input.f2UV, g_cbPobj.tex_map_enum);
 
         if (Ns >= 0)
         {
@@ -960,7 +877,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     
     if (nor_len > 0)
     {
-        float3 Ka, Kd, Ks, Ns;
+        float3 Ka, Kd, Ks;
         if (colored)
         {
             Ka = colorcoded * g_cbVobj.pb_shading_factor.x * g_cbEnv.ltint_ambient.rgb;
@@ -973,7 +890,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
             Kd = Kd_pobj * g_cbEnv.ltint_diffuse.rgb;
             Ks = Ks_pobj * g_cbEnv.ltint_spec.rgb;
         }
-        Ns = g_cbPobj.Ns;
+        float Ns = g_cbPobj.Ns;
 
         ComputeColor(v_rgba.rgb, Ka, Kd, Ks, Ns, 1.0, input.f3PosWS, view_dir, nor, nor_len);
     }
@@ -986,7 +903,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
          
     if (nor_len > 0)
     {
-        float3 Ka, Kd, Ks, Ns;
+        float3 Ka, Kd, Ks;
         if (colored)
         {
             Ka = colorcoded * g_cbVobj.pb_shading_factor.x * g_cbEnv.ltint_ambient.rgb;
@@ -999,7 +916,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
             Kd = Kd_pobj * g_cbEnv.ltint_diffuse.rgb;
             Ks = Ks_pobj * g_cbEnv.ltint_spec.rgb;
         }
-        Ns = g_cbPobj.Ns;
+        float Ns = g_cbPobj.Ns;
         ComputeColor(v_rgba.rgb, Ka, Kd, Ks, Ns, 1.0, input.f3PosWS, view_dir, nor, nor_len);
     }
 
@@ -1009,9 +926,10 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
 
     if (BitCheck(g_cbPobj.pobj_flag, 3))
     {
-        Ka = input.f3Custom * Ka_pobj;
-        Kd = input.f3Custom * Kd_pobj;
-		Ks = input.f3Custom * Ks_pobj;
+		float3 color_vtx = input.f4Color.rgb * input.f4Color.a;
+        Ka = color_vtx * Ka_pobj;
+        Kd = color_vtx * Kd_pobj;
+		Ks = color_vtx * Ks_pobj;
 	}
     else
     {
@@ -1033,14 +951,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     }
 
 #endif
-    
-#if __PAINTER_UV == 1
-    if (g_cbPobj.tex_map_enum & (0x1 << 17))
-    {
-	    //v_rgba.rgb = float3(input.f2PaintUV, 0);
-    }
-#endif
-    
+        
 #if DX10_0 == 1
     v_rgba.a = 1.f;
 #else
@@ -1136,12 +1047,12 @@ void GS_TriNormal(triangle VS_OUTPUT input[3], inout TriangleStream<VS_OUTPUT> t
         {
             if (face_flag & 0x1)
             {
-                output.f3Custom = faceColor.rgb;
+                output.f4Color.rgb = faceColor.rgb;
             }
             else
             {
-                output.f3Custom = ConvertUIntToFloat4(g_cbPobj.pobj_dummy_1).bgr;
-            }
+				output.f4Color.rgb = ConvertUIntToFloat4(g_cbPobj.pobj_dummy_1).bgr;
+			}
             if (face_flag & 0x2)
             {
                 output.f3VecNormalWS = normal;

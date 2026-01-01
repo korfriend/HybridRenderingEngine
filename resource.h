@@ -21,17 +21,19 @@
 #define IDR_RCDATA11004					  11004
 #define IDR_RCDATA11005					  11005
 #define IDR_RCDATA11006					  11006
-
-#define IDR_RCDATA11040					  11040
-#define IDR_RCDATA11041					  11041
-#define IDR_RCDATA11042					  11042
-#define IDR_RCDATA11043					  11043
+#define IDR_RCDATA11007					  11007
+#define IDR_RCDATA11008					  11008
+#define IDR_RCDATA11009					  11009
 
 #define IDR_RCDATA91001					  91001
 #define IDR_RCDATA91002					  91002
 #define IDR_RCDATA91003					  91003
 #define IDR_RCDATA91004					  91004
 #define IDR_RCDATA91005					  91005
+#define IDR_RCDATA91006					  91006
+#define IDR_RCDATA91007					  91007
+#define IDR_RCDATA91008					  91008
+#define IDR_RCDATA91009					  91009
 
 #define IDR_RCDATA10000					  10000
 
@@ -70,35 +72,12 @@
 #define IDR_RCDATA90150					  90150
 
 #define IDR_RCDATA11010					  11010
-#define IDR_RCDATA11011					  11011
-#define IDR_RCDATA11012					  11012
-#define IDR_RCDATA11013					  11013
-#define IDR_RCDATA11014					  11014
 
 #define IDR_RCDATA11015					  11015
 #define IDR_RCDATA11016					  11016
 
 #define IDR_RCDATA91015					  91015
 #define IDR_RCDATA91016					  91016
-
-#define IDR_RCDATA12010					  12010
-#define IDR_RCDATA12011					  12011
-#define IDR_RCDATA12012					  12012
-#define IDR_RCDATA12013					  12013
-#define IDR_RCDATA12014					  12014
-//#define IDR_RCDATA11016					  11016
-
-#define IDR_RCDATA11110					  11110
-#define IDR_RCDATA11111					  11111
-#define IDR_RCDATA11112					  11112
-#define IDR_RCDATA11113					  11113
-#define IDR_RCDATA11114					  11114
-
-#define IDR_RCDATA11120					  11120
-#define IDR_RCDATA11121					  11121
-#define IDR_RCDATA11122					  11122
-#define IDR_RCDATA11123					  11123
-#define IDR_RCDATA11124					  11124
 
 #define IDR_RCDATA11020					  11020
 #define IDR_RCDATA11021					  11021
@@ -107,7 +86,6 @@
 #define IDR_RCDATA11024					  11024
 #define IDR_RCDATA11025					  11025
 #define IDR_RCDATA11026					  11026
-#define IDR_RCDATA11027					  11027
 #define IDR_RCDATA11028					  11028
 #define IDR_RCDATA11029					  11029
 
@@ -125,6 +103,8 @@
 #define IDR_RCDATA11104					  11104
 #define IDR_RCDATA11105					  11105
 
+#define IDR_RCDATA11201					  11201
+
 #define IDR_RCDATA11030					  11030
 #define IDR_RCDATA11031					  11031
 #define IDR_RCDATA11032					  11032
@@ -134,13 +114,6 @@
 #define IDR_RCDATA11036					  11036
 #define IDR_RCDATA11037					  11037
 
-#define IDR_RCDATA21000					  21000
-#define IDR_RCDATA21002					  21002
-#define IDR_RCDATA21001					  21001
-#define IDR_RCDATA21003					  21003
-#define IDR_RCDATA21006					  21006
-#define IDR_RCDATA21004					  21004
-#define IDR_RCDATA21005					  21005
 #define IDR_RCDATA21050					  21050
 #define IDR_RCDATA21051					  21051
 #define IDR_RCDATA21100					  21100
@@ -187,13 +160,6 @@
 #define IDR_RCDATA50015					  50015
 #define IDR_RCDATA50016					  50016
 #define IDR_RCDATA50017					  50017
-
-#define IDR_RCDATA50020					  50020
-#define IDR_RCDATA50021					  50021
-#define IDR_RCDATA50022					  50022
-#define IDR_RCDATA50030					  50030
-#define IDR_RCDATA50031					  50031
-#define IDR_RCDATA50032					  50032
 
 #define IDR_RCDATA50041					  50041
 #define IDR_RCDATA50042					  50042
@@ -251,31 +217,6 @@
 #define IDR_RCDATA9110					  9110
 #define IDR_RCDATA9111					  9111
 
-#define IDR_RCDATA11050					  11050
-#define IDR_RCDATA11051					  11051
-#define IDR_RCDATA11052					  11052
-#define IDR_RCDATA11053					  11053
-#define IDR_RCDATA11054					  11054
-
-#define IDR_RCDATA12050					  12050
-#define IDR_RCDATA12051					  12051
-#define IDR_RCDATA12052					  12052
-#define IDR_RCDATA12053					  12053
-#define IDR_RCDATA12054					  12054
-		
-#define IDR_RCDATA11150					  11150
-#define IDR_RCDATA11151					  11151
-#define IDR_RCDATA11152					  11152
-#define IDR_RCDATA11153					  11153
-#define IDR_RCDATA11154					  11154
-
-#define IDR_RCDATA11170					  11170
-#define IDR_RCDATA11171					  11171
-#define IDR_RCDATA11172					  11172
-#define IDR_RCDATA11173					  11173
-#define IDR_RCDATA11174					  11174
-
-#define IDR_RCDATA21007					  21007
 
 #define IDR_RCDATA11070					  11070
 #define IDR_RCDATA11077					  11077
@@ -315,10 +256,6 @@
 #define IDR_RCDATA80001					  80001
 #define IDR_RCDATA80002					  80002
 #define IDR_RCDATA80003					  80003
-//#define IDR_RCDATA80004					  80004
-//#define IDR_RCDATA80005					  80005
-//#define IDR_RCDATA80006					  80006
-//#define IDR_RCDATA80007					  80007
 #define IDR_RCDATA80008					  80008
 
 // Next default values for new objects

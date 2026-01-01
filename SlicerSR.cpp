@@ -177,13 +177,13 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		string strNames_VS[VS_NUM] = {
 			   "SR_OIT_P_vs_4_0"
 			  ,"SR_OIT_PN_vs_4_0"
+			  ,"SR_OIT_PC_vs_4_0"
 			  ,"SR_OIT_PT_vs_4_0"
+			  ,"SR_OIT_PNC_vs_4_0"
 			  ,"SR_OIT_PNT_vs_4_0"
+			  ,"SR_OIT_PTC_vs_4_0"
+			  ,"SR_OIT_PNTC_vs_4_0"
 			  ,"SR_OIT_PTTT_vs_4_0"
-			  ,"SR_OIT_PAINTER_P_vs_5_0"
-			  ,"SR_OIT_PAINTER_PN_vs_5_0"
-			  ,"SR_OIT_PAINTER_PT_vs_5_0"
-			  ,"SR_OIT_PAINTER_PNT_vs_5_0"
 		};
 #else
 		string strNames_VS[VS_NUM] = {
@@ -203,7 +203,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			if (fopen_s(&pFile, (prefix_path + strName).c_str(), "rb") == 0)
 			{
 				fseek(pFile, 0, SEEK_END);
-				ullong ullFileSize = ftell(pFile);
+				uint64_t ullFileSize = ftell(pFile);
 				fseek(pFile, 0, SEEK_SET);
 				byte* pyRead = new byte[ullFileSize];
 				fread(pyRead, sizeof(byte), ullFileSize, pFile);
@@ -235,7 +235,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			if (fopen_s(&pFile, (prefix_path + strName).c_str(), "rb") == 0)
 			{
 				fseek(pFile, 0, SEEK_END);
-				ullong ullFileSize = ftell(pFile);
+				uint64_t ullFileSize = ftell(pFile);
 				fseek(pFile, 0, SEEK_SET);
 				byte* pyRead = new byte[ullFileSize];
 				fread(pyRead, sizeof(byte), ullFileSize, pFile);
@@ -288,7 +288,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			if (fopen_s(&pFile, (prefix_path + strName).c_str(), "rb") == 0)
 			{
 				fseek(pFile, 0, SEEK_END);
-				ullong ullFileSize = ftell(pFile);
+				uint64_t ullFileSize = ftell(pFile);
 				fseek(pFile, 0, SEEK_SET);
 				byte* pyRead = new byte[ullFileSize];
 				fread(pyRead, sizeof(byte), ullFileSize, pFile);
@@ -325,7 +325,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			if (fopen_s(&pFile, (hlslobj_path_4_0 + strName).c_str(), "rb") == 0)
 			{
 				fseek(pFile, 0, SEEK_END);
-				ullong ullFileSize = ftell(pFile);
+				uint64_t ullFileSize = ftell(pFile);
 				fseek(pFile, 0, SEEK_SET);
 				byte* pyRead = new byte[ullFileSize];
 				fread(pyRead, sizeof(byte), ullFileSize, pFile);
@@ -339,8 +339,8 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 					{ 0, "TEXCOORD", 0, 0, 3, 0 },   // output 
 				};
 				int numEntries = sizeof(pDecl) / sizeof(D3D11_SO_DECLARATION_ENTRY);
-				uint bufferStrides[] = { sizeof(vmfloat3) };
-				int numStrides = sizeof(bufferStrides) / sizeof(uint);
+				uint32_t bufferStrides[] = { sizeof(vmfloat3) };
+				int numStrides = sizeof(bufferStrides) / sizeof(uint32_t);
 				ID3D11GeometryShader* dx11GShader = NULL;
 				if (psoManager->dx11Device->CreateGeometryShaderWithStreamOutput(
 					pyRead, ullFileSize, pDecl, numEntries, bufferStrides, numStrides, D3D11_SO_NO_RASTERIZED_STREAM, NULL,
@@ -360,24 +360,6 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	}
 
 	ID3D11InputLayout* dx11LI_P = (ID3D11InputLayout*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "P"));
-	ID3D11InputLayout* dx11LI_PN = (ID3D11InputLayout*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "PN"));
-	ID3D11InputLayout* dx11LI_PT = (ID3D11InputLayout*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "PT"));
-	ID3D11InputLayout* dx11LI_PNT = (ID3D11InputLayout*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "PNT"));
-	ID3D11InputLayout* dx11LI_PTTT = (ID3D11InputLayout*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "PTTT"));
-
-#ifdef DX10_0
-	ID3D11VertexShader* dx11VShader_P = (ID3D11VertexShader*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_P_vs_4_0"));
-	ID3D11VertexShader* dx11VShader_PN = (ID3D11VertexShader*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PN_vs_4_0"));
-	ID3D11VertexShader* dx11VShader_PT = (ID3D11VertexShader*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PT_vs_4_0"));
-	ID3D11VertexShader* dx11VShader_PNT = (ID3D11VertexShader*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PNT_vs_4_0"));
-	ID3D11VertexShader* dx11VShader_PTTT = (ID3D11VertexShader*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PTTT_vs_4_0"));
-#else
-	ID3D11VertexShader* dx11VShader_P = (ID3D11VertexShader*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_P_vs_5_0"));
-	ID3D11VertexShader* dx11VShader_PN = (ID3D11VertexShader*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PN_vs_5_0"));
-	ID3D11VertexShader* dx11VShader_PT = (ID3D11VertexShader*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PT_vs_5_0"));
-	ID3D11VertexShader* dx11VShader_PNT = (ID3D11VertexShader*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PNT_vs_5_0"));
-	ID3D11VertexShader* dx11VShader_PTTT = (ID3D11VertexShader*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PTTT_vs_5_0"));
-#endif
 
 	ID3D11Buffer* cbuf_cam_state = psoManager->get_cbuf("CB_CameraState");
 	ID3D11Buffer* cbuf_env_state = psoManager->get_cbuf("CB_EnvState");
@@ -419,19 +401,19 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		iobj->SetObjParam("_int2_PreviousScreenSize", fb_size_cur);
 		iobj->SetObjParam("_int_PreviousBufferEx", (int)1);
 	}
-	ullong lastest_render_time = iobj->GetObjParam("_ullong_LatestSrTime", (ullong)0);
+	uint64_t lastest_render_time = iobj->GetObjParam("_uint64_t_LatestSrTime", (uint64_t)0);
 
 	GpuRes gres_fb_rgba, gres_fb_depthcs;
 	GpuRes gres_fb_sys_rgba, gres_fb_sys_depthcs;
 
 #ifdef DX10_0
-	const uint rtbind = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+	const uint32_t rtbind = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 #define SET_SAMPLERS dx11DeviceImmContext->PSSetSamplers
 #define SET_CBUFFERS dx11DeviceImmContext->PSSetConstantBuffers
 #define SET_SHADER_RES dx11DeviceImmContext->PSSetShaderResources
 #define SET_SHADER dx11DeviceImmContext->PSSetShader
 #else
-	const uint rtbind = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+	const uint32_t rtbind = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 #define SET_SAMPLERS dx11DeviceImmContext->CSSetSamplers
 #define SET_CBUFFERS dx11DeviceImmContext->CSSetConstantBuffers
 #define SET_SHADER_RES dx11DeviceImmContext->CSSetShaderResources
@@ -470,9 +452,9 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		grd_helper::UpdateFrameBuffer(gres_picking_system_buffer, iobj, "SYSTEM_OUT_RW_PICKING_BUF", RTYPE_BUFFER,
 			NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT | UPFB_NFPP_BUFFERSIZE, max_picking_layers * 2);
 
-		static std::vector<uint> clearDataUnit(max_picking_layers * 3, 0);//make sure that this thing is aligned
+		static std::vector<uint32_t> clearDataUnit(max_picking_layers * 3, 0);//make sure that this thing is aligned
 		psoManager->dx11DeviceImmContext->UpdateSubresource((ID3D11Buffer*)gres_picking_buffer.alloc_res_ptrs[DTYPE_RES]
-			, 0, NULL, &clearDataUnit[0], sizeof(uint) * clearDataUnit.size(), sizeof(uint) * clearDataUnit.size());
+			, 0, NULL, &clearDataUnit[0], sizeof(uint32_t) * clearDataUnit.size(), sizeof(uint32_t) * clearDataUnit.size());
 #endif
 	}
 
@@ -481,8 +463,8 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 
 #pragma endregion 
 
-	uint num_grid_x = __BLOCKSIZE == 1 ? fb_size_cur.x : (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
-	uint num_grid_y = __BLOCKSIZE == 1 ? fb_size_cur.y : (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
+	uint32_t num_grid_x = __BLOCKSIZE == 1 ? fb_size_cur.x : (uint32_t)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
+	uint32_t num_grid_y = __BLOCKSIZE == 1 ? fb_size_cur.y : (uint32_t)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
 
 	float detaultOutlinePixelThickness = 1.5f;
 	bool curved_slicer = _fncontainer->fnParams.GetParam("_bool_IsNonlinear", false);
@@ -496,8 +478,10 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			return false;
 		grd_helper::UpdateCustomBuffer(gres_cpPoints, iobj, "CurvedPlanePoints", &vtrCurveInterpolations[0], num_curvedPoints, DXGI_FORMAT_R32G32B32_FLOAT, 12);
 		grd_helper::UpdateCustomBuffer(gres_cpTangents, iobj, "CurvedPlaneTangents", &vtrCurveTangentVectors[0], num_curvedPoints, DXGI_FORMAT_R32G32B32_FLOAT, 12);
-		SET_SHADER_RES(30, 1, (ID3D11ShaderResourceView**)&gres_cpPoints.alloc_res_ptrs[DTYPE_SRV]);
-		SET_SHADER_RES(31, 1, (ID3D11ShaderResourceView**)&gres_cpTangents.alloc_res_ptrs[DTYPE_SRV]);
+		void* srv_cplane_points = gres_cpPoints.alloc_res_ptrs[DTYPE_SRV];
+		void* srv_cplane_tangents = gres_cpTangents.alloc_res_ptrs[DTYPE_SRV];
+		SET_SHADER_RES(30, 1, (ID3D11ShaderResourceView**)&srv_cplane_points);
+		SET_SHADER_RES(31, 1, (ID3D11ShaderResourceView**)&srv_cplane_tangents);
 	
 		float sample_dist = 1.f;
 		CB_CurvedSlicer cbCurvedSlicer;
@@ -675,7 +659,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 #endif
 	//if (is_ghost_mode)
 	//{
-	//	SET_SHADER_RES(50, 1, (ID3D11ShaderResourceView**)&gres_fb_mask_hotspot.alloc_res_ptrs[DTYPE_SRV]);
+	//	SET_SHADER_RES(50, 1, (ID3D11ShaderResourceView**)&gres_fb_mask_hotspot.GetResource(DTYPE_SRV));
 	//}
 
 	D3D11_RECT rects[1];
@@ -740,7 +724,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 
 		VmVObjectPrimitive* pobj = (VmVObjectPrimitive*)geo_obj;
 		PrimitiveData* prim_data = pobj->GetPrimitiveData();
-		if (prim_data->GetVerticeDefinition("POSITION") == NULL || 
+		if (prim_data->GetVerticeDefinition<float>("POSITION") == NULL || 
 #ifdef DX10_0
 			pobj->GetBVHTree() == NULL ||
 #else
@@ -789,9 +773,9 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	psoManager->GpuProfile("Clear for Slicer Render - SR");
 
 	float flt_max_ = FLT_MAX;
-	uint flt_max_u = *(uint*)&flt_max_;
-	uint clr_unit4[4] = { 0, 0, 0, 0 };
-	uint clr_max_ufloat_4[4] = { flt_max_u, flt_max_u, flt_max_u, flt_max_u };
+	uint32_t flt_max_u = *(uint32_t*)&flt_max_;
+	uint32_t clr_unit4[4] = { 0, 0, 0, 0 };
+	uint32_t clr_max_ufloat_4[4] = { flt_max_u, flt_max_u, flt_max_u, flt_max_u };
 	float clr_float_zero_4[4] = { 0, 0, 0, 0 };
 	float clr_float_fltmax_4[4] = { FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX };
 	//float clr_float_minus_4[4] = { -1.f, -1.f, -1.f, -1.f };
@@ -842,8 +826,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	int count_call_render = 0; 
 
 #define NUM_UAVs 5
-	auto PathTracer = [&psoManager, &dx11DeviceImmContext, &gpu_manager, &_fncontainer, &dx11LI_P, &dx11LI_PN, &dx11LI_PT, &dx11LI_PNT, &dx11LI_PTTT, &dx11VShader_P,
-		&dx11VShader_PN, &dx11VShader_PT, &dx11VShader_PNT, &dx11VShader_PTTT, 
+	auto PathTracer = [&psoManager, &dx11DeviceImmContext, &gpu_manager, &_fncontainer, &dx11LI_P, 
 #ifdef DX10_0
 		&gres_fb_rgba2, &gres_fb_depthcs2, &gres_quad,
 #else
@@ -874,14 +857,11 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			bool has_texture_img = actor->GetParam("_bool_HasTextureMap", false); 
 
 			vmfloat4 material_phongCoeffs = actor->GetParam("_float4_PhongCoeffs", default_phong_lighting_coeff);
-			bool use_vertex_color = actor->GetParam("_bool_UseVertexColor", false) && prim_data->GetVerticeDefinition("TEXCOORD0") != NULL;
+			bool use_vertex_color = actor->GetParam("_bool_UseVertexColor", false) && prim_data->GetVerticeDefinition<uint32_t>("COLOR") != NULL;
 
 #pragma endregion
 
 #pragma region GPU resource updates
-			//VmObject* tobj_otf = (VmObject*)actor->GetAssociateRes("OTF");
-			//VmObject* tobj_maptable = (VmObject*)actor->GetAssociateRes("MAPTABLE");
-			//VmVObjectVolume* vobj = (VmVObjectVolume*)actor->GetAssociateRes("VOLUME");
 
 			CB_Material cbRenderEffect;
 			grd_helper::SetCb_RenderingEffect(cbRenderEffect, actor);
@@ -891,22 +871,11 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			memcpy(cbRenderEffectData, &cbRenderEffect, sizeof(CB_Material));
 			dx11DeviceImmContext->Unmap(cbuf_reffect, 0);
 
-			GpuRes gres_vtx, gres_idx;
-			map<string, GpuRes> map_gres_texs;
-			grd_helper::UpdatePrimitiveModel(gres_vtx, gres_idx, map_gres_texs, pobj);
+			GpuRes gres_idx;
+			map<string, GpuRes> map_gres_vtxs, map_gres_texs;
+			grd_helper::UpdatePrimitiveModel(map_gres_vtxs, gres_idx, map_gres_texs, pobj);
 			int tex_map_enum = 0;
-			//bool is_annotation_obj = pobj->GetObjParam("_bool_IsAnnotationObj", false) && prim_data->texture_res_info.size() > 0;
-			//if (is_annotation_obj)
-			//{
-			//	auto it_tex = map_gres_texs.find("MAP_COLOR4");
-			//	if (it_tex != map_gres_texs.end())
-			//	{
-			//		tex_map_enum = 1;
-			//		GpuRes& gres_tex = it_tex->second;
-			//		SET_SHADER_RES(10, 1, (ID3D11ShaderResourceView**)&gres_tex.alloc_res_ptrs[DTYPE_SRV]);
-			//	}
-			//}
-			//else 
+
 			if (has_texture_img)
 			{
 				auto it_tex = map_gres_texs.find("MAP_COLOR4");
@@ -937,10 +906,6 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			vmmat44f pobj_mat_os2ps_T = cbPolygonObj.mat_os2ps;
 			cbPolygonObj.mat_os2ps = matQaudWS2PS_T;
 #endif
-			//cbPolygonObj.Ka *= material_phongCoeffs.x;
-			//cbPolygonObj.Kd *= material_phongCoeffs.y;
-			//cbPolygonObj.Ks *= material_phongCoeffs.z;
-			//cbPolygonObj.Ns *= material_phongCoeffs.w;
 			if (default_color_cmmobj.x >= 0 && default_color_cmmobj.y >= 0 && default_color_cmmobj.z >= 0)
 				cbPolygonObj.Ka = cbPolygonObj.Kd = cbPolygonObj.Ks = default_color_cmmobj;
 
@@ -1067,10 +1032,6 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 					SET_SHADER_RES(5, 1, (ID3D11ShaderResourceView**)&gres_bvhParentBuffer.alloc_res_ptrs[DTYPE_SRV]);
 					SET_SHADER_RES(6, 1, (ID3D11ShaderResourceView**)&gres_bvhFlagBuffer.alloc_res_ptrs[DTYPE_SRV]);
 
-					// IASetVertexBuffers, SET_SHADER_RES 둘 다 동시에 가능?
-					SET_SHADER_RES(10, 1, (ID3D11ShaderResourceView**)&gres_vtx.alloc_res_ptrs[DTYPE_SRV]);
-					SET_SHADER_RES(11, 1, (ID3D11ShaderResourceView**)&gres_idx.alloc_res_ptrs[DTYPE_SRV]);
-
 					BVHPushConstants push;
 					push.primitiveCount = prim_data->num_prims;
 					push.vertexStride = prim_data->GetNumVertexDefinitions() * 3;
@@ -1095,18 +1056,18 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 #ifdef DX10_0
 #else
 				ID3D11UnorderedAccessView* dx11UAVs[NUM_UAVs] = {
-					(ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], 
-					(ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV], 
+					(ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV],
+					(ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV],
 					is_picking_routine ? (ID3D11UnorderedAccessView*)gres_picking_buffer.alloc_res_ptrs[DTYPE_UAV] : NULL,
 					(ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV],
 					(ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV] };
 #endif
 				if (is_picking_routine) {
 #ifdef DX10_0
-					ID3D11Buffer* dx11BufferTargetPrim = (ID3D11Buffer*)gres_quad.alloc_res_ptrs[DTYPE_RES];
+					ID3D11Buffer* dx11BufferTargetPrim = (ID3D11Buffer*)gres_quad.GetResource(DTYPE_RES);
 					ID3D11Buffer* dx11IndiceTargetPrim = NULL;
-					uint stride_inputlayer = sizeof(vmfloat3);
-					uint offset = 0;
+					uint32_t stride_inputlayer = sizeof(vmfloat3);
+					uint32_t offset = 0;
 					dx11DeviceImmContext->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&dx11BufferTargetPrim, &stride_inputlayer, &offset);
 					dx11DeviceImmContext->IASetInputLayout(dx11LI_P);
 					dx11DeviceImmContext->VSSetShader(dx11VShader_P, NULL, 0);
@@ -1119,14 +1080,14 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 						curved_slicer ? GETPS(PickingCurvedThickSlice_ps_4_0) : GETPS(PickingThickSlice_ps_4_0),
 						NULL, 0);
 
-					SET_SHADER_RES(20, 1, (ID3D11ShaderResourceView**)&gres_picking_buffer.alloc_res_ptrs[DTYPE_SRV]);
-					ID3D11RenderTargetView* dx11RTVs[2] = { (ID3D11RenderTargetView*)gres_picking_buffer2.alloc_res_ptrs[DTYPE_RTV], NULL};
+					SET_SHADER_RES(20, 1, (ID3D11ShaderResourceView**)&gres_picking_buffer.GetResource(DTYPE_SRV]);
+					ID3D11RenderTargetView* dx11RTVs[2] = { (ID3D11RenderTargetView*)gres_picking_buffer2.GetResource(DTYPE_RTV], NULL};
 					dx11DeviceImmContext->OMSetRenderTargets(1, dx11RTVs, NULL);
 					dx11DeviceImmContext->Draw(4, 0);
 					dx11DeviceImmContext->OMSetRenderTargets(1, dx11RTVsNULL, NULL);
 					SET_SHADER_RES(20, 1, dx11SRVs_NULL);
 
-					dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_picking_buffer.alloc_res_ptrs[DTYPE_RES], (ID3D11Texture2D*)gres_picking_buffer2.alloc_res_ptrs[DTYPE_RES]);
+					dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_picking_buffer.GetResource(DTYPE_RES], (ID3D11Texture2D*)gres_picking_buffer2.GetResource(DTYPE_RES]);
 #else
 					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs, dx11UAVs, NULL);
 					if (isLegacyBVH)
@@ -1143,10 +1104,10 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 				}
 				else {
 #ifdef DX10_0
-					ID3D11Buffer* dx11BufferTargetPrim = (ID3D11Buffer*)gres_quad.alloc_res_ptrs[DTYPE_RES];
+					ID3D11Buffer* dx11BufferTargetPrim = (ID3D11Buffer*)gres_quad.GetResource(DTYPE_RES];
 					ID3D11Buffer* dx11IndiceTargetPrim = NULL;
-					uint stride_inputlayer = sizeof(vmfloat3);
-					uint offset = 0;
+					uint32_t stride_inputlayer = sizeof(vmfloat3);
+					uint32_t offset = 0;
 					dx11DeviceImmContext->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&dx11BufferTargetPrim, &stride_inputlayer, &offset);
 					dx11DeviceImmContext->IASetInputLayout(dx11LI_P);
 					dx11DeviceImmContext->VSSetShader(dx11VShader_P, NULL, 0);
@@ -1159,11 +1120,11 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 						curved_slicer ? GETPS(CurvedThickSlicePathTracer_ps_4_0) : GETPS(ThickSlicePathTracer_ps_4_0),
 						NULL, 0);
 
-					SET_SHADER_RES(20, 1, (ID3D11ShaderResourceView**)&gres_fb_rgba.alloc_res_ptrs[DTYPE_SRV]);
-					SET_SHADER_RES(21, 1, (ID3D11ShaderResourceView**)&gres_fb_depthcs.alloc_res_ptrs[DTYPE_SRV]);
+					SET_SHADER_RES(20, 1, (ID3D11ShaderResourceView**)&gres_fb_rgba.GetResource(DTYPE_SRV]);
+					SET_SHADER_RES(21, 1, (ID3D11ShaderResourceView**)&gres_fb_depthcs.GetResource(DTYPE_SRV]);
 					ID3D11RenderTargetView* dx11RTVs[2] = {
-					(ID3D11RenderTargetView*)gres_fb_rgba2.alloc_res_ptrs[DTYPE_RTV],
-						(ID3D11RenderTargetView*)gres_fb_depthcs2.alloc_res_ptrs[DTYPE_RTV] };
+					(ID3D11RenderTargetView*)gres_fb_rgba2.GetResource(DTYPE_RTV],
+						(ID3D11RenderTargetView*)gres_fb_depthcs2.GetResource(DTYPE_RTV] };
 					dx11DeviceImmContext->OMSetRenderTargets(2, dx11RTVs, NULL);
 					dx11DeviceImmContext->Draw(4, 0);
 					dx11DeviceImmContext->OMSetRenderTargets(2, dx11RTVsNULL, NULL);
@@ -1173,20 +1134,20 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 					if (1)// planeThickness == 0.f)
 					{
 						SET_SHADER(GETPS(SliceOutline_ps_4_0), NULL, 0);
-						SET_SHADER_RES(20, 1, (ID3D11ShaderResourceView**)&gres_fb_rgba2.alloc_res_ptrs[DTYPE_SRV]);
-						SET_SHADER_RES(21, 1, (ID3D11ShaderResourceView**)&gres_fb_depthcs2.alloc_res_ptrs[DTYPE_SRV]);
-						dx11RTVs[0] = (ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV];
-						dx11RTVs[1] = (ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV];
+						SET_SHADER_RES(20, 1, (ID3D11ShaderResourceView**)&gres_fb_rgba2.GetResource(DTYPE_SRV]);
+						SET_SHADER_RES(21, 1, (ID3D11ShaderResourceView**)&gres_fb_depthcs2.GetResource(DTYPE_SRV]);
+						dx11RTVs[0] = (ID3D11RenderTargetView*)gres_fb_rgba.GetResource(DTYPE_RTV];
+						dx11RTVs[1] = (ID3D11RenderTargetView*)gres_fb_depthcs.GetResource(DTYPE_RTV];
 						dx11DeviceImmContext->OMSetRenderTargets(2, dx11RTVs, NULL);
 						dx11DeviceImmContext->Draw(4, 0);
 						dx11DeviceImmContext->OMSetRenderTargets(2, dx11RTVsNULL, NULL);
 						SET_SHADER_RES(20, 2, dx11SRVs_NULL);
 					}
 					else {
-						dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RES],
-							(ID3D11Texture2D*)gres_fb_rgba2.alloc_res_ptrs[DTYPE_RES]);
-						dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RES],
-							(ID3D11Texture2D*)gres_fb_depthcs2.alloc_res_ptrs[DTYPE_RES]);
+						dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_fb_rgba.GetResource(DTYPE_RES],
+							(ID3D11Texture2D*)gres_fb_rgba2.GetResource(DTYPE_RES]);
+						dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_fb_depthcs.GetResource(DTYPE_RES],
+							(ID3D11Texture2D*)gres_fb_depthcs2.GetResource(DTYPE_RES]);
 					}
 #else
 					if (isLegacyBVH)
@@ -1232,7 +1193,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 //				ID3D11GeometryShader* dx11GS_Target = NULL;
 //				//ID3D11PixelShader* dx11PS_Target = NULL;
 //				ID3D11RasterizerState2* dx11RState_TargetObj = NULL;
-//				uint offset = 0;
+//				uint32_t offset = 0;
 //				D3D_PRIMITIVE_TOPOLOGY pobj_topology_type;
 //
 //				if (prim_data->GetVerticeDefinition("NORMAL"))
@@ -1279,13 +1240,13 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 //
 //				dx11RState_TargetObj = GETRASTER(SOLID_NONE);
 //
-//				ID3D11Buffer* dx11BufferTargetPrim = (ID3D11Buffer*)gres_vtx.alloc_res_ptrs[DTYPE_RES];
+//				ID3D11Buffer* dx11BufferTargetPrim = (ID3D11Buffer*)gres_vtx.GetResource(DTYPE_RES];
 //				ID3D11Buffer* dx11IndiceTargetPrim = NULL;
-//				uint stride_inputlayer = sizeof(vmfloat3) * (uint)prim_data->GetNumVertexDefinitions();
+//				uint32_t stride_inputlayer = sizeof(vmfloat3) * (uint32_t)prim_data->GetNumVertexDefinitions();
 //				dx11DeviceImmContext->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&dx11BufferTargetPrim, &stride_inputlayer, &offset);
 //				if (prim_data->vidx_buffer != NULL)
 //				{
-//					dx11IndiceTargetPrim = (ID3D11Buffer*)gres_idx.alloc_res_ptrs[DTYPE_RES];
+//					dx11IndiceTargetPrim = (ID3D11Buffer*)gres_idx.GetResource(DTYPE_RES];
 //					dx11DeviceImmContext->IASetIndexBuffer(dx11IndiceTargetPrim, DXGI_FORMAT_R32_UINT, 0);
 //				}
 //
@@ -1302,7 +1263,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 //				// https://stackoverflow.com/questions/12606556/how-do-you-use-geometry-shader-with-output-stream
 //				dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(ALWAYS), 0);
 //
-//				dx11DeviceImmContext->SOSetTargets(1, (ID3D11Buffer**)&gres_cutlines_buffer.alloc_res_ptrs[DTYPE_RES], &offset);
+//				dx11DeviceImmContext->SOSetTargets(1, (ID3D11Buffer**)&gres_cutlines_buffer.GetResource(DTYPE_RES], &offset);
 //
 //				if (prim_data->is_stripe || prim_data->vidx_buffer == NULL)
 //					dx11DeviceImmContext->Draw(prim_data->num_vtx, 0);
@@ -1366,12 +1327,12 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		int num_layers = 0;
 #ifdef DX10_0
 		vmfloat4 data = *(vmfloat4*)mappedResSysPicking.pData;
-		uint obj_id = *(uint*)(&data.x);
+		uint32_t obj_id = *(uint32_t*)(&data.x);
 		num_layers = obj_id > 0 ? 1 : 0;
 		if (num_layers > 0)
 			picking_layers_id_depth[obj_id] = data.y;
 #else
-		uint* picking_buf = (uint*)mappedResSysPicking.pData;
+		uint32_t* picking_buf = (uint32_t*)mappedResSysPicking.pData;
 		// note each layer has 5 integer-stored data 
 		// id, depth, planePos.xyz
 
@@ -1380,7 +1341,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 
 		for (int i = 1; i <= num_picking_objs; i += 2)
 		{ 
-			uint obj_id = picking_buf[i];
+			uint32_t obj_id = picking_buf[i];
 			if (obj_id == 0) break;
 
 			float pick_depth = *(float*)&picking_buf[i + 1];
@@ -1420,8 +1381,8 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		// END of Render Process for picking
 	}
 	else {
-		cbCamState.iSrCamDummy__0 = *(uint*)&merging_beta;
-		cbCamState.iSrCamDummy__2 = *(uint*)&scale_z_res;
+		cbCamState.iSrCamDummy__0 = *(uint32_t*)&merging_beta;
+		cbCamState.iSrCamDummy__2 = *(uint32_t*)&scale_z_res;
 		SetCamConstBuf(cbCamState);
 
 		psoManager->GpuProfile("PathTracer");
@@ -1446,8 +1407,6 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 					, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
 			};
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, (ID3D11UnorderedAccessView**)&gres_fb_counter.alloc_res_ptrs[DTYPE_UAV], 0); // trimming may occur 
-			//dx11DeviceImmContext->CSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_SRV]);
-			//dx11DeviceImmContext->CSSetShaderResources(2, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_depthcs.alloc_res_ptrs[DTYPE_SRV]);
 			dx11DeviceImmContext->CSSetShader(GETCS(OIT_SKBZ_RESOLVE_cs_5_0), NULL, 0);
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 3, dx11UAVs_2nd_pass, (UINT*)(&dx11UAVs_2nd_pass));
 
@@ -1471,7 +1430,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 
 	iobj->SetDescriptor("vismtv_inbuilt_renderergpudx module");
 
-	iobj->SetObjParam("_ullong_LatestSrTime", vmhelpers::GetCurrentTimePack());
+	iobj->SetObjParam("_uint64_t_LatestSrTime", vmhelpers::GetCurrentTimePack());
 	//((std::mutex*)HDx11GetMutexGpuCriticalPath())->unlock();
 
 //#define __COUNT_DEBUG
@@ -1480,13 +1439,13 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	{
 		grd_helper::UpdateFrameBuffer(gres_fb_counter_sys, iobj, "SYSTEM_COUNTER", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R32_UINT, UPFB_SYSOUT);
 
-		dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_fb_counter_sys.alloc_res_ptrs[DTYPE_RES],
-			(ID3D11Texture2D*)gres_fb_counter.alloc_res_ptrs[DTYPE_RES]);
+		dx11DeviceImmContext->CopyResource((ID3D11Texture2D*)gres_fb_counter_sys.GetResource(DTYPE_RES],
+			(ID3D11Texture2D*)gres_fb_counter.GetResource(DTYPE_RES]);
 
 		D3D11_MAPPED_SUBRESOURCE mappedResSysTest;
-		HRESULT hr = dx11DeviceImmContext->Map((ID3D11Texture2D*)gres_fb_counter_sys.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysTest);
+		HRESULT hr = dx11DeviceImmContext->Map((ID3D11Texture2D*)gres_fb_counter_sys.GetResource(DTYPE_RES], 0, D3D11_MAP_READ, NULL, &mappedResSysTest);
 		int buf_row_pitch = mappedResSysTest.RowPitch / 4;
-		uint* __count = (uint*)mappedResSysTest.pData;
+		uint32_t* __count = (uint32_t*)mappedResSysTest.pData;
 		for (int i = 0; i < fb_size_cur.y; i++)
 		{
 			for (int j = 0; j < fb_size_cur.x; j++)
@@ -1495,7 +1454,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 					int gg = 0;
 			}
 		};
-		dx11DeviceImmContext->Unmap((ID3D11Texture2D*)gres_fb_counter_sys.alloc_res_ptrs[DTYPE_RES], 0);
+		dx11DeviceImmContext->Unmap((ID3D11Texture2D*)gres_fb_counter_sys.GetResource(DTYPE_RES], 0);
 	}
 #endif
 	return true;

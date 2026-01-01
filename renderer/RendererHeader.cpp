@@ -10,7 +10,7 @@ void GradientMagnitudeAnalysis(vmfloat2& grad_minmax, VmVObjectVolume* vobj)
 	int max_length = max(max(vol_data->vol_size.x, vol_data->vol_size.y), vol_data->vol_size.z);
 	int offset = max(max_length / 200, 2);
 
-	ushort** ppusVolume = (ushort**)vol_data->vol_slices;
+	uint16_t** ppusVolume = (uint16_t**)vol_data->vol_slices;
 	int iSizeAddrX = vol_data->vol_size.x + vol_data->bnd_size.x * 2;
 	for (int iZ = 1; iZ < vol_data->vol_size.z - 1; iZ += offset)
 	{

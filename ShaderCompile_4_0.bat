@@ -1,7 +1,11 @@
-fxc /E CommonVS_P /T vs_4_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs_4_0/SR_OIT_P_vs_4_0
-fxc /E CommonVS_PN /T vs_4_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs_4_0/SR_OIT_PN_vs_4_0
-fxc /E CommonVS_PT /T vs_4_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs_4_0/SR_OIT_PT_vs_4_0
-fxc /E CommonVS_PNT /T vs_4_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs_4_0/SR_OIT_PNT_vs_4_0 
+fxc /E CommonVS /T vs_4_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs_4_0/SR_OIT_P_vs_4_0 /D VSIN_N=0 /D VSIN_T=0 /D VSIN_C=0
+fxc /E CommonVS /T vs_4_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs_4_0/SR_OIT_PN_vs_4_0 /D VSIN_N=1 /D VSIN_T=0 /D VSIN_C=0
+fxc /E CommonVS /T vs_4_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs_4_0/SR_OIT_PC_vs_4_0 /D VSIN_N=0 /D VSIN_T=0 /D VSIN_C=1
+fxc /E CommonVS /T vs_4_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs_4_0/SR_OIT_PT_vs_4_0 /D VSIN_N=0 /D VSIN_T=1 /D VSIN_C=0
+fxc /E CommonVS /T vs_4_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs_4_0/SR_OIT_PNC_vs_4_0 /D VSIN_N=1 /D VSIN_T=0 /D VSIN_C=1
+fxc /E CommonVS /T vs_4_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs_4_0/SR_OIT_PNT_vs_4_0 /D VSIN_N=1 /D VSIN_T=1 /D VSIN_C=0
+fxc /E CommonVS /T vs_4_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs_4_0/SR_OIT_PTC_vs_4_0 /D VSIN_N=0 /D VSIN_T=1 /D VSIN_C=1
+fxc /E CommonVS /T vs_4_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs_4_0/SR_OIT_PNTC_vs_4_0 /D VSIN_N=1 /D VSIN_T=1 /D VSIN_C=1
 fxc /E CommonVS_PTTT /T vs_4_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs_4_0/SR_OIT_PTTT_vs_4_0 
 
 fxc /E WRITE_DEPTHZ /T ps_4_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs_4_0/WRITE_DEPTH_ps_4_0

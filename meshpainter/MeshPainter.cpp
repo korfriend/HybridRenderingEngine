@@ -50,35 +50,17 @@ void MeshPainter::loadShaders()
 
 		{
 			// Define input element descriptors
-			D3D11_INPUT_ELEMENT_DESC layoutP[] = {
-				{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-			};
-
-			D3D11_INPUT_ELEMENT_DESC layoutPN[] = {
-				{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-				{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-			};
-
 			D3D11_INPUT_ELEMENT_DESC layoutPT[] = {
 				{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-				{ "TEXCOORD", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-			};
-
-			D3D11_INPUT_ELEMENT_DESC layoutPNT[] = {
-				{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-				{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-				{ "TEXCOORD", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 24, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+				{ "TEXCOORD", 0, DXGI_FORMAT_R16G16_UNORM, 2, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 			};
 
 			HRSRC hrSrc = FindResource(hModule, MAKEINTRESOURCE(IDR_RCDATA80001), RT_RCDATA);
 			HGLOBAL hGlobalByte = LoadResource(hModule, hrSrc);
 			LPVOID pdata = LockResource(hGlobalByte);
-			ullong ullFileSize = SizeofResource(hModule, hrSrc);
+			uint64_t ullFileSize = SizeofResource(hModule, hrSrc);
 
-			device->CreateInputLayout(layoutP, 1, pdata, ullFileSize, brushInputLayout_P.GetAddressOf());
-			device->CreateInputLayout(layoutPN, 2, pdata, ullFileSize, brushInputLayout_PN.GetAddressOf());
-			device->CreateInputLayout(layoutPT, 2, pdata, ullFileSize, brushInputLayout_PT.GetAddressOf());
-			device->CreateInputLayout(layoutPNT, 3, pdata, ullFileSize, brushInputLayout_PNT.GetAddressOf());
+			device->CreateInputLayout(layoutPT, 2, pdata, ullFileSize, brushInputLayout.GetAddressOf());
 		}
 
 		is_loaded = true;
@@ -124,7 +106,7 @@ void MeshPainter::loadShaders()
 				return nullptr;
 
 			fseek(pFile, 0, SEEK_END);
-			ullong ullFileSize = ftell(pFile);
+			uint64_t ullFileSize = ftell(pFile);
 			fseek(pFile, 0, SEEK_SET);
 			byte* pyRead = new byte[ullFileSize];
 			fread(pyRead, sizeof(byte), ullFileSize, pFile);
@@ -149,7 +131,7 @@ void MeshPainter::loadShaders()
 				return nullptr;
 
 			fseek(pFile, 0, SEEK_END);
-			ullong ullFileSize = ftell(pFile);
+			uint64_t ullFileSize = ftell(pFile);
 			fseek(pFile, 0, SEEK_SET);
 			byte* pyRead = new byte[ullFileSize];
 			fread(pyRead, sizeof(byte), ullFileSize, pFile);
@@ -169,18 +151,6 @@ void MeshPainter::loadShaders()
 	dilationVS.Attach(loadShaderVS("MP_FullscreenQuad_vs_5_0"));
 	brushPS.Attach(loadShaderPS("MP_BrushStroke_ps_5_0"));
 	dilationPS.Attach(loadShaderPS("MP_Dilate_ps_5_0"));
-}
-
-ID3D11InputLayout* MeshPainter::getBrushInputLayout(const std::string& layoutDesc) {
-	if (layoutDesc == "P")
-		return brushInputLayout_P.Get();
-	else if (layoutDesc == "PN")
-		return brushInputLayout_PN.Get();
-	else if (layoutDesc == "PT")
-		return brushInputLayout_PT.Get();
-	else if (layoutDesc == "PNT")
-		return brushInputLayout_PNT.Get();
-	return nullptr;
 }
 
 void MeshPainter::paintOnActor(
@@ -226,13 +196,12 @@ void MeshPainter::paintOnActor(
 }
 
 bool MeshPainter::computeUVFromHit(vmobjects::PrimitiveData* primData,
-	int triangleIndex, float baryU, float baryV,
-	float outUV[2], const std::vector<float>* painterUVs) {
+	int triangleIndex, float baryU, float baryV, float outUV[2]) {
 	if (!primData)
 		return false;
 
 	// Get triangle indices
-	uint* indices = (uint*)primData->vidx_buffer;
+	uint32_t* indices = (uint32_t*)primData->vidx_buffer;
 	int idx0, idx1, idx2;
 
 	if (indices) {
@@ -247,37 +216,13 @@ bool MeshPainter::computeUVFromHit(vmobjects::PrimitiveData* primData,
 		idx2 = triangleIndex * 3 + 2;
 	}
 
-	// Use painter UVs if provided
-	// painterUVs is triangle-vertex indexed: [tri0_v0_u, tri0_v0_v, tri0_v1_u, tri0_v1_v, tri0_v2_u, tri0_v2_v, tri1_v0_u, ...]
-	if (painterUVs && painterUVs->size() >= (size_t)(triangleIndex * 3 + 3) * 2) {
-		// Read UVs directly from triangle-vertex indices (not vertex indices!)
-		int triVertexIdx0 = triangleIndex * 3 + 0;
-		int triVertexIdx1 = triangleIndex * 3 + 1;
-		int triVertexIdx2 = triangleIndex * 3 + 2;
-
-		float uv0_x = (*painterUVs)[triVertexIdx0 * 2 + 0];
-		float uv0_y = (*painterUVs)[triVertexIdx0 * 2 + 1];
-		float uv1_x = (*painterUVs)[triVertexIdx1 * 2 + 0];
-		float uv1_y = (*painterUVs)[triVertexIdx1 * 2 + 1];
-		float uv2_x = (*painterUVs)[triVertexIdx2 * 2 + 0];
-		float uv2_y = (*painterUVs)[triVertexIdx2 * 2 + 1];
-
-		// Interpolate UV using barycentric coordinates
-		// P = (1 - u - v) * V0 + u * V1 + v * V2
-		float w = 1.0f - baryU - baryV;
-		outUV[0] = w * uv0_x + baryU * uv1_x + baryV * uv2_x;
-		outUV[1] = w * uv0_y + baryU * uv1_y + baryV * uv2_y;
-		return true;
-	}
-
-	// Fallback to TEXCOORD0 if painter UVs not available
-	vmfloat3* texcoords = primData->GetVerticeDefinition("TEXCOORD0");
+	vmfloat2* texcoords = primData->GetVerticeDefinition<vmfloat2>("TEXCOORD0");
 	if (!texcoords)
 		return false;
 
-	vmfloat3 uv0 = texcoords[idx0];
-	vmfloat3 uv1 = texcoords[idx1];
-	vmfloat3 uv2 = texcoords[idx2];
+	vmfloat2 uv0 = texcoords[idx0];
+	vmfloat2 uv1 = texcoords[idx1];
+	vmfloat2 uv2 = texcoords[idx2];
 
 	float w = 1.0f - baryU - baryV;
 	outUV[0] = w * uv0.x + baryU * uv1.x + baryV * uv2.x;
@@ -296,18 +241,9 @@ RayHitResult MeshPainter::raycastMesh(vmobjects::PrimitiveData* primData,
 	if (!primData)
 		return result;
 
-	vmfloat3* positions = primData->GetVerticeDefinition("POSITION");
+	vmfloat3* positions = primData->GetVerticeDefinition<vmfloat3>("POSITION");
 	if (!positions)
 		return result;
-
-	// Get painter UVs for this actor (triangle-vertex indexed for accurate CPU raycast)
-	const std::vector<float>* painterUVs = nullptr;
-	if (paintManager) {
-		ActorPaintData* paintData = paintManager->getPaintResource(actorId);
-		if (paintData && paintData->vbUVs) {
-			painterUVs = &paintData->vbUVs->vbPainterUVs_TriVertex;  // Use triangle-vertex indexed UVs
-		}
-	}
 
 	// Transform ray to object space
 	vmmat44f matWS2OS;
@@ -318,7 +254,7 @@ RayHitResult MeshPainter::raycastMesh(vmobjects::PrimitiveData* primData,
 	vmmath::fTransformVector(&rayDirOS, &rayDir, &matWS2OS);
 	vmmath::fNormalizeVector(&rayDirOS, &rayDirOS);
 
-	uint* indices = (uint*)primData->vidx_buffer;
+	uint32_t* indices = (uint32_t*)primData->vidx_buffer;
 	int numTriangles = primData->num_prims;
 
 	float closestT = FLT_MAX;
@@ -385,7 +321,7 @@ RayHitResult MeshPainter::raycastMesh(vmobjects::PrimitiveData* primData,
 				result.worldPos[2] = hitPosWS.z;
 
 				// Compute UV using painter UVs
-				computeUVFromHit(primData, i, u, v, result.uv, painterUVs);
+				computeUVFromHit(primData, i, u, v, result.uv);
 			}
 			});
 	}
@@ -446,7 +382,7 @@ RayHitResult MeshPainter::raycastMesh(vmobjects::PrimitiveData* primData,
 				result.worldPos[2] = hitPosWS.z;
 
 				// Compute UV using painter UVs
-				computeUVFromHit(primData, i, u, v, result.uv, painterUVs);
+				computeUVFromHit(primData, i, u, v, result.uv);
 			}
 		}
 	}
@@ -537,20 +473,11 @@ void MeshPainter::renderBrushStroke(FeedbackTexture* hoverTex,
 	context->GSSetShader(nullptr, nullptr, 0);
 
 	// Bind input layout (use mesh painter's own input layout created from MP_Brush_vs_5_0)
-	ID3D11InputLayout* brushLayout = getBrushInputLayout(meshParams.inputLayerDesc);
-	if (brushLayout)
-		context->IASetInputLayout(brushLayout);
-	else
-		vzlog_error("MeshPainter: Failed to get brush input layout for %s", meshParams.inputLayerDesc.c_str());
+	context->IASetInputLayout(brushInputLayout.Get());
 
 	// Bind previous paint texture as SRV at slot 2 (tex2d_previous : register(t2))
 	ID3D11ShaderResourceView* prevPaintSRV = paintTex->getRenderTarget()->srv.Get();
 	context->PSSetShaderResources(2, 1, &prevPaintSRV);
-
-	// Bind UV buffer as SRV at slot 61 (g_uvBuffer : register(t61))
-	if (meshParams.uvBufferSRV) {
-		context->VSSetShaderResources(61, 1, &meshParams.uvBufferSRV);
-	}
 
 	// Bind brush constant buffer
 	ID3D11Buffer* cb = brushConstantBuffer.Get();
@@ -566,7 +493,11 @@ void MeshPainter::renderBrushStroke(FeedbackTexture* hoverTex,
 		
 	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-	context->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&meshParams.vbMesh, &meshParams.stride, &meshParams.offset);
+	uint32_t stride_vb = 12;
+	uint32_t stride_uv = 4;
+	uint32_t offset = 0;
+	context->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&meshParams.vbPos, &stride_vb, &offset);
+	context->IASetVertexBuffers(2, 1, (ID3D11Buffer**)&meshParams.vbUV, &stride_uv, &offset);
 	// Input layout already set above
 
 	assert(meshParams.primData->num_vtx == meshParams.primData->num_prims * 3);

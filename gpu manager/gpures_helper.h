@@ -22,6 +22,43 @@ namespace grd_helper
 	{
 		return value == AlignTo(value, alignment);
 	}
+	
+	static inline uint16_t PackUNorm16(float x)
+	{
+		x = std::clamp(x, 0.0f, 1.0f);
+		return (uint16_t)std::lround(x * 65535.0f);
+	}
+
+	enum Attr : uint32_t {
+		A_P = 1u << 0,
+		A_N = 1u << 1,
+		A_T0 = 1u << 2,
+		A_C = 1u << 3,
+		A_T1 = 1u << 4,
+		A_T2 = 1u << 5,
+	};
+
+	// mask
+	constexpr uint32_t M_P = A_P;
+	constexpr uint32_t M_PN = A_P | A_N;
+	constexpr uint32_t M_PT = A_P | A_T0;
+	constexpr uint32_t M_PC = A_P | A_C;
+	constexpr uint32_t M_PNT = A_P | A_N | A_T0;
+	constexpr uint32_t M_PNC = A_P | A_N | A_C;
+	constexpr uint32_t M_PTC = A_P | A_T0 | A_C;
+	constexpr uint32_t M_PNTC = A_P | A_N | A_T0 | A_C;
+	// PTTT = P + (T0 + T1 + T2)
+	constexpr uint32_t M_PTTT = A_P | A_T0 | A_T1 | A_T2;
+
+	struct Variant {
+		uint32_t mask;
+		const char* name;                 // e.g., "PNTC"
+		ID3D11VertexShader* vs;
+		ID3D11InputLayout* il;
+		// optional for more parameters can be added
+	};
+
+	const Variant* GetPSOVariant(uint32_t mask);
 
 #define NUM_MATERIALS 6	// primitive-bound texture descriptions 
 
@@ -29,7 +66,7 @@ namespace grd_helper
 
 	const ID3D11ShaderResourceView* GetPushContantSRV();
 
-	void PushConstants(const void* data, uint size, uint offset);
+	void PushConstants(const void* data, uint32_t size, uint32_t offset);
 
 	static bool is_test_out = false;
 
@@ -334,53 +371,53 @@ namespace grd_helper
 		float maxLife;
 		vmfloat2 sizeBeginEnd;
 		float life;
-		uint color;
+		uint32_t color;
 	};
 
 	struct ParticleCounters
 	{
-		uint aliveCount;
-		uint deadCount;
-		uint realEmitCount;
-		uint aliveCount_afterSimulation;
-		uint culledCount;
-		uint cellAllocator;
+		uint32_t aliveCount;
+		uint32_t deadCount;
+		uint32_t realEmitCount;
+		uint32_t aliveCount_afterSimulation;
+		uint32_t culledCount;
+		uint32_t cellAllocator;
 	};
 
-	static const uint PARTICLECOUNTER_OFFSET_ALIVECOUNT = 0;
-	static const uint PARTICLECOUNTER_OFFSET_DEADCOUNT = PARTICLECOUNTER_OFFSET_ALIVECOUNT + 4;
-	static const uint PARTICLECOUNTER_OFFSET_REALEMITCOUNT = PARTICLECOUNTER_OFFSET_DEADCOUNT + 4;
-	static const uint PARTICLECOUNTER_OFFSET_ALIVECOUNT_AFTERSIMULATION = PARTICLECOUNTER_OFFSET_REALEMITCOUNT + 4;
-	static const uint PARTICLECOUNTER_OFFSET_CULLEDCOUNT = PARTICLECOUNTER_OFFSET_ALIVECOUNT_AFTERSIMULATION + 4;
-	static const uint PARTICLECOUNTER_OFFSET_CELLALLOCATOR = PARTICLECOUNTER_OFFSET_CULLEDCOUNT + 4;
+	static const uint32_t PARTICLECOUNTER_OFFSET_ALIVECOUNT = 0;
+	static const uint32_t PARTICLECOUNTER_OFFSET_DEADCOUNT = PARTICLECOUNTER_OFFSET_ALIVECOUNT + 4;
+	static const uint32_t PARTICLECOUNTER_OFFSET_REALEMITCOUNT = PARTICLECOUNTER_OFFSET_DEADCOUNT + 4;
+	static const uint32_t PARTICLECOUNTER_OFFSET_ALIVECOUNT_AFTERSIMULATION = PARTICLECOUNTER_OFFSET_REALEMITCOUNT + 4;
+	static const uint32_t PARTICLECOUNTER_OFFSET_CULLEDCOUNT = PARTICLECOUNTER_OFFSET_ALIVECOUNT_AFTERSIMULATION + 4;
+	static const uint32_t PARTICLECOUNTER_OFFSET_CELLALLOCATOR = PARTICLECOUNTER_OFFSET_CULLEDCOUNT + 4;
 
-	static const uint EMITTER_OPTION_BIT_FRAME_BLENDING_ENABLED = 1 << 0;
-	static const uint EMITTER_OPTION_BIT_SPH_ENABLED = 1 << 1;
-	static const uint EMITTER_OPTION_BIT_MESH_SHADER_ENABLED = 1 << 2;
-	static const uint EMITTER_OPTION_BIT_COLLIDERS_DISABLED = 1 << 3;
-	static const uint EMITTER_OPTION_BIT_USE_RAIN_BLOCKER = 1 << 4;
-	static const uint EMITTER_OPTION_BIT_TAKE_COLOR_FROM_MESH = 1 << 5;
+	static const uint32_t EMITTER_OPTION_BIT_FRAME_BLENDING_ENABLED = 1 << 0;
+	static const uint32_t EMITTER_OPTION_BIT_SPH_ENABLED = 1 << 1;
+	static const uint32_t EMITTER_OPTION_BIT_MESH_SHADER_ENABLED = 1 << 2;
+	static const uint32_t EMITTER_OPTION_BIT_COLLIDERS_DISABLED = 1 << 3;
+	static const uint32_t EMITTER_OPTION_BIT_USE_RAIN_BLOCKER = 1 << 4;
+	static const uint32_t EMITTER_OPTION_BIT_TAKE_COLOR_FROM_MESH = 1 << 5;
 
 	struct IndirectDrawArgsInstanced
 	{
-		uint VertexCountPerInstance;
-		uint InstanceCount;
-		uint StartVertexLocation;
-		uint StartInstanceLocation;
+		uint32_t VertexCountPerInstance;
+		uint32_t InstanceCount;
+		uint32_t StartVertexLocation;
+		uint32_t StartInstanceLocation;
 	};
 	struct IndirectDrawArgsIndexedInstanced
 	{
-		uint IndexCountPerInstance;
-		uint InstanceCount;
-		uint StartIndexLocation;
+		uint32_t IndexCountPerInstance;
+		uint32_t InstanceCount;
+		uint32_t StartIndexLocation;
 		int BaseVertexLocation;
-		uint StartInstanceLocation;
+		uint32_t StartInstanceLocation;
 	};
 	struct IndirectDispatchArgs
 	{
-		uint ThreadGroupCountX;
-		uint ThreadGroupCountY;
-		uint ThreadGroupCountZ;
+		uint32_t ThreadGroupCountX;
+		uint32_t ThreadGroupCountY;
+		uint32_t ThreadGroupCountZ;
 	};
 
 	int Initialize(VmGpuManager* pCGpuManager, PSOManager* gpu_params);
@@ -390,7 +427,7 @@ namespace grd_helper
 	MeshPainter* GetMeshPainter();
 
 	HRESULT PresetCompiledShader(__ID3D11Device* pdx11Device, HMODULE hModule, LPCWSTR pSrcResource, LPCSTR strShaderProfile, ID3D11DeviceChild** ppdx11Shader/*out*/
-		, D3D11_INPUT_ELEMENT_DESC* pInputLayoutDesc, uint num_elements, ID3D11InputLayout** ppdx11LayoutInputVS);
+		, D3D11_INPUT_ELEMENT_DESC* pInputLayoutDesc, uint32_t num_elements, ID3D11InputLayout** ppdx11LayoutInputVS);
 
 	void CheckReusability(GpuRes& gres, VmObject* resObj, bool& update_data, bool& regen_data,
 		const vmobjects::VmParamMap<std::string, std::any>& res_new_values);
@@ -408,7 +445,7 @@ namespace grd_helper
 	bool UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, const bool isPreInt = false, LocalProgress* progress = NULL);
 
 	// primitive structure
-	bool UpdatePrimitiveModel(GpuRes& gres_vtx, GpuRes& gres_idx, map<string, GpuRes>& map_gres_texs, VmVObjectPrimitive* pobj, VmObject* imgObj = NULL, bool* hasTextureMap = NULL, LocalProgress* progress = NULL);
+	bool UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes& gres_idx, map<string, GpuRes>& map_gres_texs, VmVObjectPrimitive* pobj, VmObject* imgObj = NULL, bool* hasTextureMap = NULL, LocalProgress* progress = NULL);
 
 #define UPFB_SYSOUT 0x1
 #define UPFB_RAWBYTE 0x1 << 1 // buffer only
@@ -423,13 +460,13 @@ namespace grd_helper
 	bool UpdateFrameBuffer(GpuRes& gres, const VmIObject* iobj,
 		const string& res_name,
 		const GpuResType gres_type,
-		const uint bind_flag,
-		const uint dx_format,
+		const uint32_t bind_flag,
+		const uint32_t dx_format,
 		const int fb_flag,
 		const int num_frags_perpixel = 1,
 		const int structured_stride = 0);
 
-	bool UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string& resName, const void* bufPtr, const int numElements, DXGI_FORMAT dxFormat, const int type_bytes, LocalProgress* progress = NULL, ullong cpu_update_custom_time = 0);
+	bool UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string& resName, const void* bufPtr, const int numElements, DXGI_FORMAT dxFormat, const int type_bytes, LocalProgress* progress = NULL, uint64_t cpu_update_custom_time = 0);
 
 	bool UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, VmCObject* camObj);
 
@@ -438,7 +475,7 @@ namespace grd_helper
 #define MAX_LAYERS 8
 	struct Fragment
 	{
-		uint i_vis;
+		uint32_t i_vis;
 		float z;
 		float zthick;
 		float opacity_sum;
@@ -486,13 +523,13 @@ namespace grd_helper
 		vmmat44f mat_ws2cs;
 
 		vmfloat3 pos_cam_ws;
-		uint rt_width;
+		uint32_t rt_width;
 
 		vmfloat3 dir_view_ws;
-		uint rt_height;
+		uint32_t rt_height;
 
 		float cam_vz_thickness;
-		uint k_value;
+		uint32_t k_value;
 		// 0-  bit : 0 : (orthogonal), 1 : (perspective)
 		// 1-  bit : for RT to k-buffer : 0 (just RT), 1 : (after silhouette processing)
 		// 2-  bit : for dynamic K value // deprecated... (this will be treated as a separate shader
@@ -505,19 +542,19 @@ namespace grd_helper
 		// 9-  bit : 0 : outlint mode (solid), 1 : outlint mode (gradient alpha)
 		// 10- bit : 0 : 3D camera, 1 : Slicer
 		// 11- bit : 0 : no external K-buffer, 1 : put an external RT to K-buffer (OIT_RESOLVE)
-		uint cam_flag;
+		uint32_t cam_flag;
 		// used for 
 		// 1) A-Buffer prefix computations /*deprecated*/ or 2) beta (asfloat) for merging operation
 		// 2) Second Layer Blending : 1st 8 bit for Pattern Interval (pixels), 2nd 8 bit for Blending
-		uint iSrCamDummy__0; 
+		uint32_t iSrCamDummy__0; 
 
 		float near_plane;
 		float far_plane;
 		// used for 
 		// 1) the level of MIPMAP generation (only for SSAO rendering), or 2) picking xy (16bit, 16bit)
 		// 3) outline's colorRGB and thicknessPix
-		uint iSrCamDummy__1; 
-		uint iSrCamDummy__2; // scaling factor (asfloat) for the z-thickness value determined by the z-resolution
+		uint32_t iSrCamDummy__1; 
+		uint32_t iSrCamDummy__2; // scaling factor (asfloat) for the z-thickness value determined by the z-resolution
 
 		ZERO_SET(CB_CameraState)
 	};
@@ -531,10 +568,10 @@ namespace grd_helper
 		// 2nd bit : 0 (only polygons for SSAO), 1 : (volume G buffer for SSAO)
 		// 10th bit : 0 (no SSAO output to render buffer), 1: (SSAO output to render buffer)
 		// 11th~13th bit : 0~7th layer of SSAO
-		uint env_flag;
+		uint32_t env_flag;
 
 		vmfloat3 dir_light_ws;
-		uint num_lights;
+		uint32_t num_lights;
 
 		// associated colors
 		vmfloat4 ltint_ambient;
@@ -550,9 +587,9 @@ namespace grd_helper
 		float tangent_bias;
 
 		float ao_intensity;
-		uint num_safe_loopexit;
-		uint env_dummy_1;
-		uint env_dummy_2;
+		uint32_t num_safe_loopexit;
+		uint32_t env_dummy_1;
+		uint32_t env_dummy_2;
 
 		float dof_lens_r;
 		float dof_lens_F;
@@ -568,10 +605,10 @@ namespace grd_helper
 		vmfloat3 pos_clipplane;
 		// 1st bit : 0 (No) 1 (Clip Box)
 		// 2nd bit : 0 (No) 1 (Clip plane)
-		uint clip_flag;
+		uint32_t clip_flag;
 
 		vmfloat3 vec_clipplane;
-		uint ci_dummy_1;
+		uint32_t ci_dummy_1;
 
 		ZERO_SET(CB_ClipInfo)
 	};
@@ -597,7 +634,7 @@ namespace grd_helper
 		// 6th bit : g_tex2D_BUMP
 		// 7th bit : g_tex2D_D
 		// 17th bit : g_tex2D_PAINT
-		uint tex_map_enum;
+		uint32_t tex_map_enum;
 
 		// 1st bit : 0 (shading color to RT) 1 (normal to RT for the purpose of silhouette rendering)
 		// 2nd bit : 0 (no face normal) 1 (use face normal) in GS (flat normal)
@@ -613,15 +650,17 @@ namespace grd_helper
 		// 23th bit : 0 (static alpha) 1 (dynamic alpha using mask t50) ... mode 1
 		// 24th bit : 0 (static alpha) 1 (dynamic alpha using mask t50) ... mode 2
 		// 31~32th bit : max components for dashed line : 0 ==> x, 1 ==> y, 2 ==> z
-		uint pobj_flag;
-		uint num_letters;	// for text object 
+		uint32_t pobj_flag;
+		uint32_t num_letters;	// for text object 
 		float dash_interval;
 		float depth_thres;	// for outline!
 
 		float pix_thickness; // 1) for POINT and LINE TOPOLOGY, 2) slicer's cutting outline thickness
 		float vz_thickness;
-		uint pobj_dummy_0; // 1) actor_id used for picking, 2) outline color, 3) iso_value for difference map
-		uint pobj_dummy_1;
+		uint32_t pobj_dummy_0; // 1) actor_id used for picking, 2) outline color, 3) iso_value for difference map
+		uint32_t pobj_dummy_1;
+
+		vmfloat4 pb_shading_factor; // x : Ambient, y : Diffuse, z : Specular, w : specular
 
 		ZERO_SET(CB_PolygonObject)
 	};
@@ -656,10 +695,10 @@ namespace grd_helper
 		// 19 bit : ghost surface (1) or not (0)
 		// 20 bit : hotspot visible (1) or not (0)
 		// 24~31bit : Sculpt Mask Value (1 byte)
-		uint vobj_flag;
-		uint iso_value;
-		uint v_dummy0; 
-		uint v_dummy1;
+		uint32_t vobj_flag;
+		uint32_t iso_value;
+		uint32_t v_dummy0; 
+		uint32_t v_dummy1;
 
 		// light properties
 		vmfloat4 pb_shading_factor;	// x : Ambient, y : Diffuse, z : Specular, w : Specular power
@@ -668,7 +707,7 @@ namespace grd_helper
 		float mask_value_range;
 
 		vmuint3 vol_original_size;
-		uint v_dummy2;
+		uint32_t v_dummy2;
 
 		CB_ClipInfo clip_info;
 
@@ -681,10 +720,10 @@ namespace grd_helper
 		// 1st bit : AO or Not , 2nd bit : Anisotropic BRDF or Not , 3rd bit : Apply Shading Factor or Not
 		// NA ==> 4th bit : 0 : Normal Curvature Map (2D), 1 : Apply Concaveness
 		// NA ==> 5th bit : Concaveness Direction or Not
-		uint rf_flag;
-		uint outline_mode; // deprecated
+		uint32_t rf_flag;
+		uint32_t outline_mode; // deprecated
 		float curvature_kernel_radius;
-		uint rf_dummy_0;
+		uint32_t rf_dummy_0;
 
 		float brdf_diffuse_ratio;
 		float brdf_reft_ratio;
@@ -694,12 +733,12 @@ namespace grd_helper
 		float shadowmap_occusion_w; // for shadow
 		float shadowmap_depth_bias; // for shadow
 		float occ_radius;
-		uint occ_num_rays;
+		uint32_t occ_num_rays;
 
 		float ao_intensity;
-		uint rf_dummy_1;
-		uint rf_dummy_2;
-		uint rf_dummy_3;
+		uint32_t rf_dummy_1;
+		uint32_t rf_dummy_2;
+		uint32_t rf_dummy_3;
 
 		ZERO_SET(CB_Material)
 	};
@@ -714,8 +753,8 @@ namespace grd_helper
 		float occ_sample_dist_scale; // for occlusion
 		float sdm_sample_dist_scale; // for shadow
 		// 0-bit : 0 - normal surface hit, 1 - jittering 
-		uint flag;
-		uint vrf_dummy_1;
+		uint32_t flag;
+		uint32_t vrf_dummy_1;
 
 		ZERO_SET(CB_VolumeMaterial)
 	};
@@ -724,16 +763,16 @@ namespace grd_helper
 	{
 		vmfloat4 last_color;
 
-		uint		first_nonzeroalpha_index; // For ESS
-		uint		last_nonzeroalpha_index;
-		uint		tmap_size_x;
+		uint32_t		first_nonzeroalpha_index; // For ESS
+		uint32_t		last_nonzeroalpha_index;
+		uint32_t		tmap_size_x;
 		float		mapping_v_min; 
 
 		float		mapping_v_max;
 		// 1st bit set, then color clip
-		uint		flag;	
-		uint		tm_dummy_1;
-		uint		tm_dummy_2;
+		uint32_t		flag;	
+		uint32_t		tm_dummy_1;
+		uint32_t		tm_dummy_2;
 
 		ZERO_SET(CB_TMAP)
 	};
@@ -790,20 +829,20 @@ namespace grd_helper
 		vmfloat3 posBottomLeftCOS;
 		float thicknessPlane; // use cam's far_plane
 		vmfloat3 posBottomRightCOS;
-		uint __dummy0;
+		uint32_t __dummy0;
 		vmfloat3 planeUp; // WS, length is planePitch
-		uint flag; // 1st bit : isRightSide
+		uint32_t flag; // 1st bit : isRightSide
 	};
 
 	struct CB_TestBuffer
 	{
-		//uint testIntValues[16];
+		//uint32_t testIntValues[16];
 		//float testFloatValues[16];
 
-		uint testA;
-		uint testB;
-		uint testC;
-		uint testD;
+		uint32_t testA;
+		uint32_t testB;
+		uint32_t testC;
+		uint32_t testD;
 	};
 
 	struct CB_Particle_Blob
@@ -812,7 +851,7 @@ namespace grd_helper
 		vmint4 color_spheres;
 		float smoothCoeff;
 		vmfloat3 minRoiCube;
-		uint dummy1;
+		uint32_t dummy1;
 		vmfloat3 maxRoiCube;
 	};
 
@@ -822,23 +861,23 @@ namespace grd_helper
 		vmmat44f	mat_ws2lcs_udc_map;
 
 		vmfloat3	undercutDir;
-		uint		icolor;
+		uint32_t		icolor;
 	};
 
 	// CS Particle Buffer Update (https://github.com/turanszkij/WickedEngine/blob/2f5631e46aed3e278377a678b9e49714bfd33968/WickedEngine/shaders/emittedparticle_emitCS.hlsl )
 	// VS (for rendering)
 	struct CB_Frame
 	{
-		uint		options;					// renderer bool options packed into bitmask (OPTION_BIT_ values)
+		uint32_t		options;					// renderer bool options packed into bitmask (OPTION_BIT_ values)
 		float		time;
 		float		time_previous;
 		float		delta_time;
 
-		uint		frame_count;
-		uint		temporalaa_samplerotation;
+		uint32_t		frame_count;
+		uint32_t		temporalaa_samplerotation;
 
-		uint		forcefieldarray_offset;		// indexing into entity array
-		uint		forcefieldarray_count;		// indexing into entity array
+		uint32_t		forcefieldarray_offset;		// indexing into entity array
+		uint32_t		forcefieldarray_count;		// indexing into entity array
 	};
 
 	struct CB_Emitter
@@ -846,7 +885,7 @@ namespace grd_helper
 		vmmat44f	xEmitterTransform;
 		vmmat44f	xEmitterBaseMeshUnormRemap;
 
-		uint		xEmitCount;
+		uint32_t		xEmitCount;
 		float		xEmitterRandomness;
 		float		xParticleRandomColorFactor;
 		float		xParticleSize;
@@ -861,18 +900,18 @@ namespace grd_helper
 		float		xParticleMass;
 		float		xParticleMotionBlurAmount;
 
-		uint		xEmitterMaxParticleCount;
-		uint		xEmitterInstanceIndex;
-		uint		xEmitterMeshGeometryOffset;
-		uint		xEmitterMeshGeometryCount;
+		uint32_t		xEmitterMaxParticleCount;
+		uint32_t		xEmitterInstanceIndex;
+		uint32_t		xEmitterMeshGeometryOffset;
+		uint32_t		xEmitterMeshGeometryCount;
 
 		vmuint2		xEmitterFramesXY;
-		uint		xEmitterFrameCount;
-		uint		xEmitterFrameStart;
+		uint32_t		xEmitterFrameCount;
+		uint32_t		xEmitterFrameStart;
 
 		vmfloat2		xEmitterTexMul;
 		float		xEmitterFrameRate;
-		uint		xEmitterLayerMask;
+		uint32_t		xEmitterLayerMask;
 
 		float		xSPH_h;					// smoothing radius
 		float		xSPH_h_rcp;				// 1.0f / smoothing radius
@@ -886,7 +925,7 @@ namespace grd_helper
 
 		float		xSPH_e;					// viscosity constant
 		float		xSPH_p0;				// reference density
-		uint		xEmitterOptions;
+		uint32_t		xEmitterOptions;
 		float		xEmitterFixedTimestep;	// we can force a fixed timestep (>0) onto the simulation to avoid blowing up
 
 		vmfloat3		xParticleGravity;
@@ -899,7 +938,7 @@ namespace grd_helper
 	struct CB_SortConstants
 	{
 		vmint3 job_params;
-		uint counterReadOffset;
+		uint32_t counterReadOffset;
 	};
 
 
@@ -930,3 +969,9 @@ namespace grd_helper
 #define GETPS(NAME) psoManager->get_pshader(#NAME)
 #define GETGS(NAME) psoManager->get_gshader(#NAME)
 #define GETCS(NAME) psoManager->get_cshader(#NAME)
+
+
+//__vmstatic bool UpdatePainterUvAtlas(
+//	vmobjects::VmParamMap<std::string, std::any>& ioResObjs,
+//	vmobjects::VmParamMap<std::string, std::any>& ioActors,
+//	vmobjects::VmParamMap<std::string, std::any>& ioParams);

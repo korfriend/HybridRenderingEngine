@@ -211,8 +211,8 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	//float sizeGpuResourceForVolume = _fncontainer.fnParams.GetParam("_float_SizeGpuResourceForVolume", 80.0f);
 	//// 100 means 50%
 	//float resourceRatioForVolume = sizeGpuResourceForVolume * 0.5f * 0.01f;
-	//uint uiDedicatedGpuMemoryKB = 
-	//	(uint)(g_vmCommonParams.dx11_adapter.DedicatedVideoMemory / 1024);
+	//uint32_t uiDedicatedGpuMemoryKB = 
+	//	(uint32_t)(g_vmCommonParams.dx11_adapter.DedicatedVideoMemory / 1024);
 	//float halfCriterionKB = (float)uiDedicatedGpuMemoryKB * resourceRatioForVolume;
 	//float halfCriterionKB = _fncontainer.fnParams.GetParam("_float_GpuVolumeMaxSizeKB", 256.f * 1024.f);
 	// In CPU VR mode, Recommend to set dHalfCriterionKB = 16;
@@ -464,7 +464,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 
 	if (is_final_render_out && !is_picking_routine)
 	{
-		const uint rtbind = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+		const uint32_t rtbind = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 		GpuRes gres_fb_rgba;
 		grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
 
@@ -510,8 +510,8 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 			dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 4, dx11UAVs, (UINT*)(&dx11UAVs));
 
 			int __BLOCKSIZE = _fncontainer.fnParams.GetParam("_int_GpuThreadBlockSize", (int)4);
-			uint num_grid_x = (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
-			uint num_grid_y = (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
+			uint32_t num_grid_x = (uint32_t)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
+			uint32_t num_grid_y = (uint32_t)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
 			dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
 
 			// Set NULL States //

@@ -53,7 +53,6 @@ Texture2D<float4> tex2d_base : register(t0);      // Base/diffuse texture
 Texture2D<float4> tex2d_paint : register(t1);     // Paint layer texture
 Texture2D<float4> tex2d_previous : register(t2);  // Previous paint state (for ping-pong)
 
-StructuredBuffer<float2> g_uvBuffer : register(t61);
 // ============================================================================
 // Blend Mode Functions
 // ============================================================================
@@ -155,11 +154,10 @@ struct VS_OUTPUT
 	float3 worldPos : TEXCOORD1;
 };
 
-VS_OUTPUT VS_Brush(float3 position : POSITION, uint vertexID : SV_VertexID)
+VS_OUTPUT VS_Brush(float3 position : POSITION, unorm float2 uv : TEXCOORD0, uint vertexID : SV_VertexID)
 {
 	VS_OUTPUT output;
     
-	float2 uv = g_uvBuffer[vertexID];
       // Use UV as screen position (maps to render target)
 	output.position = float4(uv * 2.0 - 1.0, 0.0, 1.0);
 	output.position.y = -output.position.y; // Flip Y for DX coordinate system
@@ -198,7 +196,7 @@ struct PS_BRUSHOUT
 	float4 paint : SV_TARGET1;
 };
 
-PS_BRUSHOUT PS_BrushStroke(VS_OUTPUT input) : SV_Target
+PS_BRUSHOUT PS_BrushStroke(VS_OUTPUT input)
 {
 	PS_BRUSHOUT output;
     float3 posWS = input.worldPos;
@@ -208,8 +206,8 @@ PS_BRUSHOUT PS_BrushStroke(VS_OUTPUT input) : SV_Target
     float dist = length(delta);
     
     // Outside brush radius
-    //if (dist > 1.0)
-    //    discard;
+    if (dist > 1.0)
+        discard;
     
     // Calculate brush falloff based on hardness
     // hardness = 1.0: hard edge, hardness = 0.0: soft edge
@@ -224,8 +222,12 @@ PS_BRUSHOUT PS_BrushStroke(VS_OUTPUT input) : SV_Target
 	float blendedAlpha = saturate(prevPaint.a + alpha * (1.0 - prevPaint.a));
 	if (painterFlags & 0x1)
 	{
-		float3 blendedColor = ApplyBlendMode(prevPaint.rgb, brushColor.rgb, alpha, blendMode);
-		output.paint = float4(blendedColor, blendedAlpha);
+		//float3 blendedColor = ApplyBlendMode(prevPaint.rgb, brushColor.rgb, alpha, blendMode);
+		//output.paint = float4(blendedColor, blendedAlpha);
+		
+		float3 C_new = lerp(prevPaint.rgb, brushColor.rgb, alpha);
+		float A_new = lerp(prevPaint.a, brushColor.a, alpha);        
+		output.paint = float4(C_new, A_new);
 	}
 	else
 	{

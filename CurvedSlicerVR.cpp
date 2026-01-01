@@ -144,7 +144,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 			if (fopen_s(&pFile, (prefix_path + strName).c_str(), "rb") == 0)
 			{
 				fseek(pFile, 0, SEEK_END);
-				ullong ullFileSize = ftell(pFile);
+				uint64_t ullFileSize = ftell(pFile);
 				fseek(pFile, 0, SEEK_SET);
 				byte* pyRead = new byte[ullFileSize];
 				fread(pyRead, sizeof(byte), ullFileSize, pFile);
@@ -185,7 +185,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 			if (fopen_s(&pFile, (prefix_path + strName).c_str(), "rb") == 0)
 			{
 				fseek(pFile, 0, SEEK_END);
-				ullong ullFileSize = ftell(pFile);
+				uint64_t ullFileSize = ftell(pFile);
 				fseek(pFile, 0, SEEK_SET);
 				byte* pyRead = new byte[ullFileSize];
 				fread(pyRead, sizeof(byte), ullFileSize, pFile);
@@ -240,7 +240,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 
 	GpuRes gres_fb_rgba, gres_fb_depthcs;
 #ifdef DX10_0
-	const uint rtbind = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+	const uint32_t rtbind = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 
 	grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
 	grd_helper::UpdateFrameBuffer(gres_fb_depthcs, iobj, "RENDER_OUT_DEPTH_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
@@ -249,7 +249,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	grd_helper::UpdateFrameBuffer(gres_fb_rgba_prev, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
 	grd_helper::UpdateFrameBuffer(gres_fb_depthcs_prev, iobj, "RENDER_OUT_DEPTH_0", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
 #else
-	const uint rtbind = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+	const uint32_t rtbind = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 
 	grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
 	grd_helper::UpdateFrameBuffer(gres_fb_depthcs, iobj, "RENDER_OUT_DEPTH_0", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
@@ -297,9 +297,9 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	dx11DeviceImmContext->OMGetRenderTargets(1, &pdxRTVOld, &pdxDSVOld);
 
 	float flt_max_ = FLT_MAX;
-	uint flt_max_u = *(uint*)&flt_max_;
-	uint clr_unit4[4] = { 0, 0, 0, 0 };
-	uint clr_max_ufloat_4[4] = { flt_max_u, flt_max_u, flt_max_u, flt_max_u };
+	uint32_t flt_max_u = *(uint32_t*)&flt_max_;
+	uint32_t clr_unit4[4] = { 0, 0, 0, 0 };
+	uint32_t clr_max_ufloat_4[4] = { flt_max_u, flt_max_u, flt_max_u, flt_max_u };
 	float clr_float_zero_4[4] = { 0, 0, 0, 0 };
 	float clr_float_fltmax_4[4] = { FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX };
 	float clr_float_minus_4[4] = { -1.f, -1.f, -1.f, -1.f };
@@ -368,8 +368,8 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 
 		ID3D11Buffer* dx11BufferTargetPrim = (ID3D11Buffer*)gres_quad.alloc_res_ptrs[DTYPE_RES];
 		//ID3D11Buffer* dx11IndiceTargetPrim = NULL;
-		uint stride_inputlayer = sizeof(vmfloat3);
-		uint offset = 0;
+		uint32_t stride_inputlayer = sizeof(vmfloat3);
+		uint32_t offset = 0;
 		dx11DeviceImmContext->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&dx11BufferTargetPrim, &stride_inputlayer, &offset);
 		dx11DeviceImmContext->IASetInputLayout(dx11LI_P);
 		dx11DeviceImmContext->VSSetShader(dx11VShader_P, NULL, 0);
@@ -429,11 +429,11 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 
 #pragma region // Camera & Environment 
 	// 	const int __BLOCKSIZE = 8;
-	// 	uint num_grid_x = (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
-	// 	uint num_grid_y = (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
+	// 	uint32_t num_grid_x = (uint32_t)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
+	// 	uint32_t num_grid_y = (uint32_t)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
 	const int __BLOCKSIZE = _fncontainer->fnParams.GetParam("_int_GpuThreadBlockSize", (int)2);
-	uint num_grid_x = __BLOCKSIZE == 1 ? fb_size_cur.x : (uint)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
-	uint num_grid_y = __BLOCKSIZE == 1 ? fb_size_cur.y : (uint)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
+	uint32_t num_grid_x = __BLOCKSIZE == 1 ? fb_size_cur.x : (uint32_t)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
+	uint32_t num_grid_y = __BLOCKSIZE == 1 ? fb_size_cur.y : (uint32_t)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
 
 	VmCObject* cam_obj = iobj->GetCameraObject();
 	vmmat44 dmatWS2CS, dmatCS2PS, dmatPS2SS;
@@ -448,7 +448,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 
 	CB_CameraState cbCamState;
 	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, matWS2CS, cam_obj, fb_size_cur, k_value, v_thickness <= 0 ? min_pitch : (float)v_thickness);
-	cbCamState.iSrCamDummy__0 = *(uint*)&merging_beta;
+	cbCamState.iSrCamDummy__0 = *(uint32_t*)&merging_beta;
 	int oulineiRGB = (int)(outline_color.r * 255.f) | (int)(outline_color.g * 255.f) << 8 | (int)(outline_color.b * 255.f) << 16;
 	outline_thickness = min(32, outline_thickness);
 	cbCamState.iSrCamDummy__1 = oulineiRGB | outline_thickness << 24;
@@ -635,7 +635,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 
 		CB_VolumeObject cbVolumeObj;
 		grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, actor->matWS2OS, gres_vol, tmap_data->valid_min_idx.x, gres_volblk.options["FORMAT"] == DXGI_FORMAT_R16_UNORM ? 65535.f : 255.f, samplePrecisionLevel, is_xray_mode);
-		if (is_modulation_mode && ((uint)vol_data->vol_size.x * (uint)vol_data->vol_size.y * (uint)vol_data->vol_size.z > 1000000)) {
+		if (is_modulation_mode && ((uint32_t)vol_data->vol_size.x * (uint32_t)vol_data->vol_size.y * (uint32_t)vol_data->vol_size.z > 1000000)) {
 			//cbVolumeObj.opacity_correction *= 2.f;
 			//cbVolumeObj.sample_dist *= 2.f;
 			//cbVolumeObj.vec_grad_x *= 2.f;
@@ -659,9 +659,9 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		}
 		if (mask_vol_obj) {
 			VolumeData* mask_vol_data = mask_vol_obj->GetVolumeData();
-			if (mask_vol_data->store_dtype.type_bytes == data_type::dtype<byte>().type_bytes) // char
+			if (mask_vol_data->store_dtype.type_bytes == data_type::dtype<uint8_t>().type_bytes) // char
 				cbVolumeObj.mask_value_range = 255.f;
-			else if (mask_vol_data->store_dtype.type_bytes == data_type::dtype<ushort>().type_bytes) // short
+			else if (mask_vol_data->store_dtype.type_bytes == data_type::dtype<uint16_t>().type_bytes) // short
 				cbVolumeObj.mask_value_range = 65535.f;
 			else VMERRORMESSAGE("UNSUPPORTED FORMAT : MASK VOLUME");
 		}
