@@ -893,7 +893,7 @@ const Variant* grd_helper::GetPSOVariant(uint32_t mask)
 	static ID3D11VertexShader* dx11VShader_IDX = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_IDX_vs_5_0"));
 #endif
 
-	static const Variant kVariants[] = {
+	static Variant kVariants[] = {
 		{ M_P,    "P",    dx11VShader_P,    dx11LI_P    },
 		{ M_PN,   "PN",   dx11VShader_PN,   dx11LI_PN   },
 		{ M_PT,   "PT",   dx11VShader_PT,   dx11LI_PT   },
@@ -904,6 +904,48 @@ const Variant* grd_helper::GetPSOVariant(uint32_t mask)
 		{ M_PNTC, "PNTC", dx11VShader_PNTC, dx11LI_PNTC },
 		{ M_PTTT, "PTTT", dx11VShader_PTTT, dx11LI_PTTT },
 	};
+
+	if (mask == ~0)
+	{
+#ifdef DX10_0
+		dx11VShader_P = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_P_vs_4_0"));
+		dx11VShader_PN = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PN_vs_4_0"));
+		dx11VShader_PT = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PT_vs_4_0"));
+		dx11VShader_PC = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PC_vs_4_0"));
+		dx11VShader_PNT = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PNT_vs_4_0"));
+		dx11VShader_PNC = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PNC_vs_4_0"));
+		dx11VShader_PTC = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PTC_vs_4_0"));
+		dx11VShader_PNTC = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PNTC_vs_4_0"));
+		dx11VShader_PTTT = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PTTT_vs_4_0"));
+#else
+		dx11VShader_P = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_P_vs_5_0"));
+		dx11VShader_PN = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PN_vs_5_0"));
+		dx11VShader_PT = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PT_vs_5_0"));
+		dx11VShader_PC = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PC_vs_5_0"));
+		dx11VShader_PNT = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PNT_vs_5_0"));
+		dx11VShader_PNC = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PNC_vs_5_0"));
+		dx11VShader_PTC = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PTC_vs_5_0"));
+		dx11VShader_PNTC = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PNTC_vs_5_0"));
+		dx11VShader_PTTT = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PTTT_vs_5_0"));
+		dx11VShader_IDX = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_IDX_vs_5_0"));
+#endif
+
+		Variant tmp[9] = {
+		{ M_P,    "P",    dx11VShader_P,    dx11LI_P    },
+		{ M_PN,   "PN",   dx11VShader_PN,   dx11LI_PN   },
+		{ M_PT,   "PT",   dx11VShader_PT,   dx11LI_PT   },
+		{ M_PC,   "PC",   dx11VShader_PC,   dx11LI_PC   },
+		{ M_PNT,  "PNT",  dx11VShader_PNT,  dx11LI_PNT  },
+		{ M_PNC,  "PNC",  dx11VShader_PNC,  dx11LI_PNC  },
+		{ M_PTC,  "PTC",  dx11VShader_PTC,  dx11LI_PTC  },
+		{ M_PNTC, "PNTC", dx11VShader_PNTC, dx11LI_PNTC },
+		{ M_PTTT, "PTTT", dx11VShader_PTTT, dx11LI_PTTT },
+		};
+		std::memcpy(kVariants, tmp, sizeof(kVariants));
+
+		return nullptr;
+	}
+
 
 
 	for (auto& v : kVariants) {
@@ -1600,7 +1642,11 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 
 	for (int i = 0; i < (int)VERTEX_DEFINITIONS::VTX_DEF_COUNT; ++i)
 	{
-		GpuRes gres_vtx;
+		uint8_t* vtx_buf = prim_data->GetVerticeDefinition<uint8_t>(vtx_def_names[i]);
+		if (vtx_buf == nullptr)
+			continue;
+
+		GpuRes& gres_vtx = map_gres_vtxs[vtx_def_names[i]];
 		gres_vtx.vm_src_id = pobj->GetObjectID();
 		gres_vtx.res_name = "VTX_" + string(vtx_def_names[i]);
 		uint32_t stride_bytes = sizeof(vmfloat3);
@@ -1647,9 +1693,6 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 
 		if (update_data)
 		{
-			uint8_t* vtx_buf = prim_data->GetVerticeDefinition<uint8_t>(vtx_def_names[i]);
-			if (vtx_buf == nullptr)
-				continue;
 			uint8_t* buffer_vertices = nullptr;
 
 			D3D11_SUBRESOURCE_DATA subres;

@@ -173,56 +173,6 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 #define GETRASTER(NAME) psoManager->get_rasterizer(#NAME)
 #define GETDEPTHSTENTIL(NAME) psoManager->get_depthstencil(#NAME)
 
-#ifdef DX10_0
-		string strNames_VS[VS_NUM] = {
-			   "SR_OIT_P_vs_4_0"
-			  ,"SR_OIT_PN_vs_4_0"
-			  ,"SR_OIT_PC_vs_4_0"
-			  ,"SR_OIT_PT_vs_4_0"
-			  ,"SR_OIT_PNC_vs_4_0"
-			  ,"SR_OIT_PNT_vs_4_0"
-			  ,"SR_OIT_PTC_vs_4_0"
-			  ,"SR_OIT_PNTC_vs_4_0"
-			  ,"SR_OIT_PTTT_vs_4_0"
-		};
-#else
-		string strNames_VS[VS_NUM] = {
-			   "SR_OIT_P_vs_5_0"
-			  ,"SR_OIT_PN_vs_5_0"
-			  ,"SR_OIT_PT_vs_5_0"
-			  ,"SR_OIT_PNT_vs_5_0"
-			  ,"SR_OIT_PTTT_vs_5_0"
-		};
-#endif
-
-		for (int i = 0; i < VS_NUM; i++)
-		{
-			string strName = strNames_VS[i];
-
-			FILE* pFile;
-			if (fopen_s(&pFile, (prefix_path + strName).c_str(), "rb") == 0)
-			{
-				fseek(pFile, 0, SEEK_END);
-				uint64_t ullFileSize = ftell(pFile);
-				fseek(pFile, 0, SEEK_SET);
-				byte* pyRead = new byte[ullFileSize];
-				fread(pyRead, sizeof(byte), ullFileSize, pFile);
-				fclose(pFile);
-
-				ID3D11VertexShader* dx11VShader = NULL;
-				if (psoManager->dx11Device->CreateVertexShader(pyRead, ullFileSize, NULL, &dx11VShader) != S_OK)
-				{
-					VMERRORMESSAGE("SHADER COMPILE FAILURE!");
-				}
-				else
-				{
-					SET_VS(strName, dx11VShader);
-				}
-				VMSAFE_DELETEARRAY(pyRead);
-			}
-		}
-		/**/
-
 		string strNames_GS[GS_NUM] = {
 			   "GS_MeshCutLines_gs_4_0"
 		};

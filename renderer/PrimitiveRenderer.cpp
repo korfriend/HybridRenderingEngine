@@ -773,15 +773,15 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 
 #ifdef DX10_0
 		string strNames_VS[VS_NUM] = {
-			   "SR_OIT_P_vs_5_0"
-			  ,"SR_OIT_PN_vs_5_0"
-			  ,"SR_OIT_PC_vs_5_0"
-			  ,"SR_OIT_PT_vs_5_0"
-			  ,"SR_OIT_PNC_vs_5_0"
-			  ,"SR_OIT_PNT_vs_5_0"
-			  ,"SR_OIT_PTC_vs_5_0"
-			  ,"SR_OIT_PNTC_vs_5_0"
-			  ,"SR_OIT_PTTT_vs_5_0"
+			   "SR_OIT_P_vs_4_0"
+			  ,"SR_OIT_PN_vs_4_0"
+			  ,"SR_OIT_PC_vs_4_0"
+			  ,"SR_OIT_PT_vs_4_0"
+			  ,"SR_OIT_PNC_vs_4_0"
+			  ,"SR_OIT_PNT_vs_4_0"
+			  ,"SR_OIT_PTC_vs_4_0"
+			  ,"SR_OIT_PNTC_vs_4_0"
+			  ,"SR_OIT_PTTT_vs_4_0"
 		};
 #else
 		string strNames_VS[VS_NUM] = {
@@ -824,6 +824,9 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 				VMSAFE_DELETEARRAY(pyRead);
 			}
 		}
+
+		grd_helper::GetPSOVariant(~0);
+
 #ifdef DX10_0
 		string strNames_GS[GS_NUM] = {
 			   "GS_ThickPoints_gs_4_0"
@@ -1921,6 +1924,12 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			bool has_texture_img = false;
 			grd_helper::UpdatePrimitiveModel(map_gres_vtxs, gres_idx, map_gres_texs, pobj, imgObj, &has_texture_img);
 
+			if (map_gres_vtxs.find("POSITION") == map_gres_vtxs.end())
+			{
+				vzlog_error("invalid primitive object!! No Position buffer");
+				continue;
+			}
+
 			if (forcedMaterialColorMode > 0) {
 				has_texture_img = false;
 				if (forcedMaterialColorMode == 1)
@@ -2351,8 +2360,8 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			ID3D11Buffer* dx11buffers[6] = {
 				(ID3D11Buffer*)map_gres_vtxs["POSITION"].alloc_res_ptrs[DTYPE_RES],
 				(ID3D11Buffer*)map_gres_vtxs["NORMAL"].alloc_res_ptrs[DTYPE_RES],
-				(ID3D11Buffer*)map_gres_vtxs["COLOR"].alloc_res_ptrs[DTYPE_RES],
 				(ID3D11Buffer*)map_gres_vtxs["TEXCOORD0"].alloc_res_ptrs[DTYPE_RES],
+				(ID3D11Buffer*)map_gres_vtxs["COLOR"].alloc_res_ptrs[DTYPE_RES],
 				(ID3D11Buffer*)map_gres_vtxs["TEXCOORD1"].alloc_res_ptrs[DTYPE_RES],
 				(ID3D11Buffer*)map_gres_vtxs["TEXCOORD2"].alloc_res_ptrs[DTYPE_RES],
 			};
