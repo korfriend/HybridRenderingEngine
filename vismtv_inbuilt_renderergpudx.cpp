@@ -983,3 +983,69 @@ bool GetRendererDevice(
 	ioParams.SetParam("DirectX11Device", (void*)device);
 	return true;
 }
+
+
+constexpr size_t FNV1aHash(std::string_view str, size_t hash = 14695981039346656037ULL) {
+	for (char c : str) {
+		hash ^= static_cast<size_t>(c);
+		hash *= 1099511628211ULL;
+	}
+	return hash;
+}
+constexpr static size_t HASH_BLEND_NORMAL = FNV1aHash("NORMAL");
+constexpr static size_t HASH_BLEND_MULTIPLY = FNV1aHash("MULTIPLY");
+constexpr static size_t HASH_BLEND_ADDITIVE = FNV1aHash("ADDITIVE");
+constexpr static size_t HASH_BLEND_OVERLAY = FNV1aHash("OVERLAY");
+constexpr static size_t HASH_BLEND_SOFT_LIGHT = FNV1aHash("SOFT_LIGHT");
+constexpr static size_t HASH_BLEND_SCREEN = FNV1aHash("SCREEN");
+
+bool BrushMeshActor(
+	vmobjects::VmParamMap<std::string, std::any>& ioResObjs,
+	vmobjects::VmParamMap<std::string, std::any>& ioActors,
+	vmobjects::VmParamMap<std::string, std::any>& ioParams)
+{
+	VmActor* meshActor = ioActors.GetParam("TargetMeshActor", (VmActor*)NULL);
+	VmIObject* iobj = ioActors.GetParam("SrcCamera", (VmIObject*)NULL);
+	if (meshActor == nullptr || iobj == nullptr)
+	{
+		vzlog_error("Invalid TargetMeshActor(%d) or SrcCamera(%d)", meshActor ? 1 : 0, iobj ? 1 : 0);
+		return false;
+	}
+
+	VmCObject* cam_obj = iobj->GetCameraObject();
+
+	vmmat44 dmatWS2CS, dmatCS2PS, dmatPS2SS;
+	vmmat44 dmatSS2PS, dmatPS2CS, dmatCS2WS;
+	cam_obj->GetMatrixWStoSS(&dmatWS2CS, &dmatCS2PS, &dmatPS2SS);
+	cam_obj->GetMatrixSStoWS(&dmatSS2PS, &dmatPS2CS, &dmatCS2WS);
+	vmmat44 dmatWS2PS = dmatWS2CS * dmatCS2PS;
+	vmmat44f matWS2CS = dmatWS2CS; // view
+	vmmat44f matWS2PS = dmatWS2PS;
+	vmmat44f matWS2SS = dmatWS2PS * dmatPS2SS;
+	vmmat44f matSS2WS = (dmatSS2PS * dmatPS2CS) * dmatCS2WS;
+
+	meshActor->SetParam("_string_PainterMode", ioParams.GetParam("_string_PainterMode", std::string("NONE")));
+	vmfloat2 pos_xy = ioParams.GetParam("_float2_BrushPos", vmfloat2(-1.f, -1.f));
+
+	BrushParams brushParams;
+	*(vmfloat4*)brushParams.color = ioParams.GetParam("_float4_BrushColor", vmfloat4(1.f, 1.f, 1.f, 1.f));
+	brushParams.size = ioParams.GetParam("_float_BrushSize", 1.f);
+	brushParams.strength = std::max(std::min(ioParams.GetParam("_float_BrushStrength", 0.5f), 1.f), 0.f);
+	brushParams.hardness = std::max(std::min(ioParams.GetParam("_float_BrushHardness", 0.5f), 1.f), 0.f);
+	std::string blendmode_str = ioParams.GetParam("_string_BrushBlendMode", std::string("NORMAL"));
+	size_t blendmode = FNV1aHash(blendmode_str);
+	switch (blendmode)
+	{
+	case HASH_BLEND_NORMAL: brushParams.blendMode = PaintBlendMode::NORMAL; break;
+	case HASH_BLEND_MULTIPLY: brushParams.blendMode = PaintBlendMode::MULTIPLY; break;
+	case HASH_BLEND_ADDITIVE: brushParams.blendMode = PaintBlendMode::ADDITIVE; break;
+	case HASH_BLEND_OVERLAY: brushParams.blendMode = PaintBlendMode::OVERLAY; break;
+	case HASH_BLEND_SOFT_LIGHT: brushParams.blendMode = PaintBlendMode::SOFT_LIGHT; break;
+	case HASH_BLEND_SCREEN: brushParams.blendMode = PaintBlendMode::SCREEN; break;
+	default:
+		vzlog_error("invalid paint brush mode! (%s)", blendmode_str.c_str());
+		return false;
+	}
+
+	return grd_helper::UpdatePaintTexture(meshActor, matSS2WS, cam_obj, pos_xy, brushParams);
+}

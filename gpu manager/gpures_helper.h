@@ -468,7 +468,7 @@ namespace grd_helper
 
 	bool UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string& resName, const void* bufPtr, const int numElements, DXGI_FORMAT dxFormat, const int type_bytes, LocalProgress* progress = NULL, uint64_t cpu_update_custom_time = 0);
 
-	bool UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, VmCObject* camObj);
+	bool UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, VmCObject* camObj, const vmfloat2& paint_pos2d_ss, const BrushParams& brushParams);
 
 #define ZERO_SET(T) T(){memset(this, 0, sizeof(T));}
 

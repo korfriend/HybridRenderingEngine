@@ -2159,35 +2159,7 @@ bool grd_helper::UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string
 	return true;
 }
 
-constexpr size_t FNV1aHash(std::string_view str, size_t hash = 14695981039346656037ULL) {
-	for (char c : str) {
-		hash ^= static_cast<size_t>(c);
-		hash *= 1099511628211ULL;
-	}
-	return hash;
-}
-constexpr static size_t HASH_BLEND_NORMAL = FNV1aHash("NORMAL");
-constexpr static size_t HASH_BLEND_MULTIPLY = FNV1aHash("MULTIPLY");
-constexpr static size_t HASH_BLEND_ADDITIVE = FNV1aHash("ADDITIVE");
-constexpr static size_t HASH_BLEND_OVERLAY = FNV1aHash("OVERLAY");
-constexpr static size_t HASH_BLEND_SOFT_LIGHT = FNV1aHash("SOFT_LIGHT");
-constexpr static size_t HASH_BLEND_SCREEN = FNV1aHash("SCREEN");
-
-
-//bool UpdatePainterUvAtlas(
-//	vmobjects::VmParamMap<std::string, std::any>& ioResObjs,
-//	vmobjects::VmParamMap<std::string, std::any>& ioActors,
-//	vmobjects::VmParamMap<std::string, std::any>& ioParams)
-//{
-//	//static PaintResourceManager* manager = meshPainter->getPaintResourceManager();
-//	//VmVObjectPrimitive* pobj = ioResObjs.GetParam("TargetPrimitive", (VmVObjectPrimitive*)NULL);
-//	//if (!meshPainter)
-//	//	return false;
-//
-//	return false;
-//}
-
-bool grd_helper::UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, VmCObject* camObj)
+bool grd_helper::UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, VmCObject* camObj, const vmfloat2& paint_pos2d_ss, const BrushParams& brushParams)
 {
 	static PaintResourceManager* manager = meshPainter->getPaintResourceManager();
 
@@ -2200,11 +2172,9 @@ bool grd_helper::UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, Vm
 	if (prim_data->idx_stride != 3) 
 		return false;
 
-	vmfloat2 paint_pos2d_ss = vmfloat2(-1, -1);
-	bool has_paintPos = actor->GetParamCheck("_float2_PaintPosSS", paint_pos2d_ss);
 	std::string painter_mode = actor->GetParam("_string_PainterMode", std::string("NONE"));
 	ActorPaintData* paintRes = manager->getPaintResource(actor->actorId);
-	if (paintRes && !has_paintPos)
+	if (paintRes && (paint_pos2d_ss.x < 0 || paint_pos2d_ss.y < 0))
 	{
 		return false;
 	}
@@ -2312,32 +2282,12 @@ bool grd_helper::UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, Vm
 	RayHitResult hit = meshPainter->raycastMesh(prim_data, matRS2WS, ray_origin, ray_dir, &bvh, actor->actorId);
 	if (!hit.hit)
 		return false;
-		
-	BrushParams brushParams;
-	memcpy(brushParams.position, hit.worldPos, sizeof(float) * 3);
-	*(vmfloat4*)brushParams.color = actor->GetParam("_float4_PaintBrushColor", vmfloat4(1.f, 1.f, 1.f, 1.f));
-	brushParams.size = actor->GetParam("_float_PaintBrushSize", 1.f);
-	brushParams.strength = std::max(std::min(actor->GetParam("_float_PaintBrushStrength", 0.5f), 1.f), 0.f);
-	brushParams.hardness = std::max(std::min(actor->GetParam("_float_PaintBrushHardness", 0.5f), 1.f), 0.f);
-	std::string blendmode_str = actor->GetParam("_string_PaintBrushBlendMode", std::string("NORMAL"));
-	size_t blendmode = FNV1aHash(blendmode_str);
-	switch (blendmode)
-	{
-	case HASH_BLEND_NORMAL: brushParams.blendMode = PaintBlendMode::NORMAL; break;
-	case HASH_BLEND_MULTIPLY: brushParams.blendMode = PaintBlendMode::MULTIPLY; break;
-	case HASH_BLEND_ADDITIVE: brushParams.blendMode = PaintBlendMode::ADDITIVE; break;
-	case HASH_BLEND_OVERLAY: brushParams.blendMode = PaintBlendMode::OVERLAY; break;
-	case HASH_BLEND_SOFT_LIGHT: brushParams.blendMode = PaintBlendMode::SOFT_LIGHT; break;
-	case HASH_BLEND_SCREEN: brushParams.blendMode = PaintBlendMode::SCREEN; break;
-	default:
-		vzlog_error("invalid paint brush mode! (%s)", blendmode_str.c_str());
-		return false;
-	}
 
 	BrushParams brush = brushParams;
-	brush.position[0] = hit.worldPos[0];
-	brush.position[1] = hit.worldPos[1];
-	brush.position[2] = hit.worldPos[2];
+	memcpy(brush.position, hit.worldPos, sizeof(float) * 3);
+	//brush.position[0] = hit.worldPos[0];
+	//brush.position[1] = hit.worldPos[1];
+	//brush.position[2] = hit.worldPos[2];
 
 	if (is_paint)
 	{
@@ -2378,7 +2328,7 @@ bool grd_helper::UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, Vm
 		vzlog_error("hoverTex2DSRV and paintUvSRV must be valid!");
 		return false;
 	}
-	g_psoManager->dx11DeviceImmContext->PSSetShaderResources(60, 1, is_paint? &paintTex2DSRV : &hoverTex2DSRV); // t60
+	//g_psoManager->dx11DeviceImmContext->PSSetShaderResources(60, 1, is_paint? &paintTex2DSRV : &hoverTex2DSRV); // t60
 
 	return true;
 }
