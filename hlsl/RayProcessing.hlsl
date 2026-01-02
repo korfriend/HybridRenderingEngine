@@ -1998,22 +1998,19 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 	if (wildcard_v == WILDCARD_DEPTH_OUTLINE || wildcard_v == OUTSIDE_PLANE)
 		__EXIT;
 
-	//float sd_neighbors[8] = {
-	//	prev_fragment_zdepth[ss_xy + int2(1, 0)],
-	//	prev_fragment_zdepth[ss_xy + int2(0, 1)],
-	//	prev_fragment_zdepth[ss_xy + int2(-1, 0)],
-	//	prev_fragment_zdepth[ss_xy + int2(0, -1)],
-	//	prev_fragment_zdepth[ss_xy + int2(-1, -1)],
-	//	prev_fragment_zdepth[ss_xy + int2(1, 1)],
-	//	prev_fragment_zdepth[ss_xy + int2(1, -1)],
-	//	prev_fragment_zdepth[ss_xy + int2(-1, 1)],
-	//};
-
-
 	// half16 »ç¿ë...
 //#define NEW_TEST
 #ifdef NEW_TEST
-	
+	float sd_neighbors[8] = {
+		prev_fragment_zdepth[ss_xy + int2(1, 0)],
+		prev_fragment_zdepth[ss_xy + int2(0, 1)],
+		prev_fragment_zdepth[ss_xy + int2(-1, 0)],
+		prev_fragment_zdepth[ss_xy + int2(0, -1)],
+		prev_fragment_zdepth[ss_xy + int2(-1, -1)],
+		prev_fragment_zdepth[ss_xy + int2(1, 1)],
+		prev_fragment_zdepth[ss_xy + int2(1, -1)],
+		prev_fragment_zdepth[ss_xy + int2(-1, 1)],
+	};	
 	//float a_acc = LineAlpha(sd);
 	//uint count = 1;
 	//

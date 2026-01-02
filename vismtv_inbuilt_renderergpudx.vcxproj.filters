@@ -44,15 +44,6 @@
     <ClCompile Include="meshpainter\PaintResourceManager.cpp">
       <Filter>meshpainter</Filter>
     </ClCompile>
-    <ClCompile Include="meshpainter\xatlas.cpp">
-      <Filter>meshpainter</Filter>
-    </ClCompile>
-    <ClCompile Include="meshpainter\XatlasWrapper.cpp">
-      <Filter>meshpainter</Filter>
-    </ClCompile>
-    <ClCompile Include="meshpainter\UVAtlasWrapper.cpp">
-      <Filter>meshpainter</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="resource.h">
@@ -118,21 +109,6 @@
       <Filter>meshpainter</Filter>
     </ClInclude>
     <ClInclude Include="meshpainter\PaintResourceManager.h">
-      <Filter>meshpainter</Filter>
-    </ClInclude>
-    <ClInclude Include="meshpainter\xatlas.h">
-      <Filter>meshpainter</Filter>
-    </ClInclude>
-    <ClInclude Include="meshpainter\xatlas_c.h">
-      <Filter>meshpainter</Filter>
-    </ClInclude>
-    <ClInclude Include="meshpainter\XatlasWrapper.h">
-      <Filter>meshpainter</Filter>
-    </ClInclude>
-    <ClInclude Include="meshpainter\UVAtlasWrapper.h">
-      <Filter>meshpainter</Filter>
-    </ClInclude>
-    <ClInclude Include="meshpainter\uvatlas\UVAtlas.h">
       <Filter>meshpainter</Filter>
     </ClInclude>
   </ItemGroup>

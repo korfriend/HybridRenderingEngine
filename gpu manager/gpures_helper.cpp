@@ -1,6 +1,5 @@
 #include "gpures_helper.h"
 #include "meshpainter/PaintResourceManager.h"
-#include "meshpainter/UVAtlasWrapper.h"
 #include "D3DCompiler.h"
 #include "hlsl/ShaderInterop_BVH.h"
 #include "BVHUpdate.h"
@@ -1801,8 +1800,10 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 				gres_tex.rtype = RTYPE_TEXTURE2D;
 				gres_tex.options["USAGE"] = D3D11_USAGE_DEFAULT;
 				gres_tex.options["CPU_ACCESS_FLAG"] = NULL;// D3D11_CPU_ACCESS_WRITE;
-				gres_tex.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
+				// D3D11_RESOURCE_MISC_GENERATE_MIPS requires that the D3D11_BIND_RENDER_TARGET & D3D11_BIND_SHADER_RESOURCE flag be set.
+				gres_tex.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
 				gres_tex.options["FORMAT"] = DXGI_FORMAT_R8G8B8A8_UNORM;
+				gres_tex.options["MIP_GEN"] = 1;
 				gres_tex.res_values.SetParam("WIDTH", (uint32_t)imgWidth);
 				gres_tex.res_values.SetParam("HEIGHT", (uint32_t)imgHeight);
 				gres_tex.res_values.SetParam("DEPTH", (uint32_t)1);
@@ -1846,6 +1847,8 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 							tx_subres[byte_stride_gpu * (x + h * tex_res_size.x) + i] = 255;
 					}
 				g_psoManager->dx11DeviceImmContext->UpdateSubresource(pdx11tx2dres, 0, NULL, subres.pSysMem, subres.SysMemPitch, subres.SysMemSlicePitch);
+				ID3D11ShaderResourceView* pSRV = (ID3D11ShaderResourceView*)gres_tex.alloc_res_ptrs[DTYPE_SRV];
+				g_psoManager->dx11DeviceImmContext->GenerateMips(pSRV);
 				VMSAFE_DELETEARRAY(subres.pSysMem);
 			}
 
@@ -1889,6 +1892,8 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 				}
 
 				g_psoManager->dx11DeviceImmContext->UpdateSubresource(pdx11tx2dres, 0, NULL, subres.pSysMem, subres.SysMemPitch, subres.SysMemSlicePitch);
+				ID3D11ShaderResourceView* pSRV = (ID3D11ShaderResourceView*)gres_tex.alloc_res_ptrs[DTYPE_SRV];
+				g_psoManager->dx11DeviceImmContext->GenerateMips(pSRV);
 				VMSAFE_DELETEARRAY(subres.pSysMem);
 			};
 
@@ -1906,8 +1911,10 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 					gres_tex.rtype = RTYPE_TEXTURE2D;
 					gres_tex.options["USAGE"] = D3D11_USAGE_DEFAULT;
 					gres_tex.options["CPU_ACCESS_FLAG"] = NULL;// D3D11_CPU_ACCESS_WRITE;
-					gres_tex.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
+					// D3D11_RESOURCE_MISC_GENERATE_MIPS requires that the D3D11_BIND_RENDER_TARGET & D3D11_BIND_SHADER_RESOURCE flag be set.
+					gres_tex.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
 					gres_tex.options["FORMAT"] = DXGI_FORMAT_R8G8B8A8_UNORM;
+					gres_tex.options["MIP_GEN"] = 1;
 					gres_tex.res_values.SetParam("WIDTH", (uint32_t)tex_res_size.x);
 					gres_tex.res_values.SetParam("HEIGHT", (uint32_t)tex_res_size.y);
 					gres_tex.res_values.SetParam("DEPTH", (uint32_t)prim_data->texture_res_info.size());
@@ -1957,20 +1964,9 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 									tx_res_gpu[byte_stride_gpu * x + h * subres.SysMemPitch + i] = 255;
 							}
 						g_psoManager->dx11DeviceImmContext->UpdateSubresource(pdx11tx2dres, 0, NULL, subres.pSysMem, subres.SysMemPitch, subres.SysMemSlicePitch);
+						ID3D11ShaderResourceView* pSRV = (ID3D11ShaderResourceView*)gres_tex.alloc_res_ptrs[DTYPE_SRV];
+						g_psoManager->dx11DeviceImmContext->GenerateMips(pSRV); 
 						VMSAFE_DELETEARRAY(subres.pSysMem);
-						//D3D11_MAPPED_SUBRESOURCE mappedRes;
-						//g_VmCommonParams.dx11DeviceImmContext->Map(pdx11tx2dres, 0, maptype, 0, &mappedRes);
-						//byte* tx_res_gpu = (byte*)mappedRes.pData;
-						//int byte_stride_gpu = byte_stride == 1 ? 1 : 4;
-						//for (int h = 0; h < tex_res_size.y; h++)
-						//	for (int x = 0; x < tex_res_size.x; x++)
-						//	{
-						//		for (int i = 0; i < byte_stride; i++)
-						//			tx_res_gpu[byte_stride_gpu * x + h * mappedRes.RowPitch + i] = texture_res[byte_stride * (x + h * tex_res_size.x) + i];
-						//		for (int i = byte_stride; i < byte_stride_gpu; i++)
-						//			tx_res_gpu[byte_stride_gpu * x + h * mappedRes.RowPitch + i] = 255;
-						//	}
-						//g_VmCommonParams.dx11DeviceImmContext->Unmap(pdx11tx2dres, NULL);
 					};
 
 					gres_tex.res_name = string("PRIMITIVE_MODEL_") + mat_name;
@@ -1979,11 +1975,13 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 						gres_tex.rtype = RTYPE_TEXTURE2D;
 						gres_tex.options["USAGE"] = D3D11_USAGE_DEFAULT;
 						gres_tex.options["CPU_ACCESS_FLAG"] = NULL;
-						gres_tex.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
+						// D3D11_RESOURCE_MISC_GENERATE_MIPS requires that the D3D11_BIND_RENDER_TARGET & D3D11_BIND_SHADER_RESOURCE flag be set.
+						gres_tex.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
 						assert(byte_stride != 2);
 						gres_tex.options["FORMAT"] = byte_stride == 1 ? DXGI_FORMAT_R8_UNORM : DXGI_FORMAT_R8G8B8A8_UNORM;
 						gres_tex.res_values.SetParam("WIDTH", (uint32_t)tex_res_size.x);
 						gres_tex.res_values.SetParam("HEIGHT", (uint32_t)tex_res_size.y);
+						gres_tex.options["MIP_GEN"] = 1;
 
 						g_pCGpuManager->GenerateGpuResource(gres_tex);
 					}

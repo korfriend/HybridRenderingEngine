@@ -6,7 +6,7 @@ fxc /E CommonVS /T vs_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/SR_OI
 fxc /E CommonVS /T vs_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/SR_OIT_PNT_vs_5_0 /D VSIN_N=1 /D VSIN_T=1 /D VSIN_C=0
 fxc /E CommonVS /T vs_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/SR_OIT_PTC_vs_5_0 /D VSIN_N=0 /D VSIN_T=1 /D VSIN_C=1
 fxc /E CommonVS /T vs_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/SR_OIT_PNTC_vs_5_0 /D VSIN_N=1 /D VSIN_T=1 /D VSIN_C=1
-fxc /E CommonVS_PTTT /T vs_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_obj/SR_OIT_PTTT_vs_5_0 
+fxc /E CommonVS_PTTT /T vs_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/SR_OIT_PTTT_vs_5_0 
 
 fxc /E CastDepthMap /T ps_5_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs/SR_CAST_DEPTHMAP_ps_5_0
 

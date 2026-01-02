@@ -583,7 +583,6 @@ bool OverlapTest(const in Fragment f_1, const in Fragment f_2)
 
 #if DX10_0 == 1
 #define __EXIT_VR_RayCasting return output
-[earlydepthstencil]
 PS_FILL_OUTPUT RayCasting(VS_OUTPUT input)
 #else
 #define __EXIT_VR_RayCasting return
@@ -630,6 +629,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	// in DX10_0 mode, use the register for vr_hit_enc
 	uint vr_hit_enc = vrHitEnc[tex2d_xy];
 	int i = 0;
+	bool isSlicer = BitCheck(g_cbCamState.cam_flag, 10);
 
 #else
     uint2 tex2d_xy = uint2(DTid.xy);

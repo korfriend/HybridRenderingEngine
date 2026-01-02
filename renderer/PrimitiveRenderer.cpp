@@ -1634,10 +1634,6 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 #ifdef DX10_0
 			general_oit_routine_objs.push_back(actor);
 #else
-			//if(actor->GetParam("_bool_OnlyForemostSurfaces", false))
-			//	general_oit_routine_objs.push_back(actor);
-			//else 
-			//	single_foremost_routine_objs.push_back(actor);
 			general_oit_routine_objs.push_back(actor);
 #endif
 		}
