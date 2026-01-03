@@ -31,9 +31,16 @@ void main(uint3 DTid : SV_DispatchThreadID, uint groupIndex : SV_GroupIndex)
 	//uint i0 = bindless_buffers_uint[descriptor_index(geometry.ib)][startIndex + 0];
 	//uint i1 = bindless_buffers_uint[descriptor_index(geometry.ib)][startIndex + 1];
 	//uint i2 = bindless_buffers_uint[descriptor_index(geometry.ib)][startIndex + 2];
-	uint i0 = indexBuffer[startIndex + 0];//.Load((startIndex + 0) * 4);
-	uint i1 = indexBuffer[startIndex + 1];//.Load((startIndex + 1) * 4);
-	uint i2 = indexBuffer[startIndex + 2];//.Load((startIndex + 2) * 4);
+	uint i0 = startIndex + 0;
+	uint i1 = startIndex + 1;
+	uint i2 = startIndex + 2;
+	bool has_indexbuffer = push.vertexStride >> 16 == 0;
+	if (has_indexbuffer)
+	{
+		i0 = indexBuffer[i0];
+		i1 = indexBuffer[i1];
+		i2 = indexBuffer[i2];
+	}
 	
 	//float3 P0 = bindless_buffers_float4[descriptor_index(geometry.vb_pos_wind)][i0].xyz;
 	//float3 P1 = bindless_buffers_float4[descriptor_index(geometry.vb_pos_wind)][i1].xyz;
@@ -42,9 +49,10 @@ void main(uint3 DTid : SV_DispatchThreadID, uint groupIndex : SV_GroupIndex)
 	//float3 P1 = asfloat(vertexBuffer.Load3(i1 * 3 * 4));
 	//float3 P2 = asfloat(vertexBuffer.Load3(i2 * 3 * 4));
 
-	uint vtxIndex0 = i0 * push.vertexStride;
-	uint vtxIndex1 = i1 * push.vertexStride;
-	uint vtxIndex2 = i2 * push.vertexStride;
+	uint vertexStride = push.vertexStride & 0xFFFF;
+	uint vtxIndex0 = i0 * vertexStride;
+	uint vtxIndex1 = i1 * vertexStride;
+	uint vtxIndex2 = i2 * vertexStride;
 	float3 P0 = float3(vertexBuffer[vtxIndex0 + 0], vertexBuffer[vtxIndex0 + 1], vertexBuffer[vtxIndex0 + 2]);
 	float3 P1 = float3(vertexBuffer[vtxIndex1 + 0], vertexBuffer[vtxIndex1 + 1], vertexBuffer[vtxIndex1 + 2]);
 	float3 P2 = float3(vertexBuffer[vtxIndex2 + 0], vertexBuffer[vtxIndex2 + 1], vertexBuffer[vtxIndex2 + 2]);

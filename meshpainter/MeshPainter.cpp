@@ -181,6 +181,28 @@ void MeshPainter::paintOnActor(
 	// Update brush constants
 	updateBrushConstants(brush, hitResult.uv, uvRadius, matOS2WS, paint);
 
+	static grd_helper::PSOManager* psoManager = grd_helper::GetPSOManager();
+	ID3D11SamplerState* sampler_PZ = psoManager->get_sampler("POINT_ZEROBORDER");
+	ID3D11SamplerState* sampler_LZ = psoManager->get_sampler("LINEAR_ZEROBORDER");
+	ID3D11SamplerState* sampler_PC = psoManager->get_sampler("POINT_CLAMP");
+	ID3D11SamplerState* sampler_LC = psoManager->get_sampler("LINEAR_CLAMP");
+	ID3D11SamplerState* sampler_PW = psoManager->get_sampler("POINT_WRAP");
+	ID3D11SamplerState* sampler_LW = psoManager->get_sampler("LINEAR_WRAP");
+
+	context->VSSetSamplers(0, 1, &sampler_LZ);
+	context->VSSetSamplers(1, 1, &sampler_PZ);
+	context->VSSetSamplers(2, 1, &sampler_LC);
+	context->VSSetSamplers(3, 1, &sampler_PC);
+	context->VSSetSamplers(4, 1, &sampler_LW);
+	context->VSSetSamplers(5, 1, &sampler_PW);
+
+	context->PSSetSamplers(0, 1, &sampler_LZ);
+	context->PSSetSamplers(1, 1, &sampler_PZ);
+	context->PSSetSamplers(2, 1, &sampler_LC);
+	context->PSSetSamplers(3, 1, &sampler_PC);
+	context->PSSetSamplers(4, 1, &sampler_LW);
+	context->PSSetSamplers(5, 1, &sampler_PW);
+
 	// Render brush stroke to paint texture (reads from current, writes to
 	// off-target)
 	renderBrushStroke(hoverTex, paintTex, meshParams, hitResult.uv, uvRadius);

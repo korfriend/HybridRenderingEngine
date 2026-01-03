@@ -1795,24 +1795,22 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 #else
 			if (pickType == PICKING_TYPE::NONE)
 			{
-				std::string painter_mode = actor->GetParam("_string_PainterMode", std::string("NONE"));
-				if (painter_mode != "NONE")
+				static PaintResourceManager* manager = grd_helper::GetMeshPainter()->getPaintResourceManager();
+				ActorPaintData* paintRes = manager->getPaintResource(actor->actorId);
+				if (paintRes)
 				{
-					static PaintResourceManager* manager = grd_helper::GetMeshPainter()->getPaintResourceManager();
-					ActorPaintData* paintRes = manager->getPaintResource(actor->actorId);
-					if (paintRes)
+					ID3D11ShaderResourceView* hoverTex2DSRV = paintRes->hoverTexture->getRenderTarget()->srv.Get();
+					ID3D11ShaderResourceView* paintTex2DSRV = paintRes->paintTexture->getRenderTarget()->srv.Get();
+					if (!hoverTex2DSRV || !paintTex2DSRV)
 					{
-						ID3D11ShaderResourceView* hoverTex2DSRV = paintRes->hoverTexture->getRenderTarget()->srv.Get();
-						ID3D11ShaderResourceView* paintTex2DSRV = paintRes->paintTexture->getRenderTarget()->srv.Get();
-						if (!hoverTex2DSRV || !paintTex2DSRV)
-						{
-							vzlog_error("hoverTex2DSRV and paintUvSRV must be valid!");
-						}
-						else
-						{
-							dx11DeviceImmContext->PSSetShaderResources(60, 1, painter_mode == "PAINT" ? &paintTex2DSRV : &hoverTex2DSRV); // t60
-						}
+						vzlog_error("hoverTex2DSRV and paintUvSRV must be valid!");
 					}
+					else
+					{
+						std::string painter_mode = actor->GetParam("_string_PainterMode", std::string("NONE"));
+						dx11DeviceImmContext->PSSetShaderResources(60, 1, painter_mode == "PAINT" ? &paintTex2DSRV : &hoverTex2DSRV); // t60
+					}
+					has_painter = true;
 				}
 			}
 			//if (has_painter)

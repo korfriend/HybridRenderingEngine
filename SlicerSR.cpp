@@ -988,7 +988,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 
 					BVHPushConstants push;
 					push.primitiveCount = prim_data->num_prims;
-					push.vertexStride = prim_data->GetNumVertexDefinitions() * 3;
+					push.vertexStride = 3;
 
 					geometrics::AABB aabb(XMFLOAT3(prim_data->aabb_os.pos_min.x, prim_data->aabb_os.pos_min.y, prim_data->aabb_os.pos_min.z),
 						XMFLOAT3(prim_data->aabb_os.pos_max.x, prim_data->aabb_os.pos_max.y, prim_data->aabb_os.pos_max.z));

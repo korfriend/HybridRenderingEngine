@@ -204,9 +204,6 @@ RWTexture2D<float> fragment_zdepth : register(u4);
 
 #ifdef BVH_LEGACY
 
-Buffer<float> vertexBuffer : register(t10);
-Buffer<uint> indexBuffer : register(t11);
-
 int DEBUGintersectBVHandTriangles(const in float4 rayorig, const in float4 raydir,
 	const in Buffer<float4> gpuNodes, const in Buffer<float4> gpuDebugTris, const in Buffer<int> gpuTriIndices, // const in Buffer<float4> gpuTriWoops,
 	inout int hitTriIdx, inout float hitdistance, inout int debugbingo, inout float3 trinormal, bool needClosestHit) 
@@ -882,7 +879,7 @@ inline RayHit TraceRay_Closest(RayDesc ray, uint groupIndex = 0)
 	// push root node
 	stack[stackpos++][groupIndex] = 0;
 	
-	const uint MAX_ITERATIONS = 10000u; // 좀 더 큰 값으로 설정
+	const uint MAX_ITERATIONS = 10000u; // setting larger iterations?!
 	uint count = 0;
 
 	[allow_uav_condition]

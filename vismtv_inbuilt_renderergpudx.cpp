@@ -435,7 +435,6 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 					for (int j = 0; j < fb_size_cur.x; j++)
 					{
 						vmbyte4 rgba = rgba_gpu_buf[j + i * buf_row_pitch];
-						// __PS_MERGE_LAYERS_TO_RENDEROUT ���� INT -> FLOAT4 �� �Ǿ� �迭�� color ��Ұ� ��� ��. //
 
 						// BGRA
 						if (is_rgba)

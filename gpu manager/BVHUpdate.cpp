@@ -17,6 +17,7 @@ namespace bvh {
 		}
 
 		GpuRes gres_vtx, gres_idx;
+		bool has_indexbuffer = false;
 		// gpu resource check
 		{
 
@@ -25,8 +26,9 @@ namespace bvh {
 
 			gres_idx.vm_src_id = pobj->GetObjectID();
 			gres_idx.res_name = string("PRIMITIVE_MODEL_IDX");
+			has_indexbuffer = gpuManager->UpdateGpuResource(gres_idx);
 
-			if (!gpuManager->UpdateGpuResource(gres_vtx) || !gpuManager->UpdateGpuResource(gres_idx))
+			if (!gpuManager->UpdateGpuResource(gres_vtx))
 			{
 				vzlog_error("target primitive MUST be registered in GPU memory!!");
 				return false;
@@ -256,13 +258,18 @@ namespace bvh {
 
 			ID3D11ShaderResourceView* srvs[2] = {
 				  (ID3D11ShaderResourceView*)gres_vtx.alloc_res_ptrs[DTYPE_SRV]
-				, (ID3D11ShaderResourceView*)gres_idx.alloc_res_ptrs[DTYPE_SRV]
+				, has_indexbuffer? (ID3D11ShaderResourceView*)gres_idx.alloc_res_ptrs[DTYPE_SRV] : nullptr
 			};
-			dx11DeviceImmContext->CSSetShaderResources(0, arraysize(srvs), srvs);
+			dx11DeviceImmContext->CSSetShaderResources(0, has_indexbuffer ? arraysize(srvs) : 1, srvs);
 
 			BVHPushConstants push;
 			push.primitiveCount = totalTriangles;
 			push.vertexStride = 3;
+
+			if (!has_indexbuffer)
+			{
+				push.vertexStride |= 0x1 << 16;
+			}
 
 			geometrics::AABB aabb(XMFLOAT3(primitive->aabb_os.pos_min.x, primitive->aabb_os.pos_min.y, primitive->aabb_os.pos_min.z), 
 				XMFLOAT3(primitive->aabb_os.pos_max.x, primitive->aabb_os.pos_max.y, primitive->aabb_os.pos_max.z));
