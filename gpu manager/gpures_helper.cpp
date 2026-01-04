@@ -2210,13 +2210,9 @@ bool grd_helper::UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, Vm
 		return false;
 	}
 
-	// Check if mesh is indexed (needs conversion to non-indexed for triangle-vertex UVs)
+	// Check if mesh is indexed
 	// Indexed mesh: num_vtx < num_prims * 3 (vertices are shared between triangles)
 	bool is_indexed = (prim_data->vidx_buffer != nullptr) && (prim_data->num_vtx != prim_data->num_prims * 3);
-	if (is_indexed)
-	{
-		return false;
-	}
 
 	bool is_regen_res = true;
 	if (paintRes)
@@ -2259,9 +2255,8 @@ bool grd_helper::UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, Vm
 
 	map<string, GpuRes> gres_vtxs;
 	map<string, GpuRes> gres_texs;
-	GpuRes gres_tmp;
-	UpdatePrimitiveModel(gres_vtxs, gres_tmp, gres_texs, pobj, nullptr);
-	//vzlog_assert(gres_tmp.alloc_res_ptrs.size() == 0, "mesh painter DOES NOT use index-buffer!");
+	GpuRes gres_ib;
+	UpdatePrimitiveModel(gres_vtxs, gres_ib, gres_texs, pobj, nullptr);
 	
 	vmmat44f matPivot = (actor->GetParam("_matrix44f_Pivot", vmmat44f(1)));
 	vmmat44f matRS2WS = matPivot * actor->matOS2WS;
@@ -2298,6 +2293,9 @@ bool grd_helper::UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, Vm
 	mesh_params.primData = prim_data;
 	mesh_params.vbPos = (ID3D11Buffer*)gres_vtxs["POSITION"].alloc_res_ptrs[DTYPE_RES];
 	mesh_params.vbUV = (ID3D11Buffer*)gres_vtxs["TEXCOORD0"].alloc_res_ptrs[DTYPE_RES];
+	mesh_params.indexBuffer = (is_indexed && gres_ib.alloc_res_ptrs.size() > 0)
+		? (ID3D11Buffer*)gres_ib.alloc_res_ptrs[DTYPE_RES]
+		: nullptr;
 
 	float clr_float_zero_4[4] = { 0, 0, 0, 0 };
 	if (clean_paint)

@@ -41,6 +41,7 @@ struct RayHitResult {
 struct MeshParams {
 	ID3D11Buffer* vbPos;
 	ID3D11Buffer* vbUV;
+	ID3D11Buffer* indexBuffer;
 	vmobjects::PrimitiveData* primData;
 };
 

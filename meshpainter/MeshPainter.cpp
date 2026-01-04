@@ -522,8 +522,16 @@ void MeshPainter::renderBrushStroke(FeedbackTexture* hoverTex,
 	context->IASetVertexBuffers(2, 1, (ID3D11Buffer**)&meshParams.vbUV, &stride_uv, &offset);
 	// Input layout already set above
 
-	assert(meshParams.primData->num_vtx == meshParams.primData->num_prims * 3);
-	context->Draw(meshParams.primData->num_vtx, 0);
+	if (meshParams.indexBuffer) {
+		// Indexed mesh
+		context->IASetIndexBuffer(meshParams.indexBuffer, DXGI_FORMAT_R32_UINT, 0);
+		context->DrawIndexed(meshParams.primData->num_vidx, 0, 0);
+	}
+	else {
+		// Non-indexed mesh
+		assert(meshParams.primData->num_vtx == meshParams.primData->num_prims * 3);
+		context->Draw(meshParams.primData->num_vtx, 0);
+	}
 
 	// Unbind SRV
 	ID3D11ShaderResourceView* nullSRV = nullptr;
