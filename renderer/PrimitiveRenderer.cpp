@@ -672,6 +672,8 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 
 	vmint2 picking_pos_ss = _fncontainer->fnParams.GetParam("_int2_PickingPosSS", vmint2(-1, -1));
 
+	bool camera_brush_mode = _fncontainer->fnParams.GetParam("_bool_CameraBrushMode", false);
+
 	int outline_thickness = _fncontainer->fnParams.GetParam("_int_SilhouetteThickness", (int)0);
 	float outline_depthThres = _fncontainer->fnParams.GetParam("_float_SilhouetteDepthThres", 10000.f);
 	vmfloat3 outline_color = _fncontainer->fnParams.GetParam("_float3_SilhouetteColor", vmfloat3(1));
@@ -1778,6 +1780,22 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 	CB_CameraState cbCamState;
 	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, matWS2CS, cam_obj, fb_size_cur, k_value, gi_v_thickness);
 
+	int camera_brush_target_actor_id = 0;
+	bool camera_brush_in_3d = false;
+	if (camera_brush_mode)
+	{
+		camera_brush_in_3d = _fncontainer->fnParams.GetParam("_bool_CameraBrushIn3D", camera_brush_in_3d);
+		camera_brush_target_actor_id = _fncontainer->fnParams.GetParam("_int_CameraBrushTargetActorID", camera_brush_target_actor_id);
+		cbCamState.hoverPosWS = _fncontainer->fnParams.GetParam("_float3_CameraBrushHit", vmfloat3(-1));
+		vmfloat4 camera_brush_color = _fncontainer->fnParams.GetParam("_float4_CameraBrushColor", vmfloat4(1));
+		glm::vec4 x = glm::clamp(camera_brush_color, 0.0f, 1.0f);
+		x = glm::round(x * 255.0f);
+		*(glm::u8vec4*)&cbCamState.hoverColor = glm::u8vec4(x.x, x.y, x.z, x.w);
+
+		cbCamState.hoverRadius = _fncontainer->fnParams.GetParam("_float_CameraBrushRadius", 1.f);
+		cbCamState.hoverBand = _fncontainer->fnParams.GetParam("_float_CameraBrushBand", 2.f);
+	}
+
 	auto RenderStage1 = [&](
 		vector<VmActor*>& actor_list,
 		const MFR_MODE mode_OIT, const RENDER_GEOPASS render_pass, const bool is_frag_counter_buffer,
@@ -1813,13 +1831,6 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 					has_painter = true;
 				}
 			}
-			//if (has_painter)
-			//{
-			//	dx11DeviceImmContext->VSSetConstantBuffers(1, 1, &cbuf_pobj);
-			//	dx11DeviceImmContext->PSSetConstantBuffers(1, 1, &cbuf_pobj);
-			//	dx11DeviceImmContext->RSSetViewports(1, &dx11ViewPort);
-			//	dx11DeviceImmContext->OMSetBlendState(NULL, NULL, 0xffffffff);
-			//}
 #endif
 
 			VmVObjectPrimitive* pobj = (VmVObjectPrimitive*)actor->GetGeometryRes();
@@ -1887,7 +1898,8 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 
 				vmmat44f matGeoOS2VolOS = actor->GetParam("_matrix44f_GeoOS2VolOS", vmmat44f(1));
 				CB_VolumeObject cbVolumeObj;
-				grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, matGeoOS2VolOS, gres_vol, 0, 65535.f, 1.f, false);
+				vmmat44f matWS2VolOS = actor->matWS2OS * matGeoOS2VolOS;
+				grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, matWS2VolOS, gres_vol, 0, 65535.f, 1.f, false);
 
 				VmActor* actor_dstvolume = actor->GetParamPtr<VmActor>("_VmActor_DstVolume");
 				if (actor_dstvolume)
@@ -1987,6 +1999,21 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 				}
 			}
 
+
+			vmfloat3* vtx_normal = prim_data->GetVerticeDefinition<vmfloat3>("NORMAL");
+			uint32_t* vtx_color = prim_data->GetVerticeDefinition<uint32_t>("COLOR");
+			vmfloat2* vtx_uv = prim_data->GetVerticeDefinition<vmfloat2>("TEXCOORD0");
+			vmfloat3* vtx_ann_tex1 = prim_data->GetVerticeDefinition<vmfloat3>("TEXCOORD1");
+			vmfloat3* vtx_ann_tex2 = prim_data->GetVerticeDefinition<vmfloat3>("TEXCOORD2");
+			vmfloat3* vtx_geodesic = prim_data->GetVerticeDefinition<vmfloat3>("GEODIST");
+
+			if (camera_brush_mode && actor->actorId == camera_brush_target_actor_id)
+			{
+				tex_map_enum |= (0x1 << 18);
+				if (camera_brush_in_3d || !vtx_geodesic)
+					tex_map_enum |= (0x1 << 19);
+			}
+
 			CB_PolygonObject cbPolygonObj;
 			cbPolygonObj.tex_map_enum = tex_map_enum;
 			cbPolygonObj.pobj_dummy_0 = actor->actorId;// pobj->GetObjectID(); // used for picking
@@ -2062,12 +2089,6 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			uint32_t offset = 0;
 			D3D_PRIMITIVE_TOPOLOGY pobj_topology_type;
 
-			vmfloat3* vtx_normal = prim_data->GetVerticeDefinition<vmfloat3>("NORMAL");
-			uint32_t* vtx_color = prim_data->GetVerticeDefinition<uint32_t>("COLOR");
-			vmfloat2* vtx_uv = prim_data->GetVerticeDefinition<vmfloat2>("TEXCOORD0");
-			vmfloat3* vtx_ann_tex1 = prim_data->GetVerticeDefinition<vmfloat3>("TEXCOORD1");
-			vmfloat3* vtx_ann_tex2 = prim_data->GetVerticeDefinition<vmfloat3>("TEXCOORD2");
-
 #ifdef DX10_0
 			// ASSERT 
 			if (!is_picking_routine) {
@@ -2087,6 +2108,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 				if (vtx_color)    vs_mask |= A_C;
 				if (vtx_ann_tex1) vs_mask |= A_T1;
 				if (vtx_ann_tex2) vs_mask |= A_T2;
+				if (vtx_geodesic) vs_mask |= A_G;
 
 				const Variant* pso = grd_helper::GetPSOVariant(vs_mask);
 				dx11InputLayer_Target = pso->il;
@@ -2372,25 +2394,30 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			}break;
 			}
 
-			ID3D11Buffer* dx11buffers[6] = {
-				(ID3D11Buffer*)map_gres_vtxs["POSITION"].alloc_res_ptrs[DTYPE_RES],
+#define VERTEX_SLOTS 7
+			// D3D11_INPUT_ELEMENT_DESC::InputSlot
+			ID3D11Buffer* dx11buffers[VERTEX_SLOTS] = {
+				(ID3D11Buffer*)map_gres_vtxs["POSITION"].alloc_res_ptrs[DTYPE_RES], 
 				(ID3D11Buffer*)map_gres_vtxs["NORMAL"].alloc_res_ptrs[DTYPE_RES],
 				(ID3D11Buffer*)map_gres_vtxs["TEXCOORD0"].alloc_res_ptrs[DTYPE_RES],
 				(ID3D11Buffer*)map_gres_vtxs["COLOR"].alloc_res_ptrs[DTYPE_RES],
 				(ID3D11Buffer*)map_gres_vtxs["TEXCOORD1"].alloc_res_ptrs[DTYPE_RES],
 				(ID3D11Buffer*)map_gres_vtxs["TEXCOORD2"].alloc_res_ptrs[DTYPE_RES],
+				(ID3D11Buffer*)map_gres_vtxs["GEODIST"].alloc_res_ptrs[DTYPE_RES],
 			};
 
-			static UINT strides[6] = {
+			static UINT strides[VERTEX_SLOTS] = {
 				sizeof(vmfloat3),
 				sizeof(vmfloat3),
 				sizeof(uint16_t) * 2,
 				sizeof(uint32_t),
 				sizeof(vmfloat3),
 				sizeof(vmfloat3),
+				sizeof(float),
 			};
 
-			static UINT offsets[6] = {
+			static UINT offsets[VERTEX_SLOTS] = {
+				0,
 				0,
 				0,
 				0,
@@ -2400,8 +2427,8 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			};
 
 			ID3D11Buffer* dx11IndiceTargetPrim = NULL;
-			assert(D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT > 5);
-			dx11DeviceImmContext->IASetVertexBuffers(0, 6, dx11buffers, strides, offsets);
+			assert(D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT > VERTEX_SLOTS);
+			dx11DeviceImmContext->IASetVertexBuffers(0, VERTEX_SLOTS, dx11buffers, strides, offsets);
 
 			if (prim_data->vidx_buffer != NULL && prim_data->ptype != EvmPrimitiveType::PrimitiveTypePOINT)
 			{

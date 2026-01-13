@@ -39,6 +39,9 @@ struct VS_INPUTS
 #if VSIN_C == 1
 	float4 f4Color : COLOR0;
 #endif
+#if VSIN_G == 1
+	float fDist : TEXCOORD1;
+#endif
 	uint vertexID : SV_VertexID; // vertex index
 };
 
@@ -58,6 +61,7 @@ struct VS_OUTPUT
 	float3 f3PosWS : TEXCOORD0;
 	float2 f2UV : TEXCOORD1;
 	float4 f4Color : COLOR;
+	float fDist : TEXCOORD2;
 };
 
 struct VS_OUTPUT_TTT
@@ -88,6 +92,9 @@ VS_OUTPUT CommonVS(VS_INPUTS input)
 #endif
 #if VSIN_C == 1
 	vout.f4Color = input.f4Color;
+#endif
+#if VSIN_G == 1
+	vout.fDist = input.fDist;
 #endif
     
 	return vout;
@@ -582,7 +589,7 @@ float3 BisectionalRefine(const float3 pos_sample_ts, const float3 dir_sample_ts,
 	return pos_bis_e_ts; //	float2(t0, t1);
 }
 
-float3 ComputeDeviation(float3 pos, float3 nrl, out bool colored)
+float3 ComputeDeviation(float3 pos, float3 nrl, out bool colored, out float s)
 {
     float sampleDist = g_cbVobj.sample_dist;
     float devMin = FLT_COMP_MAX;
@@ -591,9 +598,8 @@ float3 ComputeDeviation(float3 pos, float3 nrl, out bool colored)
     float dst_isovalue = asfloat(g_cbPobj.pobj_dummy_0);
 
     // note pos and nrl are defined in WS
-    // g_cbVobj.mat_ws2ts is "os2ts"     
-	float4x4 mat_ws2ts = mul(g_cbVobj.mat_ws2ts, g_cbPobj.mat_ws2os);
-	float3 posTS = TransformPoint(pos, mat_ws2ts);
+    float4x4 mat_ws2ts = g_cbVobj.mat_ws2ts;
+	float3 posTS = TransformPoint(pos, mat_ws2ts);    
     
 	bool is_clipped = false;
 	if (g_cbVobj.clip_info.clip_flag & 0x1)
@@ -622,17 +628,19 @@ float3 ComputeDeviation(float3 pos, float3 nrl, out bool colored)
 		float3 sampleDirs[2] = { dirSampleTS, -dirSampleTS };
 		float3 sampleDirs_unit_ws[2] = { nrl, -nrl };
         
-		bool is_inside = true;
-		float refVolValue = g_tex3DVolume.SampleLevel(g_samplerLinear, posTS, 0).r;
+        float refVolValue = g_tex3DVolume.SampleLevel(g_samplerLinear, posTS, 0).r;
+        
         [loop]
 		for (int k = 0; k < 2; k++)
 		{
 			float3 sampleDirUnitWS = sampleDirs_unit_ws[k];
-			float2 hits_t = ComputeVBoxHits(pos, sampleDirUnitWS, g_cbVobj.mat_alignedvbox_tr_ws2bs, g_cbVobj.clip_info);
+            float2 hits_t = ComputeVBoxHits(pos, sampleDirUnitWS, g_cbVobj.mat_alignedvbox_tr_ws2bs, g_cbVobj.clip_info);
+            hits_t.y = min(g_cbCamState.far_plane, hits_t.y); // only available in orthogonal view (thickness slicer)
         
+            hits_t.x = max(hits_t.x, 0.0);
+            
 			if (hits_t.y <= hits_t.x)
 			{
-				is_inside = false;
 				continue;
 			}
 
@@ -657,7 +665,7 @@ float3 ComputeDeviation(float3 pos, float3 nrl, out bool colored)
 						for (int j = 0; j <= blkSkip.num_skip_steps; j++)
 						{
 							float3 pos_sample_blk_ts = posStartTS + sampleDir * (float) (i + j);
-							float sampleValue = g_tex3DVolume.SampleLevel(g_samplerLinear_clamp, pos_sample_blk_ts, 0).r;
+                            float sampleValue = g_tex3DVolume.SampleLevel(g_samplerPoint_clamp, pos_sample_blk_ts, 0).r;
 
 							if (sampleValue > dst_isovalue)
 							{
@@ -668,8 +676,10 @@ float3 ComputeDeviation(float3 pos, float3 nrl, out bool colored)
 								if (distMin > dist)
 								{
 									distMin = dist;
-									devMin = -dist;
-								}
+                                    // old version : 
+                                    // devMin = -dist;
+                                    devMin = k == 0 ? dist : -dist;
+                                }
 								i = numSamples;
 								j = numSamples + blkSkip.num_skip_steps;
 								break;
@@ -695,9 +705,11 @@ float3 ComputeDeviation(float3 pos, float3 nrl, out bool colored)
 						float dist = dist_ts / sample_dist_ts * sampleDist;
 						if (distMin > dist)
 						{
-							distMin = dist;
-							devMin = dist;
-						}
+                            distMin = dist;
+                            // old version : 
+                            // devMin = dist;
+                            devMin = k == 0 ? dist : -dist;
+                        }
 						i = numSamples;
 						break;
 					}
@@ -708,6 +720,7 @@ float3 ComputeDeviation(float3 pos, float3 nrl, out bool colored)
 
 	float3 f3Color = float3(1, 1, 1);
 	colored = false;
+    s = -1.f;
 
     float minMapping = g_cbTmap.mapping_v_min;
     float maxMapping = g_cbTmap.mapping_v_max;
@@ -717,20 +730,25 @@ float3 ComputeDeviation(float3 pos, float3 nrl, out bool colored)
     //if (devMin > 0 && devMin < maxMapping)
 	if (!is_clipped)
     {
-		float mapValue = ((devMin - minMapping) / (maxMapping - minMapping));
+        float mapValue = ((devMin - minMapping) / (maxMapping - minMapping));
+        s = mapValue;
 
-        if (BitCheck(g_cbTmap.flag, 0)) {
-			f3Color = g_f4bufOTF[(int) (saturate(mapValue) * (g_cbTmap.tmap_size_x - 1))].rgb;
-			colored = true;
-		}
+        if (BitCheck(g_cbTmap.flag, 0)) 
+        {
+            float4 f4ColorMap = g_f4bufOTF[(int) (saturate(mapValue) * (g_cbTmap.tmap_size_x - 1))];
+            colored = true;
+            f3Color = f4ColorMap.rgb * f4ColorMap.a;
+
+        }
         else
         {
             if (mapValue >= 0 && mapValue <= 1.f) {
-				f3Color = g_f4bufOTF[(int) ((mapValue) * (g_cbTmap.tmap_size_x - 1))].rgb;
-				colored = true;
-			}
-		}
-	}
+                float4 f4ColorMap = g_f4bufOTF[(int) ((mapValue) * (g_cbTmap.tmap_size_x - 1))];
+                colored = true;
+                f3Color = f4ColorMap.rgb * f4ColorMap.a;
+            }
+        }
+    }
 
 	return f3Color;
 }
@@ -774,6 +792,51 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
         }
     }
 #endif
+    
+	if (g_cbPobj.tex_map_enum & (0x1 << 18))
+	{
+		float d = input.fDist;
+		if (g_cbPobj.tex_map_enum & (0x1 << 19))
+            d = length(g_cbCamState.hoverPosWS - input.f3PosWS);
+		float r = g_cbCamState.hoverRadius;
+        
+        // 중심선에서의 signed distance (월드 단위)
+		float sd = d - r;
+
+        // 픽셀 한 칸에서 sd가 얼마나 바뀌는지(월드 단위 / pixel)
+		float px = max(fwidth(d), 1e-6); // aa
+
+        // 링 “반 두께”를 픽셀 기준으로 지정 (예: 2px -> 전체 4px)
+		float halfWidthPx = 2.0; // 1.5~2.0 정도로 조절 , g_cbCamState.hoverBand
+
+        // 월드 단위 반 두께 = (픽셀 반 두께) * (월드/픽셀)
+		float w = halfWidthPx * px;
+
+        // 링 마스크: sd=0에서 1, |sd|가 w보다 커지면 0 (부드럽게)
+		float ring = 1.0 - smoothstep(w, w + px, abs(sd));
+		//float ring = 1.0 - smoothstep(halfWidthPx * aa,
+        //                      halfWidthPx * aa + aa,
+        //                      abs(sd));
+
+        // ring 값으로 색/알파 섞기
+		float4 ink = ConvertUIntToFloat4(g_cbCamState.hoverColor); // 원하는 링 색
+		ink.rgb *= ink.a;
+        
+		Ka_pobj = lerp(Ka_pobj, ink.rgb * g_cbPobj.pb_shading_factor.x, ring);
+		Kd_pobj = lerp(Kd_pobj, ink.rgb * g_cbPobj.pb_shading_factor.y, ring);
+        
+		//if (sd * sd < 10000)
+		//{
+		//	Kd_pobj = float3(frac(d * 0.1), frac(d * 0.1), frac(d * 0.1));
+		//}
+		//else
+		//{
+		//	//Kd_pobj = float3(saturate(abs(sd) * 0.1), 0, 0);
+		//	Kd_pobj = float3(ring, ring, ring);
+		//}
+		//Ka_pobj = Kd_pobj;
+
+	}
 
 #if __RENDERING_MODE == 1
     DashedLine(v_rgba, z_depth, input.f2UV.x, g_cbPobj.dash_interval, g_cbPobj.pobj_flag & (0x1 << 19), g_cbPobj.pobj_flag & (0x1 << 20));
@@ -830,10 +893,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
         if (d <= 0.01) clip(-1);
         v_rgba.a *= d;
     }
-#elif __RENDERING_MODE == 5
-    // note g_cbVolObj.mat_ws2ts represents SrcOS2DstTS
-    float3 posOS = TransformPoint(input.f3PosWS, g_cbPobj.mat_ws2os);
-    
+#elif __RENDERING_MODE == 5    
     bool is_clipped = false;
     if (g_cbVobj.clip_info.clip_flag & 0x1)
     {
@@ -847,7 +907,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
         }
     }
     
-    float3 posTS = TransformPoint(posOS, g_cbVobj.mat_ws2ts);   // mat_ws2ts is used as os2ts
+    float3 posTS = TransformPoint(input.f3PosWS, g_cbVobj.mat_ws2ts);
     if (posTS.x <= 0 || posTS.x >= 1
         || posTS.y <= 0 || posTS.y >= 1
         || posTS.z <= 0 || posTS.z >= 1)
@@ -859,6 +919,8 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     {
         float sample_v = g_tex3DVolume.SampleLevel(g_samplerLinear, posTS, 0).r;
         float4 colorMap = g_f4bufOTF[(int)(sample_v * (g_cbTmap.tmap_size_x - 1))];
+        //colorMap = float4(0, 1, 0, 1);
+        //colorMap.rgb = float3(0, 1, 0);
         
         if (BitCheck(g_cbPobj.pobj_flag, 7)) 
         {
@@ -898,17 +960,30 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
 #elif __RENDERING_MODE == 6
     bool colored = false;
     float3 colorcoded = float3(1, 1, 1);
+    float s = -1.f;
     if (nor_len > 0)
-        colorcoded = ComputeDeviation(input.f3PosWS, nor, colored); 
-         
+        colorcoded = ComputeDeviation(input.f3PosWS, nor, colored, s); 
+             
     if (nor_len > 0)
     {
         float3 Ka, Kd, Ks;
         if (colored)
         {
+            float w = 3;//clamp(fwidth(s), 1e-6, 0.01);
+
+            // inside 마스크: s가 [0,1] 안이면 1, 밖이면 0 (경계에서만 부드럽게)
+            //float in0 = smoothstep(0.0 - w, 0.0 + w, s);       // 0 아래 ->0, 0 위 ->1
+            //float in1 = 1.0 - smoothstep(1.0 - w, 1.0 + w, s); // 1 아래 ->1, 1 위 ->0
+            //float inside = in0 * in1;                           // 둘 다 만족하면 inside≈1
+    
+            //Ka = lerp(Ka_pobj, colorcoded * g_cbVobj.pb_shading_factor.x, inside) * g_cbEnv.ltint_ambient.rgb;
+            //Kd = lerp(Kd_pobj, colorcoded * g_cbVobj.pb_shading_factor.y, inside) * g_cbEnv.ltint_diffuse.rgb;
+            //Ks = lerp(Ks_pobj, colorcoded * g_cbVobj.pb_shading_factor.z, inside) * g_cbEnv.ltint_spec.rgb;
+    
             Ka = colorcoded * g_cbVobj.pb_shading_factor.x * g_cbEnv.ltint_ambient.rgb;
             Kd = colorcoded * g_cbVobj.pb_shading_factor.y * g_cbEnv.ltint_diffuse.rgb;
             Ks = colorcoded * g_cbVobj.pb_shading_factor.z * g_cbEnv.ltint_spec.rgb;
+
         }
         else
         {

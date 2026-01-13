@@ -36,6 +36,7 @@ namespace grd_helper
 		A_C = 1u << 3,
 		A_T1 = 1u << 4,
 		A_T2 = 1u << 5,
+		A_G = 1u << 6,
 	};
 
 	// mask
@@ -47,6 +48,14 @@ namespace grd_helper
 	constexpr uint32_t M_PNC = A_P | A_N | A_C;
 	constexpr uint32_t M_PTC = A_P | A_T0 | A_C;
 	constexpr uint32_t M_PNTC = A_P | A_N | A_T0 | A_C;
+	constexpr uint32_t M_PG = A_P | A_G;
+	constexpr uint32_t M_PNG = A_P | A_N | A_G;
+	constexpr uint32_t M_PTG = A_P | A_T0 | A_G;
+	constexpr uint32_t M_PCG = A_P | A_C | A_G;
+	constexpr uint32_t M_PNTG = A_P | A_N | A_T0 | A_G;
+	constexpr uint32_t M_PNCG = A_P | A_N | A_C | A_G;
+	constexpr uint32_t M_PTCG = A_P | A_T0 | A_C | A_G;
+	constexpr uint32_t M_PNTCG = A_P | A_N | A_T0 | A_C | A_G;
 	// PTTT = P + (T0 + T1 + T2)
 	constexpr uint32_t M_PTTT = A_P | A_T0 | A_T1 | A_T2;
 
@@ -556,6 +565,14 @@ namespace grd_helper
 		uint32_t iSrCamDummy__1; 
 		uint32_t iSrCamDummy__2; // scaling factor (asfloat) for the z-thickness value determined by the z-resolution
 
+		vmfloat3 hoverPosWS;
+		float hoverRadius;
+
+		uint32_t hoverColor;
+		float hoverBand;
+		uint32_t iSrCamDummy__3;
+		uint32_t iSrCamDummy__4;
+
 		ZERO_SET(CB_CameraState)
 	};
 
@@ -634,6 +651,8 @@ namespace grd_helper
 		// 6th bit : g_tex2D_BUMP
 		// 7th bit : g_tex2D_D
 		// 17th bit : g_tex2D_PAINT
+		// 18th bit : display camera brush
+		// 19th bit : camera brush (0: geodesic, 1: 3D spatial)
 		uint32_t tex_map_enum;
 
 		// 1st bit : 0 (shading color to RT) 1 (normal to RT for the purpose of silhouette rendering)

@@ -63,6 +63,14 @@ struct HxCB_CameraState // Hlsl dX Contant Buffer
 	// 3) outline's colorRGB and thicknessPix
 	uint iSrCamDummy__1; // used for the N-buffer index or SSAO setting for DOF
 	uint iSrCamDummy__2; // scale_z_res
+	
+	float3 hoverPosWS;
+	float hoverRadius;
+	
+	uint hoverColor;
+	float hoverBand;
+	uint iSrCamDummy__3;
+	uint iSrCamDummy__4;
 };
 
 struct HxCB_EnvState
@@ -131,6 +139,8 @@ struct HxCB_PolygonObject
 	// 6th bit : g_tex2D_BUMP
 	// 7th bit : g_tex2D_D
 	// 17th bit : g_tex2D_PAINT
+	// 18th bit : display camera brush
+	// 19th bit : camera brush (0: 3D spatial, 1: geodesic)
 	uint tex_map_enum;
 
 	// 1st bit : 0 (shading color to RT) 1 (normal to RT for the purpose of silhouette rendering)

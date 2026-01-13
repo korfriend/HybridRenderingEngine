@@ -37,7 +37,8 @@
 //#define __VERSION "1.33" // released at 25.08.11
 //#define __VERSION "1.40" // released at 25.11.29
 //#define __VERSION "1.41" // released at 25.12.01
-#define __VERSION "1.50" // released at 25.12.29
+//#define __VERSION "1.50" // released at 25.12.29
+#define __VERSION "1.51" // released at 26.01.12
 
 #define _HAS_STD_BYTE 0
 
@@ -1271,13 +1272,19 @@ namespace vmobjects
 		uint64_t GetContentUpdateTime();
 
 		void SetContentUpdateTime();
+
+		void SetDestoryer(const std::string& name, void(*fn)(VmObject* obj));
+		bool ContainsDestroyer(const std::string& name);
+
+		bool RemoveDestoryers();
+		bool RemoveDestoryer(const std::string& name);
 		
-		bool SetObjParam(const std::string& param_name, const std::any& v);
+		void SetObjParam(const std::string& param_name, const std::any& v);
 
 		template <typename T> T* GetObjParamPtr(const std::string& param_name) {
 			bool ret = false;
-			any& p = GetObjParamA(param_name, ret);
-			return ret? (T*)&any_cast<T&>(p) : NULL;
+			std::any& p = GetObjParamA(param_name, ret);
+			return ret? (T*)&std::any_cast<T&>(p) : NULL;
 		}
 		template <typename T> T GetObjParam(const std::string& param_name, const T& init_v) {
 			T* p = GetObjParamPtr<T>(param_name);
