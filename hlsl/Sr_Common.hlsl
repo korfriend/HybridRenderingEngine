@@ -779,6 +779,15 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
 	float3 Ka_pobj = g_cbPobj.Ka;
 	float3 Kd_pobj = g_cbPobj.Kd;
 	float3 Ks_pobj = g_cbPobj.Ks;
+    
+	if (BitCheck(g_cbPobj.pobj_flag, 3))
+	{
+		float3 color_in = input.f4Color.rgb * input.f4Color.a;
+		Ka_pobj = color_in * g_cbPobj.pb_shading_factor.x;
+		Kd_pobj = color_in * g_cbPobj.pb_shading_factor.y;
+		Ks_pobj = color_in * g_cbPobj.pb_shading_factor.z;
+	}
+    
 #if __PAINTER_UV == 1
     if (g_cbPobj.tex_map_enum & (0x1 << 17))
     {
@@ -824,17 +833,6 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
         
 		Ka_pobj = lerp(Ka_pobj, ink.rgb * g_cbPobj.pb_shading_factor.x, ring);
 		Kd_pobj = lerp(Kd_pobj, ink.rgb * g_cbPobj.pb_shading_factor.y, ring);
-        
-		//if (sd * sd < 10000)
-		//{
-		//	Kd_pobj = float3(frac(d * 0.1), frac(d * 0.1), frac(d * 0.1));
-		//}
-		//else
-		//{
-		//	//Kd_pobj = float3(saturate(abs(sd) * 0.1), 0, 0);
-		//	Kd_pobj = float3(ring, ring, ring);
-		//}
-		//Ka_pobj = Kd_pobj;
 
 	}
 
@@ -999,14 +997,14 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     float3 Ka, Kd, Ks;
     float Ns = g_cbPobj.Ns;
 
-    if (BitCheck(g_cbPobj.pobj_flag, 3))
-    {
-		float3 color_vtx = input.f4Color.rgb * input.f4Color.a;
-        Ka = color_vtx * Ka_pobj;
-        Kd = color_vtx * Kd_pobj;
-		Ks = color_vtx * Ks_pobj;
-	}
-    else
+    //if (BitCheck(g_cbPobj.pobj_flag, 3))
+    //{
+	//	float3 color_vtx = input.f4Color.rgb * input.f4Color.a;
+    //    Ka = color_vtx * Ka_pobj;
+    //    Kd = color_vtx * Kd_pobj;
+	//	Ks = color_vtx * Ks_pobj;
+	//}
+    //else
     {
         // note g_cbPobj's Ka, Kd, and Ks has already been multiplied by pb_shading_factor.xyz
         Ka = Ka_pobj;
@@ -1102,11 +1100,9 @@ void GS_TriNormal(triangle VS_OUTPUT input[3], inout TriangleStream<VS_OUTPUT> t
 
     float3 normal = normalize(cross(pos1 - pos0, pos2 - pos0));
     float4 faceColor = (float4)1;
-    uint face_flag = 0xFF;
     if (BitCheck(g_cbPobj.pobj_flag, 2))
     {
         faceColor = g_faceColors[primID].rgba;
-        face_flag = (uint)(faceColor.a * 255.f);
     }
 
 
@@ -1119,19 +1115,8 @@ void GS_TriNormal(triangle VS_OUTPUT input[3], inout TriangleStream<VS_OUTPUT> t
             output.f3VecNormalWS = normal;
         }
         if (BitCheck(g_cbPobj.pobj_flag, 2))
-        {
-            if (face_flag & 0x1)
-            {
-                output.f4Color.rgb = faceColor.rgb;
-            }
-            else
-            {
-				output.f4Color.rgb = ConvertUIntToFloat4(g_cbPobj.pobj_dummy_1).bgr;
-			}
-            if (face_flag & 0x2)
-            {
-                output.f3VecNormalWS = normal;
-            }
+		{
+			output.f4Color = faceColor;
         }
 
         triangleStream.Append(output);

@@ -585,8 +585,7 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 	};
 
 
-	//if (gres.vm_src_id == 33554445)
-	//	cout << "------33554445-----> " << gres.res_name << (uint32_t)GetParam("NUM_ELEMENTS") << endl;
+	vzlog("__GenerateGpuResource (%s)", gres.res_name.c_str())
 
 	__ReleaseGpuResource(gres, false);
 

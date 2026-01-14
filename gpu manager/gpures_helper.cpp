@@ -7,6 +7,12 @@
 #include <iostream>
 #include <fstream>
 
+#if (defined(_DEBUG) || defined(DEBUG))
+bool DEBUG_GPU_UPDATE_DATA = true;
+#else
+bool DEBUG_GPU_UPDATE_DATA = false;
+#endif
+
 using namespace grd_helper;
 
 #define __BLKLEVEL 1
@@ -579,6 +585,8 @@ int grd_helper::Initialize(VmGpuManager* pCGpuManager, PSOManager* gpu_params)
 			vtx_group[3] = vmfloat3( 1,-1, 0);
 			g_psoManager->dx11DeviceImmContext->UpdateSubresource(pdx11bufvtx, 0, NULL, subres.pSysMem, subres.SysMemPitch, 0);
 			VMSAFE_DELETEARRAY(subres.pSysMem);
+
+			if (DEBUG_GPU_UPDATE_DATA) vzlog("DEBUG_GPU_UPDATE_DATA: %s", gres_quad.res_name.c_str());
 		}
 
 		// mesh painter
@@ -1665,7 +1673,7 @@ bool grd_helper::UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, const bool isPre
 	gres.res_name = isPreInt? string("PREINT_OTF_BUFFER") : string("OTF_BUFFER");
 
 	MapTable* tmap_data = tobj->GetObjParamPtr<MapTable>("_TableMap_OTF");
-	string updateTimeName = string("_uint64_t_Latest") + string(isPreInt? "PreIntOtf" : "Otf") + string("GpuUpdateTime");
+	string updateTimeName = string("_ullong_Latest") + string(isPreInt? "PreIntOtf" : "Otf") + string("GpuUpdateTime");
 
 	bool needRegen = true;
 	if (g_pCGpuManager->UpdateGpuResource(gres)) {
@@ -1842,6 +1850,11 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 				g_pCGpuManager->GenerateGpuResource(gres_vtx);
 		}
 
+		if (pobj->GetObjParam(std::string(vtx_def_names[i]) + "_UPDATED", false))
+		{
+			update_data_attriute = true;
+			pobj->SetObjParam(std::string(vtx_def_names[i]) + "_UPDATED", false);
+		}
 		if (update_data_attriute)
 		{
 			uint8_t* buffer_vertices = nullptr;
@@ -1876,6 +1889,8 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 
 			gres_vtx.options["Update LAST_UPDATE_TIME"] = 1u;
 			g_pCGpuManager->UpdateGpuResource(gres_vtx);
+
+			if (DEBUG_GPU_UPDATE_DATA) vzlog("DEBUG_GPU_UPDATE_DATA: %s", gres_vtx.res_name.c_str());
 		}
 	}
 	if (update_data)
@@ -1927,6 +1942,8 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 
 			gres_idx.options["Update LAST_UPDATE_TIME"] = 1u;
 			g_pCGpuManager->UpdateGpuResource(gres_idx);
+
+			if (DEBUG_GPU_UPDATE_DATA) vzlog("DEBUG_GPU_UPDATE_DATA: %s", gres_idx.res_name.c_str());
 		}
 	}
 
@@ -2015,6 +2032,8 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 
 				gres_tex.options["Update LAST_UPDATE_TIME"] = 1u;
 				g_pCGpuManager->UpdateGpuResource(gres_tex);
+
+				if (DEBUG_GPU_UPDATE_DATA) vzlog("DEBUG_GPU_UPDATE_DATA: %s", gres_tex.res_name.c_str());
 			}
 
 			map_gres_texs["MAP_COLOR4"] = gres_tex;
@@ -2063,6 +2082,8 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 
 				gres_tex.options["Update LAST_UPDATE_TIME"] = 1u;
 				g_pCGpuManager->UpdateGpuResource(gres_tex);
+
+				if (DEBUG_GPU_UPDATE_DATA) vzlog("DEBUG_GPU_UPDATE_DATA: %s", gres_tex.res_name.c_str());
 			};
 
 			if (prim_data->GetTexureInfo("MAP_COLOR4", tex_res_size.x, tex_res_size.y, byte_stride, &texture_res) || prim_data->GetTexureInfo("PLY_TEX_MAP_0", tex_res_size.x, tex_res_size.y, byte_stride, &texture_res))
@@ -2139,6 +2160,8 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 
 						gres_tex.options["Update LAST_UPDATE_TIME"] = 1u;
 						g_pCGpuManager->UpdateGpuResource(gres_tex);
+
+						if (DEBUG_GPU_UPDATE_DATA) vzlog("DEBUG_GPU_UPDATE_DATA: %s", gres_tex.res_name.c_str());
 					};
 
 					gres_tex.res_name = string("PRIMITIVE_MODEL_") + mat_name;
@@ -2289,7 +2312,7 @@ bool grd_helper::UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string
 	gres.vm_src_id = srcObj->GetObjectID();
 	gres.res_name = resName;
 
-	string updateName = "_uint64_t_Latest" + resName + "GpuUpdateTime";
+	string updateName = "_ullong_Latest" + resName + "GpuUpdateTime";
 
 	bool needRegen = true;
 	if (g_pCGpuManager->UpdateGpuResource(gres)) {
@@ -2755,33 +2778,6 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 				cb_polygon.pobj_flag |= (0x1 << 9);
 			if (pos_vtx_2_ss.y - pos_vtx_0_ss.y < 0)
 				cb_polygon.pobj_flag |= (0x1 << 10);
-			//vmfloat3 f3VecWidth = pos_vtx[1] - pos_vtx[0];
-			//vmfloat3 f3VecHeight = pos_vtx[2] - pos_vtx[0];
-			//fTransformVector(&f3VecWidth, &f3VecWidth, &matOS2SS); 
-			//fTransformVector(&f3VecHeight, &f3VecHeight, &matOS2SS);
-			//fNormalizeVector(&f3VecWidth, &f3VecWidth);
-			//fNormalizeVector(&f3VecHeight, &f3VecHeight);
-			//
-			//f3VecWidth.z = 0;
-			//f3VecHeight.z = 0;
-			//
-			////vmfloat3 f3VecWidth0 = pf3Positions[1] - pf3Positions[0];
-			////vmfloat3 f3VecHeight0 = -pf3Positions[2] + pf3Positions[0];
-			////vmmat44 matOS2PS = matOS2WS * matWS2CS * matCS2PS;
-			////fTransformVector(&f3VecWidth0, &f3VecWidth0, &matOS2PS);
-			////fTransformVector(&f3VecHeight0, &f3VecHeight0, &matOS2PS);
-			////fNormalizeVector(&f3VecWidth0, &f3VecWidth0);
-			////fNormalizeVector(&f3VecHeight0, &f3VecHeight0);
-			//
-			//if (fDotVector(&f3VecWidth, &vmfloat3(1.f, 0, 0)) < 0)
-			//	cb_polygon.pobj_flag |= (0x1 << 9);
-			//
-			////vmfloat3 f3VecNormal;
-			////fCrossDotVector(&f3VecNormal, &f3VecHeight, &f3VecWidth);
-			////fCrossDotVector(&f3VecHeight, &f3VecWidth, &f3VecNormal);
-			//
-			//if (fDotVector(&f3VecHeight, &vmfloat3(0, 1.f, 0)) < 0)
-			//	cb_polygon.pobj_flag |= (0x1 << 10);
 		}
 	}
 	else

@@ -677,8 +677,10 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 					pTextLayout->Release();
 				}
 				
-				res2d->pSolidBrush->SetColor(D2D1::ColorF(titem.iColor, titem.alpha)); // D2D1::ColorF::Black
-				const D2D1_RECT_F rectangle1 = D2D1::RectF(titem.posScreenX, titem.posScreenY, rSize.width, rSize.height);
+				UINT32 color_ = (titem.color & 0xFF) << 16 | ((titem.color >> 16) & 0xFF) | (titem.color & 0x00FF00);
+
+				res2d->pSolidBrush->SetColor(D2D1::ColorF(color_, titem.alpha)); // D2D1::ColorF::Black
+				const D2D1_RECT_F rectangle1 = D2D1::RectF((float)titem.posScreenX, (float)titem.posScreenY, rSize.width, rSize.height);
 
 				res2d->pRenderTarget->DrawText(
 					text_w.c_str(),

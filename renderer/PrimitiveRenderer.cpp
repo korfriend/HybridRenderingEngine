@@ -1190,7 +1190,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 		iobj->SetObjParam("_int2_PreviousScreenSize", fb_size_cur);
 		iobj->SetObjParam("_int_PreviousBufferEx", buffer_ex);
 	}
-	uint64_t lastest_render_time = iobj->GetObjParam("_uint64_t_LatestSrTime", (uint64_t)0);
+	uint64_t lastest_render_time = iobj->GetObjParam("_ullong_LatestSrTime", (uint64_t)0);
 
 	GpuRes gres_fb_rgba, gres_fb_depthcs, gres_fb_depthstencil;
 	GpuRes gres_fb_singlelayer_rgba, gres_fb_singlelayer_depthcs, gres_fb_singlelayer_tempDepth;
@@ -1837,12 +1837,20 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			PrimitiveData* prim_data = pobj->GetPrimitiveData();
 			// note that the actor is visible (already checked)
 
+			vmfloat3* vtx_normal = prim_data->GetVerticeDefinition<vmfloat3>("NORMAL");
+			uint32_t* vtx_color = prim_data->GetVerticeDefinition<uint32_t>("COLOR");
+			vmfloat2* vtx_uv = prim_data->GetVerticeDefinition<vmfloat2>("TEXCOORD0");
+			vmfloat3* vtx_ann_tex1 = prim_data->GetVerticeDefinition<vmfloat3>("TEXCOORD1");
+			vmfloat3* vtx_ann_tex2 = prim_data->GetVerticeDefinition<vmfloat3>("TEXCOORD2");
+			float* vtx_geodesic = prim_data->GetVerticeDefinition<float>("GEODIST");
+
 #pragma region Actor Parameters
 			//bool has_texture_img = actor->GetParam("_bool_HasTextureMap", false); // ????
 
 
 			vmfloat4 material_phongCoeffs = actor->GetParam("_float4_PhongCoeffs", default_phong_lighting_coeff);
-			bool use_vertex_color = actor->GetParam("_bool_UseVertexColor", false) && prim_data->GetVerticeDefinition<uint32_t>("COLOR") != NULL;
+			bool use_vertex_color = actor->GetParam("_bool_UseVertexColor", false);
+			use_vertex_color = use_vertex_color && vtx_color != nullptr;
 
 			//int outline_thickness = actor->GetParam("_int_SilhouetteThickness", (int)0);
 			//float outline_depthThres = actor->GetParam("_float_SilhouetteDepthThres", 10000.f);
@@ -1998,14 +2006,6 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 					}
 				}
 			}
-
-
-			vmfloat3* vtx_normal = prim_data->GetVerticeDefinition<vmfloat3>("NORMAL");
-			uint32_t* vtx_color = prim_data->GetVerticeDefinition<uint32_t>("COLOR");
-			vmfloat2* vtx_uv = prim_data->GetVerticeDefinition<vmfloat2>("TEXCOORD0");
-			vmfloat3* vtx_ann_tex1 = prim_data->GetVerticeDefinition<vmfloat3>("TEXCOORD1");
-			vmfloat3* vtx_ann_tex2 = prim_data->GetVerticeDefinition<vmfloat3>("TEXCOORD2");
-			vmfloat3* vtx_geodesic = prim_data->GetVerticeDefinition<vmfloat3>("GEODIST");
 
 			if (camera_brush_mode && actor->actorId == camera_brush_target_actor_id)
 			{
@@ -2449,7 +2449,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 					if (face_color_buffer)
 					{
 						GpuRes face_color_res;
-						uint64_t facecolor_update = pobj->GetObjParam("_uint64_t_Latest_FACECOLOR", (uint64_t)0);
+						uint64_t facecolor_update = pobj->GetObjParam("_ullong_Latest_FACECOLOR", (uint64_t)0);
 						grd_helper::UpdateCustomBuffer(face_color_res, pobj, "FaceColorBuffer", face_color_buffer,
 							prim_data->num_prims, DXGI_FORMAT_R8G8B8A8_UNORM, sizeof(int), NULL, facecolor_update);
 						dx11DeviceImmContext->GSSetShaderResources(30, 1, (ID3D11ShaderResourceView**)&face_color_res.alloc_res_ptrs[DTYPE_SRV]);
@@ -4386,7 +4386,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 
 	iobj->SetDescriptor("vismtv_inbuilt_renderergpudx module");
 
-	iobj->SetObjParam("_uint64_t_LatestSrTime", vmhelpers::GetCurrentTimePack());
+	iobj->SetObjParam("_ullong_LatestSrTime", vmhelpers::GetCurrentTimePack());
 	//((std::mutex*)HDx11GetMutexGpuCriticalPath())->unlock();
 
 	return true;

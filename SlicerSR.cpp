@@ -351,7 +351,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		iobj->SetObjParam("_int2_PreviousScreenSize", fb_size_cur);
 		iobj->SetObjParam("_int_PreviousBufferEx", (int)1);
 	}
-	uint64_t lastest_render_time = iobj->GetObjParam("_uint64_t_LatestSrTime", (uint64_t)0);
+	uint64_t lastest_render_time = iobj->GetObjParam("_ullong_LatestSrTime", (uint64_t)0);
 
 	GpuRes gres_fb_rgba, gres_fb_depthcs;
 	GpuRes gres_fb_sys_rgba, gres_fb_sys_depthcs;
@@ -1385,7 +1385,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 
 	iobj->SetDescriptor("vismtv_inbuilt_renderergpudx module");
 
-	iobj->SetObjParam("_uint64_t_LatestSrTime", vmhelpers::GetCurrentTimePack());
+	iobj->SetObjParam("_ullong_LatestSrTime", vmhelpers::GetCurrentTimePack());
 	//((std::mutex*)HDx11GetMutexGpuCriticalPath())->unlock();
 
 //#define __COUNT_DEBUG
