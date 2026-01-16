@@ -12,8 +12,9 @@
 //#define SDK_REDISTRIBUTE
 
 //#define _DEBUG
-#if (defined(_DEBUG) || defined(DEBUG)) && !defined(SDK_REDISTRIBUTE)
 #include <DXGI.h>
+#pragma comment(lib, "dxgi.lib")
+#if (defined(_DEBUG) || defined(DEBUG)) && !defined(SDK_REDISTRIBUTE)
 ID3D11Debug *debugDev;
 #endif
 
@@ -110,6 +111,7 @@ IDXGIAdapter* g_pdxgiAdapter = NULL;
 
 bool __InitializeDevice()
 {
+	const bool force_integrated_gpu = false;
 	if (g_pdx11Device || g_pdx11DeviceImmContext)
 	{
 		vmlog::LogWarn("VmManager::CreateDevice - Already Created!");
@@ -138,8 +140,151 @@ bool __InitializeDevice()
 			D3D_FEATURE_LEVEL_9_1
 		};
 
-		D3D11CreateDevice(NULL, driverTypes, NULL, createDeviceFlags, featureLevels, ARRAYSIZE(featureLevels), D3D11_SDK_VERSION, 
-			&g_pdx11Device, &g_eFeatureLevel, &g_pdx11DeviceImmContext);
+		// Enumerate adapters and select GPU based on preference
+		IDXGIFactory1* pFactory = NULL;
+		IDXGIAdapter1* pSelectedAdapter = NULL;
+		IDXGIAdapter1* pDiscreteAdapter = NULL;
+		IDXGIAdapter1* pIntegratedAdapter = NULL;
+		wstring discreteAdapterName;
+		wstring integratedAdapterName;
+
+		if (SUCCEEDED(CreateDXGIFactory1(__uuidof(IDXGIFactory1), (void**)&pFactory)))
+		{
+			IDXGIAdapter1* pAdapter = NULL;
+			UINT adapterIndex = 0;
+
+			vmlog::LogInfo("Enumerating GPU adapters...");
+			if (force_integrated_gpu)
+			{
+				vmlog::LogInfo("  (Force integrated GPU mode enabled)");
+			}
+
+			while (pFactory->EnumAdapters1(adapterIndex, &pAdapter) != DXGI_ERROR_NOT_FOUND)
+			{
+				DXGI_ADAPTER_DESC1 desc;
+				pAdapter->GetDesc1(&desc);
+
+				wstring description = desc.Description;
+				vmlog::LogInfo(string("  [") + to_string(adapterIndex) + "] " + string(description.begin(), description.end()) +
+					" (VendorId: 0x" + to_string(desc.VendorId) + ", DedicatedVideoMemory: " +
+					to_string(desc.DedicatedVideoMemory / (1024 * 1024)) + " MB)");
+
+				// Skip software adapters
+				if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
+				{
+					pAdapter->Release();
+					adapterIndex++;
+					continue;
+				}
+
+				// Check for discrete GPU (NVIDIA: 0x10DE, AMD: 0x1002/0x1022)
+				if (desc.VendorId == 0x10DE || desc.VendorId == 0x1002 || desc.VendorId == 0x1022)
+				{
+					if (pDiscreteAdapter == NULL)
+					{
+						pDiscreteAdapter = pAdapter;
+						discreteAdapterName = desc.Description;
+						vmlog::LogInfo("    -> Found discrete GPU");
+					}
+					else
+					{
+						pAdapter->Release();
+					}
+				}
+				// Intel integrated graphics (0x8086)
+				else if (desc.VendorId == 0x8086)
+				{
+					if (pIntegratedAdapter == NULL)
+					{
+						pIntegratedAdapter = pAdapter;
+						integratedAdapterName = desc.Description;
+						vmlog::LogInfo("    -> Found integrated GPU");
+					}
+					else
+					{
+						pAdapter->Release();
+					}
+				}
+				else
+				{
+					pAdapter->Release();
+				}
+
+				adapterIndex++;
+			}
+
+			// Select adapter based on force_integrated_gpu flag
+			wstring selectedAdapterName;
+			if (force_integrated_gpu)
+			{
+				// Force integrated GPU selection
+				if (pIntegratedAdapter != NULL)
+				{
+					pSelectedAdapter = pIntegratedAdapter;
+					pIntegratedAdapter = NULL;
+					selectedAdapterName = integratedAdapterName;
+					vmlog::LogInfo("Forcing integrated GPU selection => " + string(selectedAdapterName.begin(), selectedAdapterName.end()));
+				}
+				else if (pDiscreteAdapter != NULL)
+				{
+					// Fallback to discrete if no integrated available
+					pSelectedAdapter = pDiscreteAdapter;
+					pDiscreteAdapter = NULL;
+					selectedAdapterName = discreteAdapterName;
+					vmlog::LogWarn("No integrated GPU found, falling back to discrete GPU => " + string(selectedAdapterName.begin(), selectedAdapterName.end()));
+				}
+			}
+			else
+			{
+				// Prefer discrete GPU (default behavior)
+				if (pDiscreteAdapter != NULL)
+				{
+					pSelectedAdapter = pDiscreteAdapter;
+					pDiscreteAdapter = NULL;
+					selectedAdapterName = discreteAdapterName;
+					vmlog::LogInfo("Selecting discrete GPU (preferred) => " + string(selectedAdapterName.begin(), selectedAdapterName.end()));
+				}
+				else if (pIntegratedAdapter != NULL)
+				{
+					pSelectedAdapter = pIntegratedAdapter;
+					pIntegratedAdapter = NULL;
+					selectedAdapterName = integratedAdapterName;
+					vmlog::LogWarn("No discrete GPU found, using integrated graphics => " + string(selectedAdapterName.begin(), selectedAdapterName.end()));
+				}
+			}
+
+			// Release unused adapters
+			if (pDiscreteAdapter != NULL)
+			{
+				pDiscreteAdapter->Release();
+			}
+			if (pIntegratedAdapter != NULL)
+			{
+				pIntegratedAdapter->Release();
+			}
+		}
+
+		// Create device with selected adapter or let system choose
+		if (pSelectedAdapter != NULL)
+		{
+			vmlog::LogInfo("Creating D3D11 device with selected adapter...");
+			// When using a specific adapter, driver type must be D3D_DRIVER_TYPE_UNKNOWN
+			D3D11CreateDevice((IDXGIAdapter*)pSelectedAdapter, D3D_DRIVER_TYPE_UNKNOWN, NULL, createDeviceFlags,
+				featureLevels, ARRAYSIZE(featureLevels), D3D11_SDK_VERSION,
+				&g_pdx11Device, &g_eFeatureLevel, &g_pdx11DeviceImmContext);
+			pSelectedAdapter->Release();
+		}
+		else
+		{
+			vmlog::LogWarn("No suitable adapter found, using system default");
+			D3D11CreateDevice(NULL, driverTypes, NULL, createDeviceFlags, featureLevels, ARRAYSIZE(featureLevels), D3D11_SDK_VERSION,
+				&g_pdx11Device, &g_eFeatureLevel, &g_pdx11DeviceImmContext);
+		}
+
+		if (pFactory != NULL)
+		{
+			pFactory->Release();
+		}
 
 		// for some unstable graphics HW e.g., intel HD, forced to set feature level by trial-and-error strategy
 #ifdef DX11_0
@@ -248,14 +393,9 @@ bool __InitializeDevice()
 	vmlog::LogInfo("==============");
 	switch (g_adapterDesc.VendorId) {
 	case 0x10DE: // NVIDIA
-		vmlog::LogInfo("[NVIDIA]");
-		break;
 	case 0x1002: // AMD
 	case 0x1022: // ATI
-		vmlog::LogInfo("[AMD]");
-		break;
 	case 0x8086: // Intel
-		vmlog::LogInfo("[Intel]");
 		break;
 	case 0x1414: // Microsoft
 	case 0x5143: // Qualcomm
@@ -275,18 +415,6 @@ bool __InitializeDevice()
 		VMSAFE_RELEASE(g_pdx11Device);
 		return false;
 	}
-	wstring description = g_adapterDesc.Description;
-	vmlog::LogInfo(string(description.begin(), description.end()));
-	vmlog::LogInfo("==============");
-
-// 	if(g_adapterDesc.VendorId != 0x10DE && g_adapterDesc.VendorId != 0x1002 && g_adapterDesc.VendorId != 0x1022)
-// 	{
-// 		VMSAFE_RELEASE(g_pdx11DeviceImmContext);
-// 		VMSAFE_RELEASE(g_pdx11Device);
-// 		return false;
-// 	}
-
-//	VmDeviceSetting(g_pdx11Device, g_pdx11DeviceImmContext, g_adapterDesc);
 
 #ifdef USE_D2D
 	// Create a Direct2D factory.

@@ -1171,7 +1171,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 
 	__ID3D11Device* dx11Device = psoManager->dx11Device;
 	__ID3D11DeviceContext* dx11DeviceImmContext = psoManager->dx11DeviceImmContext;
-
+	
 #pragma region // IOBJECT GPU
 	int buffer_ex = (check_pixel_transmittance && mode_OIT == MFR_MODE::DYNAMIC_FB) ? buf_ex_scale : 1, buffer_ex_old = 0; // optimal for K is 1
 	// 'cause we now do not support the dynamic version of k+ buffer
@@ -1418,7 +1418,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 	dx11DeviceImmContext->Unmap(cbuf_env_state, 0);
 	dx11DeviceImmContext->PSSetConstantBuffers(7, 1, &cbuf_env_state);
 	dx11DeviceImmContext->CSSetConstantBuffers(7, 1, &cbuf_env_state);
-
+	
 	if (is_ghost_mode)
 	{
 		// do 'dynamic'
@@ -1640,7 +1640,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 #endif
 		}
 	}
-
+	
 	// supposed to be updated in the separate shadow caster !!!
 	GpuRes gres_map_shadow; // just read
 	if (cast_shadows && receive_shadows)
@@ -1712,7 +1712,6 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 	if (mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB)
 		dx11DeviceImmContext->ClearUnorderedAccessViewUint((ID3D11UnorderedAccessView*)gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_UAV], clr_unit4);
 #endif
-
 	if (!is_picking_routine)
 	{
 		dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
@@ -1957,8 +1956,9 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			map<string, GpuRes> map_gres_texs, map_gres_vtxs;
 			VmObject* imgObj = actor->GetAssociateRes("TEXTURE2DIMAGE");
 			bool has_texture_img = false;
-			grd_helper::UpdatePrimitiveModel(map_gres_vtxs, gres_idx, map_gres_texs, pobj, imgObj, &has_texture_img);
 
+			grd_helper::UpdatePrimitiveModel(map_gres_vtxs, gres_idx, map_gres_texs, pobj, imgObj, &has_texture_img);
+			
 			if (map_gres_vtxs.find("POSITION") == map_gres_vtxs.end())
 			{
 				vzlog_error("invalid primitive object!! No Position buffer");
@@ -4378,6 +4378,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 		}
 	}
 #endif
+	dx11DeviceImmContext->Flush();
 	dx11DeviceImmContext->ClearState();
 
 	dx11DeviceImmContext->OMSetRenderTargets(1, &pdxRTVOld, pdxDSVOld);

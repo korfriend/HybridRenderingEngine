@@ -2178,6 +2178,7 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 						gres_tex.res_values.SetParam("HEIGHT", (uint32_t)tex_res_size.y);
 						gres_tex.options["MIP_GEN"] = 1;
 
+						update_data_attriute = true;
 						g_pCGpuManager->GenerateGpuResource(gres_tex);
 					}
 					else

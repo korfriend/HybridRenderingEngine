@@ -393,18 +393,8 @@ void TextureImgMap(inout float4 v_rgba, const float2 uv)
     //pos_sample.y = 1. - pos_sample.y;
     //pos_sample.z = 0;
     v_rgba = g_texRgbaArray.Sample(g_samplerLinear_wrap, float3(uv, 0)).bgra;
-    //if (img_rgba.a == 0)
-    //{
-    //    v_rgba = (float4) 0;
-    //    depthcs = FLT_MAX;
-    //}
-    //else
-    //{
-    //    v_rgba.rgb = img_rgba.rgb;
-    //    v_rgba.a *= img_rgba.a;
-    //}
 }
-    
+        
 void TextureMaterialMap(inout float3 Ka, inout float3 Kd, inout float3 Ks, inout float Ns, inout float bump, inout float d, const float2 uv, const uint tex_map_enum)
 {
     //Texture2D g_tex2D_Mat_KA : register(t10);
@@ -417,25 +407,25 @@ void TextureMaterialMap(inout float3 Ka, inout float3 Kd, inout float3 Ks, inout
 	if (tex_map_enum & (0x1 << 1))
 	{
         float4 load_tex = g_tex2D_Mat_KA.Sample(g_samplerLinear_wrap, uv).bgra;
-		Ka *= load_tex.rgb;
+		Ka = load_tex.rgb;
 		alpha_wildcard = max(alpha_wildcard, load_tex.a);
 	}
 	if (tex_map_enum & (0x1 << 2))
 	{
         float4 load_tex = g_tex2D_Mat_KD.Sample(g_samplerLinear_wrap, uv).bgra;
-		Kd *= load_tex.rgb;
+		Kd = load_tex.rgb;
 		alpha_wildcard = max(alpha_wildcard, load_tex.a);
 	}
 	if (tex_map_enum & (0x1 << 3))
 	{
-        Ks *= g_tex2D_Mat_KS.Sample(g_samplerLinear_wrap, uv).bgr;
+        Ks = g_tex2D_Mat_KS.Sample(g_samplerLinear_wrap, uv).bgr;
     }
 	if (tex_map_enum & (0x1 << 4))
-        Ns *= g_tex2D_Mat_NS.Sample(g_samplerLinear_wrap, uv).r;
+        Ns = g_tex2D_Mat_NS.Sample(g_samplerLinear_wrap, uv).r;
 	if (tex_map_enum & (0x1 << 5))
-        bump *= g_tex2D_Mat_BUMP.Sample(g_samplerLinear_wrap, uv).r;
+        bump = g_tex2D_Mat_BUMP.Sample(g_samplerLinear_wrap, uv).r;
     if (tex_map_enum & (0x1 << 6))
-        d *= g_tex2D_Mat_D.Sample(g_samplerLinear_wrap, uv).r;
+        d = g_tex2D_Mat_D.Sample(g_samplerLinear_wrap, uv).r;
 
 	if (alpha_wildcard >= 0) d *= alpha_wildcard;
 }
@@ -835,7 +825,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
 		Kd_pobj = lerp(Kd_pobj, ink.rgb * g_cbPobj.pb_shading_factor.y, ring);
 
 	}
-
+    
 #if __RENDERING_MODE == 1
     DashedLine(v_rgba, z_depth, input.f2UV.x, g_cbPobj.dash_interval, g_cbPobj.pobj_flag & (0x1 << 19), g_cbPobj.pobj_flag & (0x1 << 20));
     if (v_rgba.a <= 0.01) clip(-1);
@@ -870,27 +860,39 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
             ComputeColor(v_rgba.rgb, Ka, Kd, Ks, Ns, 1.0, input.f3PosWS, view_dir, nor, nor_len);
         }
         v_rgba.a *= clr_map.a;
-        //v_rgba = clr_map;//float4(input.f3Custom, 1);
     }
     else
     {
         float3 Ka = Ka_pobj, Kd = Kd_pobj, Ks = Ks_pobj;
         float Ns = g_cbPobj.Ns, d = 1.0, bump = 1.0;
         TextureMaterialMap(Ka, Kd, Ks, Ns, bump, d, input.f2UV, g_cbPobj.tex_map_enum);
-
+    
+        if (any(Ka != Ka_pobj))
+        {
+            Ka *= g_cbPobj.pb_shading_factor.x;
+        }
+        if (any(Kd != Kd_pobj))
+        {
+            Kd *= g_cbPobj.pb_shading_factor.y;
+        }
+        if (any(Ks != Ks_pobj))
+        {
+            Ks *= g_cbPobj.pb_shading_factor.z;
+        }
+    
         if (Ns >= 0)
         {
             Ka *= g_cbEnv.ltint_ambient.rgb;
             Kd *= g_cbEnv.ltint_diffuse.rgb;
             Ks *= g_cbEnv.ltint_spec.rgb;
             ComputeColor(v_rgba.rgb, Ka, Kd, Ks, Ns, bump, input.f3PosWS, view_dir, nor, nor_len);
-            //v_rgba.rgb = Ks;
         }
         else // illumination model 0
             v_rgba.rgb = Kd;
         if (d <= 0.01) clip(-1);
         v_rgba.a *= d;
     }
+    
 #elif __RENDERING_MODE == 5    
     bool is_clipped = false;
     if (g_cbVobj.clip_info.clip_flag & 0x1)
@@ -1031,7 +1033,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     // make it as an associated color.
     // as a color component is stored into 8 bit channel, the alpha-multiplied precision must be determined in this stage.
     // unless, noise dots appear.
-    v_rgba.rgb *= v_rgba.a;
+	v_rgba.rgb *= v_rgba.a;
 
 #ifdef __GHOST_EFFECT__
     // dynamic opacity modulation
