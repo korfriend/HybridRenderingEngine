@@ -584,7 +584,7 @@ int grd_helper::Initialize(VmGpuManager* pCGpuManager, PSOManager* gpu_params)
 			vtx_group[2] = vmfloat3(-1,-1, 0);
 			vtx_group[3] = vmfloat3( 1,-1, 0);
 			g_psoManager->dx11DeviceImmContext->UpdateSubresource(pdx11bufvtx, 0, NULL, subres.pSysMem, subres.SysMemPitch, 0);
-			VMSAFE_DELETEARRAY(subres.pSysMem);
+			VMSAFE_DELETEARRAY_VOID(subres.pSysMem);
 
 			if (DEBUG_GPU_UPDATE_DATA) vzlog("DEBUG_GPU_UPDATE_DATA: %s", gres_quad.res_name.c_str());
 		}
@@ -1937,7 +1937,7 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 				subres.SysMemSlicePitch = 0; // only for 3D resource
 				memcpy((void*)subres.pSysMem, prim_data->vidx_buffer, prim_data->num_vidx * sizeof(uint32_t));
 				g_psoManager->dx11DeviceImmContext->UpdateSubresource(pdx11bufidx, 0, NULL, subres.pSysMem, subres.SysMemPitch, 0);
-				VMSAFE_DELETEARRAY(subres.pSysMem);
+				VMSAFE_DELETEARRAY_VOID(subres.pSysMem);
 			}
 
 			gres_idx.options["Update LAST_UPDATE_TIME"] = 1u;
@@ -2028,7 +2028,7 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 				g_psoManager->dx11DeviceImmContext->UpdateSubresource(pdx11tx2dres, 0, NULL, subres.pSysMem, subres.SysMemPitch, subres.SysMemSlicePitch);
 				ID3D11ShaderResourceView* pSRV = (ID3D11ShaderResourceView*)gres_tex.alloc_res_ptrs[DTYPE_SRV];
 				g_psoManager->dx11DeviceImmContext->GenerateMips(pSRV);
-				VMSAFE_DELETEARRAY(subres.pSysMem);
+				VMSAFE_DELETEARRAY_VOID(subres.pSysMem);
 
 				gres_tex.options["Update LAST_UPDATE_TIME"] = 1u;
 				g_pCGpuManager->UpdateGpuResource(gres_tex);
@@ -2078,7 +2078,7 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 				g_psoManager->dx11DeviceImmContext->UpdateSubresource(pdx11tx2dres, 0, NULL, subres.pSysMem, subres.SysMemPitch, subres.SysMemSlicePitch);
 				ID3D11ShaderResourceView* pSRV = (ID3D11ShaderResourceView*)gres_tex.alloc_res_ptrs[DTYPE_SRV];
 				g_psoManager->dx11DeviceImmContext->GenerateMips(pSRV);
-				VMSAFE_DELETEARRAY(subres.pSysMem);
+				VMSAFE_DELETEARRAY_VOID(subres.pSysMem);
 
 				gres_tex.options["Update LAST_UPDATE_TIME"] = 1u;
 				g_pCGpuManager->UpdateGpuResource(gres_tex);
@@ -2156,7 +2156,7 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 						g_psoManager->dx11DeviceImmContext->UpdateSubresource(pdx11tx2dres, 0, NULL, subres.pSysMem, subres.SysMemPitch, subres.SysMemSlicePitch);
 						ID3D11ShaderResourceView* pSRV = (ID3D11ShaderResourceView*)gres_tex.alloc_res_ptrs[DTYPE_SRV];
 						g_psoManager->dx11DeviceImmContext->GenerateMips(pSRV); 
-						VMSAFE_DELETEARRAY(subres.pSysMem);
+						VMSAFE_DELETEARRAY_VOID(subres.pSysMem);
 
 						gres_tex.options["Update LAST_UPDATE_TIME"] = 1u;
 						g_pCGpuManager->UpdateGpuResource(gres_tex);

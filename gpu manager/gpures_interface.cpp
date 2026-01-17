@@ -1138,7 +1138,7 @@ bool __SetGpuManagerParameters(const string& param_name, const data_type& dtype,
 		}
 		else
 		{
-			VMSAFE_DELETEARRAY(it->second.buffer_ptr);
+			VMSAFE_DELETEARRAY_VOID(it->second.buffer_ptr);
 			g_mapCustomParameters.erase(it);
 		}
 	}

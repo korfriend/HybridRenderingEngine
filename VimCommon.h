@@ -38,7 +38,8 @@
 //#define __VERSION "1.40" // released at 25.11.29
 //#define __VERSION "1.41" // released at 25.12.01
 //#define __VERSION "1.50" // released at 25.12.29
-#define __VERSION "1.51" // released at 26.01.12
+//#define __VERSION "1.51" // released at 26.01.12
+#define __VERSION "1.52" // released at 26.01.17
 
 #define _HAS_STD_BYTE 0
 
@@ -83,6 +84,8 @@ using namespace vz;
 #define VMSAFE_DELETE(p)	{ if(p) { delete (p); (p)=NULL; } }
 #define VMSAFE_DELETEARRAY(p)	{ if(p) { delete[] (p); (p)=NULL; } }
 #define VMSAFE_DELETE2DARRAY(pp, numPtrs)	{ if(pp){ for(int i = 0; i < numPtrs; i++){ VMSAFE_DELETEARRAY(pp[i]);} VMSAFE_DELETEARRAY(pp); } }
+#define VMSAFE_DELETEARRAY_VOID(p) { if(p){ delete[] (char*)(p); (p)=NULL; } }
+#define VMSAFE_DELETE2DARRAY_VOID(pp, numPtrs) { if(pp){ for(int i=0;i<numPtrs;i++){ VMSAFE_DELETEARRAY_VOID((pp)[i]); } delete[] (pp); (pp)=NULL; } }
 
 #ifdef __WINDOWS
 	typedef HMODULE VmHMODULE;
@@ -610,7 +613,7 @@ namespace vmobjects
 
 		// 포인터 ppvVolumeSlices 및 pullHistogram 에 할당된 메모리 해제
 		void Delete() {
-			VMSAFE_DELETE2DARRAY(vol_slices, vol_size.z + bnd_size.z * 2);
+			VMSAFE_DELETE2DARRAY_VOID(vol_slices, vol_size.z + bnd_size.z * 2);
 			VMSAFE_DELETEARRAY(histo_values);
 		}
 	};
@@ -957,10 +960,10 @@ namespace vmobjects
 			{
 			case 1:
 			case 2:
-				VMSAFE_DELETE2DARRAY(tmap_buffers, array_lengths.y);
+				VMSAFE_DELETE2DARRAY_VOID(tmap_buffers, array_lengths.y);
 				break;
 			case 3:
-				VMSAFE_DELETE2DARRAY(tmap_buffers, array_lengths.z);
+				VMSAFE_DELETE2DARRAY_VOID(tmap_buffers, array_lengths.z);
 				break;
 			default:
 				break;
@@ -1044,7 +1047,7 @@ namespace vmobjects
 		 * @brief 할당된 memory 모두 해제
 		*/
 		void Delete() {
-			VMSAFE_DELETEARRAY(mM_blks);
+			VMSAFE_DELETEARRAY_VOID(mM_blks);
 			for (std::map<int, uint8_t*>::iterator itr = tflag_blks_map.begin(); itr != tflag_blks_map.end(); itr++)
 				VMSAFE_DELETEARRAY(itr->second);
 			tflag_blks_map.clear();
@@ -1193,7 +1196,7 @@ namespace vmobjects
 				}
 			}
 			break;
-			default: VMSAFE_DELETEARRAY(fbuffer); break;
+			default: VMSAFE_DELETEARRAY_VOID(fbuffer); break;
 			}
 		}
 	};
