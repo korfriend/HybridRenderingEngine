@@ -1,5 +1,6 @@
 #include "RendererHeader.h"
 #include "gpulib.h"
+#include "hlsl/ShaderInterop_BVH.h"
 
 #define GETDEPTHSTENTIL(NAME) psoManager->get_depthstencil(#NAME)
 //#include <opencv2/imgproc.hpp>
@@ -2479,6 +2480,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 					};
 
 					if (use_raycaster) {
+#ifdef DX10_0
 						vmint4* nodePtr;
 						int nodeSize;
 						vmint4* triWoopPtr;
@@ -2487,6 +2489,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 						int triDebugSize;
 						int* cpuTriIndicesPtr;
 						int triIndicesSize;
+
 						if (pobj->GetBVHTreeBuffers(&nodePtr, &nodeSize, &triWoopPtr, &triWoopSize,
 							&triDebugPtr, &triDebugSize, &cpuTriIndicesPtr, &triIndicesSize)) {
 
@@ -2506,6 +2509,64 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 						else {
 							vmlog::LogErr("Undercut using raycaster requires BVH!! (" + actor->name + ")");
 						}
+#else
+						GpuRes gres_primitiveCounterBuffer;
+						gres_primitiveCounterBuffer.vm_src_id = pobj->GetObjectID();
+						gres_primitiveCounterBuffer.res_name = string("GPUBVH::primitiveCounterBuffer");
+						GpuRes gres_bvhNodeBuffer;
+						gres_bvhNodeBuffer.vm_src_id = pobj->GetObjectID();
+						gres_bvhNodeBuffer.res_name = string("GPUBVH::BVHNodeBuffer");
+						GpuRes gres_bvhParentBuffer;
+						gres_bvhParentBuffer.vm_src_id = pobj->GetObjectID();
+						gres_bvhParentBuffer.res_name = string("GPUBVH::BVHParentBuffer");
+						GpuRes gres_bvhFlagBuffer;
+						gres_bvhFlagBuffer.vm_src_id = pobj->GetObjectID();
+						gres_bvhFlagBuffer.res_name = string("GPUBVH::BVHFlagBuffer");
+						GpuRes gres_primitiveIDBuffer;
+						gres_primitiveIDBuffer.vm_src_id = pobj->GetObjectID();
+						gres_primitiveIDBuffer.res_name = string("GPUBVH::primitiveIDBuffer");
+						GpuRes gres_primitiveBuffer;
+						gres_primitiveBuffer.vm_src_id = pobj->GetObjectID();
+						gres_primitiveBuffer.res_name = string("GPUBVH::primitiveBuffer");
+						GpuRes gres_primitiveMortonBuffer;
+						gres_primitiveMortonBuffer.vm_src_id = pobj->GetObjectID();
+						gres_primitiveMortonBuffer.res_name = string("GPUBVH::primitiveMortonBuffer");
+
+						bool success = gpu_manager->UpdateGpuResource(gres_primitiveCounterBuffer);
+						success &= gpu_manager->UpdateGpuResource(gres_bvhNodeBuffer);
+						success &= gpu_manager->UpdateGpuResource(gres_bvhParentBuffer);
+						success &= gpu_manager->UpdateGpuResource(gres_bvhFlagBuffer);
+						success &= gpu_manager->UpdateGpuResource(gres_primitiveIDBuffer);
+						success &= gpu_manager->UpdateGpuResource(gres_primitiveBuffer);
+						success &= gpu_manager->UpdateGpuResource(gres_primitiveMortonBuffer);
+						assert(success);
+
+						dx11DeviceImmContext->PSSetShaderResources(70, 1, (ID3D11ShaderResourceView**)&gres_primitiveCounterBuffer.alloc_res_ptrs[DTYPE_SRV]);
+						dx11DeviceImmContext->PSSetShaderResources(71, 1, (ID3D11ShaderResourceView**)&gres_primitiveIDBuffer.alloc_res_ptrs[DTYPE_SRV]);
+						dx11DeviceImmContext->PSSetShaderResources(72, 1, (ID3D11ShaderResourceView**)&gres_primitiveMortonBuffer.alloc_res_ptrs[DTYPE_SRV]);
+						dx11DeviceImmContext->PSSetShaderResources(73, 1, (ID3D11ShaderResourceView**)&gres_bvhNodeBuffer.alloc_res_ptrs[DTYPE_SRV]);
+						dx11DeviceImmContext->PSSetShaderResources(74, 1, (ID3D11ShaderResourceView**)&gres_primitiveBuffer.alloc_res_ptrs[DTYPE_SRV]);
+						dx11DeviceImmContext->PSSetShaderResources(75, 1, (ID3D11ShaderResourceView**)&gres_bvhParentBuffer.alloc_res_ptrs[DTYPE_SRV]);
+						dx11DeviceImmContext->PSSetShaderResources(76, 1, (ID3D11ShaderResourceView**)&gres_bvhFlagBuffer.alloc_res_ptrs[DTYPE_SRV]);
+
+						//BVHPushConstants push;
+						//push.primitiveCount = prim_data->num_prims;
+						//push.vertexStride = 3;
+						//
+						//geometrics::AABB aabb(XMFLOAT3(prim_data->aabb_os.pos_min.x, prim_data->aabb_os.pos_min.y, prim_data->aabb_os.pos_min.z),
+						//	XMFLOAT3(prim_data->aabb_os.pos_max.x, prim_data->aabb_os.pos_max.y, prim_data->aabb_os.pos_max.z));
+						//push.aabb_min = aabb.getMin();
+						//push.aabb_extents_rcp = aabb.getWidth();
+						//push.aabb_extents_rcp.x = 1.f / push.aabb_extents_rcp.x;
+						//push.aabb_extents_rcp.y = 1.f / push.aabb_extents_rcp.y;
+						//push.aabb_extents_rcp.z = 1.f / push.aabb_extents_rcp.z;
+
+						//grd_helper::PushConstants(&push, sizeof(BVHPushConstants), 0);
+						//const ID3D11ShaderResourceView* srv_push = grd_helper::GetPushContantSRV();
+						//dx11DeviceImmContext->PSSetShaderResources(100, 1, (ID3D11ShaderResourceView* const*)&srv_push);
+
+						dx11PS_Target = render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES ? GETPS(SR_UNDERCUT_ps_5_0) : GETPS(SR_OIT_ABUFFER_UNDERCUT_ps_5_0);
+#endif
 						SetUndercutCB();
 					}
 					else {
@@ -2561,7 +2622,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 									float hyper_diagonal = vmmath::fLengthVector(&(maxCS - minCS));
 
 									vmmath::fTransformPoint(&pos_new_light, &pos_new_light, &matLightCS2WS);
-									pos_new_light -= lightDir * (maxCS.z - minCS.z) * 3.f;
+									pos_new_light -= lightDir * hyper_diagonal * 2.f;
 									vmmath::fMatrixWS2CS(&matLightWS2CS, &pos_new_light, &lightUp, &lightDir);
 
 									float ipW, ipH;
@@ -2876,6 +2937,8 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			dx11DeviceImmContext->VSSetShader(NULL, NULL, 0);
 			dx11DeviceImmContext->GSSetShader(NULL, NULL, 0);
 			dx11DeviceImmContext->PSSetShader(NULL, NULL, 0);
+
+			dx11DeviceImmContext->PSSetShaderResources(70, 10, dx11SRVs_NULL);
 		}
 	};
 

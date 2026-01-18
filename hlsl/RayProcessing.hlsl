@@ -147,6 +147,15 @@ Buffer<int> buf_gpuTriIndices : register(t3);
 #include "Globals.hlsli"
 #include "ShaderInterop_BVH.h"
 
+#if UNDERCUT_PS == 1
+ByteAddressBuffer primitiveCounterBuffer : register(t70);
+StructuredBuffer<uint> primitiveIDBuffer : register(t71);
+StructuredBuffer<float> primitiveMortonBuffer : register(t72); // float because it was sorted
+StructuredBuffer<BVHNode> bvhNodeBuffer : register(t73);
+StructuredBuffer<BVHPrimitive> primitiveBuffer : register(t74);
+StructuredBuffer<uint> bvhParentBuffer : register(t75);
+StructuredBuffer<uint> bvhFlagBuffer : register(t76);
+#else
 ByteAddressBuffer primitiveCounterBuffer : register(t0);
 StructuredBuffer<uint> primitiveIDBuffer : register(t1);
 StructuredBuffer<float> primitiveMortonBuffer : register(t2); // float because it was sorted
@@ -154,6 +163,7 @@ StructuredBuffer<BVHNode> bvhNodeBuffer : register(t3);
 StructuredBuffer<BVHPrimitive> primitiveBuffer : register(t4);
 StructuredBuffer<uint> bvhParentBuffer : register(t5);
 StructuredBuffer<uint> bvhFlagBuffer : register(t6);
+#endif
 
 //StructuredBuffer<BVHPushConstants> pushBVH : register(t100);
 
@@ -2151,6 +2161,7 @@ void ApplyUndercutColor(inout float4 v_rgba, in float3 f3PosWS, in uint2 ss_xy)
 	if (hitTriIdx >= 0) {
 		v_rgba.rgb *= ConvertUIntToFloat4(g_cbUndercut.icolor).rgb;
 	}
+
 }
 
 void ApplyUndercutColor2(inout float4 v_rgba, in float3 f3PosWS)
@@ -2160,53 +2171,51 @@ void ApplyUndercutColor2(inout float4 v_rgba, in float3 f3PosWS)
 	if (posMap.z <= 0) {
 		return;
 	}
-
-	float3 posLCS = TransformPoint(f3PosWS, g_cbUndercut.mat_ws2lcs_udc_map);
+	
+	float3 posWSOffset = f3PosWS - g_cbUndercut.undercutDir * 0.5;
+	
+	float3 posLCS = TransformPoint(posWSOffset, g_cbUndercut.mat_ws2lcs_udc_map);
 	float mapDepth = (-posLCS.z);
-
-	float2 wh = float2(g_cbCamState.rt_width, g_cbCamState.rt_height);
+	
+	
+	//float2 wh = float2(g_cbCamState.rt_width, g_cbCamState.rt_height);
 	//float2 uv = posMap.xy / wh;
-	float2 uv = float2(posMap.x / wh.x, posMap.y / wh.y);
-
+	////float2 uv = float2(posMap.x / wh.x, posMap.y / wh.y);
 	//float storedMapDepth = undercutMap.SampleLevel(g_samplerLinear_wrap, uv, 0).r;
-
-	float sd0 = min(undercutMap[int2(posMap.xy)].r, undercutMap[int2(posMap.xy) + int2(1, 0)].r);
-	float sd1 = min(undercutMap[int2(posMap.xy) + int2(1, 1)].r, undercutMap[int2(posMap.xy) + int2(0, 1)].r);
-	float storedMapDepth = min(sd0, sd1);
-
-	if (mapDepth > storedMapDepth - 0.001) {
-		v_rgba.rgb *= ConvertUIntToFloat4(g_cbUndercut.icolor).rgb;
-	}
-}
-
-/*
-void ApplyUndercutColorOld(inout float4 v_rgba, in float3 f3PosWS)
-{
-	float3 posMap = TransformPoint(f3PosWS, g_cbUndercut.mat_ws2ss_udc_map);
-
-	if (posMap.z <= 0) {
-		v_rgba.rgb = float3(0, 0, 1);
-		return;
-	}
-
-	posMap.z = 0;
-	float3 pos_map_ws = TransformPoint(posMap, g_cbUndercut.mat_ss2ws_udc_map);
-	float3 vec_pos_map2frag = f3PosWS - pos_map_ws;
-	float mapDepth = length(vec_pos_map2frag);
-
+	//
+	////float sd0 = min(undercutMap[int2(posMap.xy)].r, undercutMap[int2(posMap.xy) + int2(1, 0)].r);
+	////float sd1 = min(undercutMap[int2(posMap.xy) + int2(1, 1)].r, undercutMap[int2(posMap.xy) + int2(0, 1)].r);
+	////float storedMapDepth = min(sd0, sd1);
+	//
+	//if (mapDepth > storedMapDepth + 0.11) {
+	//	v_rgba.rgb *= ConvertUIntToFloat4(g_cbUndercut.icolor).rgb;
+	//}
+	/**/
+	
 	float2 wh = float2(g_cbCamState.rt_width, g_cbCamState.rt_height);
-	//float2 uv = posMap.xy / wh;
-	float2 uv = float2(posMap.x / wh.x, posMap.y / wh.y);
+	float2 uv = (posMap.xy + 0.5) / wh;
+	float2 texel = 1.0 / wh;
 
-	float storedMapDepth = undercutMap.SampleLevel(g_samplerLinear_wrap, uv, 0).r;// +0.01f;
+	float shadow = 0;
+	float bias = 1.0;
 
-	//v_rgba.rgb = float3(uv, 0);
-	if (mapDepth > storedMapDepth) {
-		v_rgba.rgb *= ConvertUIntToFloat4(g_cbUndercut.icolor).rgb;
+	[unroll]
+	for (int y = -1; y <= 1; y++)
+	{
+    [unroll]
+		for (int x = -1; x <= 1; x++)
+		{
+			float d = undercutMap[int2(posMap.xy) + int2(x, y)].r;
+
+			shadow += ((mapDepth - bias > d) ? 1.0 : 0.0);
+		}
 	}
+	shadow /= 9.0;
+
+	float3 tint = ConvertUIntToFloat4(g_cbUndercut.icolor).rgb;
+	v_rgba.rgb *= lerp((float3) 1.0, tint, shadow);
 }
 
-/**/
 PS_FILL_OUTPUT_NO_DS UndercutShader(__VS_OUT input)
 {
 	PS_FILL_OUTPUT_NO_DS out_ps;
@@ -2223,7 +2232,6 @@ PS_FILL_OUTPUT_NO_DS UndercutShader(__VS_OUT input)
 		ApplyUndercutColor(v_rgba, input.f3PosWS, uint2(input.f4PosSS.xy));
 	else
 		ApplyUndercutColor2(v_rgba, input.f3PosWS);
-	//v_rgba = float4(1, 1, 0, 1);
 
 	//out_ps.ds_z = input.f4PosSS.z;
 	out_ps.color = v_rgba;

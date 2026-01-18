@@ -239,9 +239,6 @@ namespace bvh {
 
 		uint32_t primitiveCount = 0;
 
-		//ID3D11Buffer* cbuf_BVHPushConstants = psoManager->get_cbuf("BVHPushConstants");
-		//D3D11_MAPPED_SUBRESOURCE mapped_pushConstants;
-
 		ID3D11UnorderedAccessView* dx11UAVs_NULL[10] = { };
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 10, dx11UAVs_NULL, NULL);
 		ID3D11ShaderResourceView* dx11SRVs_NULL[10] = { };
@@ -281,10 +278,6 @@ namespace bvh {
 
 			grd_helper::PushConstants(&push, sizeof(BVHPushConstants), 0);
 
-			//dx11DeviceImmContext->Map(cbuf_BVHPushConstants, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_pushConstants);
-			//BVHPushConstants* cbData = (BVHPushConstants*)mapped_pushConstants.pData;
-			//memcpy(cbData, &push, sizeof(BVHPushConstants));
-			//dx11DeviceImmContext->Unmap(cbuf_BVHPushConstants, 0);
 			const ID3D11ShaderResourceView* srv_push = grd_helper::GetPushContantSRV();
 			dx11DeviceImmContext->CSSetShaderResources(9, 1, (ID3D11ShaderResourceView* const*)&srv_push);
 

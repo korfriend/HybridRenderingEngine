@@ -206,7 +206,7 @@ int grd_helper::Initialize(VmGpuManager* pCGpuManager, PSOManager* gpu_params)
 #endif
 		descRaster.FillMode = D3D11_FILL_SOLID;
 		descRaster.CullMode = D3D11_CULL_BACK;
-		descRaster.FrontCounterClockwise = FALSE;
+		descRaster.FrontCounterClockwise = TRUE;
 		descRaster.DepthBias = 0;
 		descRaster.DepthBiasClamp = 0;
 		descRaster.SlopeScaledDepthBias = 0;
@@ -224,8 +224,6 @@ int grd_helper::Initialize(VmGpuManager* pCGpuManager, PSOManager* gpu_params)
 		hr |= g_psoManager->dx11Device->MyCreateRasterizerState(&descRaster, &raster_state);
 		g_psoManager->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "AA_SOLID_CULL_BACK"), raster_state);
 		descRaster.CullMode = D3D11_CULL_FRONT;
-		//descRaster.CullMode = D3D11_CULL_BACK; // ref FrontCounterClockwise
-		//descRaster.FrontCounterClockwise = TRUE;
 		descRaster.AntialiasedLineEnable = false;
 		hr |= g_psoManager->dx11Device->MyCreateRasterizerState(&descRaster, &raster_state);
 		g_psoManager->safe_set_res(COMRES_INDICATOR(GpuhelperResType::RASTERIZER_STATE, "SOLID_CULL_FRONT"), raster_state);

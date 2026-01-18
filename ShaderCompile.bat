@@ -25,7 +25,7 @@ fxc /E BasicShader4 /T ps_5_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compi
 fxc /E BasicShader4 /T ps_5_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs/SR_BASIC_TEXTUREIMGMAP_ps_5_0 /D __RENDERING_MODE=4 
 fxc /E BasicShader4 /T ps_5_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs/SR_BASIC_VOLUMEMAP_ps_5_0 /D __RENDERING_MODE=5 
 fxc /E BasicShader4 /T ps_5_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs/SR_BASIC_VOLUME_DIST_MAP_ps_5_0 /D __RENDERING_MODE=6 
-fxc /E UndercutShader /T ps_5_0 ./hlsl/RayProcessing.hlsl /Fo ./shader_compiled_objs/SR_UNDERCUT_ps_5_0 /D __RENDERING_MODE=0 /D PATHTR_USE_KBUF=1
+fxc /E UndercutShader /T ps_5_0 ./hlsl/RayProcessing.hlsl /Fo ./shader_compiled_objs/SR_UNDERCUT_ps_5_0 /D __RENDERING_MODE=0 /D PATHTR_USE_KBUF=1 /D UNDERCUT_PS=1
 
 fxc /E BasicShader4 /T ps_5_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs/SR_BASIC_PHONGBLINN_PAINTER_ps_5_0 /D __RENDERING_MODE=0 /D __PAINTER_UV=1
 
@@ -48,7 +48,7 @@ fxc /E OIT_A_BUFFER_FILL /T ps_5_0 ./hlsl/dx_abuf/DxABuf.hlsl /Fo ./shader_compi
 fxc /E OIT_A_BUFFER_FILL /T ps_5_0 ./hlsl/dx_abuf/DxABuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0 /D __RENDERING_MODE=4 /D DX_11_STYLE=0
 fxc /E OIT_A_BUFFER_FILL /T ps_5_0 ./hlsl/dx_abuf/DxABuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_VOLUMEMAP_ps_5_0 /D __RENDERING_MODE=5 /D DX_11_STYLE=0
 fxc /E OIT_A_BUFFER_FILL /T ps_5_0 ./hlsl/dx_abuf/DxABuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_VOLUME_DIST_MAP_ps_5_0 /D __RENDERING_MODE=6 /D DX_11_STYLE=0
-fxc /E OIT_A_BUFFER_FILL_UNDERCUT /T ps_5_0 ./hlsl/RayProcessing.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_UNDERCUT_ps_5_0 /D __RENDERING_MODE=0 /D DX_11_STYLE=0
+fxc /E OIT_A_BUFFER_FILL_UNDERCUT /T ps_5_0 ./hlsl/RayProcessing.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_UNDERCUT_ps_5_0 /D __RENDERING_MODE=0 /D DX_11_STYLE=0 /D UNDERCUT_PS=1
 
 fxc /E OIT_A_BUFFER_FILL /T ps_5_0 ./hlsl/dx_abuf/DxABuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_PHONGBLINN_PAINTER_ps_5_0 /D __RENDERING_MODE=0 /D DX_11_STYLE=0 /D __PAINTER_UV=1
 

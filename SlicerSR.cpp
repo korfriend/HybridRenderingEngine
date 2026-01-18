@@ -986,25 +986,21 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 					SET_SHADER_RES(5, 1, (ID3D11ShaderResourceView**)&gres_bvhParentBuffer.alloc_res_ptrs[DTYPE_SRV]);
 					SET_SHADER_RES(6, 1, (ID3D11ShaderResourceView**)&gres_bvhFlagBuffer.alloc_res_ptrs[DTYPE_SRV]);
 
-					BVHPushConstants push;
-					push.primitiveCount = prim_data->num_prims;
-					push.vertexStride = 3;
+					//BVHPushConstants push;
+					//push.primitiveCount = prim_data->num_prims;
+					//push.vertexStride = 3;
+					//
+					//geometrics::AABB aabb(XMFLOAT3(prim_data->aabb_os.pos_min.x, prim_data->aabb_os.pos_min.y, prim_data->aabb_os.pos_min.z),
+					//	XMFLOAT3(prim_data->aabb_os.pos_max.x, prim_data->aabb_os.pos_max.y, prim_data->aabb_os.pos_max.z));
+					//push.aabb_min = aabb.getMin();
+					//push.aabb_extents_rcp = aabb.getWidth();
+					//push.aabb_extents_rcp.x = 1.f / push.aabb_extents_rcp.x;
+					//push.aabb_extents_rcp.y = 1.f / push.aabb_extents_rcp.y;
+					//push.aabb_extents_rcp.z = 1.f / push.aabb_extents_rcp.z;
 
-					geometrics::AABB aabb(XMFLOAT3(prim_data->aabb_os.pos_min.x, prim_data->aabb_os.pos_min.y, prim_data->aabb_os.pos_min.z),
-						XMFLOAT3(prim_data->aabb_os.pos_max.x, prim_data->aabb_os.pos_max.y, prim_data->aabb_os.pos_max.z));
-					push.aabb_min = aabb.getMin();
-					push.aabb_extents_rcp = aabb.getWidth();
-					push.aabb_extents_rcp.x = 1.f / push.aabb_extents_rcp.x;
-					push.aabb_extents_rcp.y = 1.f / push.aabb_extents_rcp.y;
-					push.aabb_extents_rcp.z = 1.f / push.aabb_extents_rcp.z;
-
-					grd_helper::PushConstants(&push, sizeof(BVHPushConstants), 0);
-					//dx11DeviceImmContext->Map(cbuf_BVHPushConstants, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_pushConstants);
-					//BVHPushConstants* cbData = (BVHPushConstants*)mapped_pushConstants.pData;
-					//memcpy(cbData, &push, sizeof(BVHPushConstants));
-					//dx11DeviceImmContext->Unmap(cbuf_BVHPushConstants, 0);
-					const ID3D11ShaderResourceView* srv_push = grd_helper::GetPushContantSRV();
-					dx11DeviceImmContext->CSSetShaderResources(100, 1, (ID3D11ShaderResourceView* const*)&srv_push);
+					//grd_helper::PushConstants(&push, sizeof(BVHPushConstants), 0);
+					//const ID3D11ShaderResourceView* srv_push = grd_helper::GetPushContantSRV();
+					//dx11DeviceImmContext->CSSetShaderResources(100, 1, (ID3D11ShaderResourceView* const*)&srv_push);
 				}
 
 #ifdef DX10_0
