@@ -2114,160 +2114,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 				const Variant* pso = grd_helper::GetPSOVariant(vs_mask);
 				dx11InputLayer_Target = pso->il;
 				dx11VS_Target = pso->vs;
-
-				if (is_annotation_obj && vs_mask & A_T0)
-				{
-#ifdef DX10_0
-					dx11PS_Target = GETPS(SR_BASIC_TEXTMAPPING_ps_4_0); // if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES)
-#else
-					if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
-						dx11PS_Target = GETPS(SR_BASIC_TEXTMAPPING_ps_5_0);
-					}
-					else {
-						switch (mode_OIT)
-						{
-						case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0); break;
-						case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_TEXTMAPPING_ps_5_0) : GETPS(SR_MOMENT_OIT_TEXTMAPPING_ROV_ps_5_0); break;
-						case MFR_MODE::DYNAMIC_KB:
-							if (apply_fragmerge)
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ROV_ps_5_0);
-							else
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ROV_ps_5_0);
-							break;
-						case MFR_MODE::STATIC_KB:
-						default:
-							if (apply_fragmerge)
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ROV_ps_5_0);
-							else
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_TEXTMAPPING_ROV_ps_5_0);
-							break;
-						}
-					}
-#endif
-					if (vs_mask & A_T1 && vs_mask & A_T2)
-					{
-						assert(render_pass != RENDER_GEOPASS::PASS_SILHOUETTE);
-#ifdef DX10_0
-						dx11PS_Target = GETPS(SR_BASIC_MULTITEXTMAPPING_ps_4_0); // render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES
-#else
-						if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
-							dx11PS_Target = GETPS(SR_BASIC_MULTITEXTMAPPING_ps_5_0);
-						}
-						else {
-							switch (mode_OIT)
-							{
-							case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_ABUFFER_MULTITEXTMAPPING_ps_5_0); break;
-							case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_MOMENT_OIT_MULTITEXTMAPPING_ROV_ps_5_0); break;
-							case MFR_MODE::DYNAMIC_KB:
-								if (apply_fragmerge)
-									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_MULTITEXTMAPPING_ROV_ps_5_0);
-								else
-									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ROV_ps_5_0);
-								break;
-							case MFR_MODE::STATIC_KB:
-							default:
-								if (apply_fragmerge)
-									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ROV_ps_5_0);
-								else
-									dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_MULTITEXTMAPPING_ROV_ps_5_0);
-								break;
-							}
-						}
-#endif
-					}
-				}
-				else if (has_texture_img && vs_mask & A_T0)
-				{
-#ifdef DX10_0
-					dx11PS_Target = GETPS(SR_BASIC_TEXTUREIMGMAP_ps_4_0); // render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES
-#else
-					if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
-						dx11PS_Target = GETPS(SR_BASIC_TEXTUREIMGMAP_ps_5_0);
-					}
-					else {
-						switch (mode_OIT)
-						{
-						case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0); break;
-						case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_MOMENT_OIT_TEXTUREIMGMAP_ROV_ps_5_0); break;
-						case MFR_MODE::DYNAMIC_KB:
-							if (apply_fragmerge)
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_TEXTUREIMGMAP_ROV_ps_5_0);
-							else
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ROV_ps_5_0);
-							break;
-						case MFR_MODE::STATIC_KB:
-						default:
-							if (apply_fragmerge)
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ROV_ps_5_0);
-							else
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_TEXTUREIMGMAP_ROV_ps_5_0);
-							break;
-						}
-					}
-#endif
-				}
-				else if (vobj && tobj_maptable && render_pass != RENDER_GEOPASS::PASS_SILHOUETTE)
-				{
-#ifdef DX10_0
-					dx11PS_Target = distanceMapMode == 1 ? GETPS(SR_BASIC_VOLUME_DIST_MAP_ps_4_0) : GETPS(SR_BASIC_VOLUMEMAP_ps_4_0); // render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES
-#else
-					if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
-						dx11PS_Target = distanceMapMode == 1 ? GETPS(SR_BASIC_VOLUME_DIST_MAP_ps_5_0) : GETPS(SR_BASIC_VOLUMEMAP_ps_5_0);
-					}
-					else {
-						assert(mode_OIT == MFR_MODE::DYNAMIC_FB);
-						if (is_picking_routine) {
-							dx11PS_Target = GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0);
-						}
-						else {
-							dx11PS_Target = distanceMapMode == 1 ? GETPS(SR_OIT_ABUFFER_VOLUME_DIST_MAP_ps_5_0) : GETPS(SR_OIT_ABUFFER_VOLUMEMAP_ps_5_0);
-						}
-					}
-#endif
-				}
-				else
-				{
-#ifdef DX10_0
-					dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_4_0); // render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES
-#else
-					if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
-						dx11PS_Target = has_painter ? GETPS(SR_BASIC_PHONGBLINN_PAINTER_ps_5_0) : GETPS(SR_BASIC_PHONGBLINN_ps_5_0);
-					}
-					else {
-						switch (mode_OIT)
-						{
-						case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ?
-							GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) :
-							(has_painter ? GETPS(SR_OIT_ABUFFER_PHONGBLINN_PAINTER_ps_5_0) : GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0));
-							break;
-						case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0) : GETPS(SR_MOMENT_OIT_PHONGBLINN_ROV_ps_5_0); break;
-						case MFR_MODE::DYNAMIC_KB:
-							if (apply_fragmerge)
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ROV_ps_5_0);
-							else
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ROV_ps_5_0);
-							break;
-						case MFR_MODE::STATIC_KB:
-						default:
-							if (apply_fragmerge)
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ROV_ps_5_0);
-							else
-								dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ROV_ps_5_0);
-							break;
-						}
-					}
-#endif
-				}
-
-				if ((vs_mask & A_T0) && (cbPolygonObj.pobj_flag & (0x1 << 19)) && prim_data->ptype == PrimitiveTypeLINE)
-				{
-#ifdef DX10_0
-					dx11PS_Target = GETPS(SR_BASIC_DASHEDLINE_ps_4_0);
-#else
-					dx11PS_Target = GETPS(SR_BASIC_DASHEDLINE_ps_5_0);
-#endif
-				}
-
+				
 				switch (render_pass) {
 				case RENDER_GEOPASS::PASS_SILHOUETTE:
 #ifdef DX10_0
@@ -2280,6 +2127,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 #ifdef DX10_0
 					assert(0);
 #endif
+				case RENDER_GEOPASS::PASS_OPAQUESURFACES:
 					if (is_frag_counter_buffer)
 					{
 						// Create a count of the number of fragments at each pixel location
@@ -2296,6 +2144,164 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_GEN_TEXT_ps_5_0) : GETPS(SR_MOMENT_GEN_TEXT_ROV_ps_5_0);
 						else
 							dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_GEN_ps_5_0) : GETPS(SR_MOMENT_GEN_ROV_ps_5_0);
+					}
+					else
+					{
+						if (vs_mask & A_T0)
+						{
+							if (is_annotation_obj)
+							{
+#ifdef DX10_0
+								dx11PS_Target = GETPS(SR_BASIC_TEXTMAPPING_ps_4_0); // if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES)
+#else
+								if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
+									dx11PS_Target = GETPS(SR_BASIC_TEXTMAPPING_ps_5_0);
+								}
+								else {
+									switch (mode_OIT)
+									{
+									case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_ABUFFER_TEXTMAPPING_ps_5_0); break;
+									case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_TEXTMAPPING_ps_5_0) : GETPS(SR_MOMENT_OIT_TEXTMAPPING_ROV_ps_5_0); break;
+									case MFR_MODE::DYNAMIC_KB:
+										if (apply_fragmerge)
+											dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_TEXTMAPPING_ROV_ps_5_0);
+										else
+											dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_TEXTMAPPING_ROV_ps_5_0);
+										break;
+									case MFR_MODE::STATIC_KB:
+									default:
+										if (apply_fragmerge)
+											dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_TEXTMAPPING_ROV_ps_5_0);
+										else
+											dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_TEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_TEXTMAPPING_ROV_ps_5_0);
+										break;
+									}
+								}
+#endif
+								if (vs_mask & A_T1 && vs_mask & A_T2)
+								{
+									assert(render_pass != RENDER_GEOPASS::PASS_SILHOUETTE);
+#ifdef DX10_0
+									dx11PS_Target = GETPS(SR_BASIC_MULTITEXTMAPPING_ps_4_0); // render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES
+#else
+									if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
+										dx11PS_Target = GETPS(SR_BASIC_MULTITEXTMAPPING_ps_5_0);
+									}
+									else {
+										switch (mode_OIT)
+										{
+										case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_ABUFFER_MULTITEXTMAPPING_ps_5_0); break;
+										case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_MOMENT_OIT_MULTITEXTMAPPING_ROV_ps_5_0); break;
+										case MFR_MODE::DYNAMIC_KB:
+											if (apply_fragmerge)
+												dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_MULTITEXTMAPPING_ROV_ps_5_0);
+											else
+												dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_MULTITEXTMAPPING_ROV_ps_5_0);
+											break;
+										case MFR_MODE::STATIC_KB:
+										default:
+											if (apply_fragmerge)
+												dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_MULTITEXTMAPPING_ROV_ps_5_0);
+											else
+												dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_MULTITEXTMAPPING_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_MULTITEXTMAPPING_ROV_ps_5_0);
+											break;
+										}
+									}
+#endif
+								}
+							}
+							else if (has_texture_img)
+							{
+#ifdef DX10_0
+								dx11PS_Target = GETPS(SR_BASIC_TEXTUREIMGMAP_ps_4_0); // render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES
+#else
+								if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
+									dx11PS_Target = GETPS(SR_BASIC_TEXTUREIMGMAP_ps_5_0);
+								}
+								else {
+									switch (mode_OIT)
+									{
+									case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ? GETPS(PICKING_ABUFFER_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_ABUFFER_TEXTUREIMGMAP_ps_5_0); break;
+									case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_MOMENT_OIT_TEXTUREIMGMAP_ROV_ps_5_0); break;
+									case MFR_MODE::DYNAMIC_KB:
+										if (apply_fragmerge)
+											dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_TEXTUREIMGMAP_ROV_ps_5_0);
+										else
+											dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_TEXTUREIMGMAP_ROV_ps_5_0);
+										break;
+									case MFR_MODE::STATIC_KB:
+									default:
+										if (apply_fragmerge)
+											dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_TEXTUREIMGMAP_ROV_ps_5_0);
+										else
+											dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_TEXTUREIMGMAP_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_TEXTUREIMGMAP_ROV_ps_5_0);
+										break;
+									}
+								}
+#endif
+							}
+							else if ((cbPolygonObj.pobj_flag & (0x1 << 19)) && prim_data->ptype == PrimitiveTypeLINE)
+							{
+#ifdef DX10_0
+								dx11PS_Target = GETPS(SR_BASIC_DASHEDLINE_ps_4_0);
+#else
+								dx11PS_Target = GETPS(SR_BASIC_DASHEDLINE_ps_5_0);
+#endif
+							}
+						}
+						else
+						{
+#ifdef DX10_0
+							dx11PS_Target = GETPS(SR_BASIC_PHONGBLINN_ps_4_0); // render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES
+#else
+							if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
+								dx11PS_Target = has_painter ? GETPS(SR_BASIC_PHONGBLINN_PAINTER_ps_5_0) : GETPS(SR_BASIC_PHONGBLINN_ps_5_0);
+							}
+							else {
+								switch (mode_OIT)
+								{
+								case MFR_MODE::DYNAMIC_FB: dx11PS_Target = is_picking_routine ?
+									GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0) :
+									(has_painter ? GETPS(SR_OIT_ABUFFER_PHONGBLINN_PAINTER_ps_5_0) : GETPS(SR_OIT_ABUFFER_PHONGBLINN_ps_5_0));
+									break;
+								case MFR_MODE::MOMENT: dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_MOMENT_OIT_PHONGBLINN_ps_5_0) : GETPS(SR_MOMENT_OIT_PHONGBLINN_ROV_ps_5_0); break;
+								case MFR_MODE::DYNAMIC_KB:
+									if (apply_fragmerge)
+										dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBTZ_PHONGBLINN_ROV_ps_5_0);
+									else
+										dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_DKBT_PHONGBLINN_ROV_ps_5_0);
+									break;
+								case MFR_MODE::STATIC_KB:
+								default:
+									if (apply_fragmerge)
+										dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBTZ_PHONGBLINN_ROV_ps_5_0);
+									else
+										dx11PS_Target = use_spinlock_pixsynch ? GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ps_5_0) : GETPS(SR_OIT_FILL_SKBT_PHONGBLINN_ROV_ps_5_0);
+									break;
+								}
+							}
+#endif
+							}
+						
+						if (dx11PS_Target == NULL && vobj && tobj_maptable)
+						{
+#ifdef DX10_0
+							dx11PS_Target = distanceMapMode == 1 ? GETPS(SR_BASIC_VOLUME_DIST_MAP_ps_4_0) : GETPS(SR_BASIC_VOLUMEMAP_ps_4_0); // render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES
+#else
+							if (render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES) {
+								dx11PS_Target = distanceMapMode == 1 ? GETPS(SR_BASIC_VOLUME_DIST_MAP_ps_5_0) : GETPS(SR_BASIC_VOLUMEMAP_ps_5_0);
+							}
+							else {
+								assert(mode_OIT == MFR_MODE::DYNAMIC_FB);
+								if (is_picking_routine) {
+									dx11PS_Target = GETPS(PICKING_ABUFFER_PHONGBLINN_ps_5_0);
+								}
+								else {
+									dx11PS_Target = distanceMapMode == 1 ? GETPS(SR_OIT_ABUFFER_VOLUME_DIST_MAP_ps_5_0) : GETPS(SR_OIT_ABUFFER_VOLUMEMAP_ps_5_0);
+								}
+							}
+#endif
+						}
 					}
 					break;
 				default:
