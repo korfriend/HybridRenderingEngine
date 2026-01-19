@@ -1671,7 +1671,6 @@ bool grd_helper::UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, const bool isPre
 	gres.res_name = isPreInt? string("PREINT_OTF_BUFFER") : string("OTF_BUFFER");
 
 	MapTable* tmap_data = tobj->GetObjParamPtr<MapTable>("_TableMap_OTF");
-	string updateTimeName = string("_ullong_Latest") + string(isPreInt? "PreIntOtf" : "Otf") + string("GpuUpdateTime");
 
 	bool needRegen = true;
 	if (g_pCGpuManager->UpdateGpuResource(gres)) {
@@ -1682,8 +1681,8 @@ bool grd_helper::UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, const bool isPre
 		needRegen = (nemElementPrev * typeBytesPrev)
 			!= ((uint32_t)(tmap_data->array_lengths.x * (tmap_data->array_lengths.y)) * (isPreInt ? (uint32_t)16 : (uint32_t)tmap_data->dtype.type_bytes));
 
-		uint64_t _tp_cpu = tobj->GetContentUpdateTime(); 
-		uint64_t _tp_gpu = tobj->GetObjParam(updateTimeName, (uint64_t)0);
+		uint64_t _tp_cpu = tobj->GetContentUpdateTime();
+		uint64_t _tp_gpu = gres.res_values.GetParam("LAST_UPDATE_TIME", (uint64_t)0);
 		if (_tp_gpu >= _tp_cpu) {
 			if (needRegen)
 			{
@@ -1747,7 +1746,8 @@ bool grd_helper::UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, const bool isPre
 	}
 	g_psoManager->dx11DeviceImmContext->Unmap((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], 0);
 
-	tobj->SetObjParam(updateTimeName, vmhelpers::GetCurrentTimePack());
+	gres.options["Update LAST_UPDATE_TIME"] = 1u;
+	g_pCGpuManager->UpdateGpuResource(gres);
 
 	return true;
 }
@@ -2311,8 +2311,6 @@ bool grd_helper::UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string
 	gres.vm_src_id = srcObj->GetObjectID();
 	gres.res_name = resName;
 
-	string updateName = "_ullong_Latest" + resName + "GpuUpdateTime";
-
 	bool needRegen = true;
 	if (g_pCGpuManager->UpdateGpuResource(gres)) {
 
@@ -2322,7 +2320,7 @@ bool grd_helper::UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string
 		needRegen = (nemElementPrev * typeBytesPrev) != ((uint32_t)numElements * (uint32_t)type_bytes);
 
 		uint64_t _tp_cpu = cpu_update_custom_time == 0 ? srcObj->GetContentUpdateTime() : cpu_update_custom_time;
-		uint64_t _tp_gpu = srcObj->GetObjParam(updateName, (uint64_t)0);
+		uint64_t _tp_gpu = gres.res_values.GetParam("LAST_UPDATE_TIME", (uint64_t)0);
 		if (_tp_gpu >= _tp_cpu) {
 			assert(!needRegen);
 			return true;
@@ -2348,7 +2346,8 @@ bool grd_helper::UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string
 	memcpy(d11MappedRes.pData, bufPtr, type_bytes * numElements);
 	g_psoManager->dx11DeviceImmContext->Unmap((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], 0);
 
-	srcObj->SetObjParam(updateName, vmhelpers::GetCurrentTimePack());
+	gres.options["Update LAST_UPDATE_TIME"] = 1u;
+	g_pCGpuManager->UpdateGpuResource(gres);
 
 	return true;
 }
