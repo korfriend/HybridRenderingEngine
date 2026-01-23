@@ -655,7 +655,7 @@ float3 ComputeDeviation(float3 pos, float3 nrl, out bool colored, out float s)
 						for (int j = 0; j <= blkSkip.num_skip_steps; j++)
 						{
 							float3 pos_sample_blk_ts = posStartTS + sampleDir * (float) (i + j);
-                            float sampleValue = g_tex3DVolume.SampleLevel(g_samplerPoint_clamp, pos_sample_blk_ts, 0).r;
+							float sampleValue = g_tex3DVolume.SampleLevel(g_samplerLinear_clamp, pos_sample_blk_ts, 0).r;
 
 							if (sampleValue > dst_isovalue)
 							{
@@ -690,7 +690,7 @@ float3 ComputeDeviation(float3 pos, float3 nrl, out bool colored, out float s)
 					float sampleValue = g_tex3DVolume.SampleLevel(g_samplerLinear_clamp, posSampleTS, 0).r;
 					if (sampleValue < dst_isovalue)
 					{
-						float3 pos_refined_ts = BisectionalRefine(posSampleTS, sampleDir, 10, dst_isovalue, true);
+						float3 pos_refined_ts = BisectionalRefine(posSampleTS, sampleDir, 10, dst_isovalue, false);
 						float dist_ts = length(posTS - pos_refined_ts);
 						float dist = dist_ts / sample_dist_ts * sampleDist;
 						if (distMin > dist)
@@ -756,7 +756,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
 #if DX10_0
     float4 v_rgba = float4(g_cbPobj.Kd, 1.f); // note zero alpha actors are filtered out in the preprocessing of the rendering
 #else
-    float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
+	float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
 #endif
     float3 nor = (float3) 0;
     float nor_len = 0;
@@ -912,7 +912,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
         || posTS.y <= 0 || posTS.y >= 1
         || posTS.z <= 0 || posTS.z >= 1)
         is_clipped = true;
-        
+    
     bool colored = false;
     float3 colorcoded = float3(1, 1, 1);
     if (!is_clipped)

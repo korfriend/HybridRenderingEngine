@@ -1875,7 +1875,6 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 				vmmath::fNormalizeVector(&undercutDir, &undercutDir);
 			}
 
-			bool cmap_windowing = actor->GetParam("_bool_ColorMapAsWindowing", false);
 			//float isoValueVolumeActor = actor->GetParam("_float_ColorMapVolumeIsoValue", -1.f);
 			VmActor* actorDistTo = actor->GetParam("_VmActor*_DistToActor", (VmActor*)NULL);
 			VmObject* actorDistGeoRes = actorDistTo? actorDistTo->GetGeometryRes() : NULL;
@@ -1892,7 +1891,16 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 				// todo : actorDistGeoRes is mesh
 			}
 
+			bool cmap_windowing = false;
 			if (vobj) {
+
+				VmObject* tobj_windowing = (VmObject*)actor->GetAssociateRes("WINDOWING");
+				if (tobj_windowing)
+				{
+					tobj_maptable = tobj_windowing;
+					cmap_windowing = true;
+				}
+
 				GpuRes gres_vol;
 				grd_helper::UpdateVolumeModel(gres_vol, vobj, false, false, progress);
 				//dx11DeviceImmContext->VSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_vol.alloc_res_ptrs[DTYPE_SRV]);
@@ -1904,12 +1912,29 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 					dx11DeviceImmContext->PSSetShaderResources(2, 1, (ID3D11ShaderResourceView**)&gres_volblk_otf.alloc_res_ptrs[DTYPE_SRV]);
 				}
 
-				vmmat44f matGeoOS2VolOS = actor->GetParam("_matrix44f_GeoOS2VolOS", vmmat44f(1));
-				CB_VolumeObject cbVolumeObj;
+				VmActor* actor_dstvolume = actor->GetParam("_VmActor*_DstVolume", (VmActor*)nullptr);
+				vmmat44f matGeoOS2VolOS;
+				if (!actor->GetParamCheck("_matrix44f_GeoOS2VolOS", matGeoOS2VolOS))
+				{
+					if (actor_dstvolume)
+					{
+						vmmat44f matSrcOS2WS = actor->matOS2WS;
+						vmmat44f matDstOS2WS = actor_dstvolume->matOS2WS;
+						vmmat44f matWS2DstOS;
+						vmmath::fMatrixInverse(&matWS2DstOS, &matDstOS2WS);
+						matGeoOS2VolOS = matSrcOS2WS * matWS2DstOS;
+					}
+					else
+					{
+						vzlog_warning("There is no information to set matGeoOS2VolOS!");
+						matGeoOS2VolOS = vmmat44f(1);
+					}
+				}
 				vmmat44f matWS2VolOS = actor->matWS2OS * matGeoOS2VolOS;
+
+				CB_VolumeObject cbVolumeObj;
 				grd_helper::SetCb_VolumeObj(cbVolumeObj, vobj, matWS2VolOS, gres_vol, 0, 65535.f, 1.f, false);
 
-				VmActor* actor_dstvolume = actor->GetParamPtr<VmActor>("_VmActor_DstVolume");
 				if (actor_dstvolume)
 				{
 					CB_ClipInfo cbClipInfo_vol;
@@ -2283,7 +2308,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 #endif
 							}
 						
-						if (dx11PS_Target == NULL && vobj && tobj_maptable)
+						if (vobj && tobj_maptable)
 						{
 #ifdef DX10_0
 							dx11PS_Target = distanceMapMode == 1 ? GETPS(SR_BASIC_VOLUME_DIST_MAP_ps_4_0) : GETPS(SR_BASIC_VOLUMEMAP_ps_4_0); // render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES

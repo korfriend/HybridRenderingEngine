@@ -1571,14 +1571,13 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 #else
 #define __EXIT_PanoVR return 
 [numthreads(GRIDSIZE_VR, GRIDSIZE_VR, 1)]
-
-        void CurvedSlicer
-        (
-        uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
+void CurvedSlicer
+(
+uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
 #endif
 {
-            float4 vis_out = 0;
-            float depth_out = 0;
+    float4 vis_out = 0;
+    float depth_out = 0;
 
 #if DX10_0 == 1
 	PS_FILL_OUTPUT output;
@@ -1613,23 +1612,23 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 
 	int i = 0;
 #else
-            uint2 cip_xy = uint2(DTid.xy);
+    uint2 cip_xy = uint2(DTid.xy);
 	// do not compute 1st hit surface separately
-            if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
-                return;
+    if (DTid.x >= g_cbCamState.rt_width || DTid.y >= g_cbCamState.rt_height)
+        return;
 
-            const uint k_value = g_cbCamState.k_value;
-            uint bytes_per_frag = 4 * NUM_ELES_PER_FRAG;
-            uint pixel_id = cip_xy.y * g_cbCamState.rt_width + cip_xy.x;
-            uint bytes_frags_per_pixel = k_value * bytes_per_frag;
-            uint addr_base = pixel_id * bytes_frags_per_pixel;
+    const uint k_value = g_cbCamState.k_value;
+    uint bytes_per_frag = 4 * NUM_ELES_PER_FRAG;
+    uint pixel_id = cip_xy.y * g_cbCamState.rt_width + cip_xy.x;
+    uint bytes_frags_per_pixel = k_value * bytes_per_frag;
+    uint addr_base = pixel_id * bytes_frags_per_pixel;
 
-            uint num_frags = fragment_counter[DTid.xy];
-            if (num_frags == 0x12345679)
-            {
-                num_frags = 1;
-            }
-            num_frags = num_frags & 0xFFF;
+    uint num_frags = fragment_counter[DTid.xy];
+    if (num_frags == 0x12345679)
+    {
+        num_frags = 1;
+    }
+    num_frags = num_frags & 0xFFF;
 
 	//if (num_frags == 0)
 	//{
@@ -1664,45 +1663,42 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 	//fragment_vis[DTid.xy] = float4(1, 1, 1, 1);
 	//return;
 
-
-
-
-            bool isDither = BitCheck(g_cbCamState.cam_flag, 8);
-            if (isDither)
-            {
-                if (cip_xy.x % 2 != 0 || cip_xy.y % 2 != 0)
-                {
-                    fragment_zdepth[cip_xy] = -777.0;
-                    return;
-                }
+    bool isDither = BitCheck(g_cbCamState.cam_flag, 8);
+    if (isDither)
+    {
+        if (cip_xy.x % 2 != 0 || cip_xy.y % 2 != 0)
+        {
+            fragment_zdepth[cip_xy] = -777.0;
+            return;
+        }
 
 		//fragment_vis[tex2d_xy] = float4(1, 0, 0, 1);
 		//return;
-            }
+    }
 
-            Fragment fs[VR_MAX_LAYERS];
+    Fragment fs[VR_MAX_LAYERS];
 
 	[loop]
-            for (int i = 0; i < (int) num_frags; i++)
-            {
-                uint i_vis = 0;
-                Fragment f;
+    for (int i = 0; i < (int) num_frags; i++)
+    {
+        uint i_vis = 0;
+        Fragment f;
 		GET_FRAG(f, addr_base, i); // from K-buffer
-                float4 vis_in = ConvertUIntToFloat4(f.i_vis);
-                if (g_cbEnv.r_kernel_ao > 0)
-                    f.i_vis = ConvertFloat4ToUInt(vis_in);
-                if (vis_in.a > 0)
-                    vis_out += vis_in * (1.f - vis_out.a);
+        float4 vis_in = ConvertUIntToFloat4(f.i_vis);
+        if (g_cbEnv.r_kernel_ao > 0)
+            f.i_vis = ConvertFloat4ToUInt(vis_in);
+        if (vis_in.a > 0)
+            vis_out += vis_in * (1.f - vis_out.a);
 
 #if FRAG_MERGING == 1
 		f.zthick = g_cbVobj.sample_dist;
 #endif
-                fs[i] = f;
-            }
+        fs[i] = f;
+    }
 
-            fs[num_frags] = (Fragment) 0;
-            fs[num_frags].z = FLT_MAX;
-            fragment_vis[cip_xy] = vis_out;
+    fs[num_frags] = (Fragment) 0;
+    fs[num_frags].z = FLT_MAX;
+    fragment_vis[cip_xy] = vis_out;
 #endif
 
 
@@ -1721,88 +1717,95 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 	//float3 planeUp; // WS, length is planePitch
 	//uint flag; // 1st bit : isRightSide
 	
-            int2 i2SizeBuffer = int2(g_cbCamState.rt_width, g_cbCamState.rt_height);
-            int iPlaneSizeX = g_cbCurvedSlicer.numCurvePoints;
-            float3 f3VecSampleUpWS = g_cbCurvedSlicer.planeUp;
-            bool bIsRightSide = BitCheck(g_cbCurvedSlicer.flag, 0);
-            float3 f3PosTopLeftCOS = g_cbCurvedSlicer.posTopLeftCOS;
-            float3 f3PosTopRightCOS = g_cbCurvedSlicer.posTopRightCOS;
-            float3 f3PosBottomLeftCOS = g_cbCurvedSlicer.posBottomLeftCOS;
-            float3 f3PosBottomRightCOS = g_cbCurvedSlicer.posBottomRightCOS;
-            float fPlaneThickness = g_cbCurvedSlicer.thicknessPlane;
-            float fPlaneSizeY = g_cbCurvedSlicer.planeHeight;
-            float fPlaneCenterY = fPlaneSizeY * 0.5f;
-            const float fThicknessPosition = 0;
-            const float merging_beta = 1.0;
+    int2 i2SizeBuffer = int2(g_cbCamState.rt_width, g_cbCamState.rt_height);
+    int iPlaneSizeX = g_cbCurvedSlicer.numCurvePoints;
+    float3 f3VecSampleUpWS = g_cbCurvedSlicer.planeUp;
+    bool bIsRightSide = BitCheck(g_cbCurvedSlicer.flag, 0);
+    float3 f3PosTopLeftCOS = g_cbCurvedSlicer.posTopLeftCOS;
+    float3 f3PosTopRightCOS = g_cbCurvedSlicer.posTopRightCOS;
+    float3 f3PosBottomLeftCOS = g_cbCurvedSlicer.posBottomLeftCOS;
+    float3 f3PosBottomRightCOS = g_cbCurvedSlicer.posBottomRightCOS;
+    float fPlaneThickness = g_cbCurvedSlicer.thicknessPlane;
+    float fPlaneSizeY = g_cbCurvedSlicer.planeHeight;
+    float fPlaneCenterY = fPlaneSizeY * 0.5f;
+    const float fThicknessPosition = 0;
+    const float merging_beta = 1.0;
 
 	// i ==> cip_xy.x
-            float fRatio0 = (float) ((i2SizeBuffer.x - 1) - cip_xy.x) / (float) (i2SizeBuffer.x - 1);
-            float fRatio1 = (float) (cip_xy.x) / (float) (i2SizeBuffer.x - 1);
+    float fRatio0 = (float) ((i2SizeBuffer.x - 1) - cip_xy.x) / (float) (i2SizeBuffer.x - 1);
+    float fRatio1 = (float) (cip_xy.x) / (float) (i2SizeBuffer.x - 1);
 
-            float2 f2PosInterTopCOS, f2PosInterBottomCOS, f2PosSampleCOS;
-            f2PosInterTopCOS.x = fRatio0 * f3PosTopLeftCOS.x + fRatio1 * f3PosTopRightCOS.x;
-            f2PosInterTopCOS.y = fRatio0 * f3PosTopLeftCOS.y + fRatio1 * f3PosTopRightCOS.y;
+    float2 f2PosInterTopCOS, f2PosInterBottomCOS, f2PosSampleCOS;
+    f2PosInterTopCOS.x = fRatio0 * f3PosTopLeftCOS.x + fRatio1 * f3PosTopRightCOS.x;
+    f2PosInterTopCOS.y = fRatio0 * f3PosTopLeftCOS.y + fRatio1 * f3PosTopRightCOS.y;
 
-            if (f2PosInterTopCOS.x < 0 || f2PosInterTopCOS.x >= (float) (iPlaneSizeX - 1))
+    if (f2PosInterTopCOS.x < 0 || f2PosInterTopCOS.x >= (float) (iPlaneSizeX - 1))
 		__EXIT_PanoVR;
 
-            int iPosSampleCOS = (int) floor(f2PosInterTopCOS.x);
-            float fInterpolateRatio = f2PosInterTopCOS.x - iPosSampleCOS;
+    int iPosSampleCOS = (int) floor(f2PosInterTopCOS.x);
+    float fInterpolateRatio = f2PosInterTopCOS.x - iPosSampleCOS;
 
-            int iMinMaxAddrX = min(max(iPosSampleCOS, 0), iPlaneSizeX - 1);
-            int iMinMaxAddrNextX = min(max(iPosSampleCOS + 1, 0), iPlaneSizeX - 1);
+    int iMinMaxAddrX = min(max(iPosSampleCOS, 0), iPlaneSizeX - 1);
+    int iMinMaxAddrNextX = min(max(iPosSampleCOS + 1, 0), iPlaneSizeX - 1);
 
-            float3 f3PosSampleWS_C0 = buf_curvePoints[iMinMaxAddrX];
-            float3 f3PosSampleWS_C1 = buf_curvePoints[iMinMaxAddrNextX];
-            float3 f3PosSampleWS_C_ = f3PosSampleWS_C0 * (1.f - fInterpolateRatio) + f3PosSampleWS_C1 * fInterpolateRatio;
+    float3 f3PosSampleWS_C0 = buf_curvePoints[iMinMaxAddrX];
+    float3 f3PosSampleWS_C1 = buf_curvePoints[iMinMaxAddrNextX];
+    float3 f3PosSampleWS_C_ = f3PosSampleWS_C0 * (1.f - fInterpolateRatio) + f3PosSampleWS_C1 * fInterpolateRatio;
 
-            float3 f3VecSampleTangentWS_0 = buf_curveTangents[iMinMaxAddrX];
-            float3 f3VecSampleTangentWS_1 = buf_curveTangents[iMinMaxAddrNextX];
-            float3 f3VecSampleTangentWS = normalize(f3VecSampleTangentWS_0 * (1.f - fInterpolateRatio) + f3VecSampleTangentWS_1 * fInterpolateRatio);
-            float3 f3VecSampleViewWS = normalize(cross(f3VecSampleUpWS, f3VecSampleTangentWS));
+    float3 f3VecSampleTangentWS_0 = buf_curveTangents[iMinMaxAddrX];
+    float3 f3VecSampleTangentWS_1 = buf_curveTangents[iMinMaxAddrNextX];
+    float3 f3VecSampleTangentWS = normalize(f3VecSampleTangentWS_0 * (1.f - fInterpolateRatio) + f3VecSampleTangentWS_1 * fInterpolateRatio);
+    float3 f3VecSampleViewWS = normalize(cross(f3VecSampleUpWS, f3VecSampleTangentWS));
 
-            if (bIsRightSide)
-                f3VecSampleViewWS *= -1.f;
+    if (bIsRightSide)
+        f3VecSampleViewWS *= -1.f;
 	
-            float3 f3PosSampleWS_C = f3PosSampleWS_C_ + f3VecSampleViewWS * (fThicknessPosition - fPlaneThickness * 0.5f);
+    float3 f3PosSampleWS_C = f3PosSampleWS_C_ + f3VecSampleViewWS * (fThicknessPosition - fPlaneThickness * 0.5f);
 	//f3VecSampleUpWS *= fPlanePitch; // already multiplied
 
-            f2PosInterBottomCOS.x = fRatio0 * f3PosBottomLeftCOS.x + fRatio1 * f3PosBottomRightCOS.x;
-            f2PosInterBottomCOS.y = fRatio0 * f3PosBottomLeftCOS.y + fRatio1 * f3PosBottomRightCOS.y;
+    f2PosInterBottomCOS.x = fRatio0 * f3PosBottomLeftCOS.x + fRatio1 * f3PosBottomRightCOS.x;
+    f2PosInterBottomCOS.y = fRatio0 * f3PosBottomLeftCOS.y + fRatio1 * f3PosBottomRightCOS.y;
 
 	// j ==> cip_xy.y
-            float fRatio0Y = (float) ((i2SizeBuffer.y - 1) - cip_xy.y) / (float) (i2SizeBuffer.y - 1);
-            float fRatio1Y = (float) (cip_xy.y) / (float) (i2SizeBuffer.y - 1);
+    float fRatio0Y = (float) ((i2SizeBuffer.y - 1) - cip_xy.y) / (float) (i2SizeBuffer.y - 1);
+    float fRatio1Y = (float) (cip_xy.y) / (float) (i2SizeBuffer.y - 1);
 
-            f2PosSampleCOS.x = fRatio0Y * f2PosInterTopCOS.x + fRatio1Y * f2PosInterBottomCOS.x;
-            f2PosSampleCOS.y = fRatio0Y * f2PosInterTopCOS.y + fRatio1Y * f2PosInterBottomCOS.y;
+    f2PosSampleCOS.x = fRatio0Y * f2PosInterTopCOS.x + fRatio1Y * f2PosInterBottomCOS.x;
+    f2PosSampleCOS.y = fRatio0Y * f2PosInterTopCOS.y + fRatio1Y * f2PosInterBottomCOS.y;
 
-            if (f2PosSampleCOS.y < 0 || f2PosSampleCOS.y > fPlaneSizeY)
+    if (f2PosSampleCOS.y < 0 || f2PosSampleCOS.y > fPlaneSizeY)
 		__EXIT_PanoVR;
 
-            float sample_dist = g_cbVobj.sample_dist;
+    float sample_dist = g_cbVobj.sample_dist;
 	// start position //
 	//vmfloat3 f3PosSampleWS = f3PosSampleWS_C + f3VecSampleUpWS * (f2PosSampleCOS.y - fPlaneCenterY)
 	//	+ f3VecSampleViewWS * fStepLength * (float)m;
-            float3 pos_ray_start_ws = f3PosSampleWS_C + f3VecSampleUpWS * (f2PosSampleCOS.y - fPlaneCenterY);
-            float3 dir_sample_ws = f3VecSampleViewWS * sample_dist;
-
+    float3 pos_ray_start_ws = f3PosSampleWS_C + f3VecSampleUpWS * (f2PosSampleCOS.y - fPlaneCenterY);
+    float3 dir_sample_ws = f3VecSampleViewWS * sample_dist;
 
 	// vv //
-            float3 uv_v = normalize(f3VecSampleViewWS); // uv_v
-            float3 uv_u = normalize(f3VecSampleUpWS); // uv_u
-            float3 uv_r = cross(uv_v, uv_u); // uv_r
-            float3 v_v = TransformVector(dir_sample_ws, g_cbVobj.mat_ws2ts); // v_v
-            float3 v_u = TransformVector(uv_u * g_cbVobj.sample_dist, g_cbVobj.mat_ws2ts); // v_u
-            float3 v_r = TransformVector(uv_r * g_cbVobj.sample_dist, g_cbVobj.mat_ws2ts); // v_r
+    float3 uv_v = normalize(f3VecSampleViewWS); // uv_v
+    float3 uv_u = normalize(f3VecSampleUpWS); // uv_u
+    float3 uv_r = cross(uv_v, uv_u); // uv_r
+    float3 v_v = TransformVector(dir_sample_ws, g_cbVobj.mat_ws2ts); // v_v
+    float3 v_u = TransformVector(uv_u * g_cbVobj.sample_dist, g_cbVobj.mat_ws2ts); // v_u
+    float3 v_r = TransformVector(uv_r * g_cbVobj.sample_dist, g_cbVobj.mat_ws2ts); // v_r
 
 #if VR_MODE != 2
-            v_r /= g_cbVobj.opacity_correction;
-            v_u /= g_cbVobj.opacity_correction;
-            v_v /= g_cbVobj.opacity_correction;
+    v_r /= g_cbVobj.opacity_correction;
+    v_u /= g_cbVobj.opacity_correction;
+    v_v /= g_cbVobj.opacity_correction;
 #endif
 
-            int num_ray_samples = ceil(fPlaneThickness / sample_dist);
+			
+	float2 hits_t = ComputeVBoxHits(pos_ray_start_ws, f3VecSampleViewWS, g_cbVobj.mat_alignedvbox_tr_ws2bs, g_cbClipInfo);
+	hits_t.y = min(hits_t.y, fPlaneThickness);
+	int num_ray_samples = ceil((hits_t.y - hits_t.x) / sample_dist);
+	if (num_ray_samples <= 0)
+		__EXIT_VR_RayCasting;
+			
+	pos_ray_start_ws = pos_ray_start_ws + f3VecSampleViewWS * max(hits_t.x, 0);
+			
 	// DVR ray-casting core part
 #if RAYMODE == 0 // DVR
 	// note that the gradient normal direction faces to the inside
