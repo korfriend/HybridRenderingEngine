@@ -18,3 +18,7 @@ __vmstatic bool BrushMeshActor(
 	vmobjects::VmParamMap<std::string, std::any>& ioResObjs,
 	vmobjects::VmParamMap<std::string, std::any>& ioActors,
 	vmobjects::VmParamMap<std::string, std::any>& ioParams);
+__vmstatic bool SelectPrimitives(
+	vmobjects::VmParamMap<std::string, std::any>& ioResObjs,
+	vmobjects::VmParamMap<std::string, std::any>& ioActors,
+	vmobjects::VmParamMap<std::string, std::any>& ioParams);

@@ -1050,3 +1050,368 @@ bool BrushMeshActor(
 
 	return grd_helper::UpdatePaintTexture(meshActor, matSS2WS, cam_obj, pos_xy, brushParams);
 }
+
+bool SelectPrimitives(
+	vmobjects::VmParamMap<std::string, std::any>& ioResObjs,
+	vmobjects::VmParamMap<std::string, std::any>& ioActors,
+	vmobjects::VmParamMap<std::string, std::any>& ioParams)
+{
+	VmActor* meshActor = ioActors.GetParam("TargetMeshActor", (VmActor*)NULL);
+	VmIObject* iobj = ioActors.GetParam("SrcCamera", (VmIObject*)NULL);
+	if (meshActor == nullptr || iobj == nullptr)
+	{
+		vzlog_error("Invalid TargetMeshActor(%d) or SrcCamera(%d)", meshActor ? 1 : 0, iobj ? 1 : 0);
+		return false;
+	}
+
+	VmCObject* cam_obj = iobj->GetCameraObject();
+
+	// image mask corresponding to the rendering buffer
+	// the mask size must be same to the rendering buffer size
+	uint8_t* imageMask = ioParams.GetParam("_byte*_ImageMask", (uint8_t*)NULL);
+	if (imageMask == nullptr)
+	{
+		vzlog_error("Invalid imageMask");
+		return false;
+	}
+
+	std::vector<uint32_t>* ptr_listVertices = ioParams.GetParam("_vlist_ptr_uint_ListVertices", (std::vector<uint32_t>*)nullptr);
+	std::vector<uint32_t>* ptr_listPolygons = ioParams.GetParam("_vlist_ptr_uint_ListPolygons", (std::vector<uint32_t>*)nullptr);
+	if (ptr_listVertices == nullptr && ptr_listPolygons == nullptr)
+	{
+		vzlog_error("Non-output is required");
+		return false;
+	}
+
+	VmVObjectPrimitive* pobj = (VmVObjectPrimitive*)meshActor->GetGeometryRes();
+	if (pobj == nullptr)
+	{
+		vzlog_error("Invalid VmVObjectPrimitive");
+		return false;
+	}
+
+	PrimitiveData* prim_data = pobj->GetPrimitiveData();
+	if (prim_data == nullptr)
+	{
+		vzlog_error("Invalid PrimitiveData");
+		return false;
+	}
+
+	bool only_foremost = ioParams.GetParam("_bool_OnlyForemost", false);
+	std::vector<float> depth_fb;
+	if (only_foremost)
+	{
+		__ID3D11Device* dx11Device = g_psoManager.dx11Device;
+		__ID3D11DeviceContext* dx11DeviceImmContext = g_psoManager.dx11DeviceImmContext;
+
+		const uint32_t rtbind = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+		GpuRes gres_fb_singlelayer_tempDepth, gres_fb_depthstencil;
+		grd_helper::UpdateFrameBuffer(gres_fb_singlelayer_tempDepth, iobj, "RENDER_OUT_DEPTH_2", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
+		grd_helper::UpdateFrameBuffer(gres_fb_depthstencil, iobj, "DEPTH_STENCIL", RTYPE_TEXTURE2D, D3D11_BIND_DEPTH_STENCIL, DXGI_FORMAT_D32_FLOAT, 0);
+
+		ID3D11DepthStencilView* dx11DSV = (ID3D11DepthStencilView*)gres_fb_depthstencil.alloc_res_ptrs[DTYPE_DSV];
+		ID3D11RenderTargetView* dx11RTV = (ID3D11RenderTargetView*)gres_fb_singlelayer_tempDepth.alloc_res_ptrs[DTYPE_RTV];
+		float clr_float_fltmax_4[4] = { FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX };
+		dx11DeviceImmContext->ClearRenderTargetView(dx11RTV, clr_float_fltmax_4);
+		dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+
+		dx11DeviceImmContext->OMSetRenderTargets(1, &dx11RTV, dx11DSV);
+		dx11DeviceImmContext->OMSetDepthStencilState(g_psoManager.get_depthstencil("LESSEQUAL"), 0);
+
+		vmint2 fb_size_cur;
+		iobj->GetFrameBufferInfo(&fb_size_cur);
+
+		// Viewport
+		D3D11_VIEWPORT dx11ViewPort;
+		dx11ViewPort.Width = (float)fb_size_cur.x;
+		dx11ViewPort.Height = (float)fb_size_cur.y;
+		dx11ViewPort.MinDepth = 0;
+		dx11ViewPort.MaxDepth = 1.0f;
+		dx11ViewPort.TopLeftX = 0;
+		dx11ViewPort.TopLeftY = 0;
+		dx11DeviceImmContext->RSSetViewports(1, &dx11ViewPort);
+
+		// Camera matrices
+		vmmat44 dmatWS2CS, dmatCS2PS, dmatPS2SS;
+		vmmat44 dmatSS2PS, dmatPS2CS, dmatCS2WS;
+		cam_obj->GetMatrixWStoSS(&dmatWS2CS, &dmatCS2PS, &dmatPS2SS);
+		cam_obj->GetMatrixSStoWS(&dmatSS2PS, &dmatPS2CS, &dmatCS2WS);
+		vmmat44 dmatWS2PS = dmatWS2CS * dmatCS2PS;
+		vmmat44f matWS2CS = dmatWS2CS;
+		vmmat44f matWS2PS = dmatWS2PS;
+		vmmat44f matWS2SS = dmatWS2PS * dmatPS2SS;
+		vmmat44f matSS2WS = (dmatSS2PS * dmatPS2CS) * dmatCS2WS;
+
+		// CB_CameraState
+		CB_CameraState cbCamState;
+		grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, matWS2CS, cam_obj, fb_size_cur, 8, 0);
+
+		ID3D11Buffer* cbuf_cam_state = g_psoManager.get_cbuf("CB_CameraState");
+		D3D11_MAPPED_SUBRESOURCE mappedResCamState;
+		dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
+		memcpy(mappedResCamState.pData, &cbCamState, sizeof(CB_CameraState));
+		dx11DeviceImmContext->Unmap(cbuf_cam_state, 0);
+
+		dx11DeviceImmContext->VSSetConstantBuffers(0, 1, &cbuf_cam_state);
+		dx11DeviceImmContext->PSSetConstantBuffers(0, 1, &cbuf_cam_state);
+
+		// CB_PolygonObject
+		CB_PolygonObject cbPolygonObj;
+		grd_helper::SetCb_PolygonObj(cbPolygonObj, pobj, meshActor, matWS2SS, matWS2PS, false, false);
+
+		ID3D11Buffer* cbuf_pobj = g_psoManager.get_cbuf("CB_PolygonObject");
+		D3D11_MAPPED_SUBRESOURCE mappedResPobjData;
+		dx11DeviceImmContext->Map(cbuf_pobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResPobjData);
+		memcpy(mappedResPobjData.pData, &cbPolygonObj, sizeof(CB_PolygonObject));
+		dx11DeviceImmContext->Unmap(cbuf_pobj, 0);
+
+		dx11DeviceImmContext->VSSetConstantBuffers(1, 1, &cbuf_pobj);
+		dx11DeviceImmContext->PSSetConstantBuffers(1, 1, &cbuf_pobj);
+
+		int camClipMode = ioParams.GetParam("_int_ClippingMode", (int)0);
+		vmfloat3 camClipPlanePos = ioParams.GetParam("_float3_PosClipPlaneWS", vmfloat3(0));
+		vmfloat3 camClipPlaneDir = ioParams.GetParam("_float3_VecClipPlaneWS", vmfloat3(0));
+		vmmat44f camClipMatWS2BS = ioParams.GetParam("_matrix44f_MatrixClipWS2BS", vmmat44f(1));
+		std::set<int> camClipperFreeActors = ioParams.GetParam("_set_int_CamClipperFreeActors", std::set<int>());
+		CB_ClipInfo cbClipInfo;
+		grd_helper::SetCb_ClipInfo(cbClipInfo, pobj, meshActor, camClipMode, camClipperFreeActors, camClipMatWS2BS, camClipPlanePos, camClipPlaneDir);
+		ID3D11Buffer* cbuf_clip = g_psoManager.get_cbuf("CB_ClipInfo");
+		D3D11_MAPPED_SUBRESOURCE mappedResClipInfo;
+		dx11DeviceImmContext->Map(cbuf_clip, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResClipInfo);
+		memcpy(mappedResClipInfo.pData, &cbClipInfo, sizeof(CB_ClipInfo));
+		dx11DeviceImmContext->Unmap(cbuf_clip, 0);
+		dx11DeviceImmContext->PSSetConstantBuffers(2, 1, &cbuf_clip);
+
+		// GPU primitive model (vertex/index buffers)
+		GpuRes gres_idx;
+		map<string, GpuRes> map_gres_texs, map_gres_vtxs;
+		grd_helper::UpdatePrimitiveModel(map_gres_vtxs, gres_idx, map_gres_texs, pobj);
+
+		// Vertex shader input layout
+		uint32_t vs_mask = A_P;
+
+		const Variant* pso = grd_helper::GetPSOVariant(vs_mask);
+		dx11DeviceImmContext->IASetInputLayout(pso->il);
+		dx11DeviceImmContext->VSSetShader(pso->vs, NULL, 0);
+		dx11DeviceImmContext->GSSetShader(NULL, NULL, 0);
+
+		// SINGLE_LAYER pixel shader (depth-only)
+#ifdef DX10_0
+		dx11DeviceImmContext->PSSetShader(g_psoManager.get_pshader("SR_SINGLE_LAYER_ps_4_0"), NULL, 0);
+#else
+		dx11DeviceImmContext->PSSetShader(g_psoManager.get_pshader("SR_SINGLE_LAYER_ps_5_0"), NULL, 0);
+#endif
+		dx11DeviceImmContext->RSSetState(g_psoManager.get_rasterizer("SOLID_CULL_BACK"));
+
+		// Vertex buffers (7 slots, matching PrimitiveRenderer layout)
+		ID3D11Buffer* dx11buffers[7] = {
+			(ID3D11Buffer*)map_gres_vtxs["POSITION"].alloc_res_ptrs[DTYPE_RES],
+			(ID3D11Buffer*)map_gres_vtxs["NORMAL"].alloc_res_ptrs[DTYPE_RES],
+			(ID3D11Buffer*)map_gres_vtxs["TEXCOORD0"].alloc_res_ptrs[DTYPE_RES],
+			(ID3D11Buffer*)map_gres_vtxs["COLOR"].alloc_res_ptrs[DTYPE_RES],
+			(ID3D11Buffer*)map_gres_vtxs["TEXCOORD1"].alloc_res_ptrs[DTYPE_RES],
+			(ID3D11Buffer*)map_gres_vtxs["TEXCOORD2"].alloc_res_ptrs[DTYPE_RES],
+			(ID3D11Buffer*)map_gres_vtxs["GEODIST"].alloc_res_ptrs[DTYPE_RES],
+		};
+		UINT strides[7] = {
+			sizeof(vmfloat3), sizeof(vmfloat3), sizeof(uint16_t) * 2,
+			sizeof(uint32_t), sizeof(vmfloat3), sizeof(vmfloat3), sizeof(float),
+		};
+		UINT offsets[7] = { 0, 0, 0, 0, 0, 0, 0 };
+		dx11DeviceImmContext->IASetVertexBuffers(0, 7, dx11buffers, strides, offsets);
+
+		// Index buffer and topology
+		D3D_PRIMITIVE_TOPOLOGY pobj_topology_type;
+		if (prim_data->ptype == PrimitiveTypeTRIANGLE) {
+			pobj_topology_type = prim_data->is_stripe ?
+				D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP : D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+		}
+		else if (prim_data->ptype == PrimitiveTypeLINE) {
+			pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_LINELIST;
+		}
+		else {
+			pobj_topology_type = D3D11_PRIMITIVE_TOPOLOGY_POINTLIST;
+		}
+		dx11DeviceImmContext->IASetPrimitiveTopology(pobj_topology_type);
+
+		if (prim_data->vidx_buffer != NULL && prim_data->ptype != PrimitiveTypePOINT) {
+			ID3D11Buffer* dx11IndiceTargetPrim = (ID3D11Buffer*)gres_idx.alloc_res_ptrs[DTYPE_RES];
+			dx11DeviceImmContext->IASetIndexBuffer(dx11IndiceTargetPrim, DXGI_FORMAT_R32_UINT, 0);
+		}
+
+		// Draw
+		if (prim_data->is_stripe || pobj_topology_type == D3D11_PRIMITIVE_TOPOLOGY_POINTLIST || prim_data->num_vidx == 0)
+			dx11DeviceImmContext->Draw(prim_data->num_vtx, 0);
+		else
+			dx11DeviceImmContext->DrawIndexed(prim_data->num_vidx, 0, 0);
+
+		// Unbind render targets
+		dx11DeviceImmContext->OMSetRenderTargets(0, NULL, NULL);
+
+		// Read back depth buffer to CPU
+		GpuRes gres_fb_sys_depth;
+		grd_helper::UpdateFrameBuffer(gres_fb_sys_depth, iobj, "SYSTEM_OUT_DEPTH", RTYPE_TEXTURE2D, NULL, DXGI_FORMAT_R32_FLOAT, UPFB_SYSOUT);
+		dx11DeviceImmContext->CopyResource(
+			(ID3D11Texture2D*)gres_fb_sys_depth.alloc_res_ptrs[DTYPE_RES],
+			(ID3D11Texture2D*)gres_fb_singlelayer_tempDepth.alloc_res_ptrs[DTYPE_RES]);
+
+		depth_fb.resize(fb_size_cur.x * fb_size_cur.y);
+
+		D3D11_MAPPED_SUBRESOURCE mappedResDepth;
+		dx11DeviceImmContext->Map((ID3D11Texture2D*)gres_fb_sys_depth.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, 0, &mappedResDepth);
+		float* foremostDepthMap = (float*)mappedResDepth.pData;
+		int foremostDepthRowPitch = mappedResDepth.RowPitch / sizeof(float);
+
+		// TODO: use foremostDepthMap in vertex/polygon selection below
+		for (int y = 0; y < fb_size_cur.y; ++y)
+		{
+			memcpy(&depth_fb[y * fb_size_cur.x], foremostDepthMap + foremostDepthRowPitch * y, sizeof(float) * fb_size_cur.x);
+		}
+
+		dx11DeviceImmContext->Unmap((ID3D11Texture2D*)gres_fb_sys_depth.alloc_res_ptrs[DTYPE_RES], 0);
+	}
+
+
+	vmmat44f matPivot = (meshActor->GetParam("_matrix44f_Pivot", vmmat44f(1)));
+	vmmat44f matRS2WS = matPivot * meshActor->matOS2WS;
+
+	vmmat44 dmatWS2CS, dmatCS2PS, dmatPS2SS;
+	cam_obj->GetMatrixWStoSS(&dmatWS2CS, &dmatCS2PS, &dmatPS2SS);
+	vmmat44 dmatWS2PS = dmatWS2CS * dmatCS2PS;
+	vmmat44f matWS2CS = dmatWS2CS; // view
+	vmmat44f matWS2PS = dmatWS2PS;
+	vmmat44f matWS2SS = dmatWS2PS * dmatPS2SS;
+	vmmat44f matRS2SS = matRS2WS * matWS2SS;
+
+	vmmat44f matSS2WS;
+	{
+		vmmat44 dmatSS2PS, dmatPS2CS, dmatCS2WS;
+		cam_obj->GetMatrixSStoWS(&dmatSS2PS, &dmatPS2CS, &dmatCS2WS);
+		matSS2WS = (dmatSS2PS * dmatPS2CS) * dmatCS2WS;
+	}
+
+	vmfloat3* positions = prim_data->GetVerticeDefinition<vmfloat3>("POSITION");
+	vmint2 i2SizeScreen;
+	iobj->GetFrameBufferInfo(&i2SizeScreen);
+	float depthThresholdRatio = ioParams.GetParam("_float_DepthThreshold", 0.003f);
+	if (ptr_listVertices)
+	{
+		ptr_listVertices->clear();
+		ptr_listVertices->reserve(prim_data->num_vtx);
+		for (uint32_t i = 0; i < prim_data->num_vtx; ++i)
+		{
+			vmfloat3 p = positions[i];
+			vmfloat3 p_ss;
+			vmmath::fTransformPoint(&p_ss, &p, &matRS2SS);
+			if (p_ss.x >= 0 && p_ss.x < i2SizeScreen.x &&
+				p_ss.y >= 0 && p_ss.y < i2SizeScreen.y) {
+				if (imageMask[(int)p_ss.x + (int)p_ss.y * i2SizeScreen.x])
+				{
+					if (only_foremost && !depth_fb.empty())
+					{
+						vmfloat3 p_ws;
+						vmmath::fTransformPoint(&p_ws, &p, &matRS2WS);
+						vmfloat3 pos_ip_ss = vmfloat3(p_ss.x, p_ss.y, 0);
+						vmfloat3 pos_ip_ws;
+						vmmath::fTransformPoint(&pos_ip_ws, &pos_ip_ss, &matSS2WS);
+						vmfloat3 diff = p_ws - pos_ip_ws;
+						float vtx_depth = sqrtf(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z);
+						float stored_depth = depth_fb[(int)p_ss.x + (int)p_ss.y * i2SizeScreen.x];
+						if (stored_depth >= FLT_MAX || fabs(vtx_depth - stored_depth) > stored_depth * depthThresholdRatio)
+							continue;
+					}
+					ptr_listVertices->push_back(i);
+				}
+			}
+		}
+	}
+	if (ptr_listPolygons)
+	{
+		ptr_listPolygons->clear();
+		if (prim_data->vidx_buffer && prim_data->num_prims > 0 && !prim_data->is_stripe)
+		{
+			uint32_t idx_stride = prim_data->idx_stride;
+			ptr_listPolygons->reserve(prim_data->num_prims);
+			for (uint32_t i = 0; i < prim_data->num_prims; ++i)
+			{
+				uint32_t base = i * idx_stride;
+				bool selected = false;
+				for (uint32_t j = 0; j < idx_stride; ++j)
+				{
+					uint32_t vidx = prim_data->vidx_buffer[base + j];
+					vmfloat3 p = positions[vidx];
+					vmfloat3 p_ss;
+					vmmath::fTransformPoint(&p_ss, &p, &matRS2SS);
+					if (p_ss.x >= 0 && p_ss.x < i2SizeScreen.x &&
+						p_ss.y >= 0 && p_ss.y < i2SizeScreen.y) {
+						if (imageMask[(int)p_ss.x + (int)p_ss.y * i2SizeScreen.x])
+						{
+							if (only_foremost && !depth_fb.empty())
+							{
+								vmfloat3 p_ws;
+								vmmath::fTransformPoint(&p_ws, &p, &matRS2WS);
+								vmfloat3 pos_ip_ss = vmfloat3(p_ss.x, p_ss.y, 0);
+								vmfloat3 pos_ip_ws;
+								vmmath::fTransformPoint(&pos_ip_ws, &pos_ip_ss, &matSS2WS);
+								vmfloat3 diff = p_ws - pos_ip_ws;
+								float vtx_depth = sqrtf(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z);
+								float stored_depth = depth_fb[(int)p_ss.x + (int)p_ss.y * i2SizeScreen.x];
+								if (stored_depth >= FLT_MAX || fabs(vtx_depth - stored_depth) > stored_depth * depthThresholdRatio)
+									continue;
+							}
+							selected = true;
+							break;
+						}
+					}
+				}
+				if (selected)
+				{
+					ptr_listPolygons->push_back(i);
+				}
+			}
+		}
+		else if (prim_data->is_stripe && prim_data->num_prims > 0)
+		{
+			// triangle strip: polygon i uses vertices i, i+1, i+2
+			ptr_listPolygons->reserve(prim_data->num_prims);
+			for (uint32_t i = 0; i < prim_data->num_prims; ++i)
+			{
+				bool selected = false;
+				for (uint32_t j = 0; j < 3; ++j)
+				{
+					uint32_t vidx = (prim_data->vidx_buffer) ?
+						prim_data->vidx_buffer[i + j] : (i + j);
+					vmfloat3 p = positions[vidx];
+					vmfloat3 p_ss;
+					vmmath::fTransformPoint(&p_ss, &p, &matRS2SS);
+					if (p_ss.x >= 0 && p_ss.x < i2SizeScreen.x &&
+						p_ss.y >= 0 && p_ss.y < i2SizeScreen.y) {
+						if (imageMask[(int)p_ss.x + (int)p_ss.y * i2SizeScreen.x])
+						{
+							if (only_foremost && !depth_fb.empty())
+							{
+								vmfloat3 p_ws;
+								vmmath::fTransformPoint(&p_ws, &p, &matRS2WS);
+								vmfloat3 pos_ip_ss = vmfloat3(p_ss.x, p_ss.y, 0);
+								vmfloat3 pos_ip_ws;
+								vmmath::fTransformPoint(&pos_ip_ws, &pos_ip_ss, &matSS2WS);
+								vmfloat3 diff = p_ws - pos_ip_ws;
+								float vtx_depth = sqrtf(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z);
+								float stored_depth = depth_fb[(int)p_ss.x + (int)p_ss.y * i2SizeScreen.x];
+								if (stored_depth >= FLT_MAX || fabs(vtx_depth - stored_depth) > stored_depth * depthThresholdRatio)
+									continue;
+							}
+							selected = true;
+							break;
+						}
+					}
+				}
+				if (selected)
+				{
+					ptr_listPolygons->push_back(i);
+				}
+			}
+		}
+	}
+	return true;
+}
