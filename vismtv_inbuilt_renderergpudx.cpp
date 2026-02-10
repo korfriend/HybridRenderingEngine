@@ -1201,7 +1201,7 @@ bool SelectPrimitives(
 #else
 		dx11DeviceImmContext->PSSetShader(g_psoManager.get_pshader("SR_SINGLE_LAYER_ps_5_0"), NULL, 0);
 #endif
-		dx11DeviceImmContext->RSSetState(g_psoManager.get_rasterizer("SOLID_CULL_BACK"));
+		dx11DeviceImmContext->RSSetState(g_psoManager.get_rasterizer("SOLID_NONE"));
 
 		// Vertex buffers (7 slots, matching PrimitiveRenderer layout)
 		ID3D11Buffer* dx11buffers[7] = {
@@ -1293,7 +1293,7 @@ bool SelectPrimitives(
 	vmfloat3* positions = prim_data->GetVerticeDefinition<vmfloat3>("POSITION");
 	vmint2 i2SizeScreen;
 	iobj->GetFrameBufferInfo(&i2SizeScreen);
-	float depthThresholdRatio = ioParams.GetParam("_float_DepthThreshold", 0.003f);
+	float depthThreshold = ioParams.GetParam("_float_DepthThreshold", 0.5f);
 	if (ptr_listVertices)
 	{
 		ptr_listVertices->clear();
@@ -1317,7 +1317,7 @@ bool SelectPrimitives(
 						vmfloat3 diff = p_ws - pos_ip_ws;
 						float vtx_depth = sqrtf(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z);
 						float stored_depth = depth_fb[(int)p_ss.x + (int)p_ss.y * i2SizeScreen.x];
-						if (stored_depth >= FLT_MAX || fabs(vtx_depth - stored_depth) > stored_depth * depthThresholdRatio)
+						if (stored_depth >= FLT_MAX || fabs(vtx_depth - stored_depth) > depthThreshold)
 							continue;
 					}
 					ptr_listVertices->push_back(i);
@@ -1356,7 +1356,7 @@ bool SelectPrimitives(
 								vmfloat3 diff = p_ws - pos_ip_ws;
 								float vtx_depth = sqrtf(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z);
 								float stored_depth = depth_fb[(int)p_ss.x + (int)p_ss.y * i2SizeScreen.x];
-								if (stored_depth >= FLT_MAX || fabs(vtx_depth - stored_depth) > stored_depth * depthThresholdRatio)
+								if (stored_depth >= FLT_MAX || fabs(vtx_depth - stored_depth) > depthThreshold)
 									continue;
 							}
 							selected = true;
@@ -1398,7 +1398,7 @@ bool SelectPrimitives(
 								vmfloat3 diff = p_ws - pos_ip_ws;
 								float vtx_depth = sqrtf(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z);
 								float stored_depth = depth_fb[(int)p_ss.x + (int)p_ss.y * i2SizeScreen.x];
-								if (stored_depth >= FLT_MAX || fabs(vtx_depth - stored_depth) > stored_depth * depthThresholdRatio)
+								if (stored_depth >= FLT_MAX || fabs(vtx_depth - stored_depth) > depthThreshold)
 									continue;
 							}
 							selected = true;
