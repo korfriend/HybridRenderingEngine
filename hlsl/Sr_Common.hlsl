@@ -1050,7 +1050,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
 PS_FILL_DEPTHCS SINGLE_LAYER(VS_OUTPUT input)
 {
     PS_FILL_DEPTHCS out_ps;
-    out_ps.ds_z = 1.f;
+    out_ps.ds_z = 0.f;
     out_ps.depthcs = FLT_MAX;
 
     POBJ_PRE_CONTEXT;
@@ -1066,7 +1066,7 @@ PS_FILL_DEPTHCS SINGLE_LAYER(VS_OUTPUT input)
 PS_FILL_DEPTHCS WRITE_DEPTHZ(VS_OUTPUT input)
 {
     PS_FILL_DEPTHCS out_ps;
-    out_ps.ds_z = 1.f;
+    out_ps.ds_z = 0.f;
     out_ps.depthcs = FLT_MAX;
 
     POBJ_PRE_CONTEXT;

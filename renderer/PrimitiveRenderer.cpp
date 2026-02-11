@@ -2687,6 +2687,15 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 
 								cb_cam.mat_ss2ws = TRANSPOSE(matLightSS2WS);
 								cb_cam.mat_ws2ss = TRANSPOSE(matLightWS2SS);
+								{
+									vmmat44f matWS2PS_revZ = matLightWS2PS;
+									matWS2PS_revZ[2] = vmfloat4(
+										matLightWS2PS[3].x - matLightWS2PS[2].x,
+										matLightWS2PS[3].y - matLightWS2PS[2].y,
+										matLightWS2PS[3].z - matLightWS2PS[2].z,
+										matLightWS2PS[3].w - matLightWS2PS[2].w);
+									cb_cam.mat_ws2ps_revZ = TRANSPOSE(matWS2PS_revZ);
+								}
 								
 								cb_cam.dir_view_ws = lightDir;
 							};

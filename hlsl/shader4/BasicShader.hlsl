@@ -4,7 +4,7 @@
 PS_FILL_OUTPUT BasicShader4(__VS_OUT input)
 {
 	PS_FILL_OUTPUT out_ps;
-	out_ps.ds_z = 1.f; // remove???
+	out_ps.ds_z = 0.f;
 	out_ps.color = (float4)0;
 	out_ps.depthcs = FLT_MAX;
 
@@ -70,7 +70,7 @@ cbuffer cbGlobalParams : register(b8)
 PS_FILL_DEPTHCS CastDepthMap(__VS_OUT input)
 {
     PS_FILL_DEPTHCS out_ps;
-    out_ps.ds_z = 1.f;
+    out_ps.ds_z = 0.f;
     out_ps.depthcs = FLT_MAX;
 
     POBJ_PRE_CONTEXT;
