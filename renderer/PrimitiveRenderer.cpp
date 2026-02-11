@@ -2839,12 +2839,12 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 						dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 0.0f, 0); // Reverse Z
 						dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(LESSEQUAL), 0);
 
-						ID3D11PixelShader* dx11PS_DepthWrite = GETPS(WRITE_DEPTH_ps_5_0);
-						dx11DeviceImmContext->PSSetShader(dx11PS_DepthWrite, NULL, 0);
-						if (prim_data->is_stripe || pobj_topology_type == D3D11_PRIMITIVE_TOPOLOGY_POINTLIST || prim_data->num_vidx == 0)
-							dx11DeviceImmContext->Draw(prim_data->num_vtx, 0);
-						else
-							dx11DeviceImmContext->DrawIndexed(prim_data->num_vidx, 0, 0);
+						//ID3D11PixelShader* dx11PS_DepthWrite = GETPS(WRITE_DEPTH_ps_5_0);
+						//dx11DeviceImmContext->PSSetShader(dx11PS_DepthWrite, NULL, 0);
+						//if (prim_data->is_stripe || pobj_topology_type == D3D11_PRIMITIVE_TOPOLOGY_POINTLIST || prim_data->num_vidx == 0)
+						//	dx11DeviceImmContext->Draw(prim_data->num_vtx, 0);
+						//else
+						//	dx11DeviceImmContext->DrawIndexed(prim_data->num_vidx, 0, 0);
 
 						dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(0, NULL, dx11DSV, 2, NUM_UAVs_1ST, dx11UAVs_1st_pass, NULL);
 						dx11DeviceImmContext->PSSetShader(dx11PS_Target, NULL, 0);

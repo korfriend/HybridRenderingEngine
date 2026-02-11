@@ -530,22 +530,6 @@ struct PS_FILL_DEPTHCS
     float ds_z : SV_Depth;
 };
 
-[earlydepthstencil]
-float WRITE_DEPTHZ(__VS_OUT input) : SV_Depth
-{
-    POBJ_PRE_CONTEXT;
-
-    float z = 0; // Reverse Z: far plane is 0 (was 1)
-    //if (g_cbCamState.cam_flag & 0x1) {
-    //    //https://developer.nvidia.com/content/depth-precision-visualized
-    //
-    //    float a = - g_cbCamState.near_plane * g_cbCamState.far_plane / (g_cbCamState.far_plane - g_cbCamState.near_plane);
-    //    float b = - a / g_cbCamState.near_plane;
-    //    z = a / (z_depth + g_cbCamState.near_plane) + b;
-    //}
-    return z;
-}
-
 float3 BisectionalRefine(const float3 pos_sample_ts, const float3 dir_sample_ts, const int num_refinement,
     const float dst_isovalue, const bool largerCheck)
 {
@@ -1067,7 +1051,6 @@ PS_FILL_DEPTHCS SINGLE_LAYER(VS_OUTPUT input)
 {
     PS_FILL_DEPTHCS out_ps;
     out_ps.ds_z = 1.f;
-    //out_ps.color = (float4)0;
     out_ps.depthcs = FLT_MAX;
 
     POBJ_PRE_CONTEXT;
@@ -1075,6 +1058,24 @@ PS_FILL_DEPTHCS SINGLE_LAYER(VS_OUTPUT input)
     out_ps.ds_z = input.f4PosSS.z;
     //out_ps.color = v_rgba;
     out_ps.depthcs = z_depth;
+    return out_ps;
+}
+
+
+[earlydepthstencil]
+PS_FILL_DEPTHCS WRITE_DEPTHZ(VS_OUTPUT input)
+{
+    PS_FILL_DEPTHCS out_ps;
+    out_ps.ds_z = 1.f;
+    out_ps.depthcs = FLT_MAX;
+
+    POBJ_PRE_CONTEXT;
+
+    out_ps.ds_z = input.f4PosSS.z;
+
+    float3 pos_cs = TransformPoint(input.f3PosWS, g_cbCamState.mat_ws2cs);
+
+    out_ps.depthcs = -pos_cs.z;
     return out_ps;
 }
 

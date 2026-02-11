@@ -1199,9 +1199,9 @@ bool SelectPrimitives(
 
 		// SINGLE_LAYER pixel shader (depth-only)
 #ifdef DX10_0
-		dx11DeviceImmContext->PSSetShader(g_psoManager.get_pshader("SR_SINGLE_LAYER_ps_4_0"), NULL, 0);
+		dx11DeviceImmContext->PSSetShader(g_psoManager.get_pshader("WRITE_DEPTH_ps_4_0"), NULL, 0);
 #else
-		dx11DeviceImmContext->PSSetShader(g_psoManager.get_pshader("SR_SINGLE_LAYER_ps_5_0"), NULL, 0);
+		dx11DeviceImmContext->PSSetShader(g_psoManager.get_pshader("WRITE_DEPTH_ps_5_0"), NULL, 0);
 #endif
 		dx11DeviceImmContext->RSSetState(g_psoManager.get_rasterizer("SOLID_NONE"));
 
@@ -1314,7 +1314,7 @@ bool SelectPrimitives(
 	vmfloat3* positions = prim_data->GetVerticeDefinition<vmfloat3>("POSITION");
 	vmint2 i2SizeScreen;
 	iobj->GetFrameBufferInfo(&i2SizeScreen);
-	float depthThreshold = ioParams.GetParam("_float_DepthThreshold", 0.01f);
+	float depthThreshold = ioParams.GetParam("_float_DepthThreshold", 1.00f);
 	if (ptr_listVertices)
 	{
 		ptr_listVertices->clear();
@@ -1332,14 +1332,20 @@ bool SelectPrimitives(
 					{
 						vmfloat3 p_ws;
 						vmmath::fTransformPoint(&p_ws, &p, &matRS2WS);
-						vmfloat3 pos_ip_ss = vmfloat3(p_ss.x, p_ss.y, 0);
-						vmfloat3 pos_ip_ws;
-						vmmath::fTransformPoint(&pos_ip_ws, &pos_ip_ss, &matSS2WS);
-						vmfloat3 diff = p_ws - pos_ip_ws;
-						float vtx_depth = sqrtf(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z);
-						float stored_depth = depth_fb_3x3[(int)(p_ss.y / 3) * w3 + (int)(p_ss.x / 3)];
+
+						vmfloat3 p_cs;
+						vmmath::fTransformPoint(&p_cs, &p_ws, &matWS2CS);
+
+						float vtx_depth = -p_cs.z;
+						float stored_depth = depth_fb_3x3[(int)((p_ss.y + 0.5f) / 3) * w3 + (int)((p_ss.x + 0.5f) / 3)];
 						if (vtx_depth > stored_depth + depthThreshold)
+						{
+							//if (p_cs.x * p_cs.x + p_cs.y * p_cs.y < 100)
+							//{
+							//	int gg = 0;
+							//}
 							continue;
+						}
 					}
 					ptr_listVertices->push_back(i);
 				}
@@ -1371,12 +1377,12 @@ bool SelectPrimitives(
 							{
 								vmfloat3 p_ws;
 								vmmath::fTransformPoint(&p_ws, &p, &matRS2WS);
-								vmfloat3 pos_ip_ss = vmfloat3(p_ss.x, p_ss.y, 0);
-								vmfloat3 pos_ip_ws;
-								vmmath::fTransformPoint(&pos_ip_ws, &pos_ip_ss, &matSS2WS);
-								vmfloat3 diff = p_ws - pos_ip_ws;
-								float vtx_depth = sqrtf(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z);
-								float stored_depth = depth_fb_3x3[(int)(p_ss.y / 3) * w3 + (int)(p_ss.x / 3)];
+
+								vmfloat3 p_cs;
+								vmmath::fTransformPoint(&p_cs, &p_ws, &matWS2CS);
+
+								float vtx_depth = -p_cs.z;
+								float stored_depth = depth_fb_3x3[(int)((p_ss.y + 0.5f) / 3) * w3 + (int)((p_ss.x + 0.5f) / 3)];
 								if (vtx_depth > stored_depth + depthThreshold)
 									continue;
 							}
@@ -1413,12 +1419,12 @@ bool SelectPrimitives(
 							{
 								vmfloat3 p_ws;
 								vmmath::fTransformPoint(&p_ws, &p, &matRS2WS);
-								vmfloat3 pos_ip_ss = vmfloat3(p_ss.x, p_ss.y, 0);
-								vmfloat3 pos_ip_ws;
-								vmmath::fTransformPoint(&pos_ip_ws, &pos_ip_ss, &matSS2WS);
-								vmfloat3 diff = p_ws - pos_ip_ws;
-								float vtx_depth = sqrtf(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z);
-								float stored_depth = depth_fb_3x3[(int)(p_ss.y / 3) * w3 + (int)(p_ss.x / 3)];
+
+								vmfloat3 p_cs;
+								vmmath::fTransformPoint(&p_cs, &p_ws, &matWS2CS);
+
+								float vtx_depth = -p_cs.z;
+								float stored_depth = depth_fb_3x3[(int)((p_ss.y + 0.5f) / 3) * w3 + (int)((p_ss.x + 0.5f) / 3)];
 								if (vtx_depth > stored_depth + depthThreshold)
 									continue;
 							}
