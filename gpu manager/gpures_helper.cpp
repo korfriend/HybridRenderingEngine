@@ -270,7 +270,7 @@ int grd_helper::Initialize(VmGpuManager* pCGpuManager, PSOManager* gpu_params)
 		ZeroMemory(&descDepthStencil, sizeof(D3D11_DEPTH_STENCIL_DESC));
 		descDepthStencil.DepthEnable = TRUE;
 		descDepthStencil.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
-		descDepthStencil.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
+		descDepthStencil.DepthFunc = D3D11_COMPARISON_GREATER_EQUAL; // Reverse Z: was LESS_EQUAL
 		descDepthStencil.StencilEnable = FALSE;
 		ID3D11DepthStencilState* ds_state;
 		hr |= g_psoManager->dx11Device->CreateDepthStencilState(&descDepthStencil, &ds_state);
@@ -281,10 +281,10 @@ int grd_helper::Initialize(VmGpuManager* pCGpuManager, PSOManager* gpu_params)
 		descDepthStencil.DepthFunc = D3D11_COMPARISON_ALWAYS;
 		hr |= g_psoManager->dx11Device->CreateDepthStencilState(&descDepthStencil, &ds_state);
 		g_psoManager->safe_set_res(COMRES_INDICATOR(GpuhelperResType::DEPTHSTENCIL_STATE, "ALWAYS"), ds_state);
-		descDepthStencil.DepthFunc = D3D11_COMPARISON_GREATER;
+		descDepthStencil.DepthFunc = D3D11_COMPARISON_LESS; // Reverse Z: was GREATER
 		hr |= g_psoManager->dx11Device->CreateDepthStencilState(&descDepthStencil, &ds_state);
 		g_psoManager->safe_set_res(COMRES_INDICATOR(GpuhelperResType::DEPTHSTENCIL_STATE, "GREATER"), ds_state);
-		descDepthStencil.DepthFunc = D3D11_COMPARISON_LESS;
+		descDepthStencil.DepthFunc = D3D11_COMPARISON_GREATER; // Reverse Z: was LESS
 		hr |= g_psoManager->dx11Device->CreateDepthStencilState(&descDepthStencil, &ds_state);
 		g_psoManager->safe_set_res(COMRES_INDICATOR(GpuhelperResType::DEPTHSTENCIL_STATE, "LESS"), ds_state);
 
@@ -2522,11 +2522,21 @@ bool grd_helper::UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, Vm
 	return true;
 }
 
-void grd_helper::SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, const vmmat44f& matSS2WS, const vmmat44f& matWS2CS, VmCObject* ccobj, const vmint2& fb_size, const int k_value, const float vz_thickness)
+void grd_helper::SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, const vmmat44f& matSS2WS, const vmmat44f& matWS2CS, const vmmat44f& matWS2PS, VmCObject* ccobj, const vmint2& fb_size, const int k_value, const float vz_thickness)
 {
 	cb_cam.mat_ss2ws = TRANSPOSE(matSS2WS);
 	cb_cam.mat_ws2ss = TRANSPOSE(matWS2SS);
 	cb_cam.mat_ws2cs = TRANSPOSE(matWS2CS);
+
+	// Reverse Z: remap z from [0,1] to [1,0] by transforming column 2
+	// P_revZ[2] = P[3] - P[2], so z_ndc = (w - z_standard) / w = 1 - z_standard/w
+	vmmat44f matWS2PS_revZ = matWS2PS;
+	matWS2PS_revZ[2] = vmfloat4(
+		matWS2PS[3].x - matWS2PS[2].x,
+		matWS2PS[3].y - matWS2PS[2].y,
+		matWS2PS[3].z - matWS2PS[2].z,
+		matWS2PS[3].w - matWS2PS[2].w);
+	cb_cam.mat_ws2ps_revZ = TRANSPOSE(matWS2PS_revZ);
 
 	vmfloat3 pos_cam, dir_cam;
 	ccobj->GetCameraExtStatef(&pos_cam, &dir_cam, NULL);

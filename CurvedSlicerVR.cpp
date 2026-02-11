@@ -229,7 +229,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	if (fb_size_cur.x != fb_size_old.x || fb_size_cur.y != fb_size_old.y || k_value != k_value_old
 		|| k_value != k_value_old)
 	{
-		gpu_manager->ReleaseGpuResourcesBySrcID(iobj->GetObjectID());	// System Out Æ÷ÇÔ //
+		gpu_manager->ReleaseGpuResourcesBySrcID(iobj->GetObjectID());	// System Out //
 		iobj->SetObjParam("_int2_PreviousScreenSize", fb_size_cur);
 		iobj->SetObjParam("_int_PreviousBufferEx", (int)1);
 	}
@@ -393,7 +393,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	dx11ViewPort.Width = (float)fb_size_cur.x;
 	dx11ViewPort.Height = (float)fb_size_cur.y;
 	dx11ViewPort.MinDepth = 0;
-	dx11ViewPort.MaxDepth = 1.0f;
+	dx11ViewPort.MaxDepth = 1;
 	dx11ViewPort.TopLeftX = 0;
 	dx11ViewPort.TopLeftY = 0;
 	dx11DeviceImmContext->RSSetViewports(1, &dx11ViewPort);
@@ -447,7 +447,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	vmmat44f matSS2WS = (dmatSS2PS * dmatPS2CS) * dmatCS2WS;
 
 	CB_CameraState cbCamState;
-	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, matWS2CS, cam_obj, fb_size_cur, k_value, v_thickness <= 0 ? min_pitch : (float)v_thickness);
+	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, matWS2CS, matWS2PS, cam_obj, fb_size_cur, k_value, v_thickness <= 0 ? min_pitch : (float)v_thickness);
 	cbCamState.iSrCamDummy__0 = *(uint32_t*)&merging_beta;
 	int oulineiRGB = (int)(outline_color.r * 255.f) | (int)(outline_color.g * 255.f) << 8 | (int)(outline_color.b * 255.f) << 16;
 	outline_thickness = min(32, outline_thickness);

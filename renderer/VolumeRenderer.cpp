@@ -304,7 +304,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		|| k_value != k_value_old || num_moments != num_moments_old
 		|| buffer_ex != buffer_ex_old)
 	{
-		gpu_manager->ReleaseGpuResourcesBySrcID(iobj->GetObjectID());	// System Out Æ÷ÇÔ //
+		gpu_manager->ReleaseGpuResourcesBySrcID(iobj->GetObjectID());	// System Out //
 		iobj->SetObjParam("_int2_PreviousScreenSize", fb_size_cur);
 		iobj->SetObjParam("_int_PreviousBufferEx", buffer_ex);
 	}
@@ -563,7 +563,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	dx11ViewPort.Width = (float)fb_size_cur.x;
 	dx11ViewPort.Height = (float)fb_size_cur.y;
 	dx11ViewPort.MinDepth = 0;
-	dx11ViewPort.MaxDepth = 1.0f;
+	dx11ViewPort.MaxDepth = 1;
 	dx11ViewPort.TopLeftX = 0;
 	dx11ViewPort.TopLeftY = 0;
 	dx11DeviceImmContext->RSSetViewports(1, &dx11ViewPort);
@@ -604,7 +604,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	vmmat44f matSS2WS = (dmatSS2PS * dmatPS2CS) * dmatCS2WS;
 
 	CB_CameraState cbCamState;
-	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, matWS2CS, cam_obj, fb_size_cur, k_value, v_thickness <= 0? min_pitch : (float)v_thickness);
+	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, matWS2CS, matWS2PS, cam_obj, fb_size_cur, k_value, v_thickness <= 0? min_pitch : (float)v_thickness);
 	cbCamState.iSrCamDummy__0 = *(uint32_t*)&merging_beta;
 	if (fastRender2x) cbCamState.cam_flag |= 0x1 << 8; // 9th bit set
 	int oulineiRGB = (int)(outline_color.r * 255.f) | (int)(outline_color.g * 255.f) << 8 | (int)(outline_color.b * 255.f) << 16;
@@ -1288,7 +1288,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 	//clock_t finish = clock();
 	//double duration = (double)(finish - start) / CLOCKS_PER_SEC;
-	//printf("###################### %fÃÊ\n", duration);
+	//printf("###################### %f sec\n", duration);
 
 	return true;
 }

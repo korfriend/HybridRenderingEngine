@@ -347,7 +347,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	if (fb_size_cur.x != fb_size_old.x || fb_size_cur.y != fb_size_old.y
 		|| k_value != k_value_old)
 	{
-		gpu_manager->ReleaseGpuResourcesBySrcID(iobj->GetObjectID());	// System Out Æ÷ÇÔ //
+		gpu_manager->ReleaseGpuResourcesBySrcID(iobj->GetObjectID());	// System Out //
 		iobj->SetObjParam("_int2_PreviousScreenSize", fb_size_cur);
 		iobj->SetObjParam("_int_PreviousBufferEx", (int)1);
 	}
@@ -624,7 +624,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	dx11ViewPort.Width = (float)fb_size_cur.x;
 	dx11ViewPort.Height = (float)fb_size_cur.y;
 	dx11ViewPort.MinDepth = 0;
-	dx11ViewPort.MaxDepth = 1.0f;
+	dx11ViewPort.MaxDepth = 1;
 	dx11ViewPort.TopLeftX = 0;
 	dx11ViewPort.TopLeftY = 0;
 	dx11DeviceImmContext->RSSetViewports(1, &dx11ViewPort);
@@ -1233,7 +1233,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	dx11DeviceImmContext->PSSetConstantBuffers(0, 1, &cbuf_cam_state);
 	dx11DeviceImmContext->CSSetConstantBuffers(0, 1, &cbuf_cam_state);
 	CB_CameraState cbCamState;
-	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, matWS2CS, cam_obj, fb_size_cur, k_value, gi_v_thickness);
+	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, matWS2CS, matWS2PS, cam_obj, fb_size_cur, k_value, gi_v_thickness);
 //#ifdef DX10_0
 //	cbCamState.far_plane = planeThickness_original;
 //#else

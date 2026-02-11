@@ -1099,6 +1099,8 @@ bool SelectPrimitives(
 
 	bool only_foremost = ioParams.GetParam("_bool_OnlyForemost", false);
 	std::vector<float> depth_fb;
+	std::vector<float> depth_fb_3x3;
+	int w3 = 0, h3 = 0;
 	if (only_foremost)
 	{
 		__ID3D11Device* dx11Device = g_psoManager.dx11Device;
@@ -1113,7 +1115,7 @@ bool SelectPrimitives(
 		ID3D11RenderTargetView* dx11RTV = (ID3D11RenderTargetView*)gres_fb_singlelayer_tempDepth.alloc_res_ptrs[DTYPE_RTV];
 		float clr_float_fltmax_4[4] = { FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX };
 		dx11DeviceImmContext->ClearRenderTargetView(dx11RTV, clr_float_fltmax_4);
-		dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+		dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 0.0f, 0); // Reverse Z
 
 		dx11DeviceImmContext->OMSetRenderTargets(1, &dx11RTV, dx11DSV);
 		dx11DeviceImmContext->OMSetDepthStencilState(g_psoManager.get_depthstencil("LESSEQUAL"), 0);
@@ -1126,7 +1128,7 @@ bool SelectPrimitives(
 		dx11ViewPort.Width = (float)fb_size_cur.x;
 		dx11ViewPort.Height = (float)fb_size_cur.y;
 		dx11ViewPort.MinDepth = 0;
-		dx11ViewPort.MaxDepth = 1.0f;
+		dx11ViewPort.MaxDepth = 1;
 		dx11ViewPort.TopLeftX = 0;
 		dx11ViewPort.TopLeftY = 0;
 		dx11DeviceImmContext->RSSetViewports(1, &dx11ViewPort);
@@ -1144,7 +1146,7 @@ bool SelectPrimitives(
 
 		// CB_CameraState
 		CB_CameraState cbCamState;
-		grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, matWS2CS, cam_obj, fb_size_cur, 8, 0);
+		grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, matWS2CS, matWS2PS, cam_obj, fb_size_cur, 8, 0);
 
 		ID3D11Buffer* cbuf_cam_state = g_psoManager.get_cbuf("CB_CameraState");
 		D3D11_MAPPED_SUBRESOURCE mappedResCamState;
@@ -1256,21 +1258,40 @@ bool SelectPrimitives(
 			(ID3D11Texture2D*)gres_fb_singlelayer_tempDepth.alloc_res_ptrs[DTYPE_RES]);
 
 		depth_fb.resize(fb_size_cur.x * fb_size_cur.y);
+		w3 = fb_size_cur.x / 3;
+		h3 = fb_size_cur.y / 3;
+		depth_fb_3x3.resize(w3 * h3, FLT_MAX);
 
 		D3D11_MAPPED_SUBRESOURCE mappedResDepth;
 		dx11DeviceImmContext->Map((ID3D11Texture2D*)gres_fb_sys_depth.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_READ, 0, &mappedResDepth);
 		float* foremostDepthMap = (float*)mappedResDepth.pData;
 		int foremostDepthRowPitch = mappedResDepth.RowPitch / sizeof(float);
 
-		// TODO: use foremostDepthMap in vertex/polygon selection below
 		for (int y = 0; y < fb_size_cur.y; ++y)
 		{
 			memcpy(&depth_fb[y * fb_size_cur.x], foremostDepthMap + foremostDepthRowPitch * y, sizeof(float) * fb_size_cur.x);
 		}
 
 		dx11DeviceImmContext->Unmap((ID3D11Texture2D*)gres_fb_sys_depth.alloc_res_ptrs[DTYPE_RES], 0);
-	}
 
+		for (int by = 0; by < h3; ++by)
+		{
+			for (int bx = 0; bx < w3; ++bx)
+			{
+				float maxDepth = -FLT_MAX;
+				for (int dy = 0; dy < 3; ++dy)
+				{
+					for (int dx = 0; dx < 3; ++dx)
+					{
+						float d = depth_fb[(by * 3 + dy) * fb_size_cur.x + (bx * 3 + dx)];
+						if (d < FLT_MAX && d > maxDepth)
+							maxDepth = d;
+					}
+				}
+				depth_fb_3x3[by * w3 + bx] = (maxDepth == -FLT_MAX) ? FLT_MAX : maxDepth;
+			}
+		}
+	}
 
 	vmmat44f matPivot = (meshActor->GetParam("_matrix44f_Pivot", vmmat44f(1)));
 	vmmat44f matRS2WS = matPivot * meshActor->matOS2WS;
@@ -1293,7 +1314,7 @@ bool SelectPrimitives(
 	vmfloat3* positions = prim_data->GetVerticeDefinition<vmfloat3>("POSITION");
 	vmint2 i2SizeScreen;
 	iobj->GetFrameBufferInfo(&i2SizeScreen);
-	float depthThreshold = ioParams.GetParam("_float_DepthThreshold", 0.5f);
+	float depthThreshold = ioParams.GetParam("_float_DepthThreshold", 0.01f);
 	if (ptr_listVertices)
 	{
 		ptr_listVertices->clear();
@@ -1316,8 +1337,8 @@ bool SelectPrimitives(
 						vmmath::fTransformPoint(&pos_ip_ws, &pos_ip_ss, &matSS2WS);
 						vmfloat3 diff = p_ws - pos_ip_ws;
 						float vtx_depth = sqrtf(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z);
-						float stored_depth = depth_fb[(int)p_ss.x + (int)p_ss.y * i2SizeScreen.x];
-						if (stored_depth >= FLT_MAX || fabs(vtx_depth - stored_depth) > depthThreshold)
+						float stored_depth = depth_fb_3x3[(int)(p_ss.y / 3) * w3 + (int)(p_ss.x / 3)];
+						if (vtx_depth > stored_depth + depthThreshold)
 							continue;
 					}
 					ptr_listVertices->push_back(i);
@@ -1355,8 +1376,8 @@ bool SelectPrimitives(
 								vmmath::fTransformPoint(&pos_ip_ws, &pos_ip_ss, &matSS2WS);
 								vmfloat3 diff = p_ws - pos_ip_ws;
 								float vtx_depth = sqrtf(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z);
-								float stored_depth = depth_fb[(int)p_ss.x + (int)p_ss.y * i2SizeScreen.x];
-								if (stored_depth >= FLT_MAX || fabs(vtx_depth - stored_depth) > depthThreshold)
+								float stored_depth = depth_fb_3x3[(int)(p_ss.y / 3) * w3 + (int)(p_ss.x / 3)];
+								if (vtx_depth > stored_depth + depthThreshold)
 									continue;
 							}
 							selected = true;
@@ -1397,8 +1418,8 @@ bool SelectPrimitives(
 								vmmath::fTransformPoint(&pos_ip_ws, &pos_ip_ss, &matSS2WS);
 								vmfloat3 diff = p_ws - pos_ip_ws;
 								float vtx_depth = sqrtf(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z);
-								float stored_depth = depth_fb[(int)p_ss.x + (int)p_ss.y * i2SizeScreen.x];
-								if (stored_depth >= FLT_MAX || fabs(vtx_depth - stored_depth) > depthThreshold)
+								float stored_depth = depth_fb_3x3[(int)(p_ss.y / 3) * w3 + (int)(p_ss.x / 3)];
+								if (vtx_depth > stored_depth + depthThreshold)
 									continue;
 							}
 							selected = true;

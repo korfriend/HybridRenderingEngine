@@ -217,7 +217,7 @@ bool RenderSrOnPlane(VmFnContainer* _fncontainer,
 	pCOutputIObject->GetCustomParameter("_int2_PreviousScreenSize", data_type::dtype<vmint2>(), &i2SizeScreenOld);
 	if (i2SizeScreenCurrent.x != i2SizeScreenOld.x || i2SizeScreenCurrent.y != i2SizeScreenOld.y)
 	{
-		pCGpuManager->ReleaseGpuResourcesBySrcID(pCOutputIObject->GetObjectID());	// System Out 포함 //
+		pCGpuManager->ReleaseGpuResourcesBySrcID(pCOutputIObject->GetObjectID());	// System Out //
 		pCOutputIObject->RegisterCustomParameter(("_int2_PreviousScreenSize"), i2SizeScreenCurrent);
 	}
 
@@ -415,8 +415,8 @@ bool RenderSrOnPlane(VmFnContainer* _fncontainer,
 	D3D11_VIEWPORT dx11ViewPort;
 	dx11ViewPort.Width = (float)i2SizeScreenCurrent.x;
 	dx11ViewPort.Height = (float)i2SizeScreenCurrent.y;
-	dx11ViewPort.MinDepth = 0;	// Dojo Check //
-	dx11ViewPort.MaxDepth = 1.0f;
+	dx11ViewPort.MinDepth = 0;
+	dx11ViewPort.MaxDepth = 1;
 	dx11ViewPort.TopLeftX = 0;
 	dx11ViewPort.TopLeftY = 0;
 	pdx11DeviceImmContext->RSSetViewports(1, &dx11ViewPort);
@@ -457,7 +457,7 @@ bool RenderSrOnPlane(VmFnContainer* _fncontainer,
 	}
 	// Clear Depth Stencil //
 	ID3D11DepthStencilView* pdx11DSV = (ID3D11DepthStencilView*)gres_fbs[__GRES_FB_V1_DOUT_DS].alloc_res_ptrs[DTYPE_DSV];
-	pdx11DeviceImmContext->ClearDepthStencilView(pdx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+	pdx11DeviceImmContext->ClearDepthStencilView(pdx11DSV, D3D11_CLEAR_DEPTH, 0.0f, 0); // Reverse Z
 
 	// Clear Merge Buffers //
 	for (int i = 0; i < 2; i++)
@@ -490,9 +490,9 @@ bool RenderSrOnPlane(VmFnContainer* _fncontainer,
 #define __PLANE_RENDER_MODE_3D 1
 	int iLOOPMODE = __PLANE_RENDER_MODE_FILLED;
 	int iRENDERER_LOOP = 0;
-	int iCountRendering[2] = { 0 };	// Draw 불린 횟 수
-	int iCountRTBuffers = 0;	// Render Target Index 가 바뀌는 횟 수
-	int iCountMerging = 0;		// Merging 불린 횟 수
+	int iCountRendering[2] = { 0 };	// # of Draw calls
+	int iCountRTBuffers = 0;	// # of Render Target Index changes
+	int iCountMerging = 0;		// # of Merging calls
 
 MODE_LOOP:
 RENDERER_LOOP :
@@ -870,7 +870,7 @@ RENDERER_LOOP :
 				iCountMerging++;
 			}	// iModRTLayer == 0
 
-			pdx11DeviceImmContext->ClearDepthStencilView(pdx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+			pdx11DeviceImmContext->ClearDepthStencilView(pdx11DSV, D3D11_CLEAR_DEPTH, 0.0f, 0); // Reverse Z
 #pragma endregion // SELF RENDERING PASS
 		}
 		else
@@ -970,7 +970,7 @@ RENDERER_LOOP_EXIT:
 			{
 				for (int j = 0; j < i2SizeScreenCurrent.x; j++)
 				{
-					// __PS_MERGE_LAYERS_TO_RENDEROUT 에서 INT -> FLOAT4 로 되어 배열된 color 요소가 들어 옴. //
+					// __PS_MERGE_LAYERS_TO_RENDEROUT : INT -> FLOAT4 color. //
 					vmbyte4 y4Renderout = py4RenderOuts[j + i * iGpuBufferOffset];
 					vmbyte4 y4RenderoutCorrection;
 					y4RenderoutCorrection.x = y4Renderout.z;	// B

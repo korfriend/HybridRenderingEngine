@@ -56,7 +56,7 @@ VertextoPixel CommonVS_IDX(uint vid : SV_VertexID, uint instanceID : SV_Instance
 	Out.P = position;// TransformPoint(position, g_cbPobj.mat_os2ws);
     // Out.pos = float4(position, 1);
     Out.clip = 1;// dot(Out.pos, GetCamera().clip_plane);
-    Out.pos = mul(g_cbPobj.mat_os2ps, float4(position, 1.f)); //mul(GetCamera().view_projection, Out.pos);
+    Out.pos = mul(g_cbCamState.mat_ws2ps_revZ, float4(position, 1.f)); // Reverse Z (particle is already in world space)
     Out.tex = min16float2(uv);
     Out.size = min16float(size);
     Out.color = pack_rgba(color);
@@ -116,7 +116,7 @@ PS_FILL_OUTPUT ParticleRender(VertextoPixel input)
 		//color = material.textures[SLOT].Sample(sampler_linear_clamp, input.tex.xyxy);
 
 		//[branch]
-		// ÀÌÀü frame ¿¡ ´ëÇÑ Á¤º¸ zwzw ¿¡¼­ sample ÇÑ °Í°ú blending...
+		// ï¿½ï¿½ï¿½ï¿½ frame ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ zwzw ï¿½ï¿½ï¿½ï¿½ sample ï¿½ï¿½ ï¿½Í°ï¿½ blending...
 		//if (g_emitter.xEmitterOptions & EMITTER_OPTION_BIT_FRAME_BLENDING_ENABLED)
 		//{
 		//	float4 color2 = material.textures[SLOT].Sample(sampler_linear_clamp, input.tex.zwzw);

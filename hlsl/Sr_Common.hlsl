@@ -81,8 +81,8 @@ struct PS_OUTPUT
 VS_OUTPUT CommonVS(VS_INPUTS input)
 {
 	VS_OUTPUT vout = (VS_OUTPUT) 0;
-	vout.f4PosSS = mul(g_cbPobj.mat_os2ps, float4(input.f3PosOS, 1.f));
 	vout.f3PosWS = TransformPoint(input.f3PosOS, g_cbPobj.mat_os2ws);
+	vout.f4PosSS = mul(g_cbCamState.mat_ws2ps_revZ, float4(vout.f3PosWS, 1.f)); // Reverse Z
     
 #if VSIN_N == 1
 	vout.f3VecNormalWS = normalize(TransformVector(input.f3VecNormalOS, g_cbPobj.mat_os2ws));
@@ -103,8 +103,8 @@ VS_OUTPUT CommonVS(VS_INPUTS input)
 VS_OUTPUT_TTT CommonVS_PTTT(VS_INPUT_PTTT input)
 {
     VS_OUTPUT_TTT vout = (VS_OUTPUT_TTT) 0;
-    vout.f4PosSS = mul(g_cbPobj.mat_os2ps, float4(input.f3PosOS, 1.f));
     vout.f3PosWS = TransformPoint(input.f3PosOS, g_cbPobj.mat_os2ws);
+    vout.f4PosSS = mul(g_cbCamState.mat_ws2ps_revZ, float4(vout.f3PosWS, 1.f)); // Reverse Z
     vout.f3Custom0 = input.f3Custom0;
     vout.f3Custom1 = TransformPerspVector(input.f3Custom1, g_cbPobj.mat_os2ps);
     vout.f3Custom2 = TransformPerspVector(input.f3Custom2, g_cbPobj.mat_os2ps);
@@ -535,7 +535,7 @@ float WRITE_DEPTHZ(__VS_OUT input) : SV_Depth
 {
     POBJ_PRE_CONTEXT;
 
-    float z = 1;// input.f4PosSS.z / input.f4PosSS.w;
+    float z = 0; // Reverse Z: far plane is 0 (was 1)
     //if (g_cbCamState.cam_flag & 0x1) {
     //    //https://developer.nvidia.com/content/depth-precision-visualized
     //
@@ -1152,8 +1152,6 @@ void GS_Surfels(point VS_OUTPUT input[1], inout TriangleStream<VS_OUTPUT> triang
 	float4x4 mat_t_ori = m_translate(IDENTITY_MATRIX, -pos_center_ws);
 	float4x4 mat_t_cen = m_translate(IDENTITY_MATRIX, pos_center_ws);
 
-	float4x4 mat_ws2os = inverse(g_cbPobj.mat_os2ws);
-
 	float angle = 2.f * F_PI / nCountTriangles;
 	float4 qt = float4(sin(angle * 0.5f) * nrl_center_ws, cos(angle * 0.5f));
 	float4x4 mat_r = quaternion_to_matrix(qt);
@@ -1168,16 +1166,12 @@ void GS_Surfels(point VS_OUTPUT input[1], inout TriangleStream<VS_OUTPUT> triang
 		output.f4PosSS = pos_center_ss;
 		triangleStream.Append(output);
 		
-		float3 pos_os;
-
 		output.f3PosWS = pos_upr_ws;
-		pos_os = TransformPoint(output.f3PosWS, mat_ws2os);
-		output.f4PosSS = mul(g_cbPobj.mat_os2ps, float4(pos_os, 1.f));
+		output.f4PosSS = mul(g_cbCamState.mat_ws2ps_revZ, float4(output.f3PosWS, 1.f)); // Reverse Z
 		triangleStream.Append(output);
 
 		output.f3PosWS = pos_upr_ws = TransformPoint(pos_upr_ws, mat);
-		pos_os = TransformPoint(output.f3PosWS, mat_ws2os);
-		output.f4PosSS = mul(g_cbPobj.mat_os2ps, float4(pos_os, 1.f));
+		output.f4PosSS = mul(g_cbCamState.mat_ws2ps_revZ, float4(output.f3PosWS, 1.f)); // Reverse Z
 		triangleStream.Append(output);
 		
 		triangleStream.RestartStrip();

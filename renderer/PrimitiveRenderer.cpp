@@ -1484,7 +1484,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 	dx11ViewPort.Width = (float)fb_size_cur.x;
 	dx11ViewPort.Height = (float)fb_size_cur.y;
 	dx11ViewPort.MinDepth = 0;
-	dx11ViewPort.MaxDepth = 1.0f;
+	dx11ViewPort.MaxDepth = 1;
 	dx11ViewPort.TopLeftX = 0;
 	dx11ViewPort.TopLeftY = 0;
 	dx11DeviceImmContext->RSSetViewports(1, &dx11ViewPort);
@@ -1690,7 +1690,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 
 	// Clear Depth Stencil //
 	ID3D11DepthStencilView* dx11DSV = (ID3D11DepthStencilView*)gres_fb_depthstencil.alloc_res_ptrs[DTYPE_DSV];
-	// dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0); // this code is located to the right ahead of rendering calls
+	// dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 0.0f, 0); // Reverse Z // this code is located to the right ahead of rendering calls
 
 	float flt_max_ = FLT_MAX;
 	uint32_t flt_max_u = *(uint32_t*)&flt_max_;
@@ -1778,7 +1778,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 	};
 
 	CB_CameraState cbCamState;
-	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, matWS2CS, cam_obj, fb_size_cur, k_value, gi_v_thickness);
+	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, matWS2CS, matWS2PS, cam_obj, fb_size_cur, k_value, gi_v_thickness);
 
 	int camera_brush_target_actor_id = 0;
 	bool camera_brush_in_3d = false;
@@ -2611,7 +2611,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 						if (update_undercutMap) {
 
 							dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_map_undercut.alloc_res_ptrs[DTYPE_RTV], clr_float_fltmax_4);
-							dx11DeviceImmContext->ClearDepthStencilView((ID3D11DepthStencilView*)gres_ds_undercut.alloc_res_ptrs[DTYPE_DSV], D3D11_CLEAR_DEPTH, 1.0f, 0);
+							dx11DeviceImmContext->ClearDepthStencilView((ID3D11DepthStencilView*)gres_ds_undercut.alloc_res_ptrs[DTYPE_DSV], D3D11_CLEAR_DEPTH, 0.0f, 0); // Reverse Z
 
 							dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(LESSEQUAL), 0);
 							dx11DeviceImmContext->PSSetShader(GETPS(SR_CAST_DEPTHMAP_ps_5_0), NULL, 0);
@@ -2814,7 +2814,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 					case RENDER_GEOPASS::PASS_SILHOUETTE:
 						// clear //
 						// to do // 별도의 RT 를 만들어 두어야 한다.
-						//dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+						//dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 0.0f, 0); // Reverse Z
 						//dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(2, dx11RTVs, dx11DSV, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
 						//dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(LESSEQUAL), 0);
 						break;
@@ -2836,7 +2836,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 					// ... //
 					if (actor->GetParam("_bool_OnlyForemostSurfaces", false)) {
 						dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(0, NULL, dx11DSV, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
-						dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+						dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 0.0f, 0); // Reverse Z
 						dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(LESSEQUAL), 0);
 
 						ID3D11PixelShader* dx11PS_DepthWrite = GETPS(WRITE_DEPTH_ps_5_0);
@@ -2858,7 +2858,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 					break;
 				case RENDER_GEOPASS::PASS_SILHOUETTE:
 					// clear //
-					//dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+					//dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 0.0f, 0); // Reverse Z
 					//dx11DeviceImmContext->OMSetRenderTargets(1, (ID3D11RenderTargetView**)&gres_fb_singlelayer_tempDepth, dx11DSV);
 					dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(1, (ID3D11RenderTargetView**)&gres_fb_singlelayer_tempDepth.alloc_res_ptrs[DTYPE_RTV], dx11DSV, 2, NUM_UAVs_1ST, dx11UAVs_NULL, 0);
 					dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(LESSEQUAL), 0);
@@ -2960,7 +2960,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 					dx11DeviceImmContext->PSSetShaderResources(11, 1, dx11SRVs_NULL);
 				}
 
-				dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+				dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 0.0f, 0); // Reverse Z
 				dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_singlelayer_tempDepth.alloc_res_ptrs[DTYPE_RTV], clr_float_fltmax_4);
 
 			}
@@ -3119,7 +3119,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 
 		if (foremost_opaque_surfaces_routine_objs.size() > 0) 
 		{
-			dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+			dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 0.0f, 0); // Reverse Z
 			psoManager->GpuProfile("Opaque Surface");
 			// Opaque Foremost Rendering ==> to Render Target Textures (gres_fb_rgba and gres_fb_depthcs)
 			RenderStage1(foremost_opaque_surfaces_routine_objs, MFR_MODE::NONE, RENDER_GEOPASS::PASS_OPAQUESURFACES
@@ -3130,7 +3130,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 		// single.. k buffers... 
 		if (single_layer_routine_objs.size() > 0)
 		{
-			dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+			dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 0.0f, 0); // Reverse Z
 			psoManager->GpuProfile("Single Layer Pass");
 			// Single Layer Effect (outline) Rendering 
 			// ==> to a Temporary Render Target Texture (gres_fb_singlelayer_depthcs)
@@ -3141,7 +3141,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 
 		if (single_layer_routine_group_objs.size() > 0) 
 		{
-			dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+			dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 0.0f, 0); // Reverse Z
 			psoManager->GpuProfile("Group Single Layer Pass");
 			// Single Layer Effect (outline) Rendering 
 			// ==> to a Temporary Render Target Texture (gres_fb_singlelayer_depthcs)
@@ -4195,7 +4195,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 
 		if (second_layer_objs.size() > 0) {
 			dx11DeviceImmContext->ClearRenderTargetView((ID3D11RenderTargetView*)gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_RTV], clr_float_zero_4);
-			dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+			dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 0.0f, 0); // Reverse Z
 			psoManager->GpuProfile("Second Layer Surface");
 			RenderStage1(second_layer_objs, MFR_MODE::NONE, RENDER_GEOPASS::PASS_OPAQUESURFACES
 				, false /*is_frag_counter_buffer*/, false/*is_ghost_mode*/, PICKING_TYPE::NONE, false/*apply_fragmerge*/, false, false, true);

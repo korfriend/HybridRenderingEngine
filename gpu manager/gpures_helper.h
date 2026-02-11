@@ -530,6 +530,7 @@ namespace grd_helper
 		vmmat44f mat_ws2ss;
 		vmmat44f mat_ss2ws;
 		vmmat44f mat_ws2cs;
+		vmmat44f mat_ws2ps_revZ; // Reverse Z projection matrix
 
 		vmfloat3 pos_cam_ws;
 		uint32_t rt_width;
@@ -963,7 +964,7 @@ namespace grd_helper
 
 	// Compute Constant Buffers //
 	// global 
-	void SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, const vmmat44f& matSS2WS, const vmmat44f& matWS2CS, VmCObject* ccobj, const vmint2& fb_size, const int k_value, const float vz_thickness);
+	void SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, const vmmat44f& matSS2WS, const vmmat44f& matWS2CS, const vmmat44f& matWS2PS, VmCObject* ccobj, const vmint2& fb_size, const int k_value, const float vz_thickness);
 	void SetCb_Env(CB_EnvState& cb_env, VmCObject* ccobj, const LightSource& light_src, const GlobalLighting& global_lighting, const LensEffect& lens_effect);
 	// each object
 	void SetCb_TMap(CB_TMAP& cb_tmap, VmObject* tobj);

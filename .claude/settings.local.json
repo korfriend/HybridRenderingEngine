@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(ShaderCompile.bat)",
+      "Bash(ShaderCompile_4_0.bat:*)",
+      "Bash(cmd.exe:*)",
+      "Bash(powershell.exe -Command \"Set-Location ''D:\\\\VizMotive1\\\\VmProjects\\\\RendererGPU''; & ''.\\\\fxc.exe'' /E WRITE_DEPTHZ /T ps_5_0 ''.\\\\hlsl\\\\Sr_Common.hlsl'' /Fo ''.\\\\shader_compiled_objs\\\\WRITE_DEPTH_ps_5_0''; Write-Host ''Exit code:'' $LASTEXITCODE\")",
+      "Bash(powershell.exe -Command \"Set-Location ''D:\\\\VizMotive1\\\\VmProjects\\\\RendererGPU''; Get-Content ShaderCompile.bat | Where-Object { $_Trim\\(\\) -ne '''' } | ForEach-Object { Write-Host ''Compiling:'' $_Split\\(''/Fo''\\)[1].Split\\(''/D''\\)[0].Trim\\(\\); Invoke-Expression \"\"& .$_\"\" 2>&1 }; Write-Host ''Done''\")",
+      "Bash(powershell.exe -File:*)",
+      "Bash(powershell.exe -Command \"Start-Process cmd.exe -ArgumentList ''/c cd /d D:\\\\VizMotive1\\\\VmProjects\\\\RendererGPU && ShaderCompile.bat'' -Wait -NoNewWindow\")",
+      "Bash(powershell.exe -Command \"Start-Process cmd.exe -ArgumentList ''/c cd /d D:\\\\VizMotive1\\\\VmProjects\\\\RendererGPU && D:\\\\VizMotive1\\\\VmProjects\\\\RendererGPU\\\\ShaderCompile.bat'' -Wait -NoNewWindow\")",
+      "Bash(powershell.exe:*)",
+      "Bash(cmd:*)",
+      "Bash(./fxc /E CommonVS /T vs_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/SR_OIT_P_vs_5_0 /D VSIN_N=0 /D VSIN_T=0 /D VSIN_C=0 /D VSIN_G=0)",
+      "Bash(\"./fxc.exe\" \"/E\" \"CommonVS\" \"/T\" \"vs_5_0\" \"./hlsl/Sr_Common.hlsl\" \"/Fo\" \"./shader_compiled_objs/SR_OIT_P_vs_5_0\" \"/D\" \"VSIN_N=0\" \"/D\" \"VSIN_T=0\" \"/D\" \"VSIN_C=0\" \"/D\" \"VSIN_G=0\")",
+      "Bash(powershell:*)"
+    ]
+  }
+}
