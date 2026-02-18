@@ -181,6 +181,7 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 
 	const uint NUM_K = g_cbCamState.k_value; // K_BUF
 
+#define DX_11_STYLE 0
 #if DX_11_STYLE==0
 	// note the offset is computed considering fragment's merging structure (3 bytes per a layer)
 	uint offset = sr_offsettable_buf[nThreadNum];

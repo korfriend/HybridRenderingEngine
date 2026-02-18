@@ -753,7 +753,8 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
 	float3 Ka_pobj = g_cbPobj.Ka;
 	float3 Kd_pobj = g_cbPobj.Kd;
 	float3 Ks_pobj = g_cbPobj.Ks;
-    
+
+#if __RENDERING_MODE != 2
 	if (BitCheck(g_cbPobj.pobj_flag, 3))
 	{
 		float3 color_in = input.f4Color.rgb * input.f4Color.a;
@@ -761,6 +762,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
 		Kd_pobj = color_in * g_cbPobj.pb_shading_factor.y;
 		Ks_pobj = color_in * g_cbPobj.pb_shading_factor.z;
 	}
+#endif
     
 #if __PAINTER_UV == 1
     if (g_cbPobj.tex_map_enum & (0x1 << 17))
@@ -776,6 +778,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     }
 #endif
     
+#if __RENDERING_MODE != 2
 	if (g_cbPobj.tex_map_enum & (0x1 << 18))
 	{
 		float d = input.fDist;
@@ -809,6 +812,7 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
 		Kd_pobj = lerp(Kd_pobj, ink.rgb * g_cbPobj.pb_shading_factor.y, ring);
 
 	}
+#endif
     
 #if __RENDERING_MODE == 1
     DashedLine(v_rgba, z_depth, input.f2UV.x, g_cbPobj.dash_interval, g_cbPobj.pobj_flag & (0x1 << 19), g_cbPobj.pobj_flag & (0x1 << 20));
