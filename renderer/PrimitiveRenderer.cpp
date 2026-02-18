@@ -2861,7 +2861,6 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 					}
 					else {
 						dx11DeviceImmContext->OMSetRenderTargetsAndUnorderedAccessViews(0, NULL, NULL, 2, NUM_UAVs_1ST, dx11UAVs_1st_pass, NULL);
-						//dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(ALWAYS), 0);
 						dx11DeviceImmContext->OMSetDepthStencilState(GETDEPTHSTENTIL(DISABLED), 0);	// NOT 'ALWAYS' because no DSV is not enabled
 					}
 					break;

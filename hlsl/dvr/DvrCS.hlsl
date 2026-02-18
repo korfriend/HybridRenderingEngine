@@ -971,13 +971,13 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	// note hits_t.x >= 0
     float3 pos_ray_start_ws = vbos_hit_start_pos + dir_sample_unit_ws * hits_t.x;
     // recompute the vis result  
-
-	// DVR ray-casting core part
-#if RAYMODE == 0 // DVR
-
+	
 	vis_out = 0;
 	depth_out = FLT_MAX;
-
+	
+	// DVR ray-casting core part
+#if RAYMODE == 0 // DVR
+	
 	float depth_hit = depth_out = length(pos_ray_start_ws - pos_ip_ws);
 	float sample_dist = g_cbVobj.sample_dist;
 
@@ -1232,6 +1232,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 
 #else // RAYMODE != 0
+	
 	float3 pos_ray_start_ts = TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts);
 	float depth_begin = depth_out = length(pos_ray_start_ws - pos_ip_ws);
 	float3 dir_sample_ts = v_v;// TransformVector(dir_sample_ws, g_cbVobj.mat_ws2ts);
@@ -1258,7 +1259,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	int num_valid_samples = 0;
 	float4 vis_otf_sum = (float4)0;
 #endif
-
+	
 	int count = 0;
 	[loop]
 	for (i = 0; i < num_ray_samples; i++)
@@ -1354,7 +1355,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		}
 #endif
 	}
-
+	
 #if RAYMODE == 3
 	if (num_valid_samples == 0)
 		num_valid_samples = 1;
@@ -1391,6 +1392,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_otf, depth_sample, fs);
 #endif
 	REMAINING_MIX(vis_out, idx_dlayer, num_frags, fs);
+			
 #endif // ONLY_SINGLE_LAYER == 1
 #endif // // RAYMODE == 0
 
@@ -1400,13 +1402,12 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	output.depthcs = min(depth_out, fs[0].z);
 	return output;
 #else
-	//if (count == 0) vis_otf = float4(1, 1, 0, 1);
+	//if (count > 0) vis_out = float4(1, 1, 0, 1);
 	//vis_out = float4(ao_vr, ao_vr, ao_vr, 1);
 	//vis_out = float4(TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts), 1);
 
-            vis_out = saturate(vis_out);
-
-            fragment_vis[tex2d_xy] = vis_out;
+    vis_out = saturate(vis_out);
+    fragment_vis[tex2d_xy] = vis_out;
 #if ONLY_SINGLE_LAYER == 1
 	// to do : compute thickness...
 	fragment_zdepth[tex2d_xy] = depth_out;
