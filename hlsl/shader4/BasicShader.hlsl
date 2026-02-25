@@ -43,8 +43,8 @@ PS_FILL_OUTPUT BasicShader4(__VS_OUT input)
         fadeMode = (bool)g_cbPobj.pobj_dummy_0;
 #endif
     }
-
-    v_rgba = OutlineTest(tex2d_xy, z_depth, 10000.f, outline_color, pixThickness, fadeMode);
+    
+    v_rgba = OutlineTest(tex2d_xy, z_depth, 10000.f, outline_color, pixThickness, fadeMode);    
     if (v_rgba.a <= 0.01) clip(-1);
 
 #if DX10_0 == 1

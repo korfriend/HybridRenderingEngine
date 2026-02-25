@@ -764,11 +764,11 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 #define GETRASTER(NAME) psoManager->get_rasterizer(#NAME)
 
 #ifdef DX10_0
-#define VS_NUM 9
+#define VS_NUM 10
 #define GS_NUM 5
 #define PS_NUM 10
 #else
-#define VS_NUM 10
+#define VS_NUM 11
 #define GS_NUM 4
 #define PS_NUM 86
 #define CS_NUM 38
@@ -785,6 +785,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			  ,"SR_OIT_PTC_vs_4_0"
 			  ,"SR_OIT_PNTC_vs_4_0"
 			  ,"SR_OIT_PTTT_vs_4_0"
+			  ,"SR_QUAD_P_vs_4_0"
 		};
 #else
 		string strNames_VS[VS_NUM] = {
@@ -798,6 +799,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			  ,"SR_OIT_PNTC_vs_5_0"
 			  ,"SR_OIT_PTTT_vs_5_0"
 			  ,"SR_OIT_IDX_vs_5_0"
+			  ,"SR_QUAD_P_vs_5_0"
 		};
 #endif
 
@@ -1897,6 +1899,10 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 				VmObject* tobj_windowing = (VmObject*)actor->GetAssociateRes("WINDOWING");
 				if (tobj_windowing)
 				{
+					if (tobj_maptable)
+					{
+						vzlog_warning("MAPTABLE and WINDOWING resources must NOT set simontaneously!")
+					}
 					tobj_maptable = tobj_windowing;
 					cmap_windowing = true;
 				}
@@ -2390,7 +2396,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 				}
 				else
 				{
-					if (render_pass == RENDER_GEOPASS::PASS_SILHOUETTE || bf_cull_on) {
+					if (bf_cull_on) {
 						dx11RState_TargetObj = GETRASTER(SOLID_CULL_BACK);
 					}
 					else {
@@ -2933,7 +2939,11 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 					uint32_t vs_mask_outline = A_P;
 					const Variant* pso_outline = grd_helper::GetPSOVariant(vs_mask_outline);
 					dx11DeviceImmContext->IASetInputLayout(pso_outline->il);
-					dx11DeviceImmContext->VSSetShader(pso_outline->vs, NULL, 0);
+#ifdef DX10_0
+					dx11DeviceImmContext->VSSetShader(GETVS(SR_QUAD_P_vs_4_0), NULL, 0);
+#else
+					dx11DeviceImmContext->VSSetShader(GETVS(SR_QUAD_P_vs_5_0), NULL, 0);
+#endif
 					dx11DeviceImmContext->GSSetShader(NULL, NULL, 0);
 #ifdef DX10_0
 					dx11DeviceImmContext->PSSetShader(GETPS(SR_QUAD_OUTLINE_ps_4_0), NULL, 0);
@@ -2955,7 +2965,6 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 						(ID3D11RenderTargetView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_RTV] };
 					dx11DeviceImmContext->OMSetRenderTargets(2, dx11RTVs, dx11DSV);
 #else
-					//dx11DeviceImmContext->PSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&gres_fb_rgba.alloc_res_ptrs[DTYPE_SRV]);
 					dx11DeviceImmContext->PSSetShaderResources(11, 1, (ID3D11ShaderResourceView**)&gres_fb_singlelayer_tempDepth.alloc_res_ptrs[DTYPE_SRV]);
 					ID3D11RenderTargetView* dx11RTVs[2] = {
 						(ID3D11RenderTargetView*)gres_fb_singlelayer_rgba.alloc_res_ptrs[DTYPE_RTV],
@@ -3140,7 +3149,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 		{
 			dx11DeviceImmContext->ClearDepthStencilView(dx11DSV, D3D11_CLEAR_DEPTH, 0.0f, 0); // Reverse Z
 			psoManager->GpuProfile("Single Layer Pass");
-			// Single Layer Effect (outline) Rendering 
+			// Single Layer Effect (outline) Rendering SR_QUAD_OUTLINE_ps_5_0
 			// ==> to a Temporary Render Target Texture (gres_fb_singlelayer_depthcs)
 			RenderStage1(single_layer_routine_objs, MFR_MODE::NONE, RENDER_GEOPASS::PASS_SILHOUETTE
 				, false /*is_frag_counter_buffer*/, is_ghost_mode, PICKING_TYPE::NONE, apply_fragmerge, false, false, false);

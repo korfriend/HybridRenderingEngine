@@ -1,3 +1,5 @@
+fxc /E QuadVS /T vs_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/SR_QUAD_P_vs_5_0 /D VSIN_N=0 /D VSIN_T=0 /D VSIN_C=0 /D VSIN_G=0
+
 fxc /E CommonVS /T vs_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/SR_OIT_P_vs_5_0 /D VSIN_N=0 /D VSIN_T=0 /D VSIN_C=0 /D VSIN_G=0
 fxc /E CommonVS /T vs_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/SR_OIT_PN_vs_5_0 /D VSIN_N=1 /D VSIN_T=0 /D VSIN_C=0 /D VSIN_G=0
 fxc /E CommonVS /T vs_5_0 ./hlsl/Sr_Common.hlsl /Fo ./shader_compiled_objs/SR_OIT_PC_vs_5_0 /D VSIN_N=0 /D VSIN_T=0 /D VSIN_C=1 /D VSIN_G=0

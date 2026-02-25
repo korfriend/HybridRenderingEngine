@@ -364,7 +364,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 
 
 		ID3D11InputLayout* dx11LI_P = (ID3D11InputLayout*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "P"));
-		ID3D11VertexShader* dx11VShader_P = (ID3D11VertexShader*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_P_vs_4_0"));
+		ID3D11VertexShader* dx11VShader_Quad = (ID3D11VertexShader*)psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_QUAD_P_vs_4_0"));
 
 		ID3D11Buffer* dx11BufferTargetPrim = (ID3D11Buffer*)gres_quad.alloc_res_ptrs[DTYPE_RES];
 		//ID3D11Buffer* dx11IndiceTargetPrim = NULL;
@@ -372,7 +372,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		uint32_t offset = 0;
 		dx11DeviceImmContext->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&dx11BufferTargetPrim, &stride_inputlayer, &offset);
 		dx11DeviceImmContext->IASetInputLayout(dx11LI_P);
-		dx11DeviceImmContext->VSSetShader(dx11VShader_P, NULL, 0);
+		dx11DeviceImmContext->VSSetShader(dx11VShader_Quad, NULL, 0);
 		dx11DeviceImmContext->GSSetShader(NULL, NULL, 0);
 		dx11DeviceImmContext->PSSetShader(NULL, NULL, 0);
 		dx11DeviceImmContext->RSSetState(psoManager->get_rasterizer("SOLID_NONE"));

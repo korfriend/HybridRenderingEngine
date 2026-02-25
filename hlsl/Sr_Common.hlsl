@@ -100,6 +100,15 @@ VS_OUTPUT CommonVS(VS_INPUTS input)
 	return vout;
 }
 
+// Quad VS: uses mat_os2ps directly (for PROXY_QUAD / full-screen passes)
+VS_OUTPUT QuadVS(VS_INPUTS input)
+{
+	VS_OUTPUT vout = (VS_OUTPUT) 0;
+	vout.f4PosSS = mul(float4(input.f3PosOS, 1.f), g_cbPobj.mat_os2ps);
+	vout.f3PosWS = input.f3PosOS;
+	return vout;
+}
+
 VS_OUTPUT_TTT CommonVS_PTTT(VS_INPUT_PTTT input)
 {
     VS_OUTPUT_TTT vout = (VS_OUTPUT_TTT) 0;

@@ -15,6 +15,7 @@
 #define IDR_RCDATA91020                   91020
 
 // new oit
+#define IDR_RCDATA11000					  11000
 #define IDR_RCDATA11001					  11001
 #define IDR_RCDATA11002					  11002
 #define IDR_RCDATA11003					  11003
@@ -34,6 +35,7 @@
 #define IDR_RCDATA11047					  11047
 #define IDR_RCDATA11048					  11048
 
+#define IDR_RCDATA91000					  91000
 #define IDR_RCDATA91001					  91001
 #define IDR_RCDATA91002					  91002
 #define IDR_RCDATA91003					  91003

@@ -600,6 +600,7 @@ int grd_helper::Initialize(VmGpuManager* pCGpuManager, PSOManager* gpu_params)
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31030), "GS_PickingBasic_gs_4_0", "gs_4_0_SO"), GS_PickingBasic_gs_4_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA31031), "GS_MeshCutLines_gs_4_0", "gs_4_0_SO"), GS_MeshCutLines_gs_4_0);
 #ifdef DX10_0
+		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91000), "SR_QUAD_P_vs_4_0", "vs_4_0", "P", NULL, 0), SR_QUAD_P_vs_4_0);
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91001), "SR_OIT_P_vs_4_0", "vs_4_0", "P", lotypeInputP, 1), SR_OIT_P_vs_4_0);
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91002), "SR_OIT_PC_vs_4_0", "vs_4_0", "PC", lotypeInputPC, 2), SR_OIT_PC_vs_4_0);
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91003), "SR_OIT_PT_vs_4_0", "vs_4_0", "PT", lotypeInputPT, 2), SR_OIT_PT_vs_4_0);
@@ -670,6 +671,7 @@ int grd_helper::Initialize(VmGpuManager* pCGpuManager, PSOManager* gpu_params)
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA6006), "PanoVR_MULTIOTF_DEFAULT_ps_4_0", "ps_4_0"), PanoVR_MULTIOTF_DEFAULT_ps_4_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA6007), "PanoVR_MULTIOTF_MODULATE_ps_4_0", "ps_4_0"), PanoVR_MULTIOTF_MODULATE_ps_4_0);
 #else
+		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11000), "SR_QUAD_P_vs_5_0", "vs_5_0", "P", NULL, 0), SR_QUAD_P_vs_5_0);
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11001), "SR_OIT_P_vs_5_0", "vs_5_0", "P", lotypeInputP, 1), SR_OIT_P_vs_5_0);
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11002), "SR_OIT_PC_vs_5_0", "vs_5_0", "PC", lotypeInputPC, 2), SR_OIT_PC_vs_5_0);
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA11003), "SR_OIT_PT_vs_5_0", "vs_5_0", "PT", lotypeInputPT, 2), SR_OIT_PT_vs_5_0);
@@ -965,6 +967,7 @@ const Variant* grd_helper::GetPSOVariant(uint32_t mask)
 	static ID3D11InputLayout* dx11LI_PNTCG = (ID3D11InputLayout*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::INPUT_LAYOUT, "PNTCG"));
 
 #ifdef DX10_0
+	static ID3D11VertexShader* dx11VShader_Quad = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_QUAD_P_vs_4_0"));
 	static ID3D11VertexShader* dx11VShader_P = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_P_vs_4_0"));
 	static ID3D11VertexShader* dx11VShader_PN = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PN_vs_4_0"));
 	static ID3D11VertexShader* dx11VShader_PT = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PT_vs_4_0"));
@@ -983,6 +986,7 @@ const Variant* grd_helper::GetPSOVariant(uint32_t mask)
 	static ID3D11VertexShader* dx11VShader_PTCG = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PTCG_vs_4_0"));
 	static ID3D11VertexShader* dx11VShader_PNTCG = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PNTCG_vs_4_0"));
 #else
+	static ID3D11VertexShader* dx11VShader_Quad = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_QUAD_P_vs_5_0"));
 	static ID3D11VertexShader* dx11VShader_P = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_P_vs_5_0"));
 	static ID3D11VertexShader* dx11VShader_PN = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PN_vs_5_0"));
 	static ID3D11VertexShader* dx11VShader_PT = (ID3D11VertexShader*)g_psoManager->safe_get_res(COMRES_INDICATOR(GpuhelperResType::VERTEX_SHADER, "SR_OIT_PT_vs_5_0"));
