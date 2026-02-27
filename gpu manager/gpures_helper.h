@@ -671,8 +671,8 @@ namespace grd_helper
 		// 24th bit : 0 (static alpha) 1 (dynamic alpha using mask t50) ... mode 2
 		// 31~32th bit : max components for dashed line : 0 ==> x, 1 ==> y, 2 ==> z
 		uint32_t pobj_flag;
-		uint32_t num_letters;	// for text object 
-		float dash_interval;
+		uint32_t num_letters;	// // for text object, or for slicer (rayprocessing.hlsl), vertexStride, 
+		float dash_interval;	// for slicer (rayprocessing.hlsl), non-thickness solidfilling alpha
 		float depth_thres;	// for outline!
 
 		float pix_thickness; // 1) for POINT and LINE TOPOLOGY, 2) slicer's cutting outline thickness

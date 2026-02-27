@@ -160,7 +160,7 @@ struct HxCB_PolygonObject
 	// 31~32th bit : max components for dashed line : 0 ==> x, 1 ==> y, 2 ==> z
 	uint pobj_flag;
 	uint num_letters;	// for slicer (rayprocessing.hlsl), vertexStride
-	float dash_interval;
+	float dash_interval; // for slicer (rayprocessing.hlsl), non-thickness solidfilling alpha
 	float depth_thres; // for outline!
 
 	float pix_thickness; // 1) for POINT and LINE TOPOLOGY, 2) outline thickness (in pixel)
