@@ -677,8 +677,6 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		if (prim_data->GetVerticeDefinition<float>("POSITION") == NULL || 
 #ifdef DX10_0
 			pobj->GetBVHTree() == NULL ||
-#else
-			!pobj->GetBVH().IsValid() ||
 #endif
 			prim_data->ptype != PrimitiveTypeTRIANGLE)
 			continue;
@@ -803,7 +801,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		for (VmActor* actor : actor_list)
 		{
 			VmVObjectPrimitive* pobj = (VmVObjectPrimitive*)actor->GetGeometryRes();
-			//assert(pobj->GetBVHTree() != NULL);
+
 			PrimitiveData* prim_data = pobj->GetPrimitiveData();
 
 			// note that the actor is visible (already checked)
@@ -918,7 +916,12 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			const bool fillInside = true;
 			const bool cutPlane = true && !curved_slicer;
 
+#ifdef DX10_0
 			const bool isLegacyBVH = pobj->GetBVHTree() != NULL;
+			assert(!isLegacyBVH);
+#else
+			const bool isLegacyBVH = false;
+#endif
 
 			if (fillInside)
 			{

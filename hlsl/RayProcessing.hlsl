@@ -2150,7 +2150,8 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 
 	return out_ps;
 #else
-	fragment_vis[ss_xy] = outline_color;
+	float4 color_prev = fragment_vis[ss_xy];
+	fragment_vis[ss_xy] = outline_color * (1.f - color_prev.a) + color_prev * color_prev.a;
 	//fragment_zdepth[ss_xy] = asfloat(WILDCARD_DEPTH_OUTLINE);
 
 	if (disableSolidFill) {
