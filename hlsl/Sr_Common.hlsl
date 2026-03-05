@@ -915,7 +915,8 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
     if (!is_clipped)
     {
         float sample_v = g_tex3DVolume.SampleLevel(g_samplerLinear, posTS, 0).r;
-        float4 colorMap = g_f4bufOTF[(int)(sample_v * (g_cbTmap.tmap_size_x - 1))];
+        float4 colorMap = g_f4bufOTF[(int) (saturate(sample_v) * (g_cbTmap.tmap_size_x - 1))];
+    
         //colorMap = float4(0, 1, 0, 1);
         //colorMap.rgb = float3(0, 1, 0);
         
