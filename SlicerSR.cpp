@@ -1,6 +1,7 @@
 #include "RendererHeader.h"
 
 #include "hlsl/ShaderInterop_BVH.h"
+#include <algorithm>
 
 bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	VmGpuManager* gpu_manager,
@@ -703,6 +704,14 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 
 		targetSlicerActors->push_back(actor);
 	}
+
+	auto sortByPriorityDesc = [](VmActor* a, VmActor* b) {
+		int pa = a->GetParam("_int_RenderPriority", int(0));
+		int pb = b->GetParam("_int_RenderPriority", int(0));
+		return pa > pb;
+	};
+	std::sort(slicer_actors.begin(), slicer_actors.end(), sortByPriorityDesc);
+	std::sort(slicer_post_actors.begin(), slicer_post_actors.end(), sortByPriorityDesc);
 
 	for (int i = 0; i < (int)slicer_post_actors.size(); i++) {
 		slicer_actors.push_back(slicer_post_actors[i]);

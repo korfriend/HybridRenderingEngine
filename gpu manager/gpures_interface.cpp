@@ -712,8 +712,7 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		return it->second;
 	};
 
-
-	vzlog("__GenerateGpuResource (%s)", gres.res_name.c_str())
+	//vzlog("__GenerateGpuResource (%s)", gres.res_name.c_str())
 
 	__ReleaseGpuResource(gres, false);
 

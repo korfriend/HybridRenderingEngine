@@ -1896,6 +1896,19 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			bool cmap_windowing = false;
 			if (vobj) {
 
+				// DEBUG TEST //
+				//{
+				//	if (tobj_maptable)
+				//	{
+				//		MapTable* tmap_data = tobj_maptable->GetObjParamPtr<MapTable>("_TableMap_OTF");
+				//		vzlog_warning("_TableMap_OTF ID (%d) === %d, %d", tobj_maptable->GetObjectID(), tmap_data->valid_min_idx.x, tmap_data->valid_max_idx.x);
+				//		vzlog_warning("NUM_ELEMENTS : %d", (uint32_t)(tmap_data->array_lengths.x * (tmap_data->array_lengths.y)));
+				//		vzlog_warning("STRIDE_BYTES : %d", tmap_data->dtype.type_bytes);
+				//		vmbyte4* py4OTF = (vmbyte4*)tmap_data->tmap_buffers[0];
+				//		vzlog_warning("OTF Alpha : %d, %d, %d, %d, ..., %d", py4OTF[0].w, py4OTF[1].w, py4OTF[2].w, py4OTF[3].w, py4OTF[tmap_data->array_lengths.x - 1].w);
+				//	}
+				//}
+
 				VmObject* tobj_windowing = (VmObject*)actor->GetAssociateRes("WINDOWING");
 				if (tobj_windowing)
 				{
