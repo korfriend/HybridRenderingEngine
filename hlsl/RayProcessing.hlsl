@@ -2108,7 +2108,7 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 #else
 
 	float a = TestAlpha(sd);
-	if (a <= 0.01) {
+	if (a <= 0.001) {
 		__EXIT;
 	}
 	
