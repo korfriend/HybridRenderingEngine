@@ -629,7 +629,6 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 
 		vector<TextItem>* textItems = (vector<TextItem>*)_fncontainer.fnParams.GetParam("_vector<TextItem>*_TextItems", (void*)NULL);
 		if (textItems) {
-			// IDWriteTextFormat ��ü ����.
 			// https://learn.microsoft.com/en-us/windows/win32/Direct2D/how-to--draw-text
 			D2D1_SIZE_F rSize = res2d->pRenderTarget->GetSize();
 			IDWriteTextFormat* textFormat = g_d2dTextFormatMap["DEFAULT"];
