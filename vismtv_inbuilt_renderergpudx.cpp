@@ -627,6 +627,18 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		}
 #endif
 
+		auto s2ws = [](const std::string& s)
+		{
+			int len;
+			int slength = (int)s.length() + 1;
+			len = MultiByteToWideChar(CP_ACP, 0, s.c_str(), slength, 0, 0);
+			wchar_t* buf = new wchar_t[len];
+			MultiByteToWideChar(CP_ACP, 0, s.c_str(), slength, buf, len);
+			std::wstring r(buf);
+			delete[] buf;
+			return r;
+		};
+
 		vector<TextItem>* textItems = (vector<TextItem>*)_fncontainer.fnParams.GetParam("_vector<TextItem>*_TextItems", (void*)NULL);
 		if (textItems) {
 			// https://learn.microsoft.com/en-us/windows/win32/Direct2D/how-to--draw-text
@@ -634,10 +646,8 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 			IDWriteTextFormat* textFormat = g_d2dTextFormatMap["DEFAULT"];
 			vector<TextItem>& _textItems = *textItems;
 			for (TextItem& titem : _textItems) {
-				std::wstring fontName_w;
-				fontName_w.assign(titem.font.begin(), titem.font.end());
-				std::wstring text_w;
-				text_w.assign(titem.textStr.begin(), titem.textStr.end());
+				std::wstring fontName_w = s2ws(titem.font);
+				std::wstring text_w = s2ws(titem.textStr);
 
 				IDWriteTextFormat* pDynamicTextFormat = nullptr;
 				if (g_pDWriteFactory->CreateTextFormat(
