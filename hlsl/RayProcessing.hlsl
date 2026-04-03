@@ -1274,7 +1274,8 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 #endif
                 if (minDistOnPlane * minDistOnPlane > hitDistSS * hitDistSS)
                 {
-                    minDistOnPlane = localInside ? -hitDistSS : hitDistSS;
+                    //minDistOnPlane = localInside ? -hitDistSS : hitDistSS;
+                    minDistOnPlane = isInsideOnPlane ? -hitDistSS : hitDistSS;
                 }
             }
 
@@ -1302,8 +1303,8 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 #if PICKING == 1 
 			if (localInside) checkCountInsideVertical++;
 #else
-                isInsideOnPlane = localInside && isInsideOnPlane;
-			//isInsideOnPlane = localInside || isInsideOnPlane;
+                //isInsideOnPlane = localInside && isInsideOnPlane;
+				isInsideOnPlane = localInside || isInsideOnPlane;
 #endif
 
                 float3 posHitOS = test_rayorig.xyz + hitDistance * test_raydir.xyz;
@@ -1317,7 +1318,8 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 #endif
                 if (minDistOnPlane * minDistOnPlane > hitDistSS * hitDistSS)
                 {
-                    minDistOnPlane = localInside ? -hitDistSS : hitDistSS;
+                    //minDistOnPlane = localInside ? -hitDistSS : hitDistSS;
+                    minDistOnPlane = isInsideOnPlane ? -hitDistSS : hitDistSS;
                 }
             }
         }
@@ -1355,7 +1357,8 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 #if PICKING == 1 
 			if (localInside) checkCountInsideHorizon++;
 #else
-                isInsideOnPlane = localInside && isInsideOnPlane;
+                //isInsideOnPlane = localInside && isInsideOnPlane;
+				isInsideOnPlane = localInside || isInsideOnPlane;
 #endif
 
                 float3 posHitOS = test_rayorig.xyz + hitDistance * test_raydir.xyz;
@@ -1369,7 +1372,8 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 #endif
                 if (minDistOnPlane * minDistOnPlane > hitDistSS * hitDistSS)
                 {
-                    minDistOnPlane = localInside ? -hitDistSS : hitDistSS;
+                    //minDistOnPlane = localInside ? -hitDistSS : hitDistSS;
+                    minDistOnPlane = isInsideOnPlane ? -hitDistSS : hitDistSS;
                 }
 
             }
@@ -1398,8 +1402,8 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 #if PICKING == 1 
 			if (localInside) checkCountInsideHorizon++;
 #else
-                isInsideOnPlane = localInside && isInsideOnPlane;
-			//isInsideOnPlane = localInside || isInsideOnPlane;
+                //isInsideOnPlane = localInside && isInsideOnPlane;
+				isInsideOnPlane = localInside || isInsideOnPlane;
 #endif
 
                 float3 posHitOS = test_rayorig.xyz + hitDistance * test_raydir.xyz;
@@ -1413,7 +1417,8 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 #endif
                 if (minDistOnPlane * minDistOnPlane > hitDistSS * hitDistSS)
                 {
-                    minDistOnPlane = localInside ? -hitDistSS : hitDistSS;
+                    //minDistOnPlane = localInside ? -hitDistSS : hitDistSS;
+                    minDistOnPlane = isInsideOnPlane ? -hitDistSS : hitDistSS;
                 }
 
             }
@@ -1976,12 +1981,12 @@ inline float LineAlpha(float v)
 float TestAlpha(float v) {
 	uint wildcard_v = asuint(v);
 	if (wildcard_v == WILDCARD_DEPTH_OUTLINE || wildcard_v == OUTSIDE_PLANE)
-		return 0;
+		return -1;
 
 	const float lineThres = g_cbPobj.pix_thickness;
 	float distAbs = abs(v);
 	if (distAbs >= lineThres)
-		return 0;
+		return -1;
 
 	return max(min(lineThres - distAbs, 1.f), 0); // AA option
 }
@@ -2108,7 +2113,7 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 #else
 
 	float a = TestAlpha(sd);
-	if (a <= 0.001) {
+	if (a < 0.0) {
 		__EXIT;
 	}
 	
@@ -2128,9 +2133,6 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 	float4 outline_color = float4(g_cbPobj.Kd, g_cbPobj.alpha);
 	outline_color.a *= a;// *a; // heuristic aliasing 
 	outline_color.rgb *= outline_color.a;
-	//outline_color.rgb *= outline_color.a;
-	//outline_color.rgb *= outline_color.a;
-	//outline_color.rgb *= outline_color.a; 
 
 	//outline_color = float4(fvcur / 1000, fvcur / 1000, fvcur / 1000, 1);
 
@@ -2151,7 +2153,10 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 	return out_ps;
 #else
 	float4 color_prev = fragment_vis[ss_xy];
-	fragment_vis[ss_xy] = outline_color * (1.f - color_prev.a) + color_prev * color_prev.a;
+	float4 color_mix = outline_color * (1.f - color_prev.a) + color_prev * color_prev.a;
+	//fragment_vis[ss_xy] = outline_color * (1.f - color_prev.a) + color_prev * color_prev.a;
+	fragment_vis[ss_xy] = color_mix;
+	//fragment_vis[ss_xy] = outline_color;
 	//fragment_zdepth[ss_xy] = asfloat(WILDCARD_DEPTH_OUTLINE);
 
 	if (disableSolidFill) {
