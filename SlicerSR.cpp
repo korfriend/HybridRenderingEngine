@@ -891,7 +891,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			if (isDrawingOnlyContours) noSlicerFill = true;
 			cbPolygonObj.pobj_flag |= (int)noSlicerFill << 6;
 			
-			cbPolygonObj.dash_interval = actor->GetParam("_float_NonThicknessSolidFillingAlpha", 0.3f);
+			cbPolygonObj.dash_interval = actor->GetParam("_float_NonThicknessSolidFillingAlpha", 0.3f) * actor->color.w;
 			//if (planeThickness == 0) {
 				cbPolygonObj.pix_thickness = actor->GetParam("_float_OutlinePixThickness", detaultOutlinePixelThickness);
 				if (camForcedOutlinePixelThickness > 0) {
