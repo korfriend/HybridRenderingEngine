@@ -2224,7 +2224,8 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 	uint64_t _gpu_gen_timg = gres_bvhNodeBuffer.res_values.GetParam("LAST_UPDATE_TIME", (uint64_t)0);
 	uint64_t _cpu_gen_timg = pobj->GetContentUpdateTime();
 	const geometrics::BVH& bvh2 = ((VmVObjectPrimitive*)pobj)->GetBVH();
-	if (bvh2.IsValid() && prim_data->ptype == EvmPrimitiveType::PrimitiveTypeTRIANGLE && _gpu_gen_timg < _cpu_gen_timg)
+	//if (bvh2.IsValid() && prim_data->ptype == EvmPrimitiveType::PrimitiveTypeTRIANGLE && _gpu_gen_timg < _cpu_gen_timg)//
+	if (prim_data->ptype == EvmPrimitiveType::PrimitiveTypeTRIANGLE && _gpu_gen_timg < _cpu_gen_timg)
 	{
 		bvh::UpdateGeometryGPUBVH(g_pCGpuManager, g_psoManager, pobj);
 	}
