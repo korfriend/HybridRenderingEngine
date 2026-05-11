@@ -1425,7 +1425,8 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
         }
 
 #if PICKING == 1 
-	if (planeThickness == 0) {
+	//if (planeThickness == 0) 
+	{
 		if (minDistOnPlane * minDistOnPlane < 4.5 * 4.5 || checkCountInsideHorizon == 2 || checkCountInsideVertical == 2)
 		{
 			uint iii = (checkCountInsideHorizon == 2 ? 10 : 1) + (checkCountInsideVertical == 2 ? 1000 : 100);
