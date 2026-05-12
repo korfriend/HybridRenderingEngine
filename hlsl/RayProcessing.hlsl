@@ -1441,8 +1441,12 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 			picking_buf[1 + 2 * fc + 0] = g_cbPobj.pobj_dummy_0;
 			picking_buf[1 + 2 * fc + 1] = asuint(0.f);
 #endif
+			__EXIT;
 		}
-		__EXIT;
+		if (planeThickness == 0)
+		{
+			__EXIT;
+	    }
 	}
 #else
         if (planeThickness == 0)

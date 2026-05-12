@@ -477,6 +477,14 @@ namespace grd_helper
 
 	bool UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string& resName, const void* bufPtr, const int numElements, DXGI_FORMAT dxFormat, const int type_bytes, LocalProgress* progress = NULL, uint64_t cpu_update_custom_time = 0);
 
+	// Upload a CPU buffer as a DYNAMIC Texture3D (write-discard). The source is assumed to be tightly packed
+	// (row pitch = width * bytes_per_texel, depth pitch = row pitch * height); destination Texture3D pitches
+	// are handled internally.
+	bool UpdateCustomTexture3D(GpuRes& gres, VmObject* srcObj, const string& resName,
+		const void* bufPtr, const uint32_t width, const uint32_t height, const uint32_t depth,
+		DXGI_FORMAT dxFormat, const int bytes_per_texel,
+		LocalProgress* progress = NULL, uint64_t cpu_update_custom_time = 0);
+
 	bool UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, VmCObject* camObj, const vmfloat2& paint_pos2d_ss, const BrushParams& brushParams);
 
 #define ZERO_SET(T) T(){memset(this, 0, sizeof(T));}

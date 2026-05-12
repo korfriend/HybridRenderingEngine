@@ -2358,6 +2358,79 @@ bool grd_helper::UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string
 	return true;
 }
 
+bool grd_helper::UpdateCustomTexture3D(GpuRes& gres, VmObject* srcObj, const string& resName,
+	const void* bufPtr, const uint32_t width, const uint32_t height, const uint32_t depth,
+	DXGI_FORMAT dxFormat, const int bytes_per_texel,
+	LocalProgress* progress, uint64_t cpu_update_custom_time)
+{
+	gres.vm_src_id = srcObj->GetObjectID();
+	gres.res_name = resName;
+
+	bool needRegen = true;
+	if (g_pCGpuManager->UpdateGpuResource(gres)) {
+
+		uint32_t prevW = gres.res_values.GetParam("WIDTH", (uint32_t)0);
+		uint32_t prevH = gres.res_values.GetParam("HEIGHT", (uint32_t)0);
+		uint32_t prevD = gres.res_values.GetParam("DEPTH", (uint32_t)0);
+		uint32_t prevFmt = gres.options["FORMAT"];
+
+		needRegen = (prevW != width) || (prevH != height) || (prevD != depth) || (prevFmt != (uint32_t)dxFormat);
+
+		uint64_t _tp_cpu = cpu_update_custom_time == 0 ? srcObj->GetContentUpdateTime() : cpu_update_custom_time;
+		uint64_t _tp_gpu = gres.res_values.GetParam("LAST_UPDATE_TIME", (uint64_t)0);
+		if (_tp_gpu >= _tp_cpu && !needRegen) {
+			return true;
+		}
+	}
+
+	if (needRegen) {
+		gres.rtype = RTYPE_TEXTURE3D;
+		gres.options["USAGE"] = D3D11_USAGE_DYNAMIC;
+		gres.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
+		gres.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
+		gres.options["FORMAT"] = dxFormat;
+
+		gres.res_values.SetParam("WIDTH", (const uint32_t)width);
+		gres.res_values.SetParam("HEIGHT", (const uint32_t)height);
+		gres.res_values.SetParam("DEPTH", (const uint32_t)depth);
+
+		// including safe-delete to avoid redundant gen
+		g_pCGpuManager->GenerateGpuResource(gres);
+	}
+
+	D3D11_MAPPED_SUBRESOURCE d11MappedRes;
+	HRESULT hr = g_psoManager->dx11DeviceImmContext->Map((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes);
+	if (FAILED(hr)) {
+		vmlog::LogErr("UpdateCustomTexture3D ==> Map failed");
+		return false;
+	}
+
+	const uint32_t src_row_pitch = width * (uint32_t)bytes_per_texel;
+	const uint32_t src_depth_pitch = src_row_pitch * height;
+	const uint8_t* srcBytes = (const uint8_t*)bufPtr;
+	uint8_t* dstBytes = (uint8_t*)d11MappedRes.pData;
+
+	if (d11MappedRes.RowPitch == src_row_pitch && d11MappedRes.DepthPitch == src_depth_pitch) {
+		memcpy(dstBytes, srcBytes, (size_t)src_depth_pitch * depth);
+	}
+	else {
+		for (uint32_t z = 0; z < depth; ++z) {
+			for (uint32_t y = 0; y < height; ++y) {
+				memcpy(dstBytes + (size_t)z * d11MappedRes.DepthPitch + (size_t)y * d11MappedRes.RowPitch,
+					srcBytes + (size_t)z * src_depth_pitch + (size_t)y * src_row_pitch,
+					src_row_pitch);
+			}
+		}
+	}
+
+	g_psoManager->dx11DeviceImmContext->Unmap((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], 0);
+
+	gres.options["Update LAST_UPDATE_TIME"] = 1u;
+	g_pCGpuManager->UpdateGpuResource(gres);
+
+	return true;
+}
+
 bool grd_helper::UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, VmCObject* camObj, const vmfloat2& paint_pos2d_ss, const BrushParams& brushParams)
 {
 	static PaintResourceManager* manager = meshPainter->getPaintResourceManager();

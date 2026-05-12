@@ -3,15 +3,33 @@
 
 #define VR_ENC_BIT_SHIFT 30
 
+// Sculpt-bits resource layout toggle. Priority: TILED > TEX3D > default.
+// (must match the C++ macros USE_SCULPT_BITS_TEX3D / USE_SCULPT_BITS_TEX3D_TILED in VolumeRenderer.cpp)
+//   USE_SCULPT_BITS_TEX3D_TILED == 1 : Texture3D<uint> with 4x4x2 = 32-voxel 3D tiles per texel.
+//   USE_SCULPT_BITS_TEX3D       == 1 : Texture3D<uint> with 32 voxels (X-only) per texel.
+//   both == 0 (default)             : Buffer<uint> packed in row-major (x,y,z).
+#ifndef USE_SCULPT_BITS_TEX3D
+#define USE_SCULPT_BITS_TEX3D 1
+#endif
+#ifndef USE_SCULPT_BITS_TEX3D_TILED
+#define USE_SCULPT_BITS_TEX3D_TILED 0
+#endif
+
 Texture3D tex3D_volume : register(t0);
 Texture3D tex3D_volblk : register(t1);
 Texture3D tex3D_volmask : register(t2);
-Buffer<float4> buf_otf : register(t3); // unorm À¸·Î º¯°æÇÏ±â
-Buffer<float4> buf_preintotf : register(t13); // unorm À¸·Î º¯°æÇÏ±â
+Buffer<float4> buf_otf : register(t3); // unorm ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ï±ï¿½
+Buffer<float4> buf_preintotf : register(t13); // unorm ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ï±ï¿½
 Buffer<float4> buf_windowing : register(t4); // not used here.
 Buffer<int> buf_ids : register(t5); // Mask OTFs // not used here.
 Texture2D<float> vr_fragment_1sthit_read : register(t6);
-Buffer<uint> sculpt_bits : register(t7); 
+#if USE_SCULPT_BITS_TEX3D_TILED == 1
+Texture3D<uint> sculpt_bits_tex : register(t7);
+#elif USE_SCULPT_BITS_TEX3D == 1
+Texture3D<uint> sculpt_bits_tex : register(t7);
+#else
+Buffer<uint> sculpt_bits : register(t7);
+#endif
 
 #if DX10_0 == 1
 Texture2D prev_fragment_vis : register(t20); 
@@ -206,13 +224,25 @@ bool Sample_Volume_And_Check(inout float sample_v, const float3 pos_sample_ts, c
     
 	int sculpt_value = (int)(g_cbVobj.vobj_flag >> 24);
 	return (sample_v * g_cbTmap.tmap_size_x) >= min_valid_v && (mask_vint == 0 || mask_vint > sculpt_value);
-#else 
+#else
 #if SCULPT_BITS == 1
+#if USE_SCULPT_BITS_TEX3D_TILED == 1
+	int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
+	uint3 tex_id = uint3((uint)voxel_id.x >> 2, (uint)voxel_id.y >> 2, (uint)voxel_id.z >> 1);
+	uint sub = ((uint)voxel_id.x & 3u) | (((uint)voxel_id.y & 3u) << 2) | (((uint)voxel_id.z & 1u) << 4);
+	uint word = sculpt_bits_tex.Load(int4((int3)tex_id, 0));
+	bool visible = !(bool)(word & (1u << sub));
+#elif USE_SCULPT_BITS_TEX3D == 1
+	int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
+	uint word = sculpt_bits_tex.Load(int4(voxel_id.x >> 5, voxel_id.y, voxel_id.z, 0));
+	bool visible = !(bool)(word & (1u << ((uint)voxel_id.x & 31u)));
+#else
 	int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
 	int wwh = g_cbVobj.vol_original_size.x * g_cbVobj.vol_original_size.y;
 	uint bit_id = voxel_id.x + voxel_id.y * g_cbVobj.vol_original_size.x + voxel_id.z * wwh;
 	uint mod = bit_id % 32;
 	bool visible = !(bool)(sculpt_bits[bit_id / 32] & (0x1u << mod));
+#endif
 	return (sample_v * g_cbTmap.tmap_size_x) >= min_valid_v && visible;
 #else
 	return (sample_v * g_cbTmap.tmap_size_x) >= min_valid_v;
@@ -238,11 +268,23 @@ bool Vis_Volume_And_Check(inout float4 vis_otf, inout float sample_v, const floa
 
 	vis_otf = LoadOtfBuf(sample_v * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
 #if SCULPT_BITS == 1
+#if USE_SCULPT_BITS_TEX3D_TILED == 1
+	int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
+	uint3 tex_id = uint3((uint)voxel_id.x >> 2, (uint)voxel_id.y >> 2, (uint)voxel_id.z >> 1);
+	uint sub = ((uint)voxel_id.x & 3u) | (((uint)voxel_id.y & 3u) << 2) | (((uint)voxel_id.z & 1u) << 4);
+	uint word = sculpt_bits_tex.Load(int4((int3)tex_id, 0));
+	bool visible = !(bool)(word & (1u << sub));
+#elif USE_SCULPT_BITS_TEX3D == 1
+	int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
+	uint word = sculpt_bits_tex.Load(int4(voxel_id.x >> 5, voxel_id.y, voxel_id.z, 0));
+	bool visible = !(bool)(word & (1u << ((uint)voxel_id.x & 31u)));
+#else
 	int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
 	int wwh = g_cbVobj.vol_original_size.x * g_cbVobj.vol_original_size.y;
 	uint bit_id = voxel_id.x + voxel_id.y * g_cbVobj.vol_original_size.x + voxel_id.z * wwh;
 	uint mod = bit_id % 32;
 	bool visible = !(bool)(sculpt_bits[bit_id / 32] & (0x1u << mod));
+#endif
 	return ((uint)(vis_otf.a * 255.f) > 0) && visible;
 #else
     return vis_otf.a >= FLT_OPACITY_MIN__;
@@ -274,11 +316,23 @@ bool Vis_Volume_And_Check_Slab(inout float4 vis_otf, inout float sample_v, float
 
 	vis_otf = LoadSlabOtfBuf_PreInt(sample_v * g_cbTmap.tmap_size_x, sample_prev * g_cbTmap.tmap_size_x, buf_preintotf, g_cbVobj.opacity_correction);
 #if SCULPT_BITS == 1
+#if USE_SCULPT_BITS_TEX3D_TILED == 1
+	int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
+	uint3 tex_id = uint3((uint)voxel_id.x >> 2, (uint)voxel_id.y >> 2, (uint)voxel_id.z >> 1);
+	uint sub = ((uint)voxel_id.x & 3u) | (((uint)voxel_id.y & 3u) << 2) | (((uint)voxel_id.z & 1u) << 4);
+	uint word = sculpt_bits_tex.Load(int4((int3)tex_id, 0));
+	bool visible = !(bool)(word & (1u << sub));
+#elif USE_SCULPT_BITS_TEX3D == 1
+	int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
+	uint word = sculpt_bits_tex.Load(int4(voxel_id.x >> 5, voxel_id.y, voxel_id.z, 0));
+	bool visible = !(bool)(word & (1u << ((uint)voxel_id.x & 31u)));
+#else
 	int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
 	int wwh = g_cbVobj.vol_original_size.x * g_cbVobj.vol_original_size.y;
 	uint bit_id = voxel_id.x + voxel_id.y * g_cbVobj.vol_original_size.x + voxel_id.z * wwh;
 	uint mod = bit_id % 32;
 	bool visible = !(bool)(sculpt_bits[bit_id / 32] & (0x1u << mod));
+#endif
 	return ((uint)(vis_otf.a * 255.f) > 0) && visible;
 #else
 	return vis_otf.a >= FLT_OPACITY_MIN__;
@@ -1286,11 +1340,23 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #else
 
 #if SCULPT_BITS == 1
+#if USE_SCULPT_BITS_TEX3D_TILED == 1
+				int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
+				uint3 tex_id = uint3((uint)voxel_id.x >> 2, (uint)voxel_id.y >> 2, (uint)voxel_id.z >> 1);
+				uint sub = ((uint)voxel_id.x & 3u) | (((uint)voxel_id.y & 3u) << 2) | (((uint)voxel_id.z & 1u) << 4);
+				uint word = sculpt_bits_tex.Load(int4((int3)tex_id, 0));
+				bool visible = !(bool)(word & (1u << sub));
+#elif USE_SCULPT_BITS_TEX3D == 1
+				int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
+				uint word = sculpt_bits_tex.Load(int4(voxel_id.x >> 5, voxel_id.y, voxel_id.z, 0));
+				bool visible = !(bool)(word & (1u << ((uint)voxel_id.x & 31u)));
+#else
 				int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
 				int wwh = g_cbVobj.vol_original_size.x * g_cbVobj.vol_original_size.y;
 				uint bit_id = voxel_id.x + voxel_id.y * g_cbVobj.vol_original_size.x + voxel_id.z * wwh;
 				uint mod = bit_id % 32;
 				bool visible = !(bool)(sculpt_bits[bit_id / 32] & (0x1u << mod));
+#endif
 				float sample_v = 0;
 				if (visible)
 					sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_in_blk_ts, 0).r;
@@ -1334,11 +1400,23 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 
 #if SCULPT_BITS == 1
+#if USE_SCULPT_BITS_TEX3D_TILED == 1
+		int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
+		uint3 tex_id = uint3((uint)voxel_id.x >> 2, (uint)voxel_id.y >> 2, (uint)voxel_id.z >> 1);
+		uint sub = ((uint)voxel_id.x & 3u) | (((uint)voxel_id.y & 3u) << 2) | (((uint)voxel_id.z & 1u) << 4);
+		uint word = sculpt_bits_tex.Load(int4((int3)tex_id, 0));
+		bool visible = !(bool)(word & (1u << sub));
+#elif USE_SCULPT_BITS_TEX3D == 1
+		int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
+		uint word = sculpt_bits_tex.Load(int4(voxel_id.x >> 5, voxel_id.y, voxel_id.z, 0));
+		bool visible = !(bool)(word & (1u << ((uint)voxel_id.x & 31u)));
+#else
 		int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
 		int wwh = g_cbVobj.vol_original_size.x * g_cbVobj.vol_original_size.y;
 		uint bit_id = voxel_id.x + voxel_id.y * g_cbVobj.vol_original_size.x + voxel_id.z * wwh;
 		uint mod = bit_id % 32;
 		bool visible = !(bool)(sculpt_bits[bit_id / 32] & (0x1u << mod));
+#endif
 		float4 vis_otf = (float4)0;
 		if (visible)
 			vis_otf = LoadOtfBuf(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);

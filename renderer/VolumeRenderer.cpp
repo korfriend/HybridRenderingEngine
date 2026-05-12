@@ -1,6 +1,17 @@
 #include "RendererHeader.h"
 #include <time.h>
 
+// Toggle SCULPT_PACKEDBITS upload path. Priority: TILED > TEX3D > default.
+//   USE_SCULPT_BITS_TEX3D_TILED == 1 : upload as Texture3D<R32_UINT> with 4x4x2 = 32-voxel 3D tiles
+//                                       packed into one texel. Best 3D cache locality.
+//   USE_SCULPT_BITS_TEX3D       == 1 : upload as Texture3D<R32_UINT> with 32 voxels along X per texel.
+//                                       Good Y/Z cache locality, X-only packing.
+//   both == 0 (default)             : keep existing Buffer<uint> path (regression-safe baseline).
+// Both C++ and HLSL toggles MUST be flipped together; otherwise the SRV type at t7 will mismatch
+// the shader's declared type and reads will be undefined.
+#define USE_SCULPT_BITS_TEX3D 1
+#define USE_SCULPT_BITS_TEX3D_TILED 0
+
 using namespace grd_helper;
 
 bool RenderVrDLS(VmFnContainer* _fncontainer,
@@ -811,7 +822,63 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			vector<uint32_t>* pvtrSculptBitPacked = sculptBitPackedObj->GetObjParamPtr<vector<uint32_t>>("_vlist_UINT_SculptPackedBits");
 			if (pvtrSculptBitPacked)
 			{
+#if USE_SCULPT_BITS_TEX3D_TILED == 1
+				// 3D-tiled sculpt bits: each R32_UINT texel holds a 4x4x2 = 32-voxel block.
+				// sub-index within the texel: sub = (x&3) | ((y&3)<<2) | ((z&1)<<4).
+				// Source is the canonical 1D bit stream (bit_id = x + y*W + z*W*H, LSB-first within uint32).
+				VolumeData* vol_data_for_bits = vobj->GetVolumeData();
+				const int W = (int)vol_data_for_bits->vol_size.x;
+				const int H = (int)vol_data_for_bits->vol_size.y;
+				const int D = (int)vol_data_for_bits->vol_size.z;
+				const uint32_t tex_w = (uint32_t)((W + 3) / 4);
+				const uint32_t tex_h = (uint32_t)((H + 3) / 4);
+				const uint32_t tex_d = (uint32_t)((D + 1) / 2);
+				const size_t total_texels = (size_t)tex_w * (size_t)tex_h * (size_t)tex_d;
+
+				static thread_local std::vector<uint32_t> tiled_buf;
+				tiled_buf.assign(total_texels, 0u);
+
+				const uint32_t* src_bits = pvtrSculptBitPacked->data();
+				const size_t src_word_count = pvtrSculptBitPacked->size();
+				for (int z = 0; z < D; ++z) {
+					const int tz = z >> 1;
+					const int sz = z & 1;
+					for (int y = 0; y < H; ++y) {
+						const int ty = y >> 2;
+						const int sy = y & 3;
+						const uint64_t row_bit_base = (uint64_t)y * (uint64_t)W + (uint64_t)z * (uint64_t)W * (uint64_t)H;
+						for (int x = 0; x < W; ++x) {
+							const uint64_t bit_id = (uint64_t)x + row_bit_base;
+							const size_t word_idx = (size_t)(bit_id >> 5);
+							if (word_idx >= src_word_count) continue;
+							const uint32_t bit = (src_bits[word_idx] >> (bit_id & 31u)) & 1u;
+							if (bit) {
+								const int tx = x >> 2;
+								const int sx = x & 3;
+								const int sub = sx | (sy << 2) | (sz << 4);
+								tiled_buf[(size_t)tx + (size_t)ty * tex_w + (size_t)tz * tex_w * tex_h] |= (1u << sub);
+							}
+						}
+					}
+				}
+
+				grd_helper::UpdateCustomTexture3D(gres_sculpt_bits, sculptBitPackedObj, "SculptPackedBits_Tex3D_Tiled",
+					tiled_buf.data(), tex_w, tex_h, tex_d, DXGI_FORMAT_R32_UINT, 4);
+#elif USE_SCULPT_BITS_TEX3D == 1
+				// Upload packed sculpt bits as a Texture3D<R32_UINT>: 32 voxels along X are packed into one texel,
+				// so cache locality follows 3D texture coherency (Y/Z neighbors hit the 3D texture cache).
+				VolumeData* vol_data_for_bits = vobj->GetVolumeData();
+				const uint32_t tex_w = (uint32_t)((vol_data_for_bits->vol_size.x + 31) / 32);
+				const uint32_t tex_h = (uint32_t)vol_data_for_bits->vol_size.y;
+				const uint32_t tex_d = (uint32_t)vol_data_for_bits->vol_size.z;
+				const size_t expected_words = (size_t)tex_w * (size_t)tex_h * (size_t)tex_d;
+				// Defensive guard: CPU side must have packed at least tex_w*H*D uints in row-major (x,y,z) order.
+				assert(pvtrSculptBitPacked->size() >= expected_words);
+				grd_helper::UpdateCustomTexture3D(gres_sculpt_bits, sculptBitPackedObj, "SculptPackedBits_Tex3D",
+					pvtrSculptBitPacked->data(), tex_w, tex_h, tex_d, DXGI_FORMAT_R32_UINT, 4);
+#else
 				grd_helper::UpdateCustomBuffer(gres_sculpt_bits, sculptBitPackedObj, "SculptPackedBits", pvtrSculptBitPacked->data(), pvtrSculptBitPacked->size(), DXGI_FORMAT_R32_UINT, 4);
+#endif
 				SET_SHADER_RES(7, 1, (__SRV_PTR*)&gres_sculpt_bits.alloc_res_ptrs[DTYPE_SRV]);
 			}
 		}
