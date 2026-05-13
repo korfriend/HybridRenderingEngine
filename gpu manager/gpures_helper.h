@@ -438,7 +438,7 @@ namespace grd_helper
 	HRESULT PresetCompiledShader(__ID3D11Device* pdx11Device, HMODULE hModule, LPCWSTR pSrcResource, LPCSTR strShaderProfile, ID3D11DeviceChild** ppdx11Shader/*out*/
 		, D3D11_INPUT_ELEMENT_DESC* pInputLayoutDesc, uint32_t num_elements, ID3D11InputLayout** ppdx11LayoutInputVS);
 
-	void CheckReusability(GpuRes& gres, VmObject* resObj, bool& update_data, bool& regen_data,
+	void CheckReusability(GpuRes& gres, VmObject* resObj, bool& update_data, bool& reusable,
 		const vmobjects::VmParamMap<std::string, std::any>& res_new_values);
 	void Fence();
 

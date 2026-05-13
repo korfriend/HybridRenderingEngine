@@ -822,6 +822,31 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			vector<uint32_t>* pvtrSculptBitPacked = sculptBitPackedObj->GetObjParamPtr<vector<uint32_t>>("_vlist_UINT_SculptPackedBits");
 			if (pvtrSculptBitPacked)
 			{
+				gres_sculpt_bits.vm_src_id = sculptBitPackedObj->GetObjectID();
+
+				auto checkBitPackedTex3D = [&gpu_manager](GpuRes& gres_sculpt_bits, VmObject* sculptBitPackedObj,
+					const uint32_t width, const uint32_t height, const uint32_t depth)
+					{
+						bool needUpdate = true;
+						if (gpu_manager->UpdateGpuResource(gres_sculpt_bits)) {
+
+							uint32_t prevW = gres_sculpt_bits.res_values.GetParam("WIDTH", (uint32_t)0);
+							uint32_t prevH = gres_sculpt_bits.res_values.GetParam("HEIGHT", (uint32_t)0);
+							uint32_t prevD = gres_sculpt_bits.res_values.GetParam("DEPTH", (uint32_t)0);
+							uint32_t prevFmt = gres_sculpt_bits.options["FORMAT"];
+
+							needUpdate = (prevW != width) || (prevH != height) || (prevD != depth) || (prevFmt != (uint32_t)DXGI_FORMAT_R32_UINT);
+
+							uint64_t _tp_cpu = sculptBitPackedObj->GetContentUpdateTime();
+							uint64_t _tp_gpu = gres_sculpt_bits.res_values.GetParam("LAST_UPDATE_TIME", (uint64_t)0);
+
+							needUpdate = _tp_cpu > _tp_gpu || needUpdate;
+						}
+
+						return needUpdate;
+					};
+
+
 #if USE_SCULPT_BITS_TEX3D_TILED == 1
 				// 3D-tiled sculpt bits: each R32_UINT texel holds a 4x4x2 = 32-voxel block.
 				// sub-index within the texel: sub = (x&3) | ((y&3)<<2) | ((z&1)<<4).
@@ -833,49 +858,117 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				const uint32_t tex_w = (uint32_t)((W + 3) / 4);
 				const uint32_t tex_h = (uint32_t)((H + 3) / 4);
 				const uint32_t tex_d = (uint32_t)((D + 1) / 2);
-				const size_t total_texels = (size_t)tex_w * (size_t)tex_h * (size_t)tex_d;
 
-				static thread_local std::vector<uint32_t> tiled_buf;
-				tiled_buf.assign(total_texels, 0u);
+				gres_sculpt_bits.res_name = "SculptPackedBits_Tex3D_Tiled";
+				if (checkBitPackedTex3D(gres_sculpt_bits, sculptBitPackedObj, tex_w, tex_h, tex_d))
+				{
+					const size_t total_texels = (size_t)tex_w * (size_t)tex_h * (size_t)tex_d;
 
-				const uint32_t* src_bits = pvtrSculptBitPacked->data();
-				const size_t src_word_count = pvtrSculptBitPacked->size();
-				for (int z = 0; z < D; ++z) {
-					const int tz = z >> 1;
-					const int sz = z & 1;
-					for (int y = 0; y < H; ++y) {
-						const int ty = y >> 2;
-						const int sy = y & 3;
-						const uint64_t row_bit_base = (uint64_t)y * (uint64_t)W + (uint64_t)z * (uint64_t)W * (uint64_t)H;
-						for (int x = 0; x < W; ++x) {
-							const uint64_t bit_id = (uint64_t)x + row_bit_base;
-							const size_t word_idx = (size_t)(bit_id >> 5);
-							if (word_idx >= src_word_count) continue;
-							const uint32_t bit = (src_bits[word_idx] >> (bit_id & 31u)) & 1u;
-							if (bit) {
-								const int tx = x >> 2;
-								const int sx = x & 3;
-								const int sub = sx | (sy << 2) | (sz << 4);
-								tiled_buf[(size_t)tx + (size_t)ty * tex_w + (size_t)tz * tex_w * tex_h] |= (1u << sub);
+					static thread_local std::vector<uint32_t> tiled_buf;
+					tiled_buf.assign(total_texels, 0u);
+
+					const uint32_t* src_bits = pvtrSculptBitPacked->data();
+					const size_t src_word_count = pvtrSculptBitPacked->size();
+					for (int z = 0; z < D; ++z) {
+						const int tz = z >> 1;
+						const int sz = z & 1;
+						for (int y = 0; y < H; ++y) {
+							const int ty = y >> 2;
+							const int sy = y & 3;
+							const uint64_t row_bit_base = (uint64_t)y * (uint64_t)W + (uint64_t)z * (uint64_t)W * (uint64_t)H;
+							for (int x = 0; x < W; ++x) {
+								const uint64_t bit_id = (uint64_t)x + row_bit_base;
+								const size_t word_idx = (size_t)(bit_id >> 5);
+								if (word_idx >= src_word_count) continue;
+								const uint32_t bit = (src_bits[word_idx] >> (bit_id & 31u)) & 1u;
+								if (bit) {
+									const int tx = x >> 2;
+									const int sx = x & 3;
+									const int sub = sx | (sy << 2) | (sz << 4);
+									tiled_buf[(size_t)tx + (size_t)ty * tex_w + (size_t)tz * tex_w * tex_h] |= (1u << sub);
+								}
 							}
 						}
 					}
+
+					grd_helper::UpdateCustomTexture3D(gres_sculpt_bits, sculptBitPackedObj, "SculptPackedBits_Tex3D_Tiled",
+						tiled_buf.data(), tex_w, tex_h, tex_d, DXGI_FORMAT_R32_UINT, 4);
 				}
 
-				grd_helper::UpdateCustomTexture3D(gres_sculpt_bits, sculptBitPackedObj, "SculptPackedBits_Tex3D_Tiled",
-					tiled_buf.data(), tex_w, tex_h, tex_d, DXGI_FORMAT_R32_UINT, 4);
 #elif USE_SCULPT_BITS_TEX3D == 1
 				// Upload packed sculpt bits as a Texture3D<R32_UINT>: 32 voxels along X are packed into one texel,
 				// so cache locality follows 3D texture coherency (Y/Z neighbors hit the 3D texture cache).
+				//
+				// Source layout is a 1D bit stream (bit_id = x + y*W + z*W*H), so when W is not a multiple of 32
+				// the source row boundaries do not align to 32-bit word boundaries. We handle both the aligned
+				// fast path (zero-copy when sizes match, or simple word copy) and the unaligned path
+				// (per-row word shuffle).
 				VolumeData* vol_data_for_bits = vobj->GetVolumeData();
-				const uint32_t tex_w = (uint32_t)((vol_data_for_bits->vol_size.x + 31) / 32);
-				const uint32_t tex_h = (uint32_t)vol_data_for_bits->vol_size.y;
-				const uint32_t tex_d = (uint32_t)vol_data_for_bits->vol_size.z;
-				const size_t expected_words = (size_t)tex_w * (size_t)tex_h * (size_t)tex_d;
-				// Defensive guard: CPU side must have packed at least tex_w*H*D uints in row-major (x,y,z) order.
-				assert(pvtrSculptBitPacked->size() >= expected_words);
-				grd_helper::UpdateCustomTexture3D(gres_sculpt_bits, sculptBitPackedObj, "SculptPackedBits_Tex3D",
-					pvtrSculptBitPacked->data(), tex_w, tex_h, tex_d, DXGI_FORMAT_R32_UINT, 4);
+				const int W = (int)vol_data_for_bits->vol_size.x;
+				const int H = (int)vol_data_for_bits->vol_size.y;
+				const int D = (int)vol_data_for_bits->vol_size.z;
+				const uint32_t tex_w = (uint32_t)((W + 31) / 32);
+				const uint32_t tex_h = (uint32_t)H;
+				const uint32_t tex_d = (uint32_t)D;
+				gres_sculpt_bits.res_name = "SculptPackedBits_Tex3D";
+				if (checkBitPackedTex3D(gres_sculpt_bits, sculptBitPackedObj, tex_w, tex_h, tex_d))
+				{
+					vzlog("------------> SculptPackedBits_Tex3D");
+
+					const size_t expected_words = (size_t)tex_w * (size_t)tex_h * (size_t)tex_d;
+					const uint32_t* src_bits = pvtrSculptBitPacked->data();
+					const size_t src_word_count = pvtrSculptBitPacked->size();
+					const bool w_aligned = ((W & 31) == 0);
+					const bool zero_copy_ok = w_aligned && (src_word_count >= expected_words);
+
+					if (zero_copy_ok) {
+						// W is a multiple of 32 AND source has at least the expected words: layouts match bit-for-bit.
+						grd_helper::UpdateCustomTexture3D(gres_sculpt_bits, sculptBitPackedObj, "SculptPackedBits_Tex3D",
+							src_bits, tex_w, tex_h, tex_d, DXGI_FORMAT_R32_UINT, 4);
+					}
+					else {
+						// Need to repack the 1D bit stream into a row-padded 3D texture layout.
+						static thread_local std::vector<uint32_t> xpack_buf;
+						xpack_buf.assign(expected_words, 0u);
+						const uint32_t last_word_bits = (W & 31) ? (uint32_t)(W & 31) : 32u;
+						const uint32_t last_word_mask = (last_word_bits == 32u) ? 0xFFFFFFFFu : ((1u << last_word_bits) - 1u);
+
+						for (int z = 0; z < D; ++z) {
+							for (int y = 0; y < H; ++y) {
+								const uint64_t row_bit_start = (uint64_t)y * (uint64_t)W + (uint64_t)z * (uint64_t)W * (uint64_t)H;
+								const size_t   src_word_start = (size_t)(row_bit_start >> 5);
+								const uint32_t src_bit_offset = (uint32_t)(row_bit_start & 31u);
+								uint32_t* dst_row = xpack_buf.data() + (size_t)y * tex_w + (size_t)z * tex_w * tex_h;
+
+								if (src_bit_offset == 0) {
+									// Source row is word-aligned: simple word copy + mask the tail.
+									for (uint32_t w = 0; w < tex_w; ++w) {
+										const size_t src_idx = src_word_start + w;
+										uint32_t word = (src_idx < src_word_count) ? src_bits[src_idx] : 0u;
+										if (w == tex_w - 1u) word &= last_word_mask;
+										dst_row[w] = word;
+									}
+								}
+								else {
+									// Source row is word-unaligned: shift+combine adjacent words.
+									const uint32_t shift = src_bit_offset;
+									const uint32_t inv_shift = 32u - shift;
+									for (uint32_t w = 0; w < tex_w; ++w) {
+										const size_t src_idx = src_word_start + w;
+										const uint32_t lo = (src_idx < src_word_count) ? (src_bits[src_idx] >> shift) : 0u;
+										const uint32_t hi = (src_idx + 1u < src_word_count) ? (src_bits[src_idx + 1u] << inv_shift) : 0u;
+										uint32_t word = lo | hi;
+										if (w == tex_w - 1u) word &= last_word_mask;
+										dst_row[w] = word;
+									}
+								}
+							}
+						}
+
+						grd_helper::UpdateCustomTexture3D(gres_sculpt_bits, sculptBitPackedObj, "SculptPackedBits_Tex3D",
+							xpack_buf.data(), tex_w, tex_h, tex_d, DXGI_FORMAT_R32_UINT, 4);
+					}
+				}
 #else
 				grd_helper::UpdateCustomBuffer(gres_sculpt_bits, sculptBitPackedObj, "SculptPackedBits", pvtrSculptBitPacked->data(), pvtrSculptBitPacked->size(), DXGI_FORMAT_R32_UINT, 4);
 #endif

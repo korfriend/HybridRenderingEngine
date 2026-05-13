@@ -1135,7 +1135,7 @@ void grd_helper::PushConstants(const void* data, uint32_t size, uint32_t offset)
 	Fence();
 }
 
-void grd_helper::CheckReusability(GpuRes& gres, VmObject* resObj, bool& update_data, bool& regen_data,
+void grd_helper::CheckReusability(GpuRes& gres, VmObject* resObj, bool& update_data, bool& reusable,
 	const vmobjects::VmParamMap<std::string, std::any>& res_new_values)
 {
 	uint64_t _gpu_gen_timg = gres.res_values.GetParam("LAST_UPDATE_TIME", (uint64_t)0);
@@ -1146,10 +1146,24 @@ void grd_helper::CheckReusability(GpuRes& gres, VmObject* resObj, bool& update_d
 		update_data = true;
 		bool is_reuse_memory = resObj->GetObjParam("_bool_ReuseGpuMemory", false);
 
-		//vmlog::LogInfo(">>> OBJ ID : " + std::to_string(resObj->GetObjectID()) + ", RES TYPE : " + gres.res_name + ", reuseTag : " + (is_reuse_memory ? "true" : "false"));
-		if (!is_reuse_memory)
+		// add a condition: if the gpu res size is different from the previous one, force to set 'reusable' to 'false'
+		bool size_mismatch = false;
+
+		for (auto it = res_new_values.begin(); it != res_new_values.end(); ++it) {
+			const std::string& key = it->first;
+			if (key != "NUM_ELEMENTS" && key != "WIDTH" && key != "HEIGHT" && key != "DEPTH")
+				continue;
+			//try {
+				uint32_t new_v = std::any_cast<uint32_t>(it->second);
+				uint32_t old_v = gres.res_values.GetParam(key, (uint32_t)0);
+				if (new_v != old_v) { size_mismatch = true; break; }
+			//}
+			//catch (...) {}
+		}
+
+		if (!is_reuse_memory || size_mismatch)
 		{
-			regen_data = true;
+			reusable = false;
 			// add properties
 			for (auto it = res_new_values.begin(); it != res_new_values.end(); it++)
 				gres.res_values.SetParam(it->first, it->second);
@@ -1838,8 +1852,8 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 			vmobjects::VmParamMap<std::string, std::any> res_new_values;
 			res_new_values.SetParam("NUM_ELEMENTS", (uint32_t)prim_data->num_vtx);
 			res_new_values.SetParam("STRIDE_BYTES", (uint32_t)stride_bytes);
-			bool regen_data = false;
-			CheckReusability(gres_vtx, pobj, update_data_attriute, regen_data, res_new_values);
+			bool reusable = true;
+			CheckReusability(gres_vtx, pobj, update_data_attriute, reusable, res_new_values);
 
 			if (i == (int)VERTEX_DEFINITIONS::GEODIST)
 			{
@@ -1848,7 +1862,7 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 				update_data_attriute |= cpu_update_time > gpu_gen_timg;
 			}
 
-			if(regen_data)
+			if (!reusable)
 				g_pCGpuManager->GenerateGpuResource(gres_vtx);
 		}
 
@@ -1923,9 +1937,10 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 		{
 			vmobjects::VmParamMap<std::string, std::any> res_new_values;
 			res_new_values.SetParam("NUM_ELEMENTS", (uint32_t)prim_data->num_vidx);
-			bool regen_data = false;
-			CheckReusability(gres_idx, pobj, update_data_attriute, regen_data, res_new_values);
-			if(regen_data)
+			bool reusable = true;
+			CheckReusability(gres_idx, pobj, update_data_attriute, reusable, res_new_values);
+
+			if (!reusable)
 				g_pCGpuManager->GenerateGpuResource(gres_idx);
 		}
 
@@ -1998,9 +2013,9 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 				res_new_values.SetParam("WIDTH", (uint32_t)imgWidth);
 				res_new_values.SetParam("HEIGHT", (uint32_t)imgHeight);
 				res_new_values.SetParam("DEPTH", (uint32_t)1);
-				bool regen_data = false;
-				CheckReusability(gres_tex, imgObj, update_data_attriute, regen_data, res_new_values);
-				if (regen_data)
+				bool reusable = true;
+				CheckReusability(gres_tex, imgObj, update_data_attriute, reusable, res_new_values);
+				if (!reusable)
 					g_pCGpuManager->GenerateGpuResource(gres_tex);
 			}
 
@@ -2119,9 +2134,9 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 					res_new_values.SetParam("WIDTH", (uint32_t)tex_res_size.x);
 					res_new_values.SetParam("HEIGHT", (uint32_t)tex_res_size.y);
 					res_new_values.SetParam("DEPTH", (uint32_t)prim_data->texture_res_info.size());
-					bool regen_data = false;
-					CheckReusability(gres_tex, pobj, update_data_attriute, regen_data, res_new_values);
-					if (regen_data)
+					bool reusable = true;
+					CheckReusability(gres_tex, pobj, update_data_attriute, reusable, res_new_values);
+					if (!reusable)
 						g_pCGpuManager->GenerateGpuResource(gres_tex);
 				}
 
@@ -2189,9 +2204,9 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 						vmobjects::VmParamMap<std::string, std::any> res_new_values;
 						res_new_values.SetParam("WIDTH", (uint32_t)tex_res_size.x);
 						res_new_values.SetParam("HEIGHT", (uint32_t)tex_res_size.y);
-						bool regen_data = false;
-						CheckReusability(gres_tex, pobj, update_data_attriute, regen_data, res_new_values);
-						if (regen_data)
+						bool reusable = true;
+						CheckReusability(gres_tex, pobj, update_data_attriute, reusable, res_new_values);
+						if (reusable)
 							g_pCGpuManager->GenerateGpuResource(gres_tex);
 					}
 
@@ -2223,7 +2238,7 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 	g_pCGpuManager->UpdateGpuResource(gres_bvhNodeBuffer);
 	uint64_t _gpu_gen_timg = gres_bvhNodeBuffer.res_values.GetParam("LAST_UPDATE_TIME", (uint64_t)0);
 	uint64_t _cpu_gen_timg = pobj->GetContentUpdateTime();
-	const geometrics::BVH& bvh2 = ((VmVObjectPrimitive*)pobj)->GetBVH();
+	//const geometrics::BVH& bvh2 = ((VmVObjectPrimitive*)pobj)->GetBVH();
 	//if (bvh2.IsValid() && prim_data->ptype == EvmPrimitiveType::PrimitiveTypeTRIANGLE && _gpu_gen_timg < _cpu_gen_timg)//
 	if (prim_data->ptype == EvmPrimitiveType::PrimitiveTypeTRIANGLE && _gpu_gen_timg < _cpu_gen_timg)
 	{
