@@ -5,6 +5,7 @@
 #include <d2d1_1.h>
 #include <dwrite.h>
 #include "RendererHeader.h"
+#include "gpures_interface.h"
 
 #include <iostream>
 
@@ -76,8 +77,20 @@ auto checkRefCount = [](IUnknown* obj, const char* name) {
 
 static CRITICAL_SECTION cs;
 bool InitModule(fncontainer::VmFnContainer& _fncontainer)
-{	
+{
 	InitializeCriticalSection(&cs);
+
+	// Drop any hooks left from a prior Init/Deinit cycle, then register this
+	// module's per-iobj caches (g_d2dResMap) for cleanup whenever
+	// __ReleaseGpuResourcesBySrcID(iobjId) fires.
+	ClearPerSrcIdReleaseHooks();
+	RegisterPerSrcIdReleaseHook([](int iobjId) {
+		auto it = g_d2dResMap.find(iobjId);
+		if (it != g_d2dResMap.end()) {
+			it->second.ReleaseD2DRes();
+			g_d2dResMap.erase(it);
+		}
+	});
 
 	if(g_pCGpuManager == NULL)
 		g_pCGpuManager = new VmGpuManager(GpuSdkTypeDX11, __DLLNAME);
@@ -854,6 +867,10 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 void DeInitModule(fncontainer::VmFnContainer& _fncontainer)
 {
 	DeleteCriticalSection(&cs);
+
+	// Drop the release hook before tearing down the maps it references.
+	ClearPerSrcIdReleaseHooks();
+
 	for (auto it = g_d2dResMap.begin(); it != g_d2dResMap.end(); it++) {
 		it->second.ReleaseD2DRes();
 	}

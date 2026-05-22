@@ -24,29 +24,6 @@ ID3D11Debug *debugDev;
 #define VMSAFE_RELEASE(p)			{ if(p) { (p)->Release(); (p)=NULL; } }
 #endif
 
-//#define USE_D2D
-
-#ifdef USE_D2D
-#include <d2d1_1.h>
-
-ID2D1Factory1* g_pDirect2dFactory = NULL;
-struct D2DRes {
-	IDXGISurface* pDxgiSurface = NULL;
-	ID2D1RenderTarget* pRenderTarget = NULL;
-	ID2D1SolidColorBrush* pSolidBrush = NULL;
-
-	ID3D11Texture2D* pTex2DRT = NULL; // do not release this!
-
-	void ReleaseD2DRes() {
-		VMSAFE_RELEASE(pSolidBrush);
-		VMSAFE_RELEASE(pRenderTarget);
-		VMSAFE_RELEASE(pDxgiSurface);
-	}
-};
-map<int, D2DRes> g_d2dResMap;
-map<string, ID2D1StrokeStyle*> g_d2dStrokeStyleMap;
-#endif
-
 struct RES_INDICATOR
 {
 	int src_id;
@@ -108,6 +85,18 @@ static GPUResMap g_mapVmResources;
 
 IDXGIDevice* g_pdxgiDevice = NULL;
 IDXGIAdapter* g_pdxgiAdapter = NULL;
+
+static std::vector<std::function<void(int)>> g_perSrcIdReleaseHooks;
+
+void RegisterPerSrcIdReleaseHook(std::function<void(int)> hook)
+{
+	g_perSrcIdReleaseHooks.push_back(std::move(hook));
+}
+
+void ClearPerSrcIdReleaseHooks()
+{
+	g_perSrcIdReleaseHooks.clear();
+}
 
 bool __InitializeDevice()
 {
@@ -416,49 +405,11 @@ bool __InitializeDevice()
 		return false;
 	}
 
-#ifdef USE_D2D
-	// Create a Direct2D factory.
-	if (g_pDirect2dFactory == NULL) {
-		if (D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &g_pDirect2dFactory) != S_OK)
-			vmlog::LogErr("Failure D2D1CreateFactory!!");
-
-		ID2D1StrokeStyle* pStrokeStyle = NULL;
-		HRESULT hr = g_pDirect2dFactory->CreateStrokeStyle(
-			D2D1::StrokeStyleProperties(
-				D2D1_CAP_STYLE_ROUND,
-				D2D1_CAP_STYLE_ROUND,
-				D2D1_CAP_STYLE_ROUND,
-				D2D1_LINE_JOIN_ROUND,
-				10.0f,
-				D2D1_DASH_STYLE_SOLID,
-				0.0f),
-			NULL,
-			0,
-			&pStrokeStyle
-		);
-
-		g_d2dStrokeStyleMap["DEFAULT"] = pStrokeStyle;
-	}
-#endif
 	return true;
 }
 
 bool __DeinitializeDevice()
 {
-#ifdef USE_D2D
-	for (auto it = g_d2dResMap.begin(); it != g_d2dResMap.end(); it++) {
-		it->second.ReleaseD2DRes();
-	}
-	g_d2dResMap.clear();
-	for (auto it = g_d2dStrokeStyleMap.begin(); it != g_d2dStrokeStyleMap.end(); it++) {
-		VMSAFE_RELEASE(it->second);
-	}
-	g_d2dStrokeStyleMap.clear();
-	VMSAFE_RELEASE(g_pDirect2dFactory);
-
-	if (g_pdx11DeviceImmContext == NULL || g_pdx11Device == NULL)
-		return false;
-#endif
 	g_pdx11DeviceImmContext->Flush();
 	g_pdx11DeviceImmContext->ClearState();
 	__ReleaseAllGpuResources();
@@ -1073,6 +1024,11 @@ bool __ReleaseGpuResourcesBySrcID(const int src_id, const bool call_clearstate)
 {
 	if (src_id == 0)
 		return false;
+
+	// Release per-iobj caches outside g_mapVmResources first so that any wrappers
+	// holding refs to the GPU resources we're about to free drop them now.
+	for (auto& hook : g_perSrcIdReleaseHooks)
+		hook(src_id);
 
 	g_pdx11DeviceImmContext->Flush();
 
