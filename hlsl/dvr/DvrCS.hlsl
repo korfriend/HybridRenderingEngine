@@ -18,8 +18,8 @@
 Texture3D tex3D_volume : register(t0);
 Texture3D tex3D_volblk : register(t1);
 Texture3D tex3D_volmask : register(t2);
-Buffer<float4> buf_otf : register(t3); // unorm ���� �����ϱ�
-Buffer<float4> buf_preintotf : register(t13); // unorm ���� �����ϱ�
+Buffer<float4> buf_otf : register(t3); // unorm
+Buffer<float4> buf_preintotf : register(t13); // unorm
 Buffer<float4> buf_windowing : register(t4); // not used here.
 Buffer<int> buf_ids : register(t5); // Mask OTFs // not used here.
 Texture2D<float> vr_fragment_1sthit_read : register(t6);

@@ -1,9 +1,2 @@
-fxc /E BasicShader4 /T ps_5_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs/SR_BASIC_PHONGBLINN_ps_5_0 /D __RENDERING_MODE=0 
-fxc /E BasicShader4 /T ps_5_0 ./hlsl/shader4/BasicShader.hlsl /Fo ./shader_compiled_objs/SR_BASIC_PHONGBLINN_PAINTER_ps_5_0 /D __RENDERING_MODE=0 /D __PAINTER_UV=1
-fxc /E OIT_A_BUFFER_FILL /T ps_5_0 ./hlsl/dx_abuf/DxABuf.hlsl /Fo ./shader_compiled_objs/SR_OIT_ABUFFER_PHONGBLINN_PAINTER_ps_5_0 /D __RENDERING_MODE=0 /D DX_11_STYLE=0 /D __PAINTER_UV=1
-
-fxc /E VS_Brush /T vs_5_0 ./hlsl/meshpainter/MeshPaintShader.hlsl /Fo ./shader_compiled_objs/MP_Brush_vs_5_0 
-fxc /E VS_FullscreenQuad /T vs_5_0 ./hlsl/meshpainter/MeshPaintShader.hlsl /Fo ./shader_compiled_objs/MP_FullscreenQuad_vs_5_0
-fxc /E PS_BrushStroke /T ps_5_0 ./hlsl/meshpainter/MeshPaintShader.hlsl /Fo ./shader_compiled_objs/MP_BrushStroke_ps_5_0
-fxc /E PS_Dilate /T ps_5_0 ./hlsl/meshpainter/MeshPaintShader.hlsl /Fo ./shader_compiled_objs/MP_Dilate_ps_5_0
-
+fxc /E ThickSlicePathTracer /T cs_5_0 ./hlsl/RayProcessing.hlsl /Fo ./shader_compiled_objs/ThickSlicePathTracer_GPUBVH_cs_5_0 /D FRAG_MERGING=1 /D CURVEDPLANE=0 /D PATHTR_USE_KBUF=1 /D USE_ROV=0 /D TAIL_HANDLING=1 /D DO_NOT_USE_DISCARD=1
+fxc /E Outline2D /T cs_5_0 ./hlsl/RayProcessing.hlsl /Fo ./shader_compiled_objs/SliceOutline_cs_5_0 /D PATHTR_USE_KBUF=1 /D FRAG_MERGING=1 /D DO_NOT_USE_DISCARD=1 /D USE_ROV=0 /D TAIL_HANDLING=1

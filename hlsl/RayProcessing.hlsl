@@ -1010,12 +1010,12 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 	if (asuint(fvPrev) == WILDCARD_DEPTH_OUTLINE)
 		__EXIT;
 
-	if (fragment_counter[ss_xy] == WILDCARD_DEPTH_OUTLINE_DIRTY)
-	{
-		fragment_counter[ss_xy] = 1;
-		fragment_zdepth[ss_xy] = asfloat(WILDCARD_DEPTH_OUTLINE);
-		__EXIT;
-	}
+	//if (fragment_counter[ss_xy] == WILDCARD_DEPTH_OUTLINE_DIRTY)
+	//{
+	//	fragment_counter[ss_xy] = 1;
+	//	fragment_zdepth[ss_xy] = asfloat(WILDCARD_DEPTH_OUTLINE);
+	//	__EXIT;
+	//}
 	
 	fragment_zdepth[ss_xy] = asfloat(OUTSIDE_PLANE);
 #endif
@@ -1810,55 +1810,55 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
         {
             float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
             v_rgba.a = 1;
-		if (planeThickness == 0.f)
-		{
-			float filling_alpha = g_cbPobj.dash_interval;
-			v_rgba.a = max(filling_alpha, 0.01);
-		}
+			if (planeThickness == 0.f)
+			{
+				float filling_alpha = g_cbPobj.dash_interval;
+				v_rgba.a = max(filling_alpha, 0.01);
+			}
 
-        float zthickness = 0.1f;
-        if (disableSolidFill)
-        {
-            v_rgba = float4(0, 0, 0, 0.01);
-            zthickness = 0.f;
-        }
+			float zthickness = 0.1f;
+			if (disableSolidFill)
+			{
+				v_rgba = float4(0, 0, 0, 0.01);
+				zthickness = 0.f;
+			}
 
-        v_rgba.rgb *= v_rgba.a;
+			v_rgba.rgb *= v_rgba.a;
 
-        Fragment frag;
-        frag.i_vis = ConvertFloat4ToUInt(v_rgba); // current
-        frag.zthick = zthickness;
-        frag.z = zdepth0;
-        frag.opacity_sum = v_rgba.a;
+			Fragment frag;
+			frag.i_vis = ConvertFloat4ToUInt(v_rgba); // current
+			frag.zthick = zthickness;
+			frag.z = zdepth0;
+			frag.opacity_sum = v_rgba.a;
 
-        Fragment fragMerge = (Fragment) frag;
+			Fragment fragMerge = (Fragment) frag;
 
-        uint numFrag = fragment_counter[ss_xy];
-        if (numFrag > 0)
-        {
-            Fragment fragPrev = (Fragment) 0;
-			GET_FRAG(fragPrev, addr_base, 0); // previous frag stored in K-buffer
+			uint numFrag = fragment_counter[ss_xy];
+			if (numFrag > 0)
+			{
+				Fragment fragPrev = (Fragment) 0;
+				GET_FRAG(fragPrev, addr_base, 0); // previous frag stored in K-buffer
 
-            float4 v_rgbaPrev = ConvertUIntToFloat4(fragPrev.i_vis);
-            if (v_rgbaPrev.a > 0.01f)
-                v_rgba = MixOpt(v_rgba, v_rgba.a, v_rgbaPrev, fragPrev.opacity_sum);
-			//v_rgba = float4(v_rgba.rgb, 1);//
-            fragMerge = frag;
-			//fragMerge.zthick = 0;
-			//v_rgba = float4(1, 0, 0, 1);
-            fragMerge.i_vis = ConvertFloat4ToUInt(v_rgba);
-            fragMerge.opacity_sum += fragPrev.opacity_sum;
-        }
+				float4 v_rgbaPrev = ConvertUIntToFloat4(fragPrev.i_vis);
+				if (v_rgbaPrev.a > 0.01f)
+					v_rgba = MixOpt(v_rgba, v_rgba.a, v_rgbaPrev, fragPrev.opacity_sum);
+				//v_rgba = float4(v_rgba.rgb, 1);//
+				fragMerge = frag;
+				//fragMerge.zthick = 0;
+				//v_rgba = float4(1, 0, 0, 1);
+				fragMerge.i_vis = ConvertFloat4ToUInt(v_rgba);
+				fragMerge.opacity_sum += fragPrev.opacity_sum;
+			}
 
-		//bool store_to_kbuf = BitCheck(g_cbCamState.cam_flag, 3) && planeThickness > 0;
-		SET_FRAG(addr_base, 0, fragMerge);
-		//Fill_kBuffer(ss_xy, 2, v_rgba0, zdepth1, vz_thickness);
+			//bool store_to_kbuf = BitCheck(g_cbCamState.cam_flag, 3) && planeThickness > 0;
+			SET_FRAG(addr_base, 0, fragMerge);
+			//Fill_kBuffer(ss_xy, 2, v_rgba0, zdepth1, vz_thickness);
 
-		//if (!store_to_kbuf)
-            fragment_vis[ss_xy] = v_rgba;
+			//if (!store_to_kbuf)
+				fragment_vis[ss_xy] = v_rgba;
 
-            fragment_counter[ss_xy] = 1;
-		//fragment_zdepth[ss_xy] = minDistOnPlane;
+				fragment_counter[ss_xy] = 1;
+			//fragment_zdepth[ss_xy] = minDistOnPlane;
         }
         else
         {
@@ -2060,7 +2060,10 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 #endif
 	uint wildcard_v = asuint(sd);
 	if (wildcard_v == WILDCARD_DEPTH_OUTLINE || wildcard_v == OUTSIDE_PLANE)
+	{
+		//fragment_vis[ss_xy] = float4(wildcard_v == WILDCARD_DEPTH_OUTLINE, wildcard_v == OUTSIDE_PLANE, 0, 1);
 		__EXIT;
+	}
 
 	// half16 »ç¿ë...
 //#define NEW_TEST
@@ -2118,7 +2121,7 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 #else
 
 	float a = TestAlpha(sd);
-	if (a < 0.0) {
+	if (a < 0.01) {
 		__EXIT;
 	}
 	
@@ -2147,7 +2150,7 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 	//if (fvcur < 10)
 	//	outline_color = float4(1, 0, 0, 1);
 
-	bool disableSolidFill = BitCheck(g_cbPobj.pobj_flag, 6);
+	//bool disableSolidFill = BitCheck(g_cbPobj.pobj_flag, 6);
 
 #if DX10_0 == 1
 	//out_ps.ds_z = 0;
@@ -2164,15 +2167,16 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 	//fragment_vis[ss_xy] = outline_color;
 	//fragment_zdepth[ss_xy] = asfloat(WILDCARD_DEPTH_OUTLINE);
 
-	if (disableSolidFill) {
+	//if (disableSolidFill) 
+	{
 		//if (outline_color.a < 0)
 		//outline_color = float4(1 * outline_color.a, 0, 0, outline_color.a);
 		Fill_kBuffer(ss_xy, g_cbCamState.k_value, outline_color, 0.0001, max(g_cbCamState.far_plane, 0.1));
 	}
 
-	//if (a > 0.01)
+	if (a > 0.01)
 	{
-		fragment_counter[ss_xy] = WILDCARD_DEPTH_OUTLINE_DIRTY;
+		fragment_counter[ss_xy] = WILDCARD_DEPTH_OUTLINE;
 	}
 #endif
 }
