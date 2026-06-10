@@ -270,10 +270,14 @@ __pycache__/
 /data/backpack16_512x512x373_0.0039064x0.0039064x0.005_ushort.den
 /out.txt
 /imgui.ini
-/CLAUDE.md
 /nul
 /AGENTS.md
 /gpu manager/clean_helper.py
 /gpu manager/fix_helper.py
 /o.txt
 /o2.txt
+
+# Claude Code workspace artifacts
+.claude/
+CLAUDE.md
+/.claude/settings.local.json
