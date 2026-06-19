@@ -1009,13 +1009,6 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 	float fvPrev = fragment_zdepth[ss_xy];// asfloat(ConvertFloat4ToUInt(v_rgba));
 	if (asuint(fvPrev) == WILDCARD_DEPTH_OUTLINE)
 		__EXIT;
-
-	//if (fragment_counter[ss_xy] == WILDCARD_DEPTH_OUTLINE_DIRTY)
-	//{
-	//	fragment_counter[ss_xy] = 1;
-	//	fragment_zdepth[ss_xy] = asfloat(WILDCARD_DEPTH_OUTLINE);
-	//	__EXIT;
-	//}
 	
 	fragment_zdepth[ss_xy] = asfloat(OUTSIDE_PLANE);
 #endif
@@ -2174,10 +2167,6 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 		Fill_kBuffer(ss_xy, g_cbCamState.k_value, outline_color, 0.0001, max(g_cbCamState.far_plane, 0.1));
 	}
 
-	if (a > 0.01)
-	{
-		fragment_counter[ss_xy] = WILDCARD_DEPTH_OUTLINE;
-	}
 #endif
 }
 

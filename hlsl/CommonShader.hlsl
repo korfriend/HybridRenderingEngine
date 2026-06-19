@@ -2044,6 +2044,20 @@ cbuffer cbGlobalParams : register(b10)
 	HxCB_CurvedSlicer g_cbCurvedSlicer;
 }
 
+// Slicer x-ray image-level post-processing filter (SliceXrayFilter.hlsl)
+//   filter_radius : convolution kernel radius (N = 2*radius+1); 0 = passthrough
+//   use_filter    : 0 = passthrough (composite only), !=0 = apply NxN convolution
+struct HxCB_SliceFilter
+{
+	int filter_radius;
+	int use_filter;
+	float2 filter_pad;
+};
+cbuffer cbSliceFilter : register(b12)
+{
+	HxCB_SliceFilter g_cbSliceFilter;
+}
+
 float GetHotspotMaskWeightIdx(inout int out_lined, in int2 pos_xy, in int i, in bool check_silhouete)
 {
 	//out_lined = 0;

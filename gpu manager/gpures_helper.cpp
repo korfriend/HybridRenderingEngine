@@ -366,6 +366,7 @@ int grd_helper::Initialize(VmGpuManager* pCGpuManager, PSOManager* gpu_params)
 		CREATE_AND_SET(CB_Frame);
 		CREATE_AND_SET(CB_Emitter);
 		CREATE_AND_SET(CB_Undercut);
+		CREATE_AND_SET(CB_SliceFilter);
 		CREATE_AND_SET(CB_SortConstants);
 		//CREATE_AND_SET(BVHPushConstants);
 	}
@@ -610,14 +611,14 @@ int grd_helper::Initialize(VmGpuManager* pCGpuManager, PSOManager* gpu_params)
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91007), "SR_OIT_PTC_vs_4_0", "vs_4_0", "PTC", lotypeInputPTC, 3), SR_OIT_PTC_vs_4_0);
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91008), "SR_OIT_PNTC_vs_4_0", "vs_4_0", "PNTC", lotypeInputPNTC, 4), SR_OIT_PNTC_vs_4_0);
 
-		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91021), "SR_OIT_PG_vs_4_0", "vs_4_0", "PG", lotypeInputPG, 1), SR_OIT_PG_vs_4_0);
-		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91022), "SR_OIT_PCG_vs_4_0", "vs_4_0", "PCG", lotypeInputPCG, 2), SR_OIT_PCG_vs_4_0);
-		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91023), "SR_OIT_PTG_vs_4_0", "vs_4_0", "PTG", lotypeInputPTG, 2), SR_OIT_PTG_vs_4_0);
-		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91024), "SR_OIT_PNG_vs_4_0", "vs_4_0", "PNG", lotypeInputPNG, 2), SR_OIT_PNG_vs_4_0);
-		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91025), "SR_OIT_PNCG_vs_4_0", "vs_4_0", "PNCG", lotypeInputPNCG, 3), SR_OIT_PNCG_vs_4_0);
-		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91026), "SR_OIT_PNTG_vs_4_0", "vs_4_0", "PNTG", lotypeInputPNTG, 3), SR_OIT_PNTG_vs_4_0);
-		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91027), "SR_OIT_PTCG_vs_4_0", "vs_4_0", "PTCG", lotypeInputPTCG, 3), SR_OIT_PTCG_vs_4_0);
-		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91028), "SR_OIT_PNTCG_vs_4_0", "vs_4_0", "PNTCG", lotypeInputPNTCG, 4), SR_OIT_PNTCG_vs_4_0);
+		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91021), "SR_OIT_PG_vs_4_0", "vs_4_0", "PG", lotypeInputPG, 2), SR_OIT_PG_vs_4_0);
+		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91022), "SR_OIT_PCG_vs_4_0", "vs_4_0", "PCG", lotypeInputPCG, 3), SR_OIT_PCG_vs_4_0);
+		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91023), "SR_OIT_PTG_vs_4_0", "vs_4_0", "PTG", lotypeInputPTG, 3), SR_OIT_PTG_vs_4_0);
+		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91024), "SR_OIT_PNG_vs_4_0", "vs_4_0", "PNG", lotypeInputPNG, 3), SR_OIT_PNG_vs_4_0);
+		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91025), "SR_OIT_PNCG_vs_4_0", "vs_4_0", "PNCG", lotypeInputPNCG, 4), SR_OIT_PNCG_vs_4_0);
+		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91026), "SR_OIT_PNTG_vs_4_0", "vs_4_0", "PNTG", lotypeInputPNTG, 4), SR_OIT_PNTG_vs_4_0);
+		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91027), "SR_OIT_PTCG_vs_4_0", "vs_4_0", "PTCG", lotypeInputPTCG, 4), SR_OIT_PTCG_vs_4_0);
+		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91028), "SR_OIT_PNTCG_vs_4_0", "vs_4_0", "PNTCG", lotypeInputPNTCG, 5), SR_OIT_PNTCG_vs_4_0);
 
 		VRETURN(register_vertex_shader(MAKEINTRESOURCE(IDR_RCDATA91009), "SR_OIT_PTTT_vs_4_0", "vs_4_0", "PTTT", lotypeInputPTTT_Annotation, 4), SR_OIT_PTTT_vs_4_0);
 
@@ -818,6 +819,8 @@ int grd_helper::Initialize(VmGpuManager* pCGpuManager, PSOManager* gpu_params)
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50006), "VR_SURFACE_cs_5_0", "cs_5_0"), VR_SURFACE_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA90000), "SampleTest_cs_5_0", "cs_5_0"), SampleTest_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50100), "FillDither_cs_5_0", "cs_5_0"), FillDither_cs_5_0);
+
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50101), "XrayFilterComposite_cs_5_0", "cs_5_0"), XrayFilterComposite_cs_5_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50003), "VR_DEFAULT_FM_cs_5_0", "cs_5_0"), VR_DEFAULT_FM_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50004), "VR_OPAQUE_FM_cs_5_0", "cs_5_0"), VR_OPAQUE_FM_cs_5_0);
@@ -2362,10 +2365,13 @@ bool grd_helper::UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string
 		g_pCGpuManager->GenerateGpuResource(gres);
 	}
 
-	D3D11_MAPPED_SUBRESOURCE d11MappedRes;
-	g_psoManager->dx11DeviceImmContext->Map((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes);
-	memcpy(d11MappedRes.pData, bufPtr, type_bytes * numElements);
-	g_psoManager->dx11DeviceImmContext->Unmap((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], 0);
+	if (bufPtr)
+	{
+		D3D11_MAPPED_SUBRESOURCE d11MappedRes;
+		g_psoManager->dx11DeviceImmContext->Map((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes);
+		memcpy(d11MappedRes.pData, bufPtr, type_bytes * numElements);
+		g_psoManager->dx11DeviceImmContext->Unmap((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], 0);
+	}
 
 	gres.options["Update LAST_UPDATE_TIME"] = 1u;
 	g_pCGpuManager->UpdateGpuResource(gres);

@@ -720,6 +720,7 @@ namespace grd_helper
 
 		// 0 bit : 0 (use the input normal) 1 (invert the input normal) ==> will be deprecated! (always faces to camera)
 		// 1 bit : outline vr (1) or not (0)
+		// 2 bit : x-ray post-filter (1) or not (0)
 		// 19 bit : ghost surface (1) or not (0)
 		// 20 bit : hotspot visible (1) or not (0)
 		// 24~31bit : Sculpt Mask Value (1 byte)
@@ -885,11 +886,19 @@ namespace grd_helper
 
 	struct CB_Undercut
 	{
-		vmmat44f	mat_ws2lss_udc_map;	
+		vmmat44f	mat_ws2lss_udc_map;
 		vmmat44f	mat_ws2lcs_udc_map;
 
 		vmfloat3	undercutDir;
 		uint32_t		icolor;
+	};
+
+	// Slicer x-ray image-level post-processing filter (SliceXrayFilter.hlsl, cbuffer b12)
+	struct CB_SliceFilter
+	{
+		int32_t		filter_radius;		// convolution kernel radius (N = 2*radius+1); 0 = passthrough
+		int32_t		use_filter;			// 0 = passthrough (composite only), !=0 = apply NxN convolution
+		float		filter_pad[2];
 	};
 
 	// CS Particle Buffer Update (https://github.com/turanszkij/WickedEngine/blob/2f5631e46aed3e278377a678b9e49714bfd33968/WickedEngine/shaders/emittedparticle_emitCS.hlsl )

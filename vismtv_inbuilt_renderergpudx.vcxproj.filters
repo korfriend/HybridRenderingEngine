@@ -272,6 +272,9 @@
     <FxCompile Include="hlsl\meshpainter\MeshPaintShader.hlsl">
       <Filter>hlsl source code\meshpainter</Filter>
     </FxCompile>
+    <FxCompile Include="hlsl\dvr\SliceXrayFilter.hlsl">
+      <Filter>hlsl source code\dvr</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <Text Include="DeprecatedShaders.txt">

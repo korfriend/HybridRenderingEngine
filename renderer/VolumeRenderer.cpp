@@ -12,6 +12,34 @@
 #define USE_SCULPT_BITS_TEX3D 1
 #define USE_SCULPT_BITS_TEX3D_TILED 0
 
+#define __RM_DEFAULT 0
+#define __RM_MODULATION 1
+#define __RM_MULTIOTF_MODULATION 2
+#define __RM_CLIPOPAQUE 20
+#define __RM_OPAQUE 21
+#define __RM_OPAQUE_MULTIOTF 26
+#define __RM_SCULPTMASK 22
+#define __RM_SCULPTMASK_MODULATION 25
+#define __RM_SAMPLETEST 99
+#define __RM_MULTIOTF 23
+#define __RM_VISVOLMASK 24
+//#define __RM_TEST 6
+#define __RM_RAYMAX 10
+#define __RM_RAYMIN 11
+#define __RM_RAYSUM 12
+#define __RM_RAYMAX_SCULPTMASK 27
+#define __RM_RAYMIN_SCULPTMASK 28
+#define __RM_RAYSUM_SCULPTMASK 29
+// X-ray slicer post-filter modes (mirror vzm::CameraParameters::XRayPostFilter)
+#define __XRPF_NONE 0
+#define __XRPF_MEAN 1
+#define __XRPF_GAUSSIAN 2
+#define __XRPF_SHARPEN 3
+#define __XRPF_SHARPEN_GAUSSIAN 4
+#define __XRPF_LAPLACIAN 5
+#define __XRPF_EDGE 6
+#define __SRV_PTR ID3D11ShaderResourceView*
+
 using namespace grd_helper;
 
 bool RenderVrDLS(VmFnContainer* _fncontainer,
@@ -47,6 +75,13 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	vmfloat3 camClipPlaneDir = _fncontainer->fnParams.GetParam("_float3_VecClipPlaneWS", vmfloat3(0));
 	vmmat44f camClipMatWS2BS = _fncontainer->fnParams.GetParam("_matrix44f_MatrixClipWS2BS", vmmat44f(1));
 	std::set<int> camClipperFreeActors = _fncontainer->fnParams.GetParam("_set_int_CamClipperFreeActors", std::set<int>());
+
+	// X-ray slicer post-filter request (CameraParameters::SetXRayPostFilter). Mode != NONE means "requested";
+	// whether it actually runs is decided below (apply_postprocessing_filter), gated on an x-ray ray-cast mode.
+	bool try_postprocessing_filter = _fncontainer->fnParams.GetParam("_int_XRayPostFilterMode", (int)__XRPF_NONE) != __XRPF_NONE;
+	// Default false: the x-ray post-filter is non-DX10 only. In a DX10 build the decision below is
+	// compiled out, so this must stay false there (otherwise bit 2 could be tagged with no fused pass).
+	bool apply_postprocessing_filter = false;
 
 	float merging_beta = (float)_fncontainer->fnParams.GetParam("_float_MergingBeta", 0.5f);
 	bool is_rgba = _fncontainer->fnParams.GetParam("_bool_IsRGBA", false); // false means bgra
@@ -206,7 +241,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			}
 		}
 #else
-#define CS_NUM 43
+#define CS_NUM 44
 #define SET_CS(NAME) psoManager->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::COMPUTE_SHADER, NAME), dx11CShader, true)
 
 		string strNames_CS[CS_NUM] = {
@@ -253,6 +288,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			  ,"VR_SINGLE_SCULPTMASK_CONTEXT_FM_cs_5_0"
 			  ,"VR_SINGLE_DEFAULT_SCULPTBITS_FM_cs_5_0"
 			  ,"VR_SINGLE_CONTEXT_SCULPTBITS_FM_cs_5_0"
+			  ,"XrayFilterComposite_cs_5_0"
 		};
 
 		for (int i = 0; i < CS_NUM; i++)
@@ -372,6 +408,17 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	grd_helper::UpdateFrameBuffer(gres_fb_depthcs, iobj, "RENDER_OUT_DEPTH_0", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
 	grd_helper::UpdateFrameBuffer(gres_fb_vrdepthcs, iobj, "RENDER_OUT_DEPTH_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
 
+	// Slicer x-ray post-processing filter scratch + kernel resources. Declared here so they are
+	// visible to the DVR UAV binding / fused dispatch. gres_fb_xray_vol is NOT a new allocation: in the
+	// Presetting region (only when apply_postprocessing_filter is decided true) it is pointed at the
+	// existing "RENDER_OUT_RGBA_1" pool buffer, which is idle during the volume pass. The mask buffer is
+	// filled/uploaded at the fused-dispatch site (its weights depend on per-frame profile params).
+	//  gres_fb_xray_vol : volume-only x-ray color redirect target (DvrCS bit2 writes here at u2);
+	//                     also the convolution input for the fused XrayFilterComposite pass. RGBA8 RT|SRV|UAV.
+	//  gres_xray_filter_mask : NxN convolution weights (Buffer<float> SRV), filled from a named profile.
+	GpuRes gres_fb_xray_vol;
+	GpuRes gres_xray_filter_mask;
+
 	GpuRes gres_fb_k_buffer, gres_fb_counter;
 	GpuRes gres_fb_ao_texs[2], gres_fb_ao_blf_texs[2];
 	//GpuRes gres_fb_mip_a_halftexs[2], gres_fb_mip_z_halftexs[2]; // deprecated
@@ -445,7 +492,34 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	{
 		grd_helper::UpdateFrameBuffer(gres_fb_thickcs, iobj, "RENDER_OUT_THICK_0", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
 	}
-#pragma endregion 
+
+	// Decide the x-ray image-level post-filter HERE (presetting), not mid-render. This flag means only
+	// "is the feature ON?" and is independent of the volume-actor count. It depends on:
+	//   - the post-filter was requested (_int_XRayPostFilterMode != NONE), AND
+	//   - the global ray-cast mode is x-ray (MIP/MinIP/Raysum, incl. sculpt-mask variants).
+	// Multi-volume is supported: earlier (non-last) volumes accumulate into the RT (gres_fb_rgba) as usual;
+	// only the LAST DVR volume is redirected to the volume-only scratch and then filtered+composited. That
+	// "where" is gated separately by is_last_dvr at the render sites below — this flag is just the "whether".
+	// DX10 is intentionally unsupported for this pass: its non-DX10-only resources (gres_fb_xray_vol,
+	// the K-buffer) don't exist there, so the whole decision is compiled out and apply_postprocessing_filter
+	// stays false in a DX10 build.
+#ifndef DX10_0
+	{
+		const bool global_is_xray =
+			ray_cast_type_global == __RM_RAYMAX || ray_cast_type_global == __RM_RAYMIN || ray_cast_type_global == __RM_RAYSUM ||
+			ray_cast_type_global == __RM_RAYMAX_SCULPTMASK || ray_cast_type_global == __RM_RAYMIN_SCULPTMASK || ray_cast_type_global == __RM_RAYSUM_SCULPTMASK;
+		apply_postprocessing_filter = try_postprocessing_filter && global_is_xray;
+		if (apply_postprocessing_filter)
+			// No dedicated allocation: reuse the existing "RENDER_OUT_RGBA_1" scratch (RGBA8, RT|SRV|UAV;
+			// PrimitiveRenderer's single-layer buffer). The non-DX10 VolumeRenderer does not otherwise use
+			// it (its own RT is "RENDER_OUT_RGBA_0"), the surface DoModule that uses it has already completed,
+			// and the volume renderer is the final renderer — so it is idle for the duration of this pass.
+			// The volume slab thickness (u5) reuses gres_fb_vrdepthcs ("RENDER_OUT_DEPTH_1") the same way:
+			// it is always allocated and VR_SURFACE (its only writer) is skipped in x-ray mode, so it is idle.
+			grd_helper::UpdateFrameBuffer(gres_fb_xray_vol, iobj, "RENDER_OUT_RGBA_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+	}
+#endif // !DX10_0
+#pragma endregion
 
 #ifdef DX10_0
 	if (dvr_volumes.size() > 1) {
@@ -690,25 +764,6 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 		// note that the actor is visible (already checked)
 #pragma region Actor Parameters
-#define __RM_DEFAULT 0
-#define __RM_MODULATION 1
-#define __RM_MULTIOTF_MODULATION 2
-#define __RM_CLIPOPAQUE 20
-#define __RM_OPAQUE 21
-#define __RM_OPAQUE_MULTIOTF 26
-#define __RM_SCULPTMASK 22
-#define __RM_SCULPTMASK_MODULATION 25
-#define __RM_SAMPLETEST 99
-#define __RM_MULTIOTF 23
-#define __RM_VISVOLMASK 24
-//#define __RM_TEST 6
-#define __RM_RAYMAX 10
-#define __RM_RAYMIN 11
-#define __RM_RAYSUM 12
-#define __RM_RAYMAX_SCULPTMASK 27
-#define __RM_RAYMIN_SCULPTMASK 28
-#define __RM_RAYSUM_SCULPTMASK 29
-#define __SRV_PTR ID3D11ShaderResourceView* 
 
 		// will change integer to string type 
 		// and its param name 'RaySamplerMode'
@@ -1074,6 +1129,15 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			cbVolumeObj.kappa_i = actor->GetParam("_float_ModulationKappai", 0.f);
 			cbVolumeObj.kappa_s = actor->GetParam("_float_ModulationKappas", 0.f);
 		}
+		
+		// Tag ONLY the last DVR volume so DvrCS writes its volume-only x-ray color (bit 2) and skips the
+		// in-DVR mesh composite, leaving it to the fused pass. Earlier volumes accumulate into the RT
+		// normally, so is_last_dvr is required here (apply_postprocessing_filter alone is count-independent).
+		if (is_last_dvr && apply_postprocessing_filter)
+		{
+			cbVolumeObj.vobj_flag |= (int)1 << 2;
+		}
+
 		if (mask_vol_obj) {
 			cbVolumeObj.mask_vol_size = vmfloat3(gres_mask_vol.res_values.GetParam("WIDTH", (uint32_t)1),
 				gres_mask_vol.res_values.GetParam("HEIGHT", (uint32_t)1),
@@ -1289,10 +1353,16 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			break;
 		}
  
+		// When the x-ray post-filter is active on the last DVR pass (vobj_flag bit 2 set),
+		// DvrCS writes volume-ONLY x-ray color into u2. Redirect u2 to the dedicated
+		// volume-only scratch (gres_fb_xray_vol) so gres_fb_rgba stays untouched and becomes
+		// the fused XrayFilterComposite pass's final output. u0/u1/u3 are unchanged; the
+		// clean volume depth still lands in gres_fb_depthcs (u3).
+		const bool xray_redirect_u2 = (is_last_dvr && apply_postprocessing_filter); // redirect only the last volume
 		ID3D11UnorderedAccessView* dx11UAVs[4] = {
 				  (ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV]
 				, (ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]
-				, (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
+				, (ID3D11UnorderedAccessView*)(xray_redirect_u2 ? gres_fb_xray_vol.alloc_res_ptrs[DTYPE_UAV] : gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV])
 				, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
 		};
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs, (UINT*)(&dx11UAVs));
@@ -1372,11 +1442,25 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 		SET_SHADER_RES(20, 3, dx11SRVs_NULL);
 #else
+		// When u2 is redirected to the scratch RT, DvrCS reads the MDVR accumulation (vis_prev) from t40
+		// instead of u2 — bind the real accumulation RT (gres_fb_rgba) there. It is SRV-only this pass
+		// (u2 = scratch), so there is no SRV/UAV alias. For a single volume gres_fb_rgba is the (cleared)
+		// RT -> vis_prev.a==0; for multi-volume it holds the accumulated earlier volumes.
+		if (xray_redirect_u2)
+			SET_SHADER_RES(40, 1, (ID3D11ShaderResourceView**)&gres_fb_rgba.alloc_res_ptrs[DTYPE_SRV]);
 		SET_SHADER(cshader, NULL, 0);
 		//dx11DeviceImmContext->Flush();
-		dx11DeviceImmContext->CSSetUnorderedAccessViews(5, 1, (ID3D11UnorderedAccessView**)&gres_fb_thickcs.alloc_res_ptrs[DTYPE_UAV], (UINT*)(&dx11UAVs));
+		// u5 = fragment_zthick. When the post-filter is active the bit-2 path stores the volume slab
+		// thickness here for the fused pass; reuse the idle gres_fb_vrdepthcs ("RENDER_OUT_DEPTH_1",
+		// always allocated) instead of gres_fb_thickcs (only allocated for multi-volume). Non-filter
+		// x-ray is unchanged.
+		ID3D11UnorderedAccessView* uav_u5 = (ID3D11UnorderedAccessView*)(xray_redirect_u2
+			? gres_fb_vrdepthcs.alloc_res_ptrs[DTYPE_UAV] : gres_fb_thickcs.alloc_res_ptrs[DTYPE_UAV]);
+		dx11DeviceImmContext->CSSetUnorderedAccessViews(5, 1, &uav_u5, (UINT*)(&uav_u5));
 		dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(5, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs));
+		if (xray_redirect_u2)
+			SET_SHADER_RES(40, 1, dx11SRVs_NULL);
 		if (fastRender2x) {
 			SET_SHADER(GETCS(FillDither_cs_5_0), NULL, 0);
 			dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
@@ -1385,6 +1469,157 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 		SET_SHADER_RES(6, 1, dx11SRVs_NULL);
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(50, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+
+		// Slicer x-ray image-level post-processing filter + mesh composite (single fused pass).
+		// Runs once, after the LAST DVR volume, when the post-filter is enabled. On that volume DvrCS wrote
+		// the volume-ONLY x-ray color into gres_fb_xray_vol (u2 was redirected there) and the clean volume
+		// depth into gres_fb_depthcs (vobj_flag bit 2). The mesh K-buffer is intact; gres_fb_rgba holds the
+		// accumulated earlier volumes and is the final output target of this pass.
+		if (is_last_dvr && apply_postprocessing_filter)
+		{
+			// --- build the convolution kernel from the X-ray post-filter mode (row-major, length N*N) ---
+			// Mode/radius/strength come from CameraParameters::SetXRayPostFilter (forwarded by RenderScene as
+			// _int_XRayPostFilterMode / _int_XRayPostFilterRadius / _float_XRayPostFilterStrength). Modes mirror
+			// vzm::CameraParameters::XRayPostFilter: MEAN box blur / GAUSSIAN / SHARPEN (unsharp-box) /
+			// SHARPEN_GAUSSIAN / LAPLACIAN high-boost / EDGE high-pass. Brightness-preserving modes sum to 1;
+			// EDGE sums to 0. NONE / radius==0 -> passthrough (use_filter = 0).
+			//
+			// The kernel is CACHED in iobj (XRPF_* obj-params): it is rebuilt on the CPU and re-uploaded to the
+			// mask SRV ONLY when mode/radius/strength change. A steady filter setting therefore costs no per-frame
+			// kernel rebuild and no GPU mask re-upload (UpdateCustomBuffer reuses the buffer when the timestamp
+			// we pass has not advanced).
+			const int mode = _fncontainer->fnParams.GetParam("_int_XRayPostFilterMode", (int)__XRPF_NONE);
+			const float strength = (float)_fncontainer->fnParams.GetParam("_float_XRayPostFilterStrength", 1.f);
+			int radius = _fncontainer->fnParams.GetParam("_int_XRayPostFilterRadius", (int)1);
+			if (radius < 0) radius = 0;
+			if (radius > 5) radius = 5; // max 11x11 = 121 weights
+			const int N = 2 * radius + 1;
+			const int kcount = N * N;
+			const int center = radius * N + radius;
+			const int use_filter = (mode != __XRPF_NONE && radius > 0) ? 1 : 0;
+
+			// Rebuild only when the setting changed (compared against the values cached on iobj).
+			const bool filter_changed =
+				   mode     != iobj->GetObjParam<int>("XRPF_MODE", (int)-1)
+				|| radius   != iobj->GetObjParam<int>("XRPF_RADIUS", (int)-1)
+				|| strength != iobj->GetObjParam<float>("XRPF_STRENGTH", -2.f);
+			uint64_t filter_time = iobj->GetObjParam<uint64_t>("XRPF_TIME", (uint64_t)0);
+
+			float mask_weights[121];
+			if (filter_changed)
+			{
+				for (int t = 0; t < 121; t++) mask_weights[t] = 0.f;
+
+				// helper: fill mask_weights with a normalized 2D gaussian (sum == 1); sigma = scale*radius.
+				auto build_gaussian = [&](float sigma_scale) {
+					float sigma = (sigma_scale > 0.f ? sigma_scale : 0.5f) * (float)radius;
+					if (sigma < 1e-4f) sigma = 1e-4f;
+					const float two_s2 = 2.f * sigma * sigma;
+					float sum = 0.f; int t = 0;
+					for (int dy = -radius; dy <= radius; dy++)
+						for (int dx = -radius; dx <= radius; dx++) {
+							float wv = expf(-(float)(dx * dx + dy * dy) / two_s2);
+							mask_weights[t++] = wv; sum += wv;
+						}
+					if (sum > 0.f) for (int q = 0; q < kcount; q++) mask_weights[q] /= sum;
+				};
+				// helper: write the 4-neighbour laplacian stencil (center, up/down/left/right), rest zero.
+				auto build_laplacian = [&](float c, float nb) {
+					mask_weights[center] = c;
+					if (radius >= 1) {
+						mask_weights[(radius - 1) * N + radius] = nb; // up
+						mask_weights[(radius + 1) * N + radius] = nb; // down
+						mask_weights[radius * N + (radius - 1)] = nb; // left
+						mask_weights[radius * N + (radius + 1)] = nb; // right
+					}
+				};
+
+				switch (use_filter ? mode : __XRPF_NONE)
+				{
+				case __XRPF_MEAN: {
+					// uniform box blur, sum == 1.
+					const float w = 1.f / (float)kcount;
+					for (int t = 0; t < kcount; t++) mask_weights[t] = w;
+					break; }
+				case __XRPF_GAUSSIAN:
+					// normalized 2D gaussian; strength scales sigma (wider = more blur).
+					build_gaussian(strength);
+					break;
+				case __XRPF_SHARPEN: {
+					// unsharp via box : center = 1 + strength*(1 - 1/kcount), off-center = -strength/kcount. Sum == 1.
+					const float inv = 1.f / (float)kcount;
+					for (int t = 0; t < kcount; t++) mask_weights[t] = -strength * inv;
+					mask_weights[center] = 1.f + strength * (1.f - inv);
+					break; }
+				case __XRPF_SHARPEN_GAUSSIAN:
+					// unsharp via gaussian low-pass : (1+strength)*identity - strength*gaussian. Sum == 1.
+					build_gaussian(1.f);
+					for (int t = 0; t < kcount; t++) mask_weights[t] *= -strength;
+					mask_weights[center] += 1.f + strength;
+					break;
+				case __XRPF_LAPLACIAN:
+					// laplacian high-boost : identity + strength*L (L = 4-neighbour, sums to 0). Sum == 1.
+					build_laplacian(1.f + 4.f * strength, -strength);
+					break;
+				case __XRPF_EDGE:
+					// pure laplacian high-pass (edge map). Sum == 0 (not brightness-preserving).
+					build_laplacian(4.f * strength, -strength);
+					break;
+				default: // __XRPF_NONE / radius==0 : passthrough (mask stays zero; use_filter == 0)
+					break;
+				}
+
+				filter_time = vmhelpers::GetCurrentTimePack(); // advance so UpdateCustomBuffer re-uploads exactly once
+				iobj->SetObjParam("XRPF_MODE", mode);
+				iobj->SetObjParam("XRPF_RADIUS", radius);
+				iobj->SetObjParam("XRPF_STRENGTH", strength);
+				iobj->SetObjParam("XRPF_TIME", filter_time);
+			}
+
+			// Upload the mask. filter_time only advances on a setting change, so on steady frames UpdateCustomBuffer
+			// finds its stored timestamp already current and reuses the buffer (no Map / no re-upload). When unchanged
+			// mask_weights is left untouched above, but it is not read in that case (the size matches and the upload is skipped).
+			const int upload_count = (kcount > 0 ? kcount : 1);
+			grd_helper::UpdateCustomBuffer(gres_xray_filter_mask, iobj, "XRAY_FILTER_MASK",
+				mask_weights, upload_count, DXGI_FORMAT_R32_FLOAT, (int)sizeof(float), NULL, filter_time);
+
+			// upload cbSliceFilter (b12)
+			{
+				grd_helper::CB_SliceFilter cb_sf = {};
+				cb_sf.filter_radius = radius;
+				cb_sf.use_filter = use_filter;
+				ID3D11Buffer* cbuf_sf = psoManager->get_cbuf("CB_SliceFilter");
+				D3D11_MAPPED_SUBRESOURCE mappedResSf;
+				dx11DeviceImmContext->Map(cbuf_sf, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResSf);
+				memcpy(mappedResSf.pData, &cb_sf, sizeof(grd_helper::CB_SliceFilter));
+				dx11DeviceImmContext->Unmap(cbuf_sf, 0);
+				SET_CBUFFERS(12, 1, &cbuf_sf);
+			}
+
+			// Fused pass : NxN filter of the volume-only color + intermix with the mesh K-buffer.
+			//   u0..u3 = counter / k_buffer / rgba(final) / depthcs
+			//   t0 = gres_fb_xray_vol (volume-only color), t1 = mask buffer, t50 = offset table
+			ID3D11UnorderedAccessView* dx11UAVs_pf[4] = {
+				  (ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV]
+				, (ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]
+				, (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
+				, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
+			};
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs_pf, (UINT*)(&dx11UAVs_pf));
+			// u5 = gres_fb_vrdepthcs : the bit-2 DVR pass stored the volume slab thickness (hits_t.y - hits_t.x)
+			// into this idle buffer; the fused pass reads it as the INTERMIX thick_sample.
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(5, 1, (ID3D11UnorderedAccessView**)&gres_fb_vrdepthcs.alloc_res_ptrs[DTYPE_UAV], (UINT*)(&dx11UAVs_pf));
+			SET_SHADER_RES(0, 1, (ID3D11ShaderResourceView**)&gres_fb_xray_vol.alloc_res_ptrs[DTYPE_SRV]);
+			SET_SHADER_RES(1, 1, (ID3D11ShaderResourceView**)&gres_xray_filter_mask.alloc_res_ptrs[DTYPE_SRV]);
+			SET_SHADER_RES(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]);
+			SET_SHADER(GETCS(XrayFilterComposite_cs_5_0), NULL, 0);
+			dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(5, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+			SET_SHADER_RES(0, 1, dx11SRVs_NULL);
+			SET_SHADER_RES(1, 1, dx11SRVs_NULL);
+			SET_SHADER_RES(50, 1, dx11SRVs_NULL);
+		}
 #endif
 
 #ifdef __DX_DEBUG_QUERY
