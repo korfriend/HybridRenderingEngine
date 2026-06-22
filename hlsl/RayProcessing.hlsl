@@ -174,7 +174,7 @@ Buffer<float3> buf_curveTangents : register(t31);
 
 // magic values
 #define WILDCARD_DEPTH_OUTLINE 0x12345678
-#define WILDCARD_DEPTH_OUTLINE_DIRTY 0x12345679
+//#define WILDCARD_DEPTH_OUTLINE_DIRTY 0x12345679
 #define OUTSIDE_PLANE 0x87654321
 
 struct PS_FILL_OUTPUT_NO_DS
@@ -802,21 +802,25 @@ inline void IntersectTriangle(
 		return;
 	float invDet = rcp(det);
 
+	// Barycentric edge tolerance: a ray passing exactly through a shared triangle EDGE/vertex can be
+	// rejected by BOTH adjacent triangles under strict [0,1] bounds (non-watertight), leaving a hit
+	// gap -> dropout band along edges (e.g. where the slab-front plane crosses a triangle edge). A
+	// small overlap makes at least one of the adjacent triangles accept it. Closest-hit picks the
+	// nearer, so the slight overlap is harmless. (Tunable: increase if edge dropouts persist.)
+	const float bary_eps = 1e-5;
 	float3 tvec = ray.Origin - prim.v0();
 	float u = dot(tvec, pvec) * invDet;
-	//if (u < -eps || u > 1 + eps)
-	if (u < 0 || u > 1)
+	if (u < -bary_eps || u > 1 + bary_eps)
 		return;
 
 	float3 qvec = cross(tvec, v0v1);
 	float v = dot(ray.Direction, qvec) * invDet;
-	//if (v < -eps || u + v > 1 + eps)
-	if (v < 0 || u + v > 1)
+	if (v < -bary_eps || u + v > 1 + bary_eps)
 		return;
 
 	float t = dot(v0v2, qvec) * invDet;
-
-	if (t >= ray.TMin && t <= bestHit.distance)
+	
+    if (t >= ray.TMin && t <= bestHit.distance)
 	{
 		RayHit hit;
 		hit.distance = t;
@@ -1155,9 +1159,9 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 	else
     {
         hits_t = ComputeVBoxHits(pos_ip_ws, ray_dir_unit_ws, g_cbClipInfo.mat_clipbox_ws2bs, g_cbClipInfo);
-        hits_t.y = min(hits_t.y, planeThickness);
         if (hits_t.y - hits_t.x <= 0)
 			__EXIT;
+        hits_t.y = min(hits_t.y, planeThickness);
 		
         planeThickness = hits_t.y;
     }
@@ -1459,7 +1463,6 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
     bool hit_on_forward_ray = false;
     float forward_hit_depth = FLT_MAX;
     bool is_front_forward_face = false;
-    ray_tmin = 0.0001f; // MAGIC VALUE
 	{
 #ifdef BVH_LEGACY
 		float4 test_rayorig = float4(ray_orig_os, ray_tmin);
@@ -1484,14 +1487,14 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 
         if (!hit_on_forward_ray)
         {
-		//fragment_vis[ss_xy] = float4(1, 0, 0, 1);
-		// note ... when ray passes through a triangle edge or vertex, hit may not be detected
-		__EXIT;
+			//fragment_vis[ss_xy] = float4(1, 0, 0, 1);
+			// note ... when ray passes through a triangle edge or vertex, hit may not be detected
+			__EXIT;
         }
 
         if (!isInsideOnPlane && forward_hit_depth > planeThickness_os)
         {
-		//fragment_vis[ss_xy] = float4(1, 1, 0, 1);
+			//fragment_vis[ss_xy] = float4(1, 1, 0, 1);
 			__EXIT;
         }
 
@@ -1603,7 +1606,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
                     hitDistance = hit.distance;
 
                     ray.Origin += ray.Direction * hit.distance;
-                    ray.TMin = ray_tmin; // small offset!
+					ray.TMin = eps; // small offset!
                     ray.TMax = ray_tmax;
 
 #endif
@@ -1645,8 +1648,8 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
             }
             else if (!is_front_backward_face)
             {
-                thickness_through_os = planeThickness_os;
-            }
+				thickness_through_os = planeThickness_os;
+			}
         }
 
 	//float3 posFirstWS, posLastWS;
@@ -1695,8 +1698,6 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
                     {
                         float3 vray0_os = backward_dist * ray_dir_unit_os;
                         zdepth0 = -length(TransformVector(vray0_os, g_cbPobj.mat_os2ws));
-					//fragment_vis[ss_xy] = float4(1, 1, 0, 1);
-					//__EXIT;
                     }
                 }
 			//fragment_vis[ss_xy] = float4(1, 1, 0, 1);
@@ -1711,11 +1712,11 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
                 {
                     float3 vray1_os = last_layer_depth * ray_dir_unit_os;
                     zdepth1 = length(TransformVector(vray1_os, g_cbPobj.mat_os2ws));
-                }
+				}
                 else
                 {
-                    zdepth1 = planeThickness;
-                }
+					zdepth1 = planeThickness;
+				}
             }
         }
         else
@@ -1724,7 +1725,7 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
             {
 			__EXIT;
             }
-		// outside
+			// outside
             float3 vray0_os = min(forward_hit_depth, planeThickness_os) * ray_dir_unit_os;
             zdepth0 = length(TransformVector(vray0_os, g_cbPobj.mat_os2ws));
             if (zdepth0 > planeThickness)
@@ -1860,51 +1861,40 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
             float4 v_rgba = float4(g_cbPobj.Kd, g_cbPobj.alpha);
             if (v_rgba.a < 0.01)
                 return;
-		// always to k-buf not render-out buffer
-            float4 v_rgba0 = v_rgba; // , v_rgba1 = v_rgba;
 
-		// DOJO TO consider...
-		// preserve the original alpha (i.e., v_rgba.a) or not..????
-		//v_rgba0.a *= min(thickness_through_os / (last_layer_depth - zdepth0) + 0.1f, 1.0f);
-            v_rgba0.a *= saturate(thickness_through_os / (planeThickness_os) + 0.1f);
-            if (v_rgba0.a < 0.01)
-                return;
-		//v_rgba0.a *= v_rgba0.a; // heuristic 
-            v_rgba0.rgb *= v_rgba0.a;
-		//v_rgba0.a = v_rgba.a;
-
-            if (zdepth1 >= planeThickness) // to avoid unexpected frustom culling!
-            {
-                zdepth1 = planeThickness - 0.001f;
-            }
-
-            float vz_thickness = zdepth1 - zdepth0; // GetVZThickness(zdepth0, g_cbPobj.vz_thickness);
-		//if (vz_thickness >= planeThickness)
-		//{
-		//	fragment_vis[ss_xy] = float4(1, 0, 0, 1);
-		//	return;
-		//}
-		//if (zdepth1 >= planeThickness)
-		//	fragment_vis[ss_xy] = float4((float3)thickness_through_os / (planeThickness_os), 1);
-		//else
-		//	fragment_vis[ss_xy] = float4(1, 1, 0, 1);
-		//return;
-		//k_value
-		//if (v_rgba0.a < 1 / 255.f || vz_thickness == 0)
-		//	__EXIT;
-		//if (v_rgba0.a >= 1.f) v_rgba0.a = 0.999f;
-            Fill_kBuffer(ss_xy, 2, v_rgba0, zdepth1, vz_thickness);
-		//
-		/*
-		v_rgba1.a *= min(thickness_through_os / (planeThickness_os) + 0.1f, 1.0f);
-		v_rgba1.a *= v_rgba1.a;
-		v_rgba1.rgb *= v_rgba1.a;
-		//v_rgba1.a = v_rgba.a;
-		vz_thickness = GetVZThickness(last_layer_depth, g_cbPobj.vz_thickness);
 		
-		//k_value
-		Fill_kBuffer(ss_xy, 2, v_rgba1, last_layer_depth, vz_thickness);
-		/**/
+			// zdepth0 : first layer, zdepth1 : last layer
+			// note: approximating by skipping the interval layers 
+			float d_first = max(0.00f, zdepth0);
+		
+			// x-ray attenuation effect
+			float alpha_scale = saturate(1.f - d_first / planeThickness);
+			float4 v_rgba_layer = float4(v_rgba.rgb, v_rgba.a * alpha_scale);
+		
+			if (v_rgba_layer.a < 0.001)
+				return;
+		
+			// Emit TWO thin boundary fragments â€” front (zdepth0) and back (zdepth1) of the interior
+			// span â€” each with the CONFIGURED z-thickness (GetVZThickness), NOT the full span (z1-z0).
+			// A single full-span fragment's z-thickness window swallows the in-slab volume samples in the
+			// DVR INTERMIX (Z-thickness merge) and dilutes the mesh; two thin boundary fragments let the
+			// volume composite by depth between them.
+		
+			v_rgba_layer.rgb *= v_rgba_layer.a; 
+			float v_thick = max(GetVZThickness(d_first, planeThickness), 0.01f);
+			Fill_kBuffer(ss_xy, 2, v_rgba_layer, d_first, v_thick);
+		
+			//float d_last = min(planeThickness, zdepth1);
+			//v_thick = d_last - d_first;
+			//v_thick = max(GetVZThickness(d_last, planeThickness), 0.01f);
+			//v_thick = GetVZThickness(d_last, planeThickness);
+		
+			//alpha_scale = saturate(1.f - d_last / planeThickness);
+			//v_rgba_layer = float4(v_rgba.rgb, v_rgba.a * alpha_scale);
+			//v_rgba_layer.rgb *= v_rgba_layer.a;
+			//if (v_rgba_layer.a < 0.001)
+			//	return;
+			//Fill_kBuffer(ss_xy, 2, v_rgba_layer, d_last, v_thick);
         }
 
         return;
@@ -1990,11 +1980,11 @@ float TestAlpha(float v) {
 }
 
 float getAlpha(float sd, float sd_neighbor[8], float thickness) {
-	// ÇöÀç ÇÈ¼¿ÀÌ contour ±ÙÃ³ÀÎÁö È®ÀÎ
+	// í˜„ìž¬ í”½ì…€ì´ contour ê·¼ì²˜ì¸ì§€ í™•ì¸
 	if (abs(sd) > thickness)
 		return 0.0;
 
-	// ºÎÈ£°¡ ¹Ù²î´Â edge Ã£±â
+	// ë¶€í˜¸ê°€ ë°”ë€ŒëŠ” edge ì°¾ê¸°
 	int signChanges = 0;
 	for (int i = 0; i < 8; i++) {
 		if (sign(sd) != sign(sd_neighbor[i])) {
@@ -2002,7 +1992,7 @@ float getAlpha(float sd, float sd_neighbor[8], float thickness) {
 		}
 	}
 
-	// contour°¡ Áö³ª°¡´Â Á¤µµ¸¦ °è»ê
+	// contourê°€ ì§€ë‚˜ê°€ëŠ” ì •ë„ë¥¼ ê³„ì‚°
 	float base = 1.0 - abs(sd) / thickness;
 	float edgeFactor = float(signChanges) / 8.0;
 
@@ -2010,22 +2000,22 @@ float getAlpha(float sd, float sd_neighbor[8], float thickness) {
 }
 
 float getAlpha2(float sd, float thickness) {
-	float smoothWidth = 1.0; // ºÎµå·¯¿î Á¤µµ¸¦ Á¶Àý
+	float smoothWidth = 1.0; // ë¶€ë“œëŸ¬ìš´ ì •ë„ë¥¼ ì¡°ì ˆ
 	return smoothstep(thickness, thickness - smoothWidth, abs(sd));
 }
 
 float getAlpha1(float sd, float thickness) {
-	//float thickness = 1.0; // ¿øÇÏ´Â µÎ²² Á¶Àý (1.0ÀÌ¸é ±âº», °ªÀ» Å°¿ì¸é ÀüÈ¯ ¹üÀ§°¡ ³Ð¾îÁü)
+	//float thickness = 1.0; // ì›í•˜ëŠ” ë‘ê»˜ ì¡°ì ˆ (1.0ì´ë©´ ê¸°ë³¸, ê°’ì„ í‚¤ìš°ë©´ ì „í™˜ ë²”ìœ„ê°€ ë„“ì–´ì§)
 	float aa = fwidth(sd);
 	return 1.0 - smoothstep(0.0, thickness * aa, abs(sd));
 	
 }
 
 float getAlpha3(float sd, float sd_neighbors[8], float thickness) {
-	// ÁÂ¿ì, »óÇÏ ¹æÇâÀÇ Áß¾Ó Â÷ºÐÀ¸·Î gradient ±Ù»ç
+	// ì¢Œìš°, ìƒí•˜ ë°©í–¥ì˜ ì¤‘ì•™ ì°¨ë¶„ìœ¼ë¡œ gradient ê·¼ì‚¬
 	float dx = 0.5 * (sd_neighbors[0] - sd_neighbors[2]);
 	float dy = 0.5 * (sd_neighbors[1] - sd_neighbors[3]);
-	float aa = length(float2(dx, dy));  // º¯È­À² (anti-aliasing ³Êºñ)
+	float aa = length(float2(dx, dy));  // ë³€í™”ìœ¨ (anti-aliasing ë„ˆë¹„)
 	float alpha = 1.0 - smoothstep(0.0, aa * thickness, abs(sd));
 	return saturate(alpha);
 }
@@ -2058,7 +2048,7 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 		__EXIT;
 	}
 
-	// half16 »ç¿ë...
+	// half16 ì‚¬ìš©...
 //#define NEW_TEST
 #ifdef NEW_TEST
 	float sd_neighbors[8] = {

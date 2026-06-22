@@ -656,7 +656,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #define __VRHIT_OUTSIDE_CLIPPLANE 1
 #define __VRHIT_OUTSIDE_VOLUME 0
 
-	float4 vis_out = 0;
+    float4 vis_out = (float4) 0;
 	float depth_out = FLT_MAX;
 
 #if DX10_0 == 1
@@ -717,9 +717,9 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #else
 	uint num_frags = fragment_counter[DTid.xy];
 
-	if (num_frags == 0x12345679) {
-		num_frags = 1;
-	}
+	//if (num_frags == 0x12345679) {
+	//	num_frags = 1;
+	//}
 
 	uint vr_hit_enc = num_frags >> VR_ENC_BIT_SHIFT;
 	num_frags = num_frags & 0xFFF;
@@ -768,6 +768,17 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	float dvr_layer_thickness = 0;
 	//fragment_zthick[tex2d_xy] = 0;
 #else
+
+#if RAYMODE == 0
+	// Function-scoped loop index for the DVR path. Previously the prologue mesh-accumulation
+	// for-loop init leaked `i` to function scope (legacy fxc behavior) and the later DVR sample
+	// loop (for (i = start_idx; ...)) plus the RAYMODE==0 VR-outline INTERMIX reused it; now that
+	// the prologue loop is wrapped in its own block for the bit-2 path, declare `i` here so those
+	// later uses still resolve. Guarded by RAYMODE==0 so it does NOT redeclare the x-ray path's own
+	// `int i` (the RAYMODE!=0 sample loop declares its own at function scope). The prologue loop's
+	// inner `int i` simply shadows this one inside its block.
+	int i = 0;
+#endif
 
 #ifdef MDVR_TEST
 	// If the post-filter redirected u2 to a scratch RT (bit 2), fragment_vis no longer holds the
@@ -1053,7 +1064,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
     float3 pos_ray_start_ws = vbos_hit_start_pos + dir_sample_unit_ws * hits_t.x;
     // recompute the vis result  
 	
-	vis_out = 0;
+    vis_out = (float4) 0;
 	depth_out = FLT_MAX;
 	
 	// DVR ray-casting core part
@@ -1546,13 +1557,23 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	fragment_zdepth[tex2d_xy] = depth_out;
 	fragment_zthick[tex2d_xy] = max(depth_sample - depth_out, sample_dist);
 #else
+			
+#if RAYMODE != 0
+	// The bit-2 post-filter path (clean volume depth + slab thickness for XrayFilterComposite) is an
+	// x-ray-only feature: `vthick` and the slice-plane `depth_sample` only exist in the RAYMODE!=0
+	// branch above, and the post-filter is never engaged for DVR. Guarding by RAYMODE!=0 keeps the
+	// DVR (RAYMODE==0) variants compiling (they take the normal zdepth write) with no behavior change,
+	// since BitCheck(vobj_flag, 2) is never set for the DVR path at runtime.
 	if (BitCheck(g_cbVobj.vobj_flag, 2))
 	{
 		fragment_zdepth[tex2d_xy] = depth_sample;					// clean volume (slice plane) depth for post-filter
 		fragment_zthick[tex2d_xy] = vthick;		// volume slab thickness, consumed as INTERMIX thick_sample in the post-filter pass
 	}
 	else
+#endif
+	{
 		fragment_zdepth[tex2d_xy] = min(depth_out, fs[0].z);
+	}
 	//fragment_counter[DTid.xy] = num_frags + 1;
 #endif
 
@@ -1695,10 +1716,10 @@ PS_FILL_OUTPUT_SURF VR_SURFACE(VS_OUTPUT input)
 #else
 			vr_fragment_1sthit_write[DTid.xy] = depth_hit;
 			uint fcnt = fragment_counter[DTid.xy];
-			if (fcnt == 0x12345679)
-			{
-				fcnt = 1;
-			}
+			//if (fcnt == 0x12345679)
+			//{
+			//	fcnt = 1;
+			//}
 	// 2 : on the clip plane
 	// 1 : outside the clip plane
 	// 0 : outside the volume
@@ -1721,7 +1742,7 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 		uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
 #endif
 {
-			float4 vis_out = 0;
+            float4 vis_out = (float4) 0;
 			float depth_out = 0;
 
 #if DX10_0 == 1
@@ -1769,10 +1790,10 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 			uint addr_base = pixel_id * bytes_frags_per_pixel;
 
 			uint num_frags = fragment_counter[DTid.xy];
-			if (num_frags == 0x12345679)
-			{
-				num_frags = 1;
-			}
+			//if (num_frags == 0x12345679)
+			//{
+			//	num_frags = 1;
+			//}
 			num_frags = num_frags & 0xFFF;
 
 	//if (num_frags == 0)
@@ -1823,27 +1844,43 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 
 			Fragment fs[VR_MAX_LAYERS];
 
-	[loop]
-			for (int i = 0; i < (int) num_frags; i++)
-			{
-				uint i_vis = 0;
-				Fragment f;
-		GET_FRAG(f, addr_base, i); // from K-buffer
-				float4 vis_in = ConvertUIntToFloat4(f.i_vis);
-				if (g_cbEnv.r_kernel_ao > 0)
-					f.i_vis = ConvertFloat4ToUInt(vis_in);
-				if (vis_in.a > 0)
-					vis_out += vis_in * (1.f - vis_out.a);
+	// Function-scoped loop index. Previously the prologue's for-loop init leaked `i` to function scope
+	// (legacy fxc behavior) and the later x-ray sample loops reused it; now that the prologue loop is
+	// wrapped in its own block for the bit-2 path, declare `i` here so those later loops still see it.
+	int i = 0;
 
-#if FRAG_MERGING == 1
-		f.zthick = g_cbVobj.sample_dist;
+	// Post-filter (volume-only) path: the fused XrayFilterComposite pass composites the mesh
+	// K-buffer separately, so skip the mesh fragments here entirely. The curved slicer is
+	// single-volume (no MDVR vis_prev accumulation), so this just leaves vis_out at 0 and
+	// num_frags at 0. DX10 never sets bit 2, so this is non-DX10 in practice.
+#ifndef DX10_0
+	if (BitCheck(g_cbVobj.vobj_flag, 2))
+	{
+		num_frags = 0;
+	}
+	else
 #endif
-				fs[i] = f;
-			}
+	{
+	[loop]
+	for (i = 0; i < (int) num_frags; i++)
+	{
+		uint i_vis = 0;
+		Fragment f;
+		GET_FRAG(f, addr_base, i); // from K-buffer
+		float4 vis_in = ConvertUIntToFloat4(f.i_vis);
+		if (g_cbEnv.r_kernel_ao > 0)
+			f.i_vis = ConvertFloat4ToUInt(vis_in);
+		if (vis_in.a > 0)
+			vis_out += vis_in * (1.f - vis_out.a);
+		fs[i] = f;
+	}
+	}
 
 			fs[num_frags] = (Fragment) 0;
 			fs[num_frags].z = FLT_MAX;
 			fragment_vis[cip_xy] = vis_out;
+            vis_out = (float4) 0;
+            depth_out = FLT_MAX;
 #endif
 
 
@@ -1944,11 +1981,28 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 
 			
 			float2 hits_t = ComputeVBoxHits(pos_ray_start_ws, f3VecSampleViewWS, g_cbVobj.mat_alignedvbox_tr_ws2bs, g_cbClipInfo);
-			hits_t.y = min(hits_t.y, fPlaneThickness);
-			int num_ray_samples = ceil((hits_t.y - hits_t.x) / sample_dist);
-			if (num_ray_samples <= 0)
-		__EXIT_VR_RayCasting;
-			
+            int num_ray_samples = 0;
+            if (fPlaneThickness <= 0)
+            {
+				// Zero-thickness curved slice: render a single sample AT the plane (MPR-like), provided the
+				// plane (offset 0 along the view dir) lies within the volume box span. Without this the slab
+				// collapses to [plane, plane] -> num_ray_samples <= 0 -> the whole volume is dropped (this is
+				// why a thickness-0 curved slice drew nothing once slicer routing moved from CPU to GPU).
+				// Find1stSampleHit (DVR) tests i==0 before its loop and the x-ray loop starts at i==0, so a
+				// single sample correctly covers the plane for every RAYMODE.
+                if (hits_t.x > 0 || hits_t.y < 0)
+				  __EXIT_VR_RayCasting;
+                num_ray_samples = 1;
+                hits_t.x = 0; // sample exactly at the plane
+                hits_t.y = 0;
+            }
+            else
+            {
+                hits_t.y = min(hits_t.y, fPlaneThickness);
+                num_ray_samples = ceil((hits_t.y - hits_t.x) / sample_dist + 0.5);
+                if (num_ray_samples <= 0)
+					__EXIT_VR_RayCasting;
+            }
 			pos_ray_start_ws = pos_ray_start_ws + f3VecSampleViewWS * max(hits_t.x, 0);
 			
 	// DVR ray-casting core part
@@ -2173,10 +2227,10 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 	}
 
 	REMAINING_MIX(vis_out, idx_dlayer, num_frags, fs);
-
+	float depth_sample = depthHit;
 #else // RAYMODE != 0
-			float depth_begin = 0;
-
+	float depth_begin = 0;
+			
 #if RAYMODE==1 || RAYMODE==2
 	int luckyStep = (int)((float)(Random(pos_ray_start_ws.xy) + 1) * (float)num_ray_samples * 0.5f);
 	float depth_sample = depth_begin + g_cbVobj.sample_dist * (float)(luckyStep);
@@ -2201,12 +2255,12 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 			float3 pos_ray_start_ts = TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts);
 			float3 dir_sample_ts = TransformVector(dir_sample_ws, g_cbVobj.mat_ws2ts);
 
-			int count = 0;
+            int count = 0;
 	[loop]
-			for (i = 0; i < num_ray_samples; i++)
-			{
-				float3 pos_sample_ts = pos_ray_start_ts + dir_sample_ts * (float) i;
-
+	for (i = 0; i < num_ray_samples; i++)
+	{
+		float3 pos_sample_ts = pos_ray_start_ts + dir_sample_ts * (float) i;
+					
 #if RAYMODE == 1 || RAYMODE == 2
 		LOAD_BLOCK_INFO(blkSkip, pos_sample_ts, dir_sample_ts, num_ray_samples, i);
 #if RAYMODE == 1
@@ -2237,7 +2291,7 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 		i += blkSkip.num_skip_steps;
 #else	// ~(RAYMODE == 1 || RAYMODE == 2) , which means RAYSUM 
 		// use g_samplerLinear instead of g_samplerLinear_clamp
-				float sample_v_norm = tex3D_volume.SampleLevel(g_samplerLinear, pos_sample_ts, 0).r;
+		float sample_v_norm = tex3D_volume.SampleLevel(g_samplerLinear, pos_sample_ts, 0).r;
 #if OTF_MASK == 1
 		float sample_mask_v = tex3D_volmask.SampleLevel(g_samplerPoint_clamp, pos_sample_ts, 0).r * g_cbVolObj.mask_value_range;
 		int mask_vint = (int)(sample_mask_v + 0.5f);
@@ -2246,23 +2300,19 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 				float4 vis_otf = LoadOtfBuf(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
 #endif
 		// https://github.com/korfriend/OsstemCoreAPIs/discussions/185#discussion-4843169
-		//if (vis_otf.a > 0.0001)
-		//if (sample_v_norm > 0.001)
 		{
-					sampleSum += sample_v_norm;
-					vis_otf_sum += vis_otf;
-					num_valid_samples++;
-				}
+			sampleSum += sample_v_norm;
+			vis_otf_sum += vis_otf;
+            num_valid_samples++;
+        }
 #endif
-			}
-
+	}
+			
 #if RAYMODE == 3
 	if (num_valid_samples == 0)
 		num_valid_samples = 1;
-
+			
 	float4 vis_otf = LoadOtfBuf(sampleSum / num_valid_samples * g_cbTmap.tmap_size_x, buf_otf, 1); //float4(pos_sample_ts, 1);
-	//if (vis_otf.a > 0.199) vis_otf = float4(1, 0, 0, 1);
-	//float4 vis_otf = vis_otf_sum / (float)num_valid_samples;
 #else // RAYMODE != 3
 
 #if OTF_MASK == 1
@@ -2276,21 +2326,45 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 
 			uint idx_dlayer = 0;
 			Fragment f_dly = fs[0]; // if no frag, the z-depth is infinite
+			
+	// DX10 does not support the post-filter, so the bit-2 volume-only path is non-DX10 only;
+	// DX10 always takes the normal in-DVR intermix path below.
+#ifndef DX10_0
+	if (BitCheck(g_cbVobj.vobj_flag, 2))
+	{
+		// post-filter path: write the volume-only x-ray color; the mesh intermix
+		// is deferred to the SliceXrayFilter post-processing pass (XrayFilterComposite).
+		vis_out += vis_otf * (1.f - vis_out.a);
+	}
+	else
+#endif
+	{
 #if FRAG_MERGING == 1
-	INTERMIX(vis_out, idx_dlayer, num_frags, vis_otf, depth_begin, fPlaneThickness, fs, merging_beta);
+	INTERMIX(vis_out, idx_dlayer, num_frags, vis_otf, depth_sample, max(fPlaneThickness, sample_dist), fs, merging_beta);
 #else
-	INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_otf, depth_begin, fs);
+	INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_otf, depth_sample, fs);
 #endif
 	REMAINING_MIX(vis_out, idx_dlayer, num_frags, fs);
+	}
 #endif
 
 #ifdef DX10_0
 	output.color = vis_out;
-	output.depthcs = depth_out;
+	output.depthcs = depth_sample;
 	return output;
 #else
-					fragment_vis[cip_xy] = vis_out;
-					fragment_zdepth[cip_xy] = depth_out;
+                    fragment_vis[cip_xy] = saturate(vis_out);
+#if RAYMODE != 0
+#ifndef DX10_0
+	if (BitCheck(g_cbVobj.vobj_flag, 2))
+	{
+        fragment_zdepth[cip_xy] = depth_sample; // clean volume (slice plane) depth for post-filter
+		fragment_zthick[cip_xy] = max(fPlaneThickness, sample_dist);		// curved slab thickness, consumed as INTERMIX thick_sample in the post-filter pass
+	}
+	else
 #endif
-				}
+#endif
+        fragment_zdepth[cip_xy] = depth_sample;
+#endif
+}
 /**/

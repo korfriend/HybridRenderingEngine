@@ -263,11 +263,11 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 		// ==> therefore, we do not clear the k-buffer here, reducing the overhead of memory-write.
 		return;
 	}
-	if (frag_cnt == 0x12345679) // WILDCARD_DEPTH_OUTLINE_DIRTY
-	{
-		frag_cnt = 1;
-		fragment_counter[DTid.xy] = 1;
-	}
+	//if (frag_cnt == 0x12345679) // WILDCARD_DEPTH_OUTLINE_DIRTY
+	//{
+	//	frag_cnt = 1;
+	//	fragment_counter[DTid.xy] = 1;
+	//}
 #ifdef DEBUG__
 	else if (frag_cnt == 1)
 	{

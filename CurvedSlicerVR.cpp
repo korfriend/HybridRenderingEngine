@@ -35,6 +35,22 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	int ray_cast_type = _fncontainer->fnParams.GetParam("_int_VolumeRayCastType", (int)0);
 	float samplePrecisionLevel = _fncontainer->fnParams.GetParam("_float_SamplePrecisionLevel", 1.0f);
 
+	// X-ray slicer image-level post-filter modes (mirror vzm::CameraParameters::XRayPostFilter).
+	// Same values/structure as renderer/VolumeRenderer.cpp (the planar slicer reference).
+#define __XRPF_NONE 0
+#define __XRPF_MEAN 1
+#define __XRPF_GAUSSIAN 2
+#define __XRPF_SHARPEN 3
+#define __XRPF_SHARPEN_GAUSSIAN 4
+#define __XRPF_LAPLACIAN 5
+#define __XRPF_EDGE 6
+	// X-ray slicer post-filter request (CameraParameters::SetXRayPostFilter). Mode != NONE means "requested";
+	// whether it actually runs is decided below (apply_postprocessing_filter), gated on an x-ray ray-cast mode.
+	bool try_postprocessing_filter = _fncontainer->fnParams.GetParam("_int_XRayPostFilterMode", (int)__XRPF_NONE) != __XRPF_NONE;
+	// Default false: the x-ray post-filter is non-DX10 only. In a DX10 build the decision below is
+	// compiled out, so this must stay false there (otherwise bit 2 could be tagged with no fused pass).
+	bool apply_postprocessing_filter = false;
+
 	bool fastRender2x = _fncontainer->fnParams.GetParam("_bool_FastRender2X", false);
 
 	int outline_thickness = _fncontainer->fnParams.GetParam("_int_SilhouetteThickness", (int)0);
@@ -258,8 +274,41 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	grd_helper::UpdateFrameBuffer(gres_fb_counter, iobj, "RW_COUNTER", RTYPE_TEXTURE2D, D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
 	const int num_frags_perpixel = k_value * 3;
 	grd_helper::UpdateFrameBuffer(gres_fb_k_buffer, iobj, "BUFFER_RW_K_BUF", RTYPE_BUFFER, D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_TYPELESS, UPFB_RAWBYTE, num_frags_perpixel);
+
+	// Slicer x-ray post-processing filter scratch + kernel + slab-thickness carrier (mirror of
+	// renderer/VolumeRenderer.cpp). Declared here so they are visible to the DVR UAV binding / fused
+	// dispatch. Actual allocation happens just below, only when apply_postprocessing_filter is decided true.
+	//  gres_fb_xray_vol     : volume-only x-ray color redirect target (DvrCS bit2 writes here at u2);
+	//                         also the convolution input for the fused XrayFilterComposite pass. RGBA8 RT|SRV|UAV.
+	//                         Reuses "RENDER_OUT_RGBA_1": in the non-DX10 curved path gres_fb_rgba is
+	//                         "RENDER_OUT_RGBA_0", so RGBA_1 is otherwise unused this pass (it is only the
+	//                         DX10 render target, and DX10 never enables the filter) -> idle.
+	//  gres_fb_vrdepthcs    : u5 slab-thickness carrier (R32_FLOAT). Reuses "RENDER_OUT_DEPTH_1", which the
+	//                         non-DX10 curved path does NOT otherwise allocate (only DX10 uses it as a depth
+	//                         RT, and there is no VR_SURFACE pass here) -> idle. Mirrors VolumeRenderer's
+	//                         u5 = gres_fb_vrdepthcs = "RENDER_OUT_DEPTH_1".
+	//  gres_xray_filter_mask: NxN convolution weights (Buffer<float> SRV), filled at the fused-dispatch site.
+	GpuRes gres_fb_xray_vol;
+	GpuRes gres_fb_vrdepthcs;
+	GpuRes gres_xray_filter_mask;
+
+	// Decide the x-ray image-level post-filter HERE (presetting), not mid-render. It runs when:
+	//   - the post-filter was requested (_int_XRayPostFilterMode != NONE), AND
+	//   - the ray-cast mode is x-ray (RAYMAX / RAYMIN / RAYSUM ; values 10/11/12 == __RM_RAYMAX/MIN/SUM
+	//     defined further below). The curved slicer is single-volume, so this flag alone gates the redirect.
+	// DX10 is intentionally unsupported (compiled out, stays false in a DX10 build).
+	{
+		const int rct = ray_cast_type; // global request; not yet remapped in this single-volume path
+		const bool global_is_xray = (rct == 10 || rct == 11 || rct == 12);
+		apply_postprocessing_filter = try_postprocessing_filter && global_is_xray;
+		if (apply_postprocessing_filter)
+		{
+			grd_helper::UpdateFrameBuffer(gres_fb_xray_vol, iobj, "RENDER_OUT_RGBA_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+			grd_helper::UpdateFrameBuffer(gres_fb_vrdepthcs, iobj, "RENDER_OUT_DEPTH_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
+		}
+	}
 #endif
-#pragma endregion 
+#pragma endregion
 
 #pragma region // Presetting of VmObject
 	vector<VmActor*> dvr_volumes;
@@ -453,6 +502,13 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	outline_thickness = min(32, outline_thickness);
 	cbCamState.iSrCamDummy__1 = oulineiRGB | outline_thickness << 24;
 	if (fastRender2x) cbCamState.cam_flag |= 0x1 << 8; // 9th bit set
+	// The fused XrayFilterComposite pass keys its K-buffer addressing on cam_flag bit 10 (isSlicer).
+	// The curved slicer's K-buffer layout (pixel_id * k_value(2) * 3 * 4) matches that branch exactly,
+	// so set bit 10 when the post-filter is active. The CurvedSlicer DVR/x-ray entry itself never reads
+	// bit 10, so this has no effect on the main ray-cast pass.
+#ifndef DX10_0
+	if (apply_postprocessing_filter) cbCamState.cam_flag |= 0x1 << 10;
+#endif
 
 	D3D11_MAPPED_SUBRESOURCE mappedResCamState;
 	dx11DeviceImmContext->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCamState);
@@ -657,6 +713,13 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 			cbVolumeObj.kappa_i = actor->GetParam("_float_ModulationKappai", 1.f);
 			cbVolumeObj.kappa_s = actor->GetParam("_float_ModulationKappas", 1.f);
 		}
+		// Tag the x-ray volume so CurvedSlicer writes its volume-only x-ray color (bit 2) and skips the
+		// in-DVR mesh composite, deferring it to the fused XrayFilterComposite pass. Single-volume path,
+		// so apply_postprocessing_filter alone gates this. DX10 never sets it (flag stays false there).
+#ifndef DX10_0
+		if (apply_postprocessing_filter)
+			cbVolumeObj.vobj_flag |= (int)1 << 2;
+#endif
 		if (mask_vol_obj) {
 			VolumeData* mask_vol_data = mask_vol_obj->GetVolumeData();
 			if (mask_vol_data->store_dtype.type_bytes == data_type::dtype<uint8_t>().type_bytes) // char
@@ -764,17 +827,30 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 			VMERRORMESSAGE("NOT SUPPORT RAY CASTER!"); return false;
 		}
 
+		// When the x-ray post-filter is active (vobj_flag bit 2), CurvedSlicer writes the volume-ONLY
+		// x-ray color into u2. Redirect u2 to the dedicated scratch (gres_fb_xray_vol) so gres_fb_rgba
+		// stays the clean final-output target for the fused XrayFilterComposite pass. u0/u1/u3 unchanged.
+		const bool xray_redirect_u2 = apply_postprocessing_filter;
 		ID3D11UnorderedAccessView* dx11UAVs[4] = {
 				  (ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV]
 				, (ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]
-				, (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
+				, (ID3D11UnorderedAccessView*)(xray_redirect_u2 ? gres_fb_xray_vol.alloc_res_ptrs[DTYPE_UAV] : gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV])
 				, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
 		};
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs, (UINT*)(&dx11UAVs));
 
 		SET_SHADER(_shader, NULL, 0);
 		//dx11DeviceImmContext->Flush();
+		// u5 = fragment_zthick : the bit-2 CurvedSlicer path stores the volume slab thickness
+		// (fPlaneThickness) here for the fused pass; reuse the idle gres_fb_vrdepthcs ("RENDER_OUT_DEPTH_1").
+		if (xray_redirect_u2)
+		{
+			ID3D11UnorderedAccessView* uav_u5 = (ID3D11UnorderedAccessView*)gres_fb_vrdepthcs.alloc_res_ptrs[DTYPE_UAV];
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(5, 1, &uav_u5, (UINT*)(&uav_u5));
+		}
 		dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+		if (xray_redirect_u2)
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(5, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 #ifdef __DX_DEBUG_QUERY
 		psoManager->debug_info_queue->PushEmptyStorageFilter();
 #endif
@@ -784,10 +860,142 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		}
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(50, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+
+		// Slicer x-ray image-level post-processing filter + mesh composite (single fused pass).
+		// Runs once, after the DVR x-ray volume, when the post-filter is enabled. CurvedSlicer wrote the
+		// volume-ONLY x-ray color into gres_fb_xray_vol (u2 redirected), the clean volume depth into
+		// gres_fb_depthcs (u3) and the slab thickness into gres_fb_vrdepthcs (u5). The mesh K-buffer is
+		// intact; gres_fb_rgba is the final output target of this pass. Mirrors VolumeRenderer.cpp.
+		if (apply_postprocessing_filter)
+		{
+			// --- build the convolution kernel from the X-ray post-filter mode (row-major, length N*N) ---
+			// Modes mirror vzm::CameraParameters::XRayPostFilter. Brightness-preserving modes sum to 1;
+			// EDGE sums to 0. NONE / radius==0 -> passthrough (use_filter = 0). The kernel is CACHED in iobj
+			// (XRPF_* obj-params): rebuilt + re-uploaded only when mode/radius/strength change.
+			const int mode = _fncontainer->fnParams.GetParam("_int_XRayPostFilterMode", (int)__XRPF_NONE);
+			const float strength = (float)_fncontainer->fnParams.GetParam("_float_XRayPostFilterStrength", 1.f);
+			int radius = _fncontainer->fnParams.GetParam("_int_XRayPostFilterRadius", (int)1);
+			if (radius < 0) radius = 0;
+			if (radius > 5) radius = 5; // max 11x11 = 121 weights
+			const int N = 2 * radius + 1;
+			const int kcount = N * N;
+			const int center = radius * N + radius;
+			const int use_filter = (mode != __XRPF_NONE && radius > 0) ? 1 : 0;
+
+			const bool filter_changed =
+				   mode     != iobj->GetObjParam<int>("XRPF_MODE", (int)-1)
+				|| radius   != iobj->GetObjParam<int>("XRPF_RADIUS", (int)-1)
+				|| strength != iobj->GetObjParam<float>("XRPF_STRENGTH", -2.f);
+			uint64_t filter_time = iobj->GetObjParam<uint64_t>("XRPF_TIME", (uint64_t)0);
+
+			float mask_weights[121];
+			if (filter_changed)
+			{
+				for (int t = 0; t < 121; t++) mask_weights[t] = 0.f;
+
+				auto build_gaussian = [&](float sigma_scale) {
+					float sigma = (sigma_scale > 0.f ? sigma_scale : 0.5f) * (float)radius;
+					if (sigma < 1e-4f) sigma = 1e-4f;
+					const float two_s2 = 2.f * sigma * sigma;
+					float sum = 0.f; int t = 0;
+					for (int dy = -radius; dy <= radius; dy++)
+						for (int dx = -radius; dx <= radius; dx++) {
+							float wv = expf(-(float)(dx * dx + dy * dy) / two_s2);
+							mask_weights[t++] = wv; sum += wv;
+						}
+					if (sum > 0.f) for (int q = 0; q < kcount; q++) mask_weights[q] /= sum;
+				};
+				auto build_laplacian = [&](float c, float nb) {
+					mask_weights[center] = c;
+					if (radius >= 1) {
+						mask_weights[(radius - 1) * N + radius] = nb; // up
+						mask_weights[(radius + 1) * N + radius] = nb; // down
+						mask_weights[radius * N + (radius - 1)] = nb; // left
+						mask_weights[radius * N + (radius + 1)] = nb; // right
+					}
+				};
+
+				switch (use_filter ? mode : __XRPF_NONE)
+				{
+				case __XRPF_MEAN: {
+					const float w = 1.f / (float)kcount;
+					for (int t = 0; t < kcount; t++) mask_weights[t] = w;
+					break; }
+				case __XRPF_GAUSSIAN:
+					build_gaussian(strength);
+					break;
+				case __XRPF_SHARPEN: {
+					const float inv = 1.f / (float)kcount;
+					for (int t = 0; t < kcount; t++) mask_weights[t] = -strength * inv;
+					mask_weights[center] = 1.f + strength * (1.f - inv);
+					break; }
+				case __XRPF_SHARPEN_GAUSSIAN:
+					build_gaussian(1.f);
+					for (int t = 0; t < kcount; t++) mask_weights[t] *= -strength;
+					mask_weights[center] += 1.f + strength;
+					break;
+				case __XRPF_LAPLACIAN:
+					build_laplacian(1.f + 4.f * strength, -strength);
+					break;
+				case __XRPF_EDGE:
+					build_laplacian(4.f * strength, -strength);
+					break;
+				default: // __XRPF_NONE / radius==0 : passthrough
+					break;
+				}
+
+				filter_time = vmhelpers::GetCurrentTimePack(); // advance so UpdateCustomBuffer re-uploads exactly once
+				iobj->SetObjParam("XRPF_MODE", mode);
+				iobj->SetObjParam("XRPF_RADIUS", radius);
+				iobj->SetObjParam("XRPF_STRENGTH", strength);
+				iobj->SetObjParam("XRPF_TIME", filter_time);
+			}
+
+			const int upload_count = (kcount > 0 ? kcount : 1);
+			grd_helper::UpdateCustomBuffer(gres_xray_filter_mask, iobj, "XRAY_FILTER_MASK",
+				mask_weights, upload_count, DXGI_FORMAT_R32_FLOAT, (int)sizeof(float), NULL, filter_time);
+
+			// upload cbSliceFilter (b12)
+			{
+				grd_helper::CB_SliceFilter cb_sf = {};
+				cb_sf.filter_radius = radius;
+				cb_sf.use_filter = use_filter;
+				ID3D11Buffer* cbuf_sf = psoManager->get_cbuf("CB_SliceFilter");
+				D3D11_MAPPED_SUBRESOURCE mappedResSf;
+				dx11DeviceImmContext->Map(cbuf_sf, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResSf);
+				memcpy(mappedResSf.pData, &cb_sf, sizeof(grd_helper::CB_SliceFilter));
+				dx11DeviceImmContext->Unmap(cbuf_sf, 0);
+				SET_CBUFFERS(12, 1, &cbuf_sf);
+			}
+
+			// Fused pass : NxN filter of the volume-only color + intermix with the mesh K-buffer.
+			//   u0..u3 = counter / k_buffer / rgba(final) / depthcs ; u5 = slab thickness
+			//   t0 = gres_fb_xray_vol (volume-only color), t1 = mask buffer.
+			//   t50 (offset table) is unused: cam_flag bit 10 (isSlicer) is set, so the shader takes the
+			//   slicer addressing branch and never reads t50 -> bind NULL.
+			ID3D11UnorderedAccessView* dx11UAVs_pf[4] = {
+				  (ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV]
+				, (ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]
+				, (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
+				, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
+			};
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs_pf, (UINT*)(&dx11UAVs_pf));
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(5, 1, (ID3D11UnorderedAccessView**)&gres_fb_vrdepthcs.alloc_res_ptrs[DTYPE_UAV], (UINT*)(&dx11UAVs_pf));
+			SET_SHADER_RES(0, 1, (ID3D11ShaderResourceView**)&gres_fb_xray_vol.alloc_res_ptrs[DTYPE_SRV]);
+			SET_SHADER_RES(1, 1, (ID3D11ShaderResourceView**)&gres_xray_filter_mask.alloc_res_ptrs[DTYPE_SRV]);
+			SET_SHADER_RES(50, 1, dx11SRVs_NULL);
+			SET_SHADER(GETCS(XrayFilterComposite_cs_5_0), NULL, 0);
+			dx11DeviceImmContext->Dispatch(num_grid_x, num_grid_y, 1);
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(5, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+			SET_SHADER_RES(0, 1, dx11SRVs_NULL);
+			SET_SHADER_RES(1, 1, dx11SRVs_NULL);
+			SET_SHADER_RES(50, 1, dx11SRVs_NULL);
+		}
 #endif
 		SET_SHADER_RES(6, 1, dx11SRVs_NULL);
 		count_call_render++;
-#pragma endregion 
+#pragma endregion
 	}
 	iobj->SetObjParam("_int_NumCallRenders", count_call_render);
 

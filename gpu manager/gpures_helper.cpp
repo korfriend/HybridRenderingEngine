@@ -3160,8 +3160,14 @@ void grd_helper::SetCb_CurvedSlicer(CB_CurvedSlicer& cb_curvedSlicer, VmFnContai
 	fTransformPoint(&f3PosBottomLeftCOS, &f3PosBottomLeftCWS, &matCWS2COS);
 	fTransformPoint(&f3PosBottomRightCOS, &f3PosBottomRightCWS, &matCWS2COS);
 	
-	int iThicknessStep = (int)ceil(fPlaneThickness / sample_dist); /* Think "fPlaneThickness > fMinPitch"!! */\
-	sample_dist = fPlaneThickness / (float)iThicknessStep;
+	int iThicknessStep = (int)ceil(fPlaneThickness / sample_dist); /* Think "fPlaneThickness > fMinPitch"!! */
+	// Guard the 0/0: for a zero (or sub-step) plane thickness iThicknessStep becomes 0, and
+	// `sample_dist = fPlaneThickness / iThicknessStep` => 0/0 = NaN. sample_dist is taken by reference,
+	// so that NaN propagates into g_cbVobj.sample_dist and the curved ray-cast (dir_sample = view*NaN,
+	// and dir_sample_ts * 0 == NaN), making even the i==0 plane sample land at NaN -> nothing renders.
+	// Zero-thickness MPR slice: keep the incoming sample_dist (voxel pitch); the shader takes one sample.
+	if (iThicknessStep > 0)
+		sample_dist = fPlaneThickness / (float)iThicknessStep;
 
 	//cout << "TEST sample dvr : " << iThicknessStep << ", " << sample_dist << ", " << fPlanePitch << ", " << fPlaneThickness << endl;
 
