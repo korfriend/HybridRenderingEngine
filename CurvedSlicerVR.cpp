@@ -882,8 +882,18 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 			const int center = radius * N + radius;
 			const int use_filter = (mode != __XRPF_NONE && radius > 0) ? 1 : 0;
 
+			// Rebuild when the setting changed OR the mask buffer is currently absent. A framebuffer resize
+			// (or k_value change) triggers ReleaseGpuResourcesBySrcID(iobj id) — from THIS renderer or, more
+			// commonly, an earlier pass in the same frame: the SECTIONAL_MESH pass shares _int2_PreviousScreenSize
+			// and runs first, so it consumes the resize and frees the iobj-keyed mask before we get here. Probe
+			// the resource directly so the freed mask is rebuilt from valid weights instead of regenerated from
+			// stale/uninitialized CPU data (which blacked out the volume after a resize).
+			gres_xray_filter_mask.vm_src_id = iobj->GetObjectID();
+			gres_xray_filter_mask.res_name = "XRAY_FILTER_MASK";
+			const bool mask_absent = !gpu_manager->UpdateGpuResource(gres_xray_filter_mask);
 			const bool filter_changed =
-				   mode     != iobj->GetObjParam<int>("XRPF_MODE", (int)-1)
+				   mask_absent
+				|| mode     != iobj->GetObjParam<int>("XRPF_MODE", (int)-1)
 				|| radius   != iobj->GetObjParam<int>("XRPF_RADIUS", (int)-1)
 				|| strength != iobj->GetObjParam<float>("XRPF_STRENGTH", -2.f);
 			uint64_t filter_time = iobj->GetObjParam<uint64_t>("XRPF_TIME", (uint64_t)0);
