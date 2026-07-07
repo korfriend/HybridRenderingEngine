@@ -272,6 +272,7 @@
 #define IDR_RCDATA71005					  71005
 
 #define IDR_RCDATA72000					  72000
+#define IDR_RCDATA72001					  72001
 
 // MeshPainter Shaders
 #define IDR_RCDATA80001					  80001

@@ -1779,8 +1779,12 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->Unmap(cbuf_cam_state, 0);
 	};
 
+	// TAA sub-pixel jitter (renderer-owned; computed once per frame on the iobj, zero when TAA is off). Never
+	// jitter the picking pass — picking must be deterministic and single-frame.
+	vmfloat2 taa_jitter = is_picking_routine ? vmfloat2(0.f, 0.f)
+		: iobj->GetObjParam<vmfloat2>("_float2_TaaJitterPx", vmfloat2(0.f, 0.f));
 	CB_CameraState cbCamState;
-	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, matWS2CS, matWS2PS, cam_obj, fb_size_cur, k_value, gi_v_thickness);
+	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, matWS2CS, matWS2PS, cam_obj, fb_size_cur, k_value, gi_v_thickness, taa_jitter);
 
 	int camera_brush_target_actor_id = 0;
 	bool camera_brush_in_3d = false;

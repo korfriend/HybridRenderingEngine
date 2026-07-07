@@ -688,8 +688,11 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	vmmat44f matWS2SS = dmatWS2PS * dmatPS2SS;
 	vmmat44f matSS2WS = (dmatSS2PS * dmatPS2CS) * dmatCS2WS;
 
+	// TAA sub-pixel jitter (renderer-owned; computed once per frame on the iobj, zero when TAA is off). Same
+	// offset for every render source this frame.
+	vmfloat2 taa_jitter = iobj->GetObjParam<vmfloat2>("_float2_TaaJitterPx", vmfloat2(0.f, 0.f));
 	CB_CameraState cbCamState;
-	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, matWS2CS, matWS2PS, cam_obj, fb_size_cur, k_value, v_thickness <= 0? min_pitch : (float)v_thickness);
+	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, matWS2CS, matWS2PS, cam_obj, fb_size_cur, k_value, v_thickness <= 0? min_pitch : (float)v_thickness, taa_jitter);
 	cbCamState.iSrCamDummy__0 = *(uint32_t*)&merging_beta;
 	if (fastRender2x) cbCamState.cam_flag |= 0x1 << 8; // 9th bit set
 	int oulineiRGB = (int)(outline_color.r * 255.f) | (int)(outline_color.g * 255.f) << 8 | (int)(outline_color.b * 255.f) << 16;

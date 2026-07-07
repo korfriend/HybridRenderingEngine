@@ -162,6 +162,15 @@ bool InitModule(fncontainer::VmFnContainer& _fncontainer)
 static std::mutex queue_locker;
 #endif 
 
+// Van der Corput radical-inverse for the Halton low-discrepancy sequence (index >= 1); base 2 for X and
+// base 3 for Y give well-distributed TAA sub-pixel jitter offsets.
+static float TaaHalton(int index, int base)
+{
+	float f = 1.f, r = 0.f;
+	while (index > 0) { f /= (float)base; r += f * (float)(index % base); index /= base; }
+	return r;
+}
+
 bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 {
 #ifdef THREAD_SAFE_CODE
@@ -265,6 +274,45 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	
 	bool is_vr = false;
 	const bool gpu_query_synch = false;
+
+	// ---- TAA accumulation state (renderer-owned algorithm; core only forwards config + scene stamp) ----
+	// DoModule is invoked once per render source (MESH then VOLUME are separate calls sharing this iobj), so
+	// the jitter and accumulation index live on the iobj: the first source of the frame computes them, every
+	// source reads the same jitter (in grd_helper::SetCb_Camera), and the last source resolves + advances.
+	// Reset when the scene content or the viewport changed. Picking is never jittered.
+	const bool taa_enabled = _fncontainer.fnParams.GetParam("_bool_TaaEnabled", false) && !is_picking_routine;
+	int taa_max_samples = _fncontainer.fnParams.GetParam("_int_TaaMaxSamples", (int)1);
+	if (taa_max_samples < 1) taa_max_samples = 1;
+	if (taa_enabled)
+	{
+		if (is_first_renderer)
+		{
+			vmint2 fb_taa_now;
+			iobj->GetFrameBufferInfo(&fb_taa_now);
+			const uint64_t scene_stamp = (uint64_t)_fncontainer.fnParams.GetParam("_uint64_SceneStamp", (uint64_t)0);
+			const uint64_t sig = scene_stamp ^ (((uint64_t)fb_taa_now.x << 20) ^ (uint64_t)fb_taa_now.y);
+			int taa_accum = iobj->GetObjParam<int>("_int_TaaAccum", (int)0);
+			if (sig != iobj->GetObjParam<uint64_t>("_uint64_TaaSig", (uint64_t)0))
+			{
+				taa_accum = 0;
+				iobj->SetObjParam("_uint64_TaaSig", sig);
+			}
+			if (taa_accum >= taa_max_samples) taa_accum = 0; // safety; normally gated by the core skip
+
+			const float jx = TaaHalton(taa_accum + 1, 2) - 0.5f;
+			const float jy = TaaHalton(taa_accum + 1, 3) - 0.5f;
+			iobj->SetObjParam("_float2_TaaJitterPx", vmfloat2(jx, jy));
+			iobj->SetObjParam("_int_TaaAccum", taa_accum);
+			iobj->SetObjParam("_int_TaaTarget", taa_max_samples);
+		}
+	}
+	else if (is_first_renderer && !is_picking_routine)
+	{
+		// TAA off: no jitter, and report "converged" via CheckRenderConvergence (target == 0). Picking leaves
+		// the TAA iobj state untouched (the picking pass forces zero jitter on its own).
+		iobj->SetObjParam("_float2_TaaJitterPx", vmfloat2(0.f, 0.f));
+		iobj->SetObjParam("_int_TaaTarget", (int)0);
+	}
 
 	if (is_first_renderer && !is_picking_routine && gpu_query_synch)
 	{
@@ -533,6 +581,54 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 
 		if (iobj->GetObjParam("NUM_SECOND_LAYER_OBJECTS", (int)0) > 0) {
 			Blend2ndLayer();
+		}
+
+		// ---- TAA resolve ----
+		// Fold the composited scene (RENDER_OUT_RGBA_0) into a persistent per-camera history buffer and write
+		// the running average back for presentation. Runs once per RenderScene (final render source only). The
+		// engine (RenderScene) owns the accumulation index: it writes _int_TaaAccum before this call and
+		// advances it afterwards; _int_TaaTarget > 0 marks TAA active. D2D text draws afterwards so overlays
+		// stay crisp on top of the resolved image.
+		if (is_last_renderer && iobj->GetObjParam<int>("_int_TaaTarget", (int)0) > 0)
+		{
+			__ID3D11DeviceContext* dx11ImmCtx = g_psoManager.dx11DeviceImmContext;
+			vmint2 fb_taa;
+			iobj->GetFrameBufferInfo(&fb_taa);
+
+			GpuRes gres_fb_history;
+			grd_helper::UpdateFrameBuffer(gres_fb_history, iobj, "TAA_HISTORY_RGBA", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R16G16B16A16_FLOAT, 0);
+
+			const int taa_accum = iobj->GetObjParam<int>("_int_TaaAccum", (int)0);
+
+			ID3D11UnorderedAccessView* taaUAVs[2] = {
+					(ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
+				, (ID3D11UnorderedAccessView*)gres_fb_history.alloc_res_ptrs[DTYPE_UAV]
+			};
+
+			ID3D11Buffer* cbuf_cam_state = g_psoManager.get_cbuf("CB_CameraState");
+			D3D11_MAPPED_SUBRESOURCE mappedTaa;
+			dx11ImmCtx->Map(cbuf_cam_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedTaa);
+			CB_CameraState* cbTaa = (CB_CameraState*)mappedTaa.pData;
+			cbTaa->rt_width = fb_taa.x;
+			cbTaa->rt_height = fb_taa.y;
+			cbTaa->iSrCamDummy__0 = (uint32_t)taa_accum; // samples already accumulated in history
+			dx11ImmCtx->Unmap(cbuf_cam_state, 0);
+			dx11ImmCtx->CSSetConstantBuffers(0, 1, &cbuf_cam_state);
+
+			ID3D11ComputeShader* csTaa = g_psoManager.get_cshader("CS_TaaResolve_cs_5_0");
+			dx11ImmCtx->CSSetShader(csTaa, NULL, 0);
+			dx11ImmCtx->CSSetUnorderedAccessViews(1, 2, taaUAVs, (UINT*)(&taaUAVs));
+
+			int __BLOCKSIZE_TAA = _fncontainer.fnParams.GetParam("_int_GpuThreadBlockSize", (int)4);
+			uint32_t taa_gx = (uint32_t)ceil(fb_taa.x / (float)__BLOCKSIZE_TAA);
+			uint32_t taa_gy = (uint32_t)ceil(fb_taa.y / (float)__BLOCKSIZE_TAA);
+			dx11ImmCtx->Dispatch(taa_gx, taa_gy, 1);
+
+			ID3D11UnorderedAccessView* taaUAVs_NULL[2] = { NULL, NULL };
+			dx11ImmCtx->CSSetUnorderedAccessViews(1, 2, taaUAVs_NULL, (UINT*)(&taaUAVs_NULL));
+
+			// Advance accumulation for the next frame; core's CheckRenderConvergence reads this back.
+			iobj->SetObjParam("_int_TaaAccum", (taa_accum + 1 < taa_max_samples) ? taa_accum + 1 : taa_max_samples);
 		}
 
 #endif

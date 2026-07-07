@@ -883,6 +883,8 @@ int grd_helper::Initialize(VmGpuManager* pCGpuManager, PSOManager* gpu_params)
 #pragma endregion
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA72000), "CS_Blend2ndLayer_cs_5_0", "cs_5_0"), CS_Blend2ndLayer_cs_5_0);
 
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA72001), "CS_TaaResolve_cs_5_0", "cs_5_0"), CS_TaaResolve_cs_5_0);
+
 #endif
 	}
 
@@ -2621,20 +2623,48 @@ bool grd_helper::UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, Vm
 	return true;
 }
 
-void grd_helper::SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, const vmmat44f& matSS2WS, const vmmat44f& matWS2CS, const vmmat44f& matWS2PS, VmCObject* ccobj, const vmint2& fb_size, const int k_value, const float vz_thickness)
+void grd_helper::SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, const vmmat44f& matSS2WS, const vmmat44f& matWS2CS, const vmmat44f& matWS2PS, VmCObject* ccobj, const vmint2& fb_size, const int k_value, const float vz_thickness, const vmfloat2& taa_jitter_px)
 {
-	cb_cam.mat_ss2ws = TRANSPOSE(matSS2WS);
-	cb_cam.mat_ws2ss = TRANSPOSE(matWS2SS);
+	// TAA sub-pixel jitter: shift the virtual image plane by taa_jitter_px pixels (default 0 => no-op).
+	// These matrices use row-vector semantics over column-stored glm (output[j] = v . column_j, exactly the
+	// basis of the reverse-Z column op below), so we mutate output components via column arithmetic.
+	vmmat44f _matWS2SS = matWS2SS, _matSS2WS = matSS2WS, _matWS2PS = matWS2PS;
+	if (taa_jitter_px.x != 0.f || taa_jitter_px.y != 0.f)
+	{
+		const float jx = taa_jitter_px.x, jy = taa_jitter_px.y;
+		// Rasterized geometry (matWS2PS -> revZ -> SV_Position, GPU divides by w and applies the viewport):
+		// add a w-proportional NDC offset so the post-divide screen position moves by (jx,jy) pixels.
+		// output.xy += jNdc * output.w  =>  glm_col0 += jNdcX * glm_col3, glm_col1 += jNdcY * glm_col3.
+		// NDC spans [-1,1] across the render target; screen-Y points down, so negate the Y NDC term.
+		const float jNdcX = jx * 2.f / (float)fb_size.x;
+		const float jNdcY = -jy * 2.f / (float)fb_size.y;
+		_matWS2PS[0] += _matWS2PS[3] * jNdcX;
+		_matWS2PS[1] += _matWS2PS[3] * jNdcY;
+		// Forward world->screen (pixels): same shift for any WS2SS lookups.
+		_matWS2SS[0] += _matWS2SS[3] * jx;
+		_matWS2SS[1] += _matWS2SS[3] * jy;
+		// Inverse screen->world (volume ray reconstruction consumes integer pixel coords): evaluate the
+		// unprojection at (pixel - jitter) so the cast ray matches the rasterized sub-pixel sample. This is
+		// a pre-translation of the SS input, i.e. left-multiply by a (-jx,-jy) screen translation (glm '*'
+		// composes left-operand-first here, matching matWS2SS = dmatWS2PS * dmatPS2SS elsewhere).
+		vmmat44f Tinv(1.f);
+		Tinv[0][3] = -jx;
+		Tinv[1][3] = -jy;
+		_matSS2WS = Tinv * _matSS2WS;
+	}
+
+	cb_cam.mat_ss2ws = TRANSPOSE(_matSS2WS);
+	cb_cam.mat_ws2ss = TRANSPOSE(_matWS2SS);
 	cb_cam.mat_ws2cs = TRANSPOSE(matWS2CS);
 
 	// Reverse Z: remap z from [0,1] to [1,0] by transforming column 2
 	// P_revZ[2] = P[3] - P[2], so z_ndc = (w - z_standard) / w = 1 - z_standard/w
-	vmmat44f matWS2PS_revZ = matWS2PS;
+	vmmat44f matWS2PS_revZ = _matWS2PS;
 	matWS2PS_revZ[2] = vmfloat4(
-		matWS2PS[3].x - matWS2PS[2].x,
-		matWS2PS[3].y - matWS2PS[2].y,
-		matWS2PS[3].z - matWS2PS[2].z,
-		matWS2PS[3].w - matWS2PS[2].w);
+		_matWS2PS[3].x - _matWS2PS[2].x,
+		_matWS2PS[3].y - _matWS2PS[2].y,
+		_matWS2PS[3].z - _matWS2PS[2].z,
+		_matWS2PS[3].w - _matWS2PS[2].w);
 	cb_cam.mat_ws2ps_revZ = TRANSPOSE(matWS2PS_revZ);
 
 	vmfloat3 pos_cam, dir_cam;
