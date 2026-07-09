@@ -137,6 +137,9 @@
     <None Include="hlsl\Globals.hlsli">
       <Filter>hlsl source code</Filter>
     </None>
+    <None Include="hlsl\vxgi\ConeTrace.hlsli">
+      <Filter>hlsl source code\vxgi</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="resources">
@@ -192,6 +195,9 @@
     </Filter>
     <Filter Include="hlsl source code\meshpainter">
       <UniqueIdentifier>{e16f4a4e-9023-4a29-9067-cba132a4ad24}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="hlsl source code\vxgi">
+      <UniqueIdentifier>{19209593-5c69-4c59-83d0-96de37c3a974}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -274,6 +280,18 @@
     </FxCompile>
     <FxCompile Include="hlsl\dvr\SliceXrayFilter.hlsl">
       <Filter>hlsl source code\dvr</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\vxgi\Gather.hlsl">
+      <Filter>hlsl source code\vxgi</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\vxgi\InjectLight.hlsl">
+      <Filter>hlsl source code\vxgi</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\vxgi\Voxelize.hlsl">
+      <Filter>hlsl source code\vxgi</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\vxgi\Propagate.hlsl">
+      <Filter>hlsl source code\vxgi</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>

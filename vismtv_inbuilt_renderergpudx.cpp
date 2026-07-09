@@ -297,7 +297,11 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 				taa_accum = 0;
 				iobj->SetObjParam("_uint64_TaaSig", sig);
 			}
-			if (taa_accum >= taa_max_samples) taa_accum = 0; // safety; normally gated by the core skip
+			// Do NOT reset a converged accumulation: renders legitimately continue past TAA convergence
+			// (e.g. while VXGI bounces are still propagating), and resetting here made the TAA counter
+			// visibly cycle 0->32->0. Clamp instead — the resolve keeps blending new frames at 1/(N+1),
+			// so post-convergence image changes (GI refinement) fade smoothly into the history.
+			if (taa_accum > taa_max_samples) taa_accum = taa_max_samples;
 
 			const float jx = TaaHalton(taa_accum + 1, 2) - 0.5f;
 			const float jy = TaaHalton(taa_accum + 1, 3) - 0.5f;

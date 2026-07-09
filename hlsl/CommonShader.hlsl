@@ -109,6 +109,25 @@ struct HxCB_EnvState
 	int dof_lens_ray_num_samples;
 };
 
+// Voxel Cone Tracing GI (VXGI). Must match CB_VXGI in gpu manager/gpures_helper.h byte-for-byte.
+// Scalars are bit-packed — decode with the VXGI_* macros below the cbuffer declaration.
+struct HxCB_VXGI
+{
+	float4x4 mat_ws2vox;     // world -> voxel [0,1] space
+
+	uint  grid_res;
+	uint  vxgi_flag;         // [0:7] flags (bit0 = enabled) | [8:23] num_cones | [24:27] debug mode | [28:31] debug mip
+	uint  gi_ao_intensity;   // half(gi = volumetric in-scatter) | half(ao = surface AO) << 16
+	uint  indirect_aperture; // half(indirect = surface bounce) | half(cone_aperture) << 16
+
+	float max_trace_dist;
+	// volume-fit with margin: grid box = volume box + empty margin shell.
+	// volume tex coord -> grid coord: vox = ts * vox_fit_scale + vox_fit_offset (uniform axes).
+	float vox_fit_scale;
+	float vox_fit_offset;
+	float vxgi_dummy3;
+};
+
 struct HxCB_ClipInfo
 {
 	float4x4 mat_clipbox_ws2bs; // To Clip Box Space (BS)
@@ -385,6 +404,25 @@ cbuffer cbGlobalParams : register(b7)
 {
 	HxCB_EnvState g_cbEnv;
 }
+
+// VXGI CB slot: D3D11 has only 14 CB slots (b0-b13); b14 is INVALID. Shaders that #include CommonShader.hlsl
+// occupy b0-b10 and b12. b11 (particle) and b13 (Sort) are used ONLY by shaders that do NOT include this
+// header, so b13 is safe here — no CommonShader-including shader binds b13, and Sort never sees this
+// declaration. Kept in CommonShader (shared) on purpose: cone tracing is a common function to extend from
+// volume (v1) to mesh shading later. (Runtime: the C++ binds CB_VXGI to slot 13 for the VXGI/DVR passes.)
+cbuffer cbGlobalParams : register(b13)
+{
+	HxCB_VXGI g_cbVxgi;
+}
+// HxCB_VXGI decode helpers (see the packed layout in the struct above)
+#define VXGI_IS_ENABLED       ((g_cbVxgi.vxgi_flag & 0x1u) != 0)
+#define VXGI_NUM_CONES        ((g_cbVxgi.vxgi_flag >> 8) & 0xFFFFu)
+#define VXGI_DEBUG_MODE       ((g_cbVxgi.vxgi_flag >> 24) & 0xFu)
+#define VXGI_DEBUG_MIP        ((g_cbVxgi.vxgi_flag >> 28) & 0xFu)
+#define VXGI_GI_INTENSITY     f16tof32(g_cbVxgi.gi_ao_intensity & 0xFFFFu)
+#define VXGI_AO_INTENSITY     f16tof32(g_cbVxgi.gi_ao_intensity >> 16)
+#define VXGI_INDIRECT_INTENSITY f16tof32(g_cbVxgi.indirect_aperture & 0xFFFFu)
+#define VXGI_CONE_APERTURE    f16tof32(g_cbVxgi.indirect_aperture >> 16)
 
 //=====================
 // Helpers

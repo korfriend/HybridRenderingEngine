@@ -44,7 +44,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 #define __XRPF_SHARPEN_GAUSSIAN 4
 #define __XRPF_LAPLACIAN 5
 #define __XRPF_EDGE 6
-	// X-ray slicer post-filter request (CameraParameters::SetXRayPostFilter). Mode != NONE means "requested";
+	// X-ray slicer post-filter request (CameraParameters::EnableXRayPostFilter). Mode != NONE means "requested";
 	// whether it actually runs is decided below (apply_postprocessing_filter), gated on an x-ray ray-cast mode.
 	bool try_postprocessing_filter = _fncontainer->fnParams.GetParam("_int_XRayPostFilterMode", (int)__XRPF_NONE) != __XRPF_NONE;
 	// Default false: the x-ray post-filter is non-DX10 only. In a DX10 build the decision below is

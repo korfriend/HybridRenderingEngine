@@ -477,6 +477,12 @@ namespace grd_helper
 
 	bool UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string& resName, const void* bufPtr, const int numElements, DXGI_FORMAT dxFormat, const int type_bytes, LocalProgress* progress = NULL, uint64_t cpu_update_custom_time = 0);
 
+	// Allocate (or reuse) a GPU-writable cubic Texture3D for VXGI (voxel radiance/opacity): USAGE_DEFAULT with
+	// UNORDERED_ACCESS | SHADER_RESOURCE. Keyed on srcObj + res_name so it persists across frames. with_mips
+	// adds a full auto-gen mip chain (+RENDER_TARGET for GenerateMips) so cone tracing can LOD-sample; the
+	// UAV stays on mip 0 — write mip 0, then call GenerateMips on the SRV.
+	bool UpdateVoxelGrid(GpuRes& gres, VmObject* srcObj, const string& res_name, const uint32_t resolution, const uint32_t dx_format, const bool with_mips = false);
+
 	// Upload a CPU buffer as a DYNAMIC Texture3D (write-discard). The source is assumed to be tightly packed
 	// (row pitch = width * bytes_per_texel, depth pitch = row pitch * height); destination Texture3D pitches
 	// are handled internally.
@@ -623,6 +629,30 @@ namespace grd_helper
 		int dof_lens_ray_num_samples;
 
 		ZERO_SET(CB_EnvState)
+	};
+
+	// Voxel Cone Tracing GI (VXGI). Volume-sourced grid: volumetric in-scatter + surface AO + surface
+	// indirect, individually controllable (a 0 intensity disables that effect). Layout must match
+	// HxCB_VXGI (register b13; b14 is invalid — D3D11 has 14 CB slots b0-b13) in hlsl/CommonShader.hlsl
+	// byte-for-byte. Scalars are bit-packed (see SetCb_VXGI; HLSL decodes via the VXGI_* macros).
+	struct CB_VXGI
+	{
+		vmmat44f mat_ws2vox;         // world -> voxel [0,1] space (= volume mat_ws2ts)
+
+		uint32_t grid_res;           // cubic grid resolution (voxels per axis)
+		uint32_t vxgi_flag;          // [0:7] flags (bit0 = enabled) | [8:23] num_cones | [24:27] debug mode | [28:31] debug mip
+		uint32_t gi_ao_intensity;    // half(gi_intensity = volumetric in-scatter) | half(ao_intensity = surface AO) << 16
+		uint32_t indirect_aperture;  // half(indirect_intensity = surface bounce) | half(cone_aperture) << 16
+
+		float    max_trace_dist;     // cone max distance in [0,1] voxel space
+		// Volume-fit mapping WITH MARGIN: the grid box is the volume box expanded by a margin shell (empty
+		// voxels), so diffusion / cone marches near the volume boundary have room instead of clamping at the
+		// edge. volume tex coord -> grid coord: vox = ts * vox_fit_scale + vox_fit_offset (uniform).
+		float    vox_fit_scale;
+		float    vox_fit_offset;
+		float    vxgi_dummy3;
+
+		ZERO_SET(CB_VXGI)
 	};
 
 	struct CB_ClipInfo
@@ -983,6 +1013,10 @@ namespace grd_helper
 	// global 
 	void SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, const vmmat44f& matSS2WS, const vmmat44f& matWS2CS, const vmmat44f& matWS2PS, VmCObject* ccobj, const vmint2& fb_size, const int k_value, const float vz_thickness, const vmfloat2& taa_jitter_px = vmfloat2(0.f, 0.f));
 	void SetCb_Env(CB_EnvState& cb_env, VmCObject* ccobj, const LightSource& light_src, const GlobalLighting& global_lighting, const LensEffect& lens_effect);
+	// Fill the VXGI constant buffer (register b13). mat_ws2vox_raw = world->voxel[0,1] (volume mat_ws2ts for v1).
+	// gi/ao/indirect intensities gate the three effects individually (0 = off); they are half-packed into the
+	// CB. debug_byte = (mode & 0xF) | (mip & 0xF) << 4, packed into vxgi_flag's top byte.
+	void SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const uint32_t resolution, const float gi_intensity, const float ao_intensity, const bool enabled, const float indirect_intensity = 1.f, const uint32_t debug_byte = 0);
 	// each object
 	void SetCb_TMap(CB_TMAP& cb_tmap, VmObject* tobj);
 	//bool SetCbVrShadowMap(CB_VrShadowMap* pCBVrShadowMap, CB_VrCameraState* pCBVrCamStateForShadowMap, vmfloat3 f3PosOverviewBoxMinWS, vmfloat3 f3PosOverviewBoxMaxWS, map<string, void*>* pmapCustomParameter);

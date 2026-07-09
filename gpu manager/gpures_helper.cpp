@@ -31,6 +31,7 @@ namespace grd_helper
 
 #include <DirectXColors.h>
 #include <DirectXCollision.h>
+#include <DirectXPackedVector.h> // XMConvertFloatToHalf (CB_VXGI half packing)
 
 HRESULT grd_helper::PresetCompiledShader(__ID3D11Device* pdx11Device, HMODULE hModule, LPCWSTR pSrcResource, LPCSTR strShaderProfile, ID3D11DeviceChild** ppdx11Shader/*out*/
 	, D3D11_INPUT_ELEMENT_DESC* pInputLayoutDesc, uint32_t num_elements, ID3D11InputLayout** ppdx11LayoutInputVS)
@@ -368,6 +369,7 @@ int grd_helper::Initialize(VmGpuManager* pCGpuManager, PSOManager* gpu_params)
 		CREATE_AND_SET(CB_Undercut);
 		CREATE_AND_SET(CB_SliceFilter);
 		CREATE_AND_SET(CB_SortConstants);
+		CREATE_AND_SET(CB_VXGI);
 		//CREATE_AND_SET(BVHPushConstants);
 	}
 
@@ -884,6 +886,11 @@ int grd_helper::Initialize(VmGpuManager* pCGpuManager, PSOManager* gpu_params)
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA72000), "CS_Blend2ndLayer_cs_5_0", "cs_5_0"), CS_Blend2ndLayer_cs_5_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA72001), "CS_TaaResolve_cs_5_0", "cs_5_0"), CS_TaaResolve_cs_5_0);
+
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52000), "VXGI_VoxelizeVolume_cs_5_0", "cs_5_0"), VXGI_VoxelizeVolume_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52001), "VXGI_InjectLight_cs_5_0", "cs_5_0"), VXGI_InjectLight_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52002), "VXGI_Gather_cs_5_0", "cs_5_0"), VXGI_Gather_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52003), "VXGI_Propagate_cs_5_0", "cs_5_0"), VXGI_Propagate_cs_5_0);
 
 #endif
 	}
@@ -2332,6 +2339,33 @@ bool grd_helper::UpdateFrameBuffer(GpuRes& gres,
 	return true;
 }
 
+bool grd_helper::UpdateVoxelGrid(GpuRes& gres, VmObject* srcObj, const string& res_name, const uint32_t resolution, const uint32_t dx_format, const bool with_mips)
+{
+	// GPU-writable cubic 3D grid for VXGI (voxel radiance/opacity). USAGE_DEFAULT + UAV|SRV so compute passes
+	// write it and shading trilinear-samples it. Keyed on srcObj + res_name -> persists across frames.
+	// with_mips: full auto-gen mip chain for cone-trace LOD — the UAV stays on mip 0; write mip 0 then call
+	// GenerateMips on the SRV (needs the RENDER_TARGET bind). Resolution is assumed stable for the session
+	// (like UpdateFrameBuffer, an existing resource is reused as-is).
+	gres.vm_src_id = srcObj->GetObjectID();
+	gres.res_name = res_name;
+
+	if (g_pCGpuManager->UpdateGpuResource(gres))
+		return true;
+
+	gres.rtype = RTYPE_TEXTURE3D;
+	gres.options["USAGE"] = D3D11_USAGE_DEFAULT;
+	gres.options["CPU_ACCESS_FLAG"] = NULL;
+	gres.options["BIND_FLAG"] = D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_SHADER_RESOURCE
+		| (with_mips ? D3D11_BIND_RENDER_TARGET : 0); // RT bind required by GenerateMips
+	gres.options["FORMAT"] = dx_format;
+	if (with_mips) gres.options["MIP_GEN"] = 1;
+	gres.res_values.SetParam("WIDTH", resolution);
+	gres.res_values.SetParam("HEIGHT", resolution);
+	gres.res_values.SetParam("DEPTH", resolution);
+
+	return g_pCGpuManager->GenerateGpuResource(gres);
+}
+
 bool grd_helper::UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string& resName, const void* bufPtr, const int numElements, DXGI_FORMAT dxFormat, const int type_bytes, LocalProgress* progress, uint64_t cpu_update_custom_time)
 {
 	gres.vm_src_id = srcObj->GetObjectID();
@@ -2691,6 +2725,46 @@ void grd_helper::SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, 
 
 	cb_cam.near_plane = (float)np;
 	cb_cam.far_plane = (float)fp;
+}
+
+void grd_helper::SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const uint32_t resolution, const float gi_intensity, const float ao_intensity, const bool enabled, const float indirect_intensity, const uint32_t debug_byte)
+{
+	// mat_ws2vox_raw maps world -> voxel [0,1]. For v1 the caller passes the volume's world->texture matrix
+	// (grd_helper::SetCb_VolumeObj mat_ws2ts), so the grid aligns with the volume box. Stored transposed for
+	// HLSL, matching every other SetCb_* helper. gi/ao/indirect gate the three effects individually (0 = off);
+	// intensities and the cone aperture are packed as halves (HLSL f16tof32 unpacks via the VXGI_* macros).
+	using namespace DirectX::PackedVector;
+	const uint32_t num_cones = 6;          // hemisphere diffuse cones
+	const float cone_aperture = 0.577f;    // tan(30deg) => ~60deg diffuse cone
+
+	// Volume-fit WITH MARGIN: expand the grid box by VXGI_MARGIN_VOXELS empty voxels on every side so
+	// diffusion / cone marches near the volume boundary have room instead of clamping at the grid edge.
+	// Mapping (uniform, all axes): grid = ts * s + o with s = 1/(1+2m), o = m*s, m = margin/resolution.
+	// mat_ws2vox_raw is the volume's world->texture matrix; append the fit as a post-transform (row-vector
+	// convention: glm '*' composes left-operand-first, and output component j = v . column_j, so the scale
+	// sits on M[j][j] and the translation on M[j][3] — same basis as the TAA jitter injection).
+	const float VXGI_MARGIN_VOXELS = 8.f;
+	const float m = VXGI_MARGIN_VOXELS / (float)(resolution > 0 ? resolution : 128);
+	const float fit_s = 1.f / (1.f + 2.f * m);
+	const float fit_o = m * fit_s;
+	vmmat44f matFit(1.f);
+	matFit[0][0] = fit_s; matFit[1][1] = fit_s; matFit[2][2] = fit_s;
+	matFit[0][3] = fit_o; matFit[1][3] = fit_o; matFit[2][3] = fit_o;
+	vmmat44f mat_ws2vox = mat_ws2vox_raw * matFit; // ws -> volume ts -> grid (with margin)
+
+	cb.mat_ws2vox = TRANSPOSE(mat_ws2vox);
+	cb.grid_res = resolution;
+	cb.vxgi_flag = (enabled ? 0x1u : 0x0u)             // [0:7]  flags
+		| ((num_cones & 0xFFFFu) << 8)                 // [8:23] cone count
+		| ((debug_byte & 0xFFu) << 24);                // [24:31] debug: mode(4b) | mip(4b)
+	cb.gi_ao_intensity = (uint32_t)XMConvertFloatToHalf(gi_intensity)
+		| ((uint32_t)XMConvertFloatToHalf(ao_intensity) << 16);
+	cb.indirect_aperture = (uint32_t)XMConvertFloatToHalf(indirect_intensity)
+		| ((uint32_t)XMConvertFloatToHalf(cone_aperture) << 16);
+	cb.max_trace_dist = 1.0f;              // full grid extent in [0,1] voxel space
+	cb.vox_fit_scale = fit_s;              // volume ts -> grid coord (used by Voxelize / DvrCS in-scatter)
+	cb.vox_fit_offset = fit_o;
+	cb.vxgi_dummy3 = 0.f;
 }
 
 void grd_helper::SetCb_Env(CB_EnvState& cb_env, VmCObject* ccobj, const LightSource& light_src, const GlobalLighting& global_lighting, const LensEffect& lens_effect)

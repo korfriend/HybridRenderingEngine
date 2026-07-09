@@ -64,6 +64,33 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	int k_value = _fncontainer->fnParams.GetParam("_int_NumK", k_value_old);
 	iobj->SetObjParam("_int_NumK", k_value);
 
+	// --- VXGI v2 (Voxel Cone Tracing GI: volumetric in-scatter) ------------------------------------
+	// Volume-sourced radiance/opacity grid consumed by the DVR RayCasting march itself: the grid is built
+	// (voxelize + inject, scene-gated) BEFORE the last volume's RayCasting dispatch and bound as SRV t8, so
+	// the ray-march adds per-sample in-scattered radiance (gated in-shader by g_cbVxgi.vxgi_flag). The old
+	// v1 screen-space gather post-pass is disabled below. All GPU work is guarded by vxgi_on (zero overhead
+	// when off). CB_VXGI is bound at b13.
+	bool vxgi_on = _fncontainer->fnParams.GetParam("_bool_VxgiEnabled", false);
+	int vxgi_resolution = _fncontainer->fnParams.GetParam("_int_VxgiResolution", (int)128);
+	float vxgi_gi_intensity = _fncontainer->fnParams.GetParam("_float_VxgiGiIntensity", 1.f);       // volumetric in-scatter (0 = off)
+	float vxgi_ao_intensity = _fncontainer->fnParams.GetParam("_float_VxgiAoIntensity", 1.f);       // surface AO (0 = off)
+	float vxgi_indirect_intensity = _fncontainer->fnParams.GetParam("_float_VxgiIndirectIntensity", 1.f); // surface indirect (0 = off)
+	int vxgi_debug = _fncontainer->fnParams.GetParam("_int_VxgiDebug", (int)0); // 0=render, 1..7=debug viz (screen gather)
+	// Slow-motion diffusion toggle (SetRenderTestParam "_bool_VxgiSlowMotion"): 1 bounce per 8 rendered
+	// frames so the progressive inward spread is observable; full speed when off. The frame index is the
+	// GLOBAL monotonic render count forwarded by core (== vzmpf::GetRenderCount) — NOT count_call_render /
+	// "_int_NumCallRenders", which is a per-frame pass counter reset at frame start (using it froze the
+	// modulo at a constant, so slow-motion never advanced a bounce).
+	bool vxgi_slowmo = _fncontainer->fnParams.GetParam("_bool_VxgiSlowMotion", false);
+	uint64_t temporal_render_count = (uint64_t)_fncontainer->fnParams.GetParam("_uint64_TemporalRenderCount", (uint64_t)0);
+	GpuRes gres_vxgi;
+	bool vxgi_ready = false;
+	ID3D11ShaderResourceView* vxgi_vol_srv = NULL;
+	// Default the convergence demand to "done" each frame; the build block below overwrites it when it actually
+	// runs. Prevents a stale bounce target from keeping the app's re-render loop spinning after VXGI is turned
+	// off or the volume switches to an x-ray mode (where the block is skipped).
+	iobj->SetObjParam("_int_VxgiBounceTarget", (int)0);
+
 	vmfloat4 default_phong_lighting_coeff = vmfloat4(0.2, 1.0, 0.5, 5); // Emission, Diffusion, Specular, Specular Power
 	bool force_to_update_otf = _fncontainer->fnParams.GetParam("_bool_ForceToUpdateOtf", false);
 	bool show_block_test = _fncontainer->fnParams.GetParam("_bool_IsShowBlock", false);
@@ -76,7 +103,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	vmmat44f camClipMatWS2BS = _fncontainer->fnParams.GetParam("_matrix44f_MatrixClipWS2BS", vmmat44f(1));
 	std::set<int> camClipperFreeActors = _fncontainer->fnParams.GetParam("_set_int_CamClipperFreeActors", std::set<int>());
 
-	// X-ray slicer post-filter request (CameraParameters::SetXRayPostFilter). Mode != NONE means "requested";
+	// X-ray slicer post-filter request (CameraParameters::EnableXRayPostFilter). Mode != NONE means "requested";
 	// whether it actually runs is decided below (apply_postprocessing_filter), gated on an x-ray ray-cast mode.
 	bool try_postprocessing_filter = _fncontainer->fnParams.GetParam("_int_XRayPostFilterMode", (int)__XRPF_NONE) != __XRPF_NONE;
 	// Default false: the x-ray post-filter is non-DX10 only. In a DX10 build the decision below is
@@ -1194,10 +1221,139 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		memcpy(cbVrEffectData, &cbVrMaterial, sizeof(CB_VolumeMaterial));
 		dx11DeviceImmContext->Unmap(cbuf_vreffect, 0);
 		SET_CBUFFERS(6, 1, &cbuf_vreffect);
-#pragma endregion 
+#pragma endregion
+
+#ifdef DX10_0
+#else
+		// ----- VXGI v2.5: build material + radiance grids, propagate bounces, bind for the DVR in-scatter -----
+		// Runs on the last DVR volume (non-x-ray) BEFORE its RayCasting dispatch (RayCasting reads the radiance
+		// grid at SRV t8 with cone-trace LOD, gated by g_cbVxgi.vxgi_flag). Three resources:
+		//   VXGI_GRID_MAT   (single mip) : albedo+opacity from Voxelize — static until the CONTENT changes.
+		//   VXGI_VOXEL_GRID (MIP CHAIN)  : radiance+opacity — what shading cone-traces; mips via GenerateMips.
+		//   VXGI_GRID_PING  (single mip) : propagation scratch (read prev radiance -> write next, then copy back).
+		// Rebuild is gated on a CONTENT stamp (volume + OTF content times + resolved light state) — NOT the scene
+		// stamp, so camera moves no longer re-voxelize (the grid is view-independent). While the content is
+		// static, ONE VXGI_Propagate iteration runs per frame (up to a target bounce count): the radiance field
+		// visibly refines frame over frame, driven by the same convergence re-render loop TAA uses.
+		if (vxgi_on && is_last_dvr && !is_xray_mode)
+		{
+			const uint32_t vxgi_R = (uint32_t)(vxgi_resolution > 0 ? vxgi_resolution : 128);
+			GpuRes gres_vxgi_mat, gres_vxgi_ping, gres_vxgi_direct;
+			grd_helper::UpdateVoxelGrid(gres_vxgi_mat, iobj, "VXGI_GRID_MAT", vxgi_R, DXGI_FORMAT_R16G16B16A16_FLOAT, true); // mips: inject's light march LODs through it
+			grd_helper::UpdateVoxelGrid(gres_vxgi, iobj, "VXGI_VOXEL_GRID", vxgi_R, DXGI_FORMAT_R16G16B16A16_FLOAT, true); // mip chain
+			grd_helper::UpdateVoxelGrid(gres_vxgi_ping, iobj, "VXGI_GRID_PING", vxgi_R, DXGI_FORMAT_R16G16B16A16_FLOAT);
+			grd_helper::UpdateVoxelGrid(gres_vxgi_direct, iobj, "VXGI_GRID_DIRECT", vxgi_R, DXGI_FORMAT_R16G16B16A16_FLOAT); // stable diffusion source
+			vxgi_vol_srv = (ID3D11ShaderResourceView*)gres_vol.alloc_res_ptrs[DTYPE_SRV];
+			vxgi_ready = true;
+
+			// CB_VXGI (b13): grid aligned with the volume, so world->voxel[0,1] == the volume's world->texture
+			// matrix. SetCb_VolumeObj stored mat_ws2ts TRANSPOSED; recover the raw matrix (SetCb_VXGI re-transposes).
+			ID3D11Buffer* cbuf_vxgi = psoManager->get_cbuf("CB_VXGI");
+			CB_VXGI cbVxgi;
+			// debug byte for vxgi_flag[24:31]: mode (4b, from VXGI_DEBUG low byte) | mip (4b, from its high bits)
+			const uint32_t vxgi_debug_byte = ((uint32_t)vxgi_debug & 0xFu) | ((((uint32_t)vxgi_debug >> 8) & 0xFu) << 4);
+			grd_helper::SetCb_VXGI(cbVxgi, TRANSPOSE(cbVolumeObj.mat_ws2ts), vxgi_R, vxgi_gi_intensity, vxgi_ao_intensity, true, vxgi_indirect_intensity, vxgi_debug_byte);
+			D3D11_MAPPED_SUBRESOURCE mappedResVxgi;
+			dx11DeviceImmContext->Map(cbuf_vxgi, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResVxgi);
+			memcpy(mappedResVxgi.pData, &cbVxgi, sizeof(CB_VXGI));
+			dx11DeviceImmContext->Unmap(cbuf_vxgi, 0);
+			SET_CBUFFERS(13, 1, &cbuf_vxgi);
+
+			// CONTENT stamp: volume voxels + OTF (transfer function) + the RESOLVED light state (post headlight
+			// resolution, so a camera-locked light correctly retriggers, while pure camera moves do not).
+			auto f2u64 = [](float f) { return (uint64_t)(*(uint32_t*)&f); };
+			uint64_t vxgi_light_hash = ((uint64_t)cbEnvState.env_flag << 32);
+			const float* lposf = (const float*)&cbEnvState.pos_light_ws;
+			const float* ldirf = (const float*)&cbEnvState.dir_light_ws;
+			for (int lh = 0; lh < 3; lh++)
+				vxgi_light_hash ^= (f2u64(lposf[lh]) << (lh * 8 + 4)) ^ (f2u64(ldirf[lh]) << (lh * 8));
+			// _int_VxgiRestart: app-driven counter (debug UI) folded into the stamp so a button press restarts
+			// the diffusion from bounce 0 without touching the actual content.
+			const uint64_t vxgi_restart = (uint64_t)_fncontainer->fnParams.GetParam("_int_VxgiRestart", (int)0);
+			const uint64_t vxgi_content_stamp = vobj->GetContentUpdateTime()
+				^ (tobj_otf->GetContentUpdateTime() << 1) ^ vxgi_light_hash ^ ((uint64_t)vxgi_R << 48)
+				^ (vxgi_restart << 40);
+
+			const int VXGI_BOUNCE_TARGET = 12; // diffusion iterations: light creeps a few voxels inward per frame
+			int vxgi_bounce = iobj->GetObjParam<int>("_int_VxgiBounce", (int)0);
+			const uint32_t vxgi_groups = (uint32_t)ceil(vxgi_R / 8.f);
+			ID3D11ShaderResourceView* vxgi_grid_srv = (ID3D11ShaderResourceView*)gres_vxgi.alloc_res_ptrs[DTYPE_SRV];
+			ID3D11ShaderResourceView* vxgi_mat_srv = (ID3D11ShaderResourceView*)gres_vxgi_mat.alloc_res_ptrs[DTYPE_SRV];
+			ID3D11ShaderResourceView* vxgi_direct_srv = (ID3D11ShaderResourceView*)gres_vxgi_direct.alloc_res_ptrs[DTYPE_SRV];
+
+			const uint64_t vxgi_prev_stamp = iobj->GetObjParam<uint64_t>("_uint64_VxgiStamp", (uint64_t)~0ull);
+			if (vxgi_prev_stamp != vxgi_content_stamp)
+			{
+				// -- content changed: voxelize the material, bake the arriving-light (DIRECT) field, seed grid --
+				ID3D11UnorderedAccessView* vxgi_uav_mat = (ID3D11UnorderedAccessView*)gres_vxgi_mat.alloc_res_ptrs[DTYPE_UAV];
+				ID3D11UnorderedAccessView* vxgi_uav_direct = (ID3D11UnorderedAccessView*)gres_vxgi_direct.alloc_res_ptrs[DTYPE_UAV];
+
+				// 1) Voxelize -> MAT (u0). Reads t0=volume, t3=OTF (already bound), supersampled box filter.
+				//    MAT gets a mip chain so the inject's light march can LOD through it.
+				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, &vxgi_uav_mat, (UINT*)(&vxgi_uav_mat));
+				SET_SHADER(GETCS(VXGI_VoxelizeVolume_cs_5_0), NULL, 0);
+				dx11DeviceImmContext->Dispatch(vxgi_groups, vxgi_groups, vxgi_groups);
+				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+				dx11DeviceImmContext->GenerateMips(vxgi_mat_srv);
+
+				// 2) Inject: light-transmittance march through MAT (t9, mips) -> DIRECT field (u0).
+				SET_SHADER_RES(9, 1, &vxgi_mat_srv);
+				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, &vxgi_uav_direct, (UINT*)(&vxgi_uav_direct));
+				SET_SHADER(GETCS(VXGI_InjectLight_cs_5_0), NULL, 0);
+				dx11DeviceImmContext->Dispatch(vxgi_groups, vxgi_groups, vxgi_groups);
+				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+				SET_SHADER_RES(9, 1, dx11SRVs_NULL);
+
+				// 3) Seed the radiance grid with the DIRECT field (bounce 0) and build its mips.
+				dx11DeviceImmContext->CopySubresourceRegion(
+					(ID3D11Resource*)gres_vxgi.alloc_res_ptrs[DTYPE_RES], 0, 0, 0, 0,
+					(ID3D11Resource*)gres_vxgi_direct.alloc_res_ptrs[DTYPE_RES], 0, NULL);
+				dx11DeviceImmContext->GenerateMips(vxgi_grid_srv);
+
+				vxgi_bounce = 0; // diffusion restarts
+				iobj->SetObjParam("_uint64_VxgiStamp", vxgi_content_stamp);
+			}
+			else if (vxgi_bounce < VXGI_BOUNCE_TARGET
+				// Slow-motion is an explicit app toggle (SetRenderTestParam "_bool_VxgiSlowMotion"), no longer
+				// tied to the debug view mode: advance one iteration every 8th rendered frame while on, full
+				// speed otherwise. Frame index = the GLOBAL render count forwarded by core (monotonic).
+				&& (!vxgi_slowmo || (temporal_render_count % 8) == 0))
+			{
+				// -- content static: ONE volumetric diffusion iteration (progressive refinement) --
+				// prev radiance (t8, mips) + material (t9) + DIRECT source (t10) -> PING (u0);
+				// copy back to grid mip 0; refresh mips.
+				ID3D11UnorderedAccessView* vxgi_uav_ping = (ID3D11UnorderedAccessView*)gres_vxgi_ping.alloc_res_ptrs[DTYPE_UAV];
+				SET_SHADER_RES(8, 1, &vxgi_grid_srv);
+				SET_SHADER_RES(9, 1, &vxgi_mat_srv);
+				SET_SHADER_RES(10, 1, &vxgi_direct_srv);
+				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, &vxgi_uav_ping, (UINT*)(&vxgi_uav_ping));
+				SET_SHADER(GETCS(VXGI_Propagate_cs_5_0), NULL, 0);
+				dx11DeviceImmContext->Dispatch(vxgi_groups, vxgi_groups, vxgi_groups);
+				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+				SET_SHADER_RES(8, 1, dx11SRVs_NULL);
+				SET_SHADER_RES(9, 1, dx11SRVs_NULL);
+				SET_SHADER_RES(10, 1, dx11SRVs_NULL);
+
+				dx11DeviceImmContext->CopySubresourceRegion(
+					(ID3D11Resource*)gres_vxgi.alloc_res_ptrs[DTYPE_RES], 0, 0, 0, 0,
+					(ID3D11Resource*)gres_vxgi_ping.alloc_res_ptrs[DTYPE_RES], 0, NULL);
+				dx11DeviceImmContext->GenerateMips(vxgi_grid_srv);
+
+				vxgi_bounce++;
+			}
+
+			// Convergence readback: core's skip-gate / CheckRenderConvergence keep the re-render loop alive
+			// until both TAA samples AND VXGI bounces are done (renderer owns the algorithm, core only reads).
+			iobj->SetObjParam("_int_VxgiBounce", vxgi_bounce);
+			iobj->SetObjParam("_int_VxgiBounceTarget", (int)VXGI_BOUNCE_TARGET);
+
+			// Bind the radiance grid as SRV t8 for the RayCasting march below (nulled after the dispatch).
+			SET_SHADER_RES(8, 1, &vxgi_grid_srv);
+		}
+#endif
 
 #pragma region GPU resource updates
-#pragma endregion 
+#pragma endregion
 
 #pragma region Renderer
 		// LATER... MFR_MODE::DYNAMIC_KB ==> DEPRECATED in VR
@@ -1473,6 +1629,11 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		SET_SHADER_RES(6, 1, dx11SRVs_NULL);
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(50, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 
+		// VXGI v2: the RayCasting dispatch above sampled the voxel grid as SRV t8 (in-scatter). The grid build
+		// + t8 bind now happen BEFORE RayCasting (see the block right after the volume CB setup); release t8 here.
+		if (vxgi_on && is_last_dvr && !is_xray_mode)
+			SET_SHADER_RES(8, 1, dx11SRVs_NULL);
+
 		// Slicer x-ray image-level post-processing filter + mesh composite (single fused pass).
 		// Runs once, after the LAST DVR volume, when the post-filter is enabled. On that volume DvrCS wrote
 		// the volume-ONLY x-ray color into gres_fb_xray_vol (u2 was redirected there) and the clean volume
@@ -1481,7 +1642,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		if (is_last_dvr && apply_postprocessing_filter)
 		{
 			// --- build the convolution kernel from the X-ray post-filter mode (row-major, length N*N) ---
-			// Mode/radius/strength come from CameraParameters::SetXRayPostFilter (forwarded by RenderScene as
+			// Mode/radius/strength come from CameraParameters::EnableXRayPostFilter (forwarded by RenderScene as
 			// _int_XRayPostFilterMode / _int_XRayPostFilterRadius / _float_XRayPostFilterStrength). Modes mirror
 			// vzm::CameraParameters::XRayPostFilter: MEAN box blur / GAUSSIAN / SHARPEN (unsharp-box) /
 			// SHARPEN_GAUSSIAN / LAPLACIAN high-boost / EDGE high-pass. Brightness-preserving modes sum to 1;
@@ -1673,6 +1834,52 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			SET_SHADER_RES(11, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_texs[1].alloc_res_ptrs[DTYPE_SRV]);
 			SET_SHADER_RES(20, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_vr_tex.alloc_res_ptrs[DTYPE_SRV]);
 		}
+	}
+#endif
+
+#ifdef DX10_0
+#else
+	// ----- VXGI v1 screen-space gather: DISABLED (superseded by v2 per-sample volumetric in-scatter) -----
+	// In v2 the DVR RayCasting march samples the voxel grid at t8 and adds in-scattered radiance per sample,
+	// so this screen-space post-pass over RENDER_OUT_RGBA_0 is no longer used. Gated off with `if (false)`;
+	// the body is kept for reference. The grid alloc / voxelize / inject (moved BEFORE RayCasting) stay active.
+	// v3: this pass is BOTH the debug viz (modes 1..9 short-circuit inside the shader) AND the surface
+	// GI modulation: screen-space cone-traced AO + indirect on the DVR first-hit, layered on top of the
+	// volumetric in-scatter that the RayCasting march already added. korfriend's A/B (a leaked debug flag
+	// accidentally enabled this pass) showed the combination reads far better than in-scatter alone —
+	// the surface AO supplies the directional shading (음영) the pure volumetric term lacks.
+	// Skip the dispatch entirely when it would be a no-op: no debug view AND both surface terms at 0.
+	if (vxgi_on && vxgi_ready && ((vxgi_debug & 0xFF) != 0 || vxgi_ao_intensity > 0.f || vxgi_indirect_intensity > 0.f))
+	{
+		// The trailing SSAO path can leave gres_fb_rgba bound at UAV u2; release the DVR UAV slots first so
+		// binding it at u1 below does not alias (a resource may occupy only one UAV slot at a time).
+		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+
+		ID3D11ShaderResourceView* vxgi_grid_srv = (ID3D11ShaderResourceView*)gres_vxgi.alloc_res_ptrs[DTYPE_SRV];
+		SET_SHADER_RES(0, 1, &vxgi_grid_srv);
+		SET_SHADER_RES(1, 1, (ID3D11ShaderResourceView**)&gres_fb_vrdepthcs.alloc_res_ptrs[DTYPE_SRV]);
+		SET_SHADER_RES(2, 1, &vxgi_vol_srv);
+
+		// Re-bind the CBs the gather shader reads (b0=camera, b4=last volume, b13=VXGI); the trailing SSAO pass
+		// may have rebound these slots. The buffers still hold the correct last-camera / last-volume / VXGI data.
+		ID3D11Buffer* cbuf_cam_g = psoManager->get_cbuf("CB_CameraState");
+		ID3D11Buffer* cbuf_vol_g = psoManager->get_cbuf("CB_VolumeObject");
+		ID3D11Buffer* cbuf_vxgi_g = psoManager->get_cbuf("CB_VXGI");
+		SET_CBUFFERS(0, 1, &cbuf_cam_g);
+		SET_CBUFFERS(4, 1, &cbuf_vol_g);
+		SET_CBUFFERS(13, 1, &cbuf_vxgi_g);
+
+		ID3D11UnorderedAccessView* vxgi_out_uav = (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV];
+		dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 1, &vxgi_out_uav, (UINT*)(&vxgi_out_uav));
+
+		const uint32_t vxgi_gx = (uint32_t)ceil(fb_size_cur.x / 8.f);
+		const uint32_t vxgi_gy = (uint32_t)ceil(fb_size_cur.y / 8.f);
+		SET_SHADER(GETCS(VXGI_Gather_cs_5_0), NULL, 0);
+		dx11DeviceImmContext->Dispatch(vxgi_gx, vxgi_gy, 1);
+
+		// Release the RT UAV + SRVs so the later DoModule composite / TaaResolve can rebind RENDER_OUT_RGBA_0.
+		dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+		SET_SHADER_RES(0, 3, dx11SRVs_NULL);
 	}
 #endif
 

@@ -784,8 +784,10 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		descTex3D.Width = gres.res_values.GetParam("WIDTH", (uint32_t)0);
 		descTex3D.Height = gres.res_values.GetParam("HEIGHT", (uint32_t)0);
 		descTex3D.Depth = gres.res_values.GetParam("DEPTH", (uint32_t)0);
-		descTex3D.MipLevels = 1;
-		descTex3D.MiscFlags = NULL;
+		// MIP_GEN (e.g. the VXGI radiance grid, cone-trace LOD): full mip chain + auto-gen via GenerateMips.
+		// Requires BIND_RENDER_TARGET | BIND_SHADER_RESOURCE in the caller's BIND_FLAG.
+		descTex3D.MipLevels = gres.options["MIP_GEN"] == 1 ? 0 : 1;
+		descTex3D.MiscFlags = gres.options["MIP_GEN"] == 1 ? D3D11_RESOURCE_MISC_GENERATE_MIPS : NULL;
 		descTex3D.Format = (DXGI_FORMAT)GetOption("FORMAT");
 		descTex3D.Usage = (D3D11_USAGE)GetOption("USAGE");
 		descTex3D.BindFlags = GetOption("BIND_FLAG");
@@ -834,6 +836,20 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 			descRTV.Buffer.FirstElement = 0;
 			descRTV.Buffer.NumElements = view_elements;
 
+			ID3D11View* pdx11View = NULL;
+			g_pdx11Device->CreateRenderTargetView((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], &descRTV, (ID3D11RenderTargetView**)&pdx11View);
+			gres.alloc_res_ptrs[DTYPE_RTV] = (void*)pdx11View;
+		}
+		else if (gres.rtype == RTYPE_TEXTURE3D)
+		{
+			// RENDER_TARGET on a Texture3D exists to satisfy GenerateMips (MIP_GEN); mip 0, all W slices.
+			D3D11_RENDER_TARGET_VIEW_DESC descRTV;
+			ZeroMemory(&descRTV, sizeof(D3D11_RENDER_TARGET_VIEW_DESC));
+			descRTV.Format = format;
+			descRTV.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE3D;
+			descRTV.Texture3D.MipSlice = 0;
+			descRTV.Texture3D.FirstWSlice = 0;
+			descRTV.Texture3D.WSize = -1;
 			ID3D11View* pdx11View = NULL;
 			g_pdx11Device->CreateRenderTargetView((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], &descRTV, (ID3D11RenderTargetView**)&pdx11View);
 			gres.alloc_res_ptrs[DTYPE_RTV] = (void*)pdx11View;
@@ -906,7 +922,7 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		} break;
 		case RTYPE_TEXTURE3D:
 			descSRV.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE3D;
-			descSRV.Texture3D.MipLevels = 1;
+			descSRV.Texture3D.MipLevels = gres.options["MIP_GEN"] == 1 ? -1 : 1; // -1 = full chain (cone-trace LOD)
 			descSRV.Texture3D.MostDetailedMip = 0;
 			break;
 		default:
@@ -953,6 +969,13 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 				}
 				break;
 			}
+		case RTYPE_TEXTURE3D:
+			// GPU-writable 3D grid (e.g. VXGI voxel radiance/opacity). Whole depth as one UAV slab (mip 0).
+			descUAV.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE3D;
+			descUAV.Texture3D.MipSlice = 0;
+			descUAV.Texture3D.FirstWSlice = 0;
+			descUAV.Texture3D.WSize = gres.res_values.GetParam("DEPTH", (uint32_t)0);
+			break;
 		default:
 			vmlog::LogErr("__GenerateGpuResource (D3D11_BIND_UNORDERED_ACCESS) ==> not allowed gres.rtype");
 			return false;
