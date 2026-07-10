@@ -32,6 +32,19 @@ struct D2DRes {
 
 	ID3D11Texture2D* pTex2DRT = NULL; // do not release this!
 
+	// ---- Rotating shared PRESENT buffers (cross-device write-after-read hazard fix) ----
+	// The finished frame in RENDER_OUT_RGBA_0 is copied into one of 3 rotating SHARED_PRESENT_RGBA_{0,1,2}
+	// textures, and GetSharedShaderResView hands the app the SRV of the buffer just written. Because the
+	// renderer cycles 0->1->2->0..., the buffer the app device is currently sampling is not overwritten for
+	// 2 more frames -> the app's in-flight cross-device read cannot race the renderer's next write. These
+	// app-device SRVs, and the present textures rotate every frame, so they MUST be cached separately from the
+	// D2D render-target path (pTex2DRT / mapDevSharedSRVs), which stays pinned to RENDER_OUT_RGBA_0.
+	// Key: (app-device ptr) within a per-present-buffer map. pPresentTex tracks the underlying present-texture
+	// pointer per slot so a resize (which recreates it) invalidates that slot's cached SRVs.
+	std::map<void*, ID3D11ShaderResourceView*> mapDevPresentSRVs[3];
+	ID3D11Texture2D* pPresentTex[3] = { NULL, NULL, NULL }; // do not release these!
+	int presentReadIdx = 0; // buffer index of the frame most recently finalized (set by the copy site)
+
 	void ReleaseD2DRes() {
 		VMSAFE_RELEASE(pSolidBrush);
 		VMSAFE_RELEASE(pRenderTarget);
@@ -41,6 +54,14 @@ struct D2DRes {
 			VMSAFE_RELEASE(kv.second);
 		}
 		mapDevSharedSRVs.clear();
+
+		for (int i = 0; i < 3; i++) {
+			for (auto& kv : mapDevPresentSRVs[i]) {
+				VMSAFE_RELEASE(kv.second);
+			}
+			mapDevPresentSRVs[i].clear();
+			pPresentTex[i] = NULL;
+		}
 	}
 };
 map<int, D2DRes> g_d2dResMap;
@@ -823,6 +844,45 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		if (res2d->pRenderTarget->EndDraw() != S_OK)
 			vmlog::LogErr("D2D Draw Error!");
 
+#ifdef DX11_3
+		// ---- Cross-device write-after-read fix: rotate the finalized frame through 3 shared PRESENT buffers ----
+		// The app samples the renderer's output through a legacy GetSharedHandle SRV on its OWN D3D11 device (no
+		// keyed mutex). The producer fence in GetSharedShaderResView already stops the app from reading a frame the
+		// renderer has not finished writing, but it cannot cover the REVERSE hazard: frame N+1's renderer write
+		// clobbering RENDER_OUT_RGBA_0 while the app device's GPU is still sampling frame N. Rather than ping-pong
+		// the whole pipeline, we keep rendering into RENDER_OUT_RGBA_0 exactly as before and, now that the frame is
+		// fully finalized (AFTER the D2D overlay EndDraw above, so overlay text/lines are included), COPY it into
+		// one of 3 rotating SHARED_PRESENT_RGBA_{0,1,2} textures. The read side hands the app the SRV of the buffer
+		// just written; because we cycle 0->1->2->0..., that buffer is not overwritten for 2 more frames, giving
+		// the app's in-flight read enough slack to break the hazard without any cross-device sync primitive.
+		// Guarded by is_last_renderer so it runs exactly once per frame for the final composited source only (same
+		// scoping as the TAA resolve above). DX11.3-only: the DX11_0 / DX10_0 builds keep the original present path.
+		if (is_last_renderer)
+		{
+			const int present_idx = iobj->GetObjParam<int>("_int_PresentBufIdx", (int)0);
+			const std::string present_name = "SHARED_PRESENT_RGBA_" + std::to_string(present_idx);
+
+			// RENDER_TARGET bind is only requested so gpures_interface auto-adds D3D11_RESOURCE_MISC_SHARED
+			// (see gpures_interface.cpp: it flags any non-staging RENDER_TARGET texture as shareable); the buffer
+			// itself is used purely as CopyResource-dest + shared SRV source. Same width/height/format as
+			// RENDER_OUT_RGBA_0, so it is recreated by UpdateFrameBuffer on a framebuffer resize just like it.
+			GpuRes gres_present;
+			grd_helper::UpdateFrameBuffer(gres_present, iobj, present_name, RTYPE_TEXTURE2D,
+				D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+
+			g_psoManager.dx11DeviceImmContext->CopyResource(
+				(ID3D11Texture2D*)gres_present.alloc_res_ptrs[DTYPE_RES],
+				(ID3D11Texture2D*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RES]);
+
+			// Tell the read side (GetSharedShaderResView, which only has iobjId) which buffer holds this frame.
+			// res2d is keyed by iobjId in g_d2dResMap, so it is the read side's channel; also mirror onto the iobj
+			// param so the rotation counter persists across calls. Advance so the NEXT frame targets a new buffer.
+			res2d->presentReadIdx = present_idx;
+			iobj->SetObjParam("_int_PresentBufReadIdx", present_idx);
+			iobj->SetObjParam("_int_PresentBufIdx", (present_idx + 1) % 3);
+		}
+#endif
+
 		// https://learn.microsoft.com/en-us/windows/win32/direct2d/path-geometries-overview
 
 		/*
@@ -1033,24 +1093,110 @@ bool GetSharedShaderResView(const int iobjId, const void* dx11devPtr, void** sha
 		return false;
 	}
 
-	ID3D11Texture2D* rtTex2D = (ID3D11Texture2D*)gres_fb.alloc_res_ptrs[DTYPE_RES];
-
-	ID3D11ShaderResourceView** ppsharedSRV = NULL;
-	D2DRes* res2d = NULL;
-	auto it = g_d2dResMap.find(iobjId);
-	if (it == g_d2dResMap.end()) {
-		vmlog::LogErr("No GPU Rendering is called! (" + std::to_string(iobjId) + ")");
-		return false;
+	// Cross-device shared-surface barrier. The app samples RENDER_OUT_RGBA_0 through a shared SRV on its OWN
+	// D3D11 device, while the renderer wrote it (raster + DVR compute + TAA resolve) on a separate device. The
+	// legacy GetSharedHandle share carries no keyed mutex, so without a barrier the app can sample a frame the
+	// renderer GPU has not finished writing -> visible flicker. TAA amplifies it: it re-renders the static view
+	// every ImGui frame, so the read almost always races the write. Drain the renderer GPU up to this point (the
+	// read boundary, hit on both the cached and freshly-created SRV paths below) so the surface handed back is
+	// fully written. On an idle frame nothing is pending, so the event resolves almost immediately.
+	if (g_psoManager.dx11qr_fenceQuery)
+	{
+		g_psoManager.dx11DeviceImmContext->End(g_psoManager.dx11qr_fenceQuery);
+		g_psoManager.dx11DeviceImmContext->Flush(); // required: submit the event so GetData cannot spin forever
+		while (g_psoManager.dx11DeviceImmContext->GetData(g_psoManager.dx11qr_fenceQuery, NULL, 0, 0) == S_FALSE)
+			;
 	}
-	else {
-		res2d = &it->second;
 
-		auto it = res2d->mapDevSharedSRVs.find((void*)dx11devPtr);
-		if (it != res2d->mapDevSharedSRVs.end()) {
-			*sharedSRV = it->second;
+	D2DRes* res2d = NULL;
+	{
+		auto it = g_d2dResMap.find(iobjId);
+		if (it == g_d2dResMap.end()) {
+			vmlog::LogErr("No GPU Rendering is called! (" + std::to_string(iobjId) + ")");
+			return false;
+		}
+		res2d = &it->second;
+	}
+
+#ifdef DX11_3
+	// ---- Rotating-present read side (see the copy site in DoModule) ----
+	// Hand the app the SRV of the present buffer the renderer just finished writing (presentReadIdx), NOT
+	// RENDER_OUT_RGBA_0. Because the renderer cycles 0->1->2->0..., this buffer will not be overwritten for 2
+	// more frames, so the app device's in-flight sampling of it cannot race the renderer's next write -- the
+	// cross-device write-after-read hazard the producer fence above cannot cover. The present SRVs live on the
+	// APP device and the underlying present texture rotates every frame, so they are cached separately from the
+	// D2D render-target path (mapDevSharedSRVs / pTex2DRT, which stays pinned to RENDER_OUT_RGBA_0). Cache key
+	// is (app-device ptr) within the per-buffer map mapDevPresentSRVs[readIdx]; a slot is invalidated when its
+	// underlying present texture pointer changes (e.g. a framebuffer resize recreated it).
+	{
+		const int readIdx = res2d->presentReadIdx; // 0..2, set by the copy site after D2D EndDraw
+
+		GpuRes gres_present;
+		gres_present.vm_src_id = iobjId;
+		gres_present.res_name = "SHARED_PRESENT_RGBA_" + std::to_string(readIdx);
+		if (!g_pCGpuManager->UpdateGpuResource(gres_present)) {
+			vmlog::LogErr("No present buffer is assigned! (" + std::to_string(iobjId) + ")");
+			return false;
+		}
+		ID3D11Texture2D* presentTex2D = (ID3D11Texture2D*)gres_present.alloc_res_ptrs[DTYPE_RES];
+
+		// Invalidate this slot's cached app-device SRVs if the underlying present texture was recreated (resize).
+		if (res2d->pPresentTex[readIdx] != presentTex2D) {
+			for (auto& kv : res2d->mapDevPresentSRVs[readIdx]) {
+				VMSAFE_RELEASE(kv.second);
+			}
+			res2d->mapDevPresentSRVs[readIdx].clear();
+			res2d->pPresentTex[readIdx] = presentTex2D;
+		}
+
+		auto itSRV = res2d->mapDevPresentSRVs[readIdx].find((void*)dx11devPtr);
+		if (itSRV != res2d->mapDevPresentSRVs[readIdx].end()) {
+			*sharedSRV = itSRV->second;
 			return true;
 		}
 
+		IDXGIResource* pDXGIResource = NULL;
+		presentTex2D->QueryInterface(__uuidof(IDXGIResource), (LPVOID*)&pDXGIResource);
+		HANDLE sharedHandle = NULL;
+		pDXGIResource->GetSharedHandle(&sharedHandle);
+		pDXGIResource->Release();
+
+		if (sharedHandle == NULL) {
+			vmlog::LogErr("Not Allowed for Shared Present Resource! (" + std::to_string(iobjId) + ")");
+			return false;
+		}
+
+		ID3D11Device* pdx11AnotherDev = (ID3D11Device*)dx11devPtr;
+		ID3D11Texture2D* presentTexShared = NULL;
+		pdx11AnotherDev->OpenSharedResource(sharedHandle, __uuidof(ID3D11Texture2D), (LPVOID*)&presentTexShared);
+
+		D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
+		ZeroMemory(&srvDesc, sizeof(srvDesc));
+		srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+		srvDesc.Texture2D.MipLevels = 1;
+		srvDesc.Texture2D.MostDetailedMip = 0;
+
+		ID3D11ShaderResourceView** ppPresentSRV = &res2d->mapDevPresentSRVs[readIdx][(void*)dx11devPtr];
+		pdx11AnotherDev->CreateShaderResourceView(presentTexShared, &srvDesc, ppPresentSRV);
+		presentTexShared->Release();
+
+		*sharedSRV = *ppPresentSRV;
+		return true;
+	}
+#else
+	// ---- Legacy single-surface present path (DX11_0 / DX10_0 builds) ----
+	// These configs do not triple-buffer; hand the app the shared SRV of RENDER_OUT_RGBA_0 directly, exactly as
+	// before. Behavior is unchanged from prior to the triple-buffering change.
+	ID3D11Texture2D* rtTex2D = (ID3D11Texture2D*)gres_fb.alloc_res_ptrs[DTYPE_RES];
+
+	ID3D11ShaderResourceView** ppsharedSRV = NULL;
+	{
+		auto itSRV = res2d->mapDevSharedSRVs.find((void*)dx11devPtr);
+		if (itSRV != res2d->mapDevSharedSRVs.end()) {
+			*sharedSRV = itSRV->second;
+			return true;
+		}
 		ppsharedSRV = &res2d->mapDevSharedSRVs[(void*)dx11devPtr];
 	}
 
@@ -1089,6 +1235,7 @@ bool GetSharedShaderResView(const int iobjId, const void* dx11devPtr, void** sha
 
 	*sharedSRV = *ppsharedSRV;
 	return true;
+#endif
 }
 
 bool GetRendererDevice(
