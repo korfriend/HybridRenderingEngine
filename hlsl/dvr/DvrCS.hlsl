@@ -1394,10 +1394,26 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 					// of the grid shows up directly in the render. Grid == volume texture space.
 					if (VXGI_IS_ENABLED)
 					{
-						// grid box = volume box + margin shell: volume ts -> grid coord via the fit mapping
+						// grid box = volume box + margin shell: volume ts -> grid coord via the fit mapping.
+						// ONE fetch yields the whole per-voxel GI field: rgb = scattered radiance (in-scatter),
+						// a = baked obscurance — so BOTH terms apply PER SAMPLE (fully volumetric, no surface
+						// bias), and the lattice-aligned baking makes them free of surface-phase striping.
 						float3 sc_p = pos_sample_blk_ts * g_cbVxgi.vox_fit_scale + g_cbVxgi.vox_fit_offset;
-						float3 sc = vxgi_grid.SampleLevel(g_samplerLinear_clamp, sc_p, 1.0f).rgb;
-						vis_sample.rgb += sc * (VXGI_GI_INTENSITY * vis_otf.a);
+						float4 sc = vxgi_grid.SampleLevel(g_samplerLinear_clamp, sc_p, 1.0f);
+						// AO from a WIDER filter (lod 2.5): the obscurance ramp rises 0->1 within a few voxels
+						// of the surface, and multiplying such a steep per-sample factor re-exposes the DVR's
+						// classic sample-quantization (wood-grain) banding — the pre-integrated OTF machinery
+						// only covers the OTF's own steepness, not this external factor. The coarser mip
+						// flattens the ramp so the fixed-step march no longer quantizes it visibly.
+						float ao_s = vxgi_grid.SampleLevel(g_samplerLinear_clamp, sc_p, 2.5f).a;
+						// sqrt response: the density-based obscurance field is inherently soft/low-frequency
+						// compared to the retired surface cone AO (fine-scale cones + direct final-color
+						// multiply). The sqrt lifts mid values (flat 0.3->0.55, crevice 0.7->0.84) so the
+						// shading reads with comparable punch, without touching the phase-free field itself.
+						vis_sample.rgb *= 1.0f - saturate(sqrt(ao_s) * VXGI_AO_INTENSITY); // volumetric AO
+						// The radiance field is direct-scale by construction (damped-Jacobi bake in
+						// VXGI_Propagate), so it is consumed unscaled — no series-gain compensation here.
+						vis_sample.rgb += sc.rgb * (VXGI_GI_INTENSITY * vis_otf.a); // volumetric in-scatter
 					}
 					depth_sample = depth_hit + (float)(i + j) * sample_dist;
 #pragma region VR_MODE 2: context-aware

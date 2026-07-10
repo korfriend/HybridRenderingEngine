@@ -12,7 +12,7 @@
 // -----------------------------------------------------------------------------
 
 Texture3D grid_mat : register(t9);              // rgb = albedo, a = opacity (MIP CHAIN)
-RWTexture3D<float4> grid_direct : register(u0); // rgb = arriving direct light, a = opacity
+RWTexture3D<float4> grid_direct : register(u0); // rgb = arriving direct light, a = per-voxel obscurance
 
 [numthreads(8, 8, 8)]
 void VXGI_InjectLight(uint3 id : SV_DispatchThreadID)
@@ -63,5 +63,12 @@ void VXGI_InjectLight(uint3 id : SV_DispatchThreadID)
 	}
 	float T = 1.0f - occ; // transmittance: lit side ~1, deeply buried ~0
 
-	grid_direct[id] = float4(mat.rgb * g_cbEnv.ltint_diffuse.rgb * T, mat.a);
+	// alpha = per-voxel OBSCURANCE (shared VXGI_Obscurance — this seeds the radiance grid's alpha at
+	// bounce 0 via the DIRECT->grid copy, so per-sample AO is valid before the first diffusion step).
+	float d1 = grid_mat.SampleLevel(g_samplerLinear_clamp, uv, 1).a;
+	float d2 = grid_mat.SampleLevel(g_samplerLinear_clamp, uv, 2).a;
+	float d3 = grid_mat.SampleLevel(g_samplerLinear_clamp, uv, 3).a;
+	float obscurance = VXGI_Obscurance(d1, d2, d3);
+
+	grid_direct[id] = float4(mat.rgb * g_cbEnv.ltint_diffuse.rgb * T, obscurance);
 }

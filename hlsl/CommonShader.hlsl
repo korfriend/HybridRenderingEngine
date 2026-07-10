@@ -423,6 +423,37 @@ cbuffer cbGlobalParams : register(b13)
 #define VXGI_AO_INTENSITY     f16tof32(g_cbVxgi.gi_ao_intensity >> 16)
 #define VXGI_INDIRECT_INTENSITY f16tof32(g_cbVxgi.indirect_aperture & 0xFFFFu)
 #define VXGI_CONE_APERTURE    f16tof32(g_cbVxgi.indirect_aperture >> 16)
+// Diffusion in-scatter gain per iteration (VXGI_Propagate) — SHARED because consumers must normalize by
+// the converged geometric-series gain: in a uniform medium radiance converges to direct/(1-K) (~6.7x at
+// 0.85), so display-side reads multiply by (1-K) to bring the field back to direct-light scale.
+#define VXGI_SCATTER_K 0.85f
+// ---------------------------------------------------------------------------------------------------
+// VXGI AO history — how obscurance/AO was computed in previous versions, and why it is THIS way now:
+//  * v1..v3 (RETIRED): a screen-space gather pass (hlsl/vxgi/Gather.hlsl, now debug-only) reconstructed
+//    the DVR first-hit surface point from the depth buffer and cone-traced a 6-cone hemisphere through
+//    the grid opacity; AO = the cones' front-to-back occlusion. Punchy contact shading, BUT sampling the
+//    grid at ARBITRARY surface points is inherently sensitive to the surface-vs-lattice sub-voxel phase:
+//    the trilinear opacity field of the thin surface band forms a maze-like interference pattern that
+//    printed voxel-period dark stripes into the AO — at EVERY mip (the pattern just scales), so all
+//    sampling-side mitigation failed (axial start jitter, constant-height per-cone offsets, LOD floors).
+//    True-coverage voxelization (avg(OTF(s_i)) per sub-sample) smoothed the FIELD, yet the stripes
+//    survived through the reconstructed-position/normal inputs of the surface evaluation itself.
+//  * v4 (CURRENT): AO became a per-voxel FIELD like everything else in the volumetric pipeline — this
+//    function is baked by InjectLight/Propagate at VOXEL CENTERS (lattice-aligned evaluation has no
+//    surface phase by construction) into the radiance grid's alpha, and the DVR march consumes it PER
+//    SAMPLE with one wide-filter fetch (lod 2.5, avoiding per-sample wood-grain) shaped by a sqrt
+//    response in DvrCS (the density measure is inherently softer than the old fine-scale cone AO).
+//    Remap evolution: initially (davg-0.5)*2 (flat surface = exactly 0) — read far weaker than the old
+//    cone AO, which gave flat surfaces a ~0.3-0.5 base from grazing side cones; now pivot 0.3 / slope
+//    1.5 so a flat open surface (half-space density ~0.5) reads ~0.3 base AO, crevices/undercuts push
+//    toward 1, and exposed ridges fall to ~0.
+// ONE shared definition — InjectLight and Propagate must bake identical values.
+// ---------------------------------------------------------------------------------------------------
+float VXGI_Obscurance(const in float d1, const in float d2, const in float d3)
+{
+	float davg = 0.5f * d1 + 0.3f * d2 + 0.2f * d3;
+	return saturate((davg - 0.3f) * 1.5f);
+}
 
 //=====================
 // Helpers

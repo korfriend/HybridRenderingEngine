@@ -1304,13 +1304,22 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 				SET_SHADER_RES(9, 1, dx11SRVs_NULL);
 
-				// 3) Seed the radiance grid with the DIRECT field (bounce 0) and build its mips.
-				dx11DeviceImmContext->CopySubresourceRegion(
-					(ID3D11Resource*)gres_vxgi.alloc_res_ptrs[DTYPE_RES], 0, 0, 0, 0,
-					(ID3D11Resource*)gres_vxgi_direct.alloc_res_ptrs[DTYPE_RES], 0, NULL);
-				dx11DeviceImmContext->GenerateMips(vxgi_grid_srv);
+				// 3) Seed the radiance grid ONLY on the very first build (uninitialized grid). On later content
+				// changes (light/OTF/volume edits) the old field is kept and the per-frame VXGI_Propagate —
+				// whose damped form r' = (1-K)*direct_new + K*gather(prev field) IS a temporal blend — cross-
+				// fades it into the new state over the bounce iterations. This is the Wicked-Engine-style
+				// temporal stabilization (grid lerped against the previous frame, BLEND_SPEED there) adapted
+				// to our content-gated pipeline: no hard visual reset while dragging the light or an OTF.
+				const bool vxgi_first_build = (vxgi_prev_stamp == (uint64_t)~0ull);
+				if (vxgi_first_build)
+				{
+					dx11DeviceImmContext->CopySubresourceRegion(
+						(ID3D11Resource*)gres_vxgi.alloc_res_ptrs[DTYPE_RES], 0, 0, 0, 0,
+						(ID3D11Resource*)gres_vxgi_direct.alloc_res_ptrs[DTYPE_RES], 0, NULL);
+					dx11DeviceImmContext->GenerateMips(vxgi_grid_srv);
+				}
 
-				vxgi_bounce = 0; // diffusion restarts
+				vxgi_bounce = 0; // diffusion restarts (from the blended old field, not from scratch)
 				iobj->SetObjParam("_uint64_VxgiStamp", vxgi_content_stamp);
 			}
 			else if (vxgi_bounce < VXGI_BOUNCE_TARGET
@@ -1840,16 +1849,14 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #ifdef DX10_0
 #else
 	// ----- VXGI v1 screen-space gather: DISABLED (superseded by v2 per-sample volumetric in-scatter) -----
-	// In v2 the DVR RayCasting march samples the voxel grid at t8 and adds in-scattered radiance per sample,
-	// so this screen-space post-pass over RENDER_OUT_RGBA_0 is no longer used. Gated off with `if (false)`;
-	// the body is kept for reference. The grid alloc / voxelize / inject (moved BEFORE RayCasting) stay active.
-	// v3: this pass is BOTH the debug viz (modes 1..9 short-circuit inside the shader) AND the surface
-	// GI modulation: screen-space cone-traced AO + indirect on the DVR first-hit, layered on top of the
-	// volumetric in-scatter that the RayCasting march already added. korfriend's A/B (a leaked debug flag
-	// accidentally enabled this pass) showed the combination reads far better than in-scatter alone —
-	// the surface AO supplies the directional shading (음영) the pure volumetric term lacks.
-	// Skip the dispatch entirely when it would be a no-op: no debug view AND both surface terms at 0.
-	if (vxgi_on && vxgi_ready && ((vxgi_debug & 0xFF) != 0 || vxgi_ao_intensity > 0.f || vxgi_indirect_intensity > 0.f))
+	// v4: DEBUG-ONLY pass. The surface AO/indirect modulation this pass used to apply is retired — sampling
+	// the grid at arbitrary reconstructed surface points is inherently surface-vs-lattice phase-sensitive
+	// (the stripe artifacts, at every mip), and its position/normal came from a depth-reconstruction
+	// roundtrip. Both GI terms are now PER-SAMPLE inside the DVR march (fully volumetric): the radiance
+	// grid's alpha carries a per-voxel obscurance baked lattice-aligned by InjectLight/Propagate, and the
+	// march's single grid fetch applies AO + in-scatter together. This dispatch remains only for the debug
+	// visualizations (modes 1..9 short-circuit inside the shader).
+	if (vxgi_on && vxgi_ready && (vxgi_debug & 0xFF) != 0)
 	{
 		// The trailing SSAO path can leave gres_fb_rgba bound at UAV u2; release the DVR UAV slots first so
 		// binding it at u1 below does not alias (a resource may occupy only one UAV slot at a time).
