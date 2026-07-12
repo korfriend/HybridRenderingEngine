@@ -293,6 +293,12 @@
     <FxCompile Include="hlsl\vxgi\Propagate.hlsl">
       <Filter>hlsl source code\vxgi</Filter>
     </FxCompile>
+    <FxCompile Include="hlsl\vxgi\BlurObscurance.hlsl">
+      <Filter>hlsl source code\vxgi</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\vxgi\SurfaceGather.hlsl">
+      <Filter>hlsl source code\vxgi</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <Text Include="DeprecatedShaders.txt">

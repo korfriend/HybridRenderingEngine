@@ -640,7 +640,7 @@ namespace grd_helper
 		vmmat44f mat_ws2vox;         // world -> voxel [0,1] space (= volume mat_ws2ts)
 
 		uint32_t grid_res;           // cubic grid resolution (voxels per axis)
-		uint32_t vxgi_flag;          // [0:7] flags (bit0 = enabled) | [8:23] num_cones | [24:27] debug mode | [28:31] debug mip
+		uint32_t vxgi_flag;          // [0:7] flags (bit0=enabled, bit1=otf-mask, bit2=sculpt-mask, bit3=sculpt-bits, bit4=preserve-AO light-only inject — set by VolumeRenderer, not SetCb_VXGI) | [8:23] num_cones | [24:27] debug mode | [28:31] debug mip
 		uint32_t gi_ao_intensity;    // half(gi_intensity = volumetric in-scatter) | half(ao_intensity = surface AO) << 16
 		uint32_t indirect_aperture;  // half(indirect_intensity = surface bounce) | half(cone_aperture) << 16
 
@@ -650,7 +650,20 @@ namespace grd_helper
 		// edge. volume tex coord -> grid coord: vox = ts * vox_fit_scale + vox_fit_offset (uniform).
 		float    vox_fit_scale;
 		float    vox_fit_offset;
-		float    vxgi_dummy3;
+		uint32_t ao_pivot_slope;     // half(ao remap pivot, def 0.3) | half(ao remap slope, def 1.5) << 16
+
+		// World metric of the grid (grid axes = volume axes, so the box is generally anisotropic in WS).
+		// grid_axis_ws = world length of each full [0,1] grid axis (volume bbox edge incl. margin);
+		// world length of a unit grid-space step along direction L = length(L * grid_axis_ws).
+		vmfloat3 grid_axis_ws;
+		float    voxel_ref_ws;       // one voxel's reference world thickness (mean axis / res): coverage alpha -> optical-depth scale
+
+		vmmat44f mat_vox2ws;         // voxel [0,1] -> world (clip tests in Voxelize; inverse of mat_ws2vox)
+
+		float    scatter_gain;       // diffusion in-scatter gain per iteration (HLSL VXGI_SCATTER_GAIN)
+		float    surface_gi_gain;    // Part C surface cone indirect strength (HLSL VXGI_SURFACE_GI_GAIN; clamped [0, 0.95])
+		float    surface_cone_ao_gain; // Part C surface cone AO blend strength (HLSL VXGI_SURFACE_CONE_AO_GAIN; 0 = density AO only)
+		float    vxgi_dummy4;
 
 		ZERO_SET(CB_VXGI)
 	};
@@ -1016,7 +1029,9 @@ namespace grd_helper
 	// Fill the VXGI constant buffer (register b13). mat_ws2vox_raw = world->voxel[0,1] (volume mat_ws2ts for v1).
 	// gi/ao/indirect intensities gate the three effects individually (0 = off); they are half-packed into the
 	// CB. debug_byte = (mode & 0xF) | (mip & 0xF) << 4, packed into vxgi_flag's top byte.
-	void SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const uint32_t resolution, const float gi_intensity, const float ao_intensity, const bool enabled, const float indirect_intensity = 1.f, const uint32_t debug_byte = 0);
+	// medium_flags: visibility parity with the DVR mode (bit0=multi-OTF, bit1=sculpt-mask, bit2=sculpt-bits)
+	// — packed into vxgi_flag bits [1:3]; the Voxelize shader gates its per-sub-sample tests on them.
+	void SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const uint32_t resolution, const float gi_intensity, const float ao_intensity, const bool enabled, const float indirect_intensity = 1.f, const uint32_t debug_byte = 0, const uint32_t medium_flags = 0, const float ao_pivot = 0.3f, const float ao_slope = 1.5f, const float scatter_gain = 0.5f, const float surface_gi_gain = 0.95f, const float surface_cone_ao_gain = 1.f);
 	// each object
 	void SetCb_TMap(CB_TMAP& cb_tmap, VmObject* tobj);
 	//bool SetCbVrShadowMap(CB_VrShadowMap* pCBVrShadowMap, CB_VrCameraState* pCBVrCamStateForShadowMap, vmfloat3 f3PosOverviewBoxMinWS, vmfloat3 f3PosOverviewBoxMaxWS, map<string, void*>* pmapCustomParameter);

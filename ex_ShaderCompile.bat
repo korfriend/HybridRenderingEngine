@@ -1,2 +1,8 @@
-fxc /E ThickSlicePathTracer /T cs_5_0 ./hlsl/RayProcessing.hlsl /Fo ./shader_compiled_objs/ThickSlicePathTracer_GPUBVH_cs_5_0 /D FRAG_MERGING=1 /D CURVEDPLANE=0 /D PATHTR_USE_KBUF=1 /D USE_ROV=0 /D TAIL_HANDLING=1 /D DO_NOT_USE_DISCARD=1
-fxc /E Outline2D /T cs_5_0 ./hlsl/RayProcessing.hlsl /Fo ./shader_compiled_objs/SliceOutline_cs_5_0 /D PATHTR_USE_KBUF=1 /D FRAG_MERGING=1 /D DO_NOT_USE_DISCARD=1 /D USE_ROV=0 /D TAIL_HANDLING=1
+
+fxc /E VXGI_VoxelizeVolume /T cs_5_0 ./hlsl/vxgi/Voxelize.hlsl /Fo ./shader_compiled_objs/VXGI_VoxelizeVolume_cs_5_0
+fxc /E VXGI_InjectLight /T cs_5_0 ./hlsl/vxgi/InjectLight.hlsl /Fo ./shader_compiled_objs/VXGI_InjectLight_cs_5_0
+fxc /E VXGI_Gather /T cs_5_0 ./hlsl/vxgi/Gather.hlsl /Fo ./shader_compiled_objs/VXGI_Gather_cs_5_0
+fxc /E VXGI_Propagate /T cs_5_0 ./hlsl/vxgi/Propagate.hlsl /Fo ./shader_compiled_objs/VXGI_Propagate_cs_5_0
+fxc /E VXGI_BlurObscuranceX /T cs_5_0 ./hlsl/vxgi/BlurObscurance.hlsl /Fo ./shader_compiled_objs/VXGI_BlurObscuranceX_cs_5_0
+fxc /E VXGI_BlurObscuranceY /T cs_5_0 ./hlsl/vxgi/BlurObscurance.hlsl /Fo ./shader_compiled_objs/VXGI_BlurObscuranceY_cs_5_0
+fxc /E VXGI_BlurObscuranceZ /T cs_5_0 ./hlsl/vxgi/BlurObscurance.hlsl /Fo ./shader_compiled_objs/VXGI_BlurObscuranceZ_cs_5_0

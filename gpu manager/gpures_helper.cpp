@@ -891,6 +891,10 @@ int grd_helper::Initialize(VmGpuManager* pCGpuManager, PSOManager* gpu_params)
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52001), "VXGI_InjectLight_cs_5_0", "cs_5_0"), VXGI_InjectLight_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52002), "VXGI_Gather_cs_5_0", "cs_5_0"), VXGI_Gather_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52003), "VXGI_Propagate_cs_5_0", "cs_5_0"), VXGI_Propagate_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52004), "VXGI_BlurObscuranceX_cs_5_0", "cs_5_0"), VXGI_BlurObscuranceX_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52005), "VXGI_BlurObscuranceY_cs_5_0", "cs_5_0"), VXGI_BlurObscuranceY_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52006), "VXGI_BlurObscuranceZ_cs_5_0", "cs_5_0"), VXGI_BlurObscuranceZ_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52007), "VXGI_SurfaceGather_cs_5_0", "cs_5_0"), VXGI_SurfaceGather_cs_5_0);
 
 #endif
 	}
@@ -2344,13 +2348,23 @@ bool grd_helper::UpdateVoxelGrid(GpuRes& gres, VmObject* srcObj, const string& r
 	// GPU-writable cubic 3D grid for VXGI (voxel radiance/opacity). USAGE_DEFAULT + UAV|SRV so compute passes
 	// write it and shading trilinear-samples it. Keyed on srcObj + res_name -> persists across frames.
 	// with_mips: full auto-gen mip chain for cone-trace LOD — the UAV stays on mip 0; write mip 0 then call
-	// GenerateMips on the SRV (needs the RENDER_TARGET bind). Resolution is assumed stable for the session
-	// (like UpdateFrameBuffer, an existing resource is reused as-is).
+	// GenerateMips on the SRV (needs the RENDER_TARGET bind).
 	gres.vm_src_id = srcObj->GetObjectID();
 	gres.res_name = res_name;
 
 	if (g_pCGpuManager->UpdateGpuResource(gres))
-		return true;
+	{
+		// _int_VxgiResolution is a LIVE api parameter: a reused grid must actually match the requested
+		// size/format, or the CB (grid_res) and dispatch run at the new R against an old-R texture —
+		// out-of-range UAV writes are silently dropped and Loads return 0, corrupting the field with no
+		// error. On mismatch, release and fall through to regenerate (the content stamp includes R, so
+		// the caller re-voxelizes into the fresh grid the same frame).
+		const uint32_t prevW = gres.res_values.GetParam("WIDTH", (uint32_t)0);
+		const uint32_t prevFmt = (uint32_t)gres.options["FORMAT"];
+		if (prevW == resolution && prevFmt == dx_format)
+			return true;
+		g_pCGpuManager->ReleaseGpuResource(gres, false);
+	}
 
 	gres.rtype = RTYPE_TEXTURE3D;
 	gres.options["USAGE"] = D3D11_USAGE_DEFAULT;
@@ -2727,7 +2741,7 @@ void grd_helper::SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, 
 	cb_cam.far_plane = (float)fp;
 }
 
-void grd_helper::SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const uint32_t resolution, const float gi_intensity, const float ao_intensity, const bool enabled, const float indirect_intensity, const uint32_t debug_byte)
+void grd_helper::SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const uint32_t resolution, const float gi_intensity, const float ao_intensity, const bool enabled, const float indirect_intensity, const uint32_t debug_byte, const uint32_t medium_flags, const float ao_pivot, const float ao_slope, const float scatter_gain, const float surface_gi_gain, const float surface_cone_ao_gain)
 {
 	// mat_ws2vox_raw maps world -> voxel [0,1]. For v1 the caller passes the volume's world->texture matrix
 	// (grd_helper::SetCb_VolumeObj mat_ws2ts), so the grid aligns with the volume box. Stored transposed for
@@ -2755,6 +2769,7 @@ void grd_helper::SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const u
 	cb.mat_ws2vox = TRANSPOSE(mat_ws2vox);
 	cb.grid_res = resolution;
 	cb.vxgi_flag = (enabled ? 0x1u : 0x0u)             // [0:7]  flags
+		| ((medium_flags & 0x7u) << 1)                 //        bit1..3: otf-mask / sculpt-mask / sculpt-bits (DVR visibility parity)
 		| ((num_cones & 0xFFFFu) << 8)                 // [8:23] cone count
 		| ((debug_byte & 0xFFu) << 24);                // [24:31] debug: mode(4b) | mip(4b)
 	cb.gi_ao_intensity = (uint32_t)XMConvertFloatToHalf(gi_intensity)
@@ -2764,7 +2779,35 @@ void grd_helper::SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const u
 	cb.max_trace_dist = 1.0f;              // full grid extent in [0,1] voxel space
 	cb.vox_fit_scale = fit_s;              // volume ts -> grid coord (used by Voxelize / DvrCS in-scatter)
 	cb.vox_fit_offset = fit_o;
-	cb.vxgi_dummy3 = 0.f;
+	cb.ao_pivot_slope = (uint32_t)XMConvertFloatToHalf(ao_pivot)
+		| ((uint32_t)XMConvertFloatToHalf(ao_slope) << 16); // VXGI_Obscurance remap knobs
+
+	// World metric of the grid box, for world-length optical-depth integration in the shaders
+	// (grid-space step -> world distance). The grid axes are the volume axes, so the box is
+	// generally anisotropic in WS; each axis' world length = the vox->ws image of that unit axis.
+	vmmat44f mat_vox2ws;
+	vmmath::fMatrixInverse(&mat_vox2ws, &mat_ws2vox);
+	vmfloat3 axis_x_ws, axis_y_ws, axis_z_ws;
+	vmmath::fTransformVector(&axis_x_ws, &vmfloat3(1.f, 0, 0), &mat_vox2ws);
+	vmmath::fTransformVector(&axis_y_ws, &vmfloat3(0, 1.f, 0), &mat_vox2ws);
+	vmmath::fTransformVector(&axis_z_ws, &vmfloat3(0, 0, 1.f), &mat_vox2ws);
+	cb.grid_axis_ws = vmfloat3(vmmath::fLengthVector(&axis_x_ws),
+		vmmath::fLengthVector(&axis_y_ws), vmmath::fLengthVector(&axis_z_ws));
+	cb.voxel_ref_ws = (cb.grid_axis_ws.x + cb.grid_axis_ws.y + cb.grid_axis_ws.z)
+		/ (3.f * (float)(resolution > 0 ? resolution : 128));
+	cb.mat_vox2ws = TRANSPOSE(mat_vox2ws); // Voxelize clip tests: grid coord -> WS for IsInsideClipBound
+	// diffusion gain MUST stay < 1 (contraction) — clamp hard so a bad app value cannot blow the field up
+	cb.scatter_gain = max(0.05f, min(0.95f, scatter_gain));
+	// Part C surface cone gains (VXGI v5). The Propagate composite pre-multiplies the surface term by
+	// (1-scatter_gain), which exactly cancels the propagate resolvent's 1/(1-gain) amplification — so
+	// the surface<->surface checkpoint feedback's loop gain is surface_gi_gain * albedo * cone
+	// visibility. raw 1.0 is only NEUTRALLY stable at the albedo=1 / full-transmission limit; 0.95
+	// guarantees strict contraction (plan §4.4). Same clamp site/style as scatter_gain above. A >0.95
+	// artistic (non-convergent) mode, if ever wanted, must be a SEPARATE flag relying on the finite
+	// checkpoint count — do not widen this clamp.
+	cb.surface_gi_gain = max(0.f, min(0.95f, surface_gi_gain));
+	cb.surface_cone_ao_gain = max(0.f, surface_cone_ao_gain); // shader saturates the blended product
+	cb.vxgi_dummy4 = 0;
 }
 
 void grd_helper::SetCb_Env(CB_EnvState& cb_env, VmCObject* ccobj, const LightSource& light_src, const GlobalLighting& global_lighting, const LensEffect& lens_effect)
@@ -3126,8 +3169,8 @@ void grd_helper::SetCb_VolumeRenderingEffect(CB_VolumeMaterial& cb_vreffect, VmV
 	cb_vreffect.occ_sample_dist_scale = actor->GetParam("_float_OccSampleDistScale", 1.f);
 	cb_vreffect.sdm_sample_dist_scale = actor->GetParam("_float_SdmSampleDistScale", 1.f);
 
-	bool jitteringSample = actor->GetParam("_bool_JitteringSample", false);
-	cb_vreffect.flag = (int)jitteringSample;
+	bool jitteringSample = actor->GetParam("_bool_JitteringSample", true);
+	cb_vreffect.flag |= (int)jitteringSample;
 }
 
 void grd_helper::SetCb_ClipInfo(CB_ClipInfo& cb_clip, VmVObject* obj, VmActor* actor, const int camClipMode, const std::set<int> camClipperFreeActor,

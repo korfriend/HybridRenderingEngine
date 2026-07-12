@@ -116,7 +116,7 @@ struct HxCB_VXGI
 	float4x4 mat_ws2vox;     // world -> voxel [0,1] space
 
 	uint  grid_res;
-	uint  vxgi_flag;         // [0:7] flags (bit0 = enabled) | [8:23] num_cones | [24:27] debug mode | [28:31] debug mip
+	uint  vxgi_flag;         // [0:7] flags (bit0=enabled, bit1=otf-mask, bit2=sculpt-mask, bit3=sculpt-bits, bit4=preserve-AO light-only inject) | [8:23] num_cones | [24:27] debug mode | [28:31] debug mip
 	uint  gi_ao_intensity;   // half(gi = volumetric in-scatter) | half(ao = surface AO) << 16
 	uint  indirect_aperture; // half(indirect = surface bounce) | half(cone_aperture) << 16
 
@@ -125,7 +125,19 @@ struct HxCB_VXGI
 	// volume tex coord -> grid coord: vox = ts * vox_fit_scale + vox_fit_offset (uniform axes).
 	float vox_fit_scale;
 	float vox_fit_offset;
-	float vxgi_dummy3;
+	uint ao_pivot_slope; // half(ao remap pivot, def 0.3) | half(ao remap slope, def 1.5) << 16
+
+	// world metric: grid axes = volume axes (box generally anisotropic in WS).
+	// world length of a unit grid-space step along direction L = length(L * grid_axis_ws).
+	float3 grid_axis_ws; // world length of each full [0,1] grid axis (volume bbox edge incl. margin)
+	float voxel_ref_ws;  // one voxel's reference world thickness: coverage alpha -> optical-depth scale
+
+	float4x4 mat_vox2ws; // voxel [0,1] -> world (clip tests in Voxelize; inverse of mat_ws2vox)
+
+	float scatter_gain;       // diffusion in-scatter gain per iteration (runtime knob; read via VXGI_SCATTER_GAIN)
+	float surface_gi_gain;    // Part C: surface cone indirect strength (read via VXGI_SURFACE_GI_GAIN)
+	float surface_cone_ao_gain; // Part C: surface cone AO blend strength (read via VXGI_SURFACE_CONE_AO_GAIN)
+	float vxgi_dummy4;
 };
 
 struct HxCB_ClipInfo
@@ -416,6 +428,13 @@ cbuffer cbGlobalParams : register(b13)
 }
 // HxCB_VXGI decode helpers (see the packed layout in the struct above)
 #define VXGI_IS_ENABLED       ((g_cbVxgi.vxgi_flag & 0x1u) != 0)
+// medium-visibility parity flags (mirror the DVR's mode selection; set by SetCb_VXGI medium_flags)
+#define VXGI_MEDIUM_OTF_MASK    ((g_cbVxgi.vxgi_flag & 0x2u) != 0) // per-mask OTF row (t2 mask id)
+#define VXGI_MEDIUM_SCULPT_MASK ((g_cbVxgi.vxgi_flag & 0x4u) != 0) // mask-value sculpt hiding (t2)
+#define VXGI_MEDIUM_SCULPT_BITS ((g_cbVxgi.vxgi_flag & 0x8u) != 0) // packed sculpt-bit hiding (t7)
+// LIGHT-ONLY rebuild (split stamps): InjectLight re-emits the baked DIRECT alpha (t11 = prev DIRECT
+// copy) instead of recomputing the material-only cubic obscurance
+#define VXGI_PRESERVE_AO        ((g_cbVxgi.vxgi_flag & 0x10u) != 0)
 #define VXGI_NUM_CONES        ((g_cbVxgi.vxgi_flag >> 8) & 0xFFFFu)
 #define VXGI_DEBUG_MODE       ((g_cbVxgi.vxgi_flag >> 24) & 0xFu)
 #define VXGI_DEBUG_MIP        ((g_cbVxgi.vxgi_flag >> 28) & 0xFu)
@@ -423,10 +442,30 @@ cbuffer cbGlobalParams : register(b13)
 #define VXGI_AO_INTENSITY     f16tof32(g_cbVxgi.gi_ao_intensity >> 16)
 #define VXGI_INDIRECT_INTENSITY f16tof32(g_cbVxgi.indirect_aperture & 0xFFFFu)
 #define VXGI_CONE_APERTURE    f16tof32(g_cbVxgi.indirect_aperture >> 16)
-// Diffusion in-scatter gain per iteration (VXGI_Propagate) — SHARED because consumers must normalize by
-// the converged geometric-series gain: in a uniform medium radiance converges to direct/(1-K) (~6.7x at
-// 0.85), so display-side reads multiply by (1-K) to bring the field back to direct-light scale.
-#define VXGI_SCATTER_K 0.85f
+#define VXGI_AO_PIVOT         f16tof32(g_cbVxgi.ao_pivot_slope & 0xFFFFu)
+#define VXGI_AO_SLOPE         f16tof32(g_cbVxgi.ao_pivot_slope >> 16)
+// Diffusion in-scatter gain per iteration (VXGI_Propagate): r' = direct + GAIN*albedo*gather.
+// direct is preserved exactly everywhere (isolated/thin voxels converge to 1.0*direct, not a damped
+// fraction), and the multiple-scatter series is bounded by direct/(1-GAIN) (2x at 0.5) in dense
+// interiors. The DVR in-scatter consumption normalizes UNIFORMLY by (1-GAIN) — a display-side scale
+// that restores slider headroom without distorting the thin:interior ratio (the field itself keeps
+// direct preserved everywhere; contrast the retired field-side damping). MUST stay < 1: the gather is
+// a weighted neighbour average (gain <= 1), so GAIN < 1 makes the iteration a contraction.
+// RUNTIME knob since v4.7 (dev channel _float_VxgiScatterGain, def 0.5, CPU-clamped to [0.05, 0.95]):
+// higher gain = deeper light creep but slower convergence (error ~ gain^n) — raise the bounce-target
+// knob together. Brightness self-normalizes: the DVR consumption and the debug views all scale by
+// (1-GAIN) from this same CB value.
+#define VXGI_SCATTER_GAIN (g_cbVxgi.scatter_gain)
+// Part C (surface cone indirect, VXGI v5) composite gains — consumed by VXGI_Propagate:
+//   r' = direct + SURFACE_GI_GAIN*(1-SCATTER_GAIN)*surf.rgb + SCATTER_GAIN*albedo*gather
+// The (1-SCATTER_GAIN) normalization cancels the propagate resolvent's 1/(1-GAIN) amplification, so
+// the surface<->surface checkpoint feedback keeps loop gain = raw_gain * albedo * cone_visibility.
+// SURFACE_GI_GAIN is CPU-clamped to [0, 0.95] (raw 1.0 is only NEUTRALLY stable at the albedo=1 /
+// full-transmission limit — 0.95 guarantees strict contraction; see plan §4.4). 0 disables the term.
+// SURFACE_CONE_AO_GAIN screen-blends the surface cone occlusion (grid_surf.a) into the density
+// obscurance: obsc' = 1 - (1-obsc_density)*(1-saturate(GAIN*surf.a)); 0 = density AO only (v4 exact).
+#define VXGI_SURFACE_GI_GAIN      (g_cbVxgi.surface_gi_gain)
+#define VXGI_SURFACE_CONE_AO_GAIN (g_cbVxgi.surface_cone_ao_gain)
 // ---------------------------------------------------------------------------------------------------
 // VXGI AO history — how obscurance/AO was computed in previous versions, and why it is THIS way now:
 //  * v1..v3 (RETIRED): a screen-space gather pass (hlsl/vxgi/Gather.hlsl, now debug-only) reconstructed
@@ -447,12 +486,79 @@ cbuffer cbGlobalParams : register(b13)
 //    cone AO, which gave flat surfaces a ~0.3-0.5 base from grazing side cones; now pivot 0.3 / slope
 //    1.5 so a flat open surface (half-space density ~0.5) reads ~0.3 base AO, crevices/undercuts push
 //    toward 1, and exposed ridges fall to ~0.
+//  * v4.6: the density taps moved from mips 1/2/3 to 2/3/4 AND became cubic-B-spline sampled
+//    (VXGI_SampleDensityCubic). Contour-line banding (debug mode 1/9) had TWO layers: the mip-1 tap
+//    carried the surface's sub-texel phase (widening helped), but the deeper cause was trilinear
+//    reconstruction itself — C0 only, slope jumps at every mip-texel boundary read as Mach bands at
+//    the texel period, and changing mips merely rescales them (radiance never showed this because
+//    the diffusion keeps smoothing it). C2 B-spline reconstruction removes the bands at the source;
+//    the flat-surface baseline (~0.5) is scale-invariant so the remap held throughout.
+//    The grid alpha is also stored PREMULTIPLIED by coverage since v4.5 (see InjectLight) so that mip
+//    filtering stays a coverage-weighted average — consumers divide by the same-lod MAT coverage.
 // ONE shared definition — InjectLight and Propagate must bake identical values.
 // ---------------------------------------------------------------------------------------------------
 float VXGI_Obscurance(const in float d1, const in float d2, const in float d3)
 {
+	// pivot/slope come from the CB (defaults 0.3/1.5; dev knobs _float_VxgiAoPivot/_float_VxgiAoSlope
+	// via vzm::SetRenderTestParam) — the cubic B-spline taps spread thin-shell density more than the
+	// old trilinear ones, so per-dataset retuning must not require a shader edit.
 	float davg = 0.5f * d1 + 0.3f * d2 + 0.2f * d3;
-	return saturate((davg - 0.3f) * 1.5f);
+	return saturate((davg - VXGI_AO_PIVOT) * VXGI_AO_SLOPE);
+}
+
+// Cubic B-spline sampling of one mip level's alpha via 8 trilinear fetches (Sigg & Hadwiger).
+// WHY: trilinear reconstruction is only C0 — its SLOPE jumps at every texel boundary, and on a
+// slowly-varying density ramp those slope jumps read as contour-line (Mach) bands with the sampled
+// mip's texel period. Changing the mip only rescales the pattern (the v4.6 mip widening made the
+// bands wider, not gone). The B-spline kernel is C2-smooth — it approximates rather than
+// interpolates, and that extra smoothing is exactly right for a density MEASURE — which strongly
+// REDUCES the band amplitude at its source (not fully eliminates: the baked field still passes
+// through mip-gen + trilinear consumption, which are C0). `res` = texel count of `lod`.
+float VXGI_SampleDensityCubic(Texture3D tex, const in float3 uv, const in float lod, const in float res)
+{
+	float3 tc = uv * res - 0.5f;
+	float3 ic = floor(tc);
+	float3 f = tc - ic;
+	float3 f2 = f * f;
+	float3 f3 = f2 * f;
+	float3 w0 = (1.0f / 6.0f) * (-f3 + 3.0f * f2 - 3.0f * f + 1.0f);
+	float3 w1 = (1.0f / 6.0f) * (3.0f * f3 - 6.0f * f2 + 4.0f);
+	float3 w2 = (1.0f / 6.0f) * (-3.0f * f3 + 3.0f * f2 + 3.0f * f + 1.0f);
+	float3 w3 = (1.0f / 6.0f) * f3;
+	float3 g0 = w0 + w1; // per-axis pair weights (g0 + g1 = 1, g0 in [1/6, 5/6] -> division is safe)
+	float3 g1 = w2 + w3;
+	float3 p0 = (ic - 0.5f + w1 / g0) / res; // fetch between texels ic-1 and ic
+	float3 p1 = (ic + 1.5f + w3 / g1) / res; // fetch between texels ic+1 and ic+2
+	float vx00 = g0.x * tex.SampleLevel(g_samplerLinear_clamp, float3(p0.x, p0.y, p0.z), lod).a
+	           + g1.x * tex.SampleLevel(g_samplerLinear_clamp, float3(p1.x, p0.y, p0.z), lod).a;
+	float vx10 = g0.x * tex.SampleLevel(g_samplerLinear_clamp, float3(p0.x, p1.y, p0.z), lod).a
+	           + g1.x * tex.SampleLevel(g_samplerLinear_clamp, float3(p1.x, p1.y, p0.z), lod).a;
+	float vx01 = g0.x * tex.SampleLevel(g_samplerLinear_clamp, float3(p0.x, p0.y, p1.z), lod).a
+	           + g1.x * tex.SampleLevel(g_samplerLinear_clamp, float3(p1.x, p0.y, p1.z), lod).a;
+	float vx11 = g0.x * tex.SampleLevel(g_samplerLinear_clamp, float3(p0.x, p1.y, p1.z), lod).a
+	           + g1.x * tex.SampleLevel(g_samplerLinear_clamp, float3(p1.x, p1.y, p1.z), lod).a;
+	return g0.z * (g0.y * vx00 + g1.y * vx10) + g1.z * (g0.y * vx01 + g1.y * vx11);
+}
+
+// --- obscurance density-tap EXPERIMENT KNOBS (bake side: InjectLight) -----------------------------
+// The three mips set the AO footprint (radius ~ 2^mip voxels): SMALLER mips = punchier contact AO
+// but finer-scale artifacts; LARGER = softer/broader shading. 2/3/4 was chosen against banding
+// BEFORE the cubic reconstruction existed — with VXGI_AO_TAP_CUBIC on, 1/2/3 is worth re-testing
+// (cubic suppresses the mip-1 phase bands that forced the widening; restores surface contact AO).
+// VXGI_AO_TAP_CUBIC: 1 = C2 cubic B-spline (band-free, slightly softer), 0 = raw trilinear
+// (sharpest, contour-band prone — for A/B comparison only).
+#define VXGI_AO_TAP_MIP1  2
+#define VXGI_AO_TAP_MIP2  3
+#define VXGI_AO_TAP_MIP3  4
+#define VXGI_AO_TAP_CUBIC 1
+
+float VXGI_SampleAoDensity(Texture3D tex, const in float3 uv, const in float lod, const in float res)
+{
+#if VXGI_AO_TAP_CUBIC == 1
+	return VXGI_SampleDensityCubic(tex, uv, lod, res);
+#else
+	return tex.SampleLevel(g_samplerLinear_clamp, uv, lod).a;
+#endif
 }
 
 //=====================

@@ -693,6 +693,7 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		case DXGI_FORMAT_R16G16_UINT: stride_bytes = sizeof(vmushort2); break;
 		case DXGI_FORMAT_R16_SINT: stride_bytes = sizeof(short); break;
 		case DXGI_FORMAT_R16G16B16A16_FLOAT: stride_bytes = 2 * 4; break;
+		case DXGI_FORMAT_R16G16_FLOAT: stride_bytes = 2 * 2; break;
 		case DXGI_FORMAT_UNKNOWN: stride_bytes = gres.res_values.GetParam("STRIDE_BYTES", (uint32_t)0); break;
 		default:
 			vzlog_error("__GenerateGpuResource NOT SUPPORTED FORMAT!!");

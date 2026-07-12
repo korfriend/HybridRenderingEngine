@@ -10,9 +10,14 @@
 // composited color in RENDER_OUT_RGBA_0.
 // -----------------------------------------------------------------------------
 
-Texture3D vxgi_grid : register(t0);           // radiance/opacity grid (linear-sampled)
+// ALPHA SEMANTICS (v4.5): the radiance grid's alpha is the per-voxel OBSCURANCE field PREMULTIPLIED
+// by coverage (obscurance * mat.a), NOT opacity. Displaying/consuming the field requires dividing by
+// the SAME-lod MAT coverage (t3); anything occupancy-dependent (march blocking, cone AO) reads the
+// MAT grid directly, whose alpha is the true coverage fraction from Voxelize.
+Texture3D vxgi_grid : register(t0);           // rgb = radiance, a = obscurance*coverage (PREMULTIPLIED)
 Texture2D<float> firsthit_depth : register(t1); // DVR first-hit depth (FLT_MAX == no hit)
 Texture3D tex3D_volume : register(t2);        // volume, for the surface-normal gradient
+Texture3D grid_mat : register(t3);            // rgb = albedo, a = COVERAGE (occupancy source)
 
 RWTexture2D<unorm float4> rgba_out : register(u1); // RENDER_OUT_RGBA_0 (in/out)
 
@@ -33,7 +38,8 @@ void VXGI_Gather(uint3 DTid : SV_DispatchThreadID)
 
 	// --- modes 8/9 : direct VOXEL visualization — ray-march the grid itself (point-sampled => blocky
 	// voxels), at the selected mip, independent of the DVR first-hit (covers empty background too).
-	// 8 = radiance rgb (verifies inject/propagate + the mip chain), 9 = opacity (verifies voxelize).
+	// 8 = radiance rgb (verifies inject/propagate + the mip chain), 9 = obscurance field (grid alpha).
+	// Blocking/normalization use the MAT grid's COVERAGE — the radiance grid's alpha is obscurance.
 	if (dbg >= 8)
 	{
 		// camera ray in voxel [0,1] space
@@ -64,13 +70,20 @@ void VXGI_Gather(uint3 DTid : SV_DispatchThreadID)
 			if (acc.a >= 0.99f)
 				break;
 			float3 p = ov + dv * (t_in + ((float) vs + 0.5f) * stepv);
-			float4 s = vxgi_grid.SampleLevel(g_samplerPoint_clamp, p, dbg_mip); // point => blocky voxels
+			float4 s = vxgi_grid.SampleLevel(g_samplerPoint_clamp, p, dbg_mip); // rgb=radiance, a=obsc*cov
+			float cov = grid_mat.SampleLevel(g_samplerPoint_clamp, p, dbg_mip).a; // true occupancy
 			// Mip compensation (display only): higher mips average occupied voxels with empty space, which
-			// dilutes both rgb and a — normalize rgb by coverage and boost the display alpha by 2^mip so
-			// every LOD reads at comparable brightness. Radiance additionally gets a sqrt tone boost so the
-			// dim progressively-diffused light deep in the medium is visible against black.
-			float3 col = (dbg == 8) ? sqrt(saturate(s.rgb / max(s.a, 1e-3f))) : s.aaa * exp2(dbg_mip);
-			float a = saturate(s.a * 0.25f * exp2(dbg_mip));
+			// dilutes rgb, coverage AND the premultiplied alpha alike — dividing by the same-lod COVERAGE
+			// recovers the coverage-weighted average (EXACT for the premultiplied obscurance at any mip;
+			// with the old un-premultiplied storage this same division inflated thin-shell voxels at low
+			// mips). Display alpha is boosted by 2^mip so every LOD reads at comparable brightness, and
+			// radiance gets a sqrt tone boost so dim diffused light deep in the medium stays visible.
+			// Radiance display range = (1-GAIN) * radiance — the SAME normalization the DVR consumption
+			// applies. Without it the DIRECT-seeded shell already clips at 1.0 and the entire propagate
+			// growth (up to direct/(1-GAIN)) disappears into the saturate: seed ~0.7 gray, converged -> 1.
+			float3 col = (dbg == 8) ? sqrt(saturate((1.0f - VXGI_SCATTER_GAIN) * s.rgb / max(cov, 1e-3f)))
+			                        : saturate(s.aaa / max(cov, 1e-3f)); // 9: obscurance per occupied voxel
+			float a = saturate(cov * 0.25f * exp2(dbg_mip));
 			acc.rgb += (1.0f - acc.a) * col * a;
 			acc.a += (1.0f - acc.a) * a;
 		}
@@ -111,20 +124,28 @@ void VXGI_Gather(uint3 DTid : SV_DispatchThreadID)
 	float4 gi = VXGI_ConeTraceGI(vxgi_grid, g_samplerLinear_clamp, origin, N_vox,
 		VXGI_CONE_APERTURE, g_cbVxgi.max_trace_dist, grid_res, VXGI_NUM_CONES);
 
-	float3 indirectRgb = gi.rgb;
-	float aoTerm = gi.a;
+	float3 indirectRgb = gi.rgb; // radiance accumulation is still meaningful (legacy debug view)
+	float aoTerm = gi.a;         // NOTE: integrates the radiance grid's alpha = PREMULTIPLIED obscurance, not opacity
+	if (dbg == 4)
+	{
+		// real opacity-based cone AO: trace the MAT grid, whose alpha is the true coverage — the v1..v3
+		// semantics this debug view was built to show (the radiance grid's alpha became obscurance in v4).
+		aoTerm = VXGI_ConeTraceGI(grid_mat, g_samplerLinear_clamp, origin, N_vox,
+			VXGI_CONE_APERTURE, g_cbVxgi.max_trace_dist, grid_res, VXGI_NUM_CONES).a;
+	}
 
 	// --- DEBUG visualization: dbg (decoded above) selects a stage to dump straight to screen (0 = normal
 	// render). Cycle it from the sample UI to isolate which stage is wrong before trusting the modulation. ---
 	if (dbg > 0)
 	{
 		float4 gs = vxgi_grid.SampleLevel(g_samplerLinear_clamp, p0, 0);
+		float gcov = grid_mat.SampleLevel(g_samplerLinear_clamp, p0, 0).a; // un-premultiply (alpha = obsc*cov)
 		float3 o = (float3) 0;
-		if      (dbg == 1) o = gs.aaa;                  // 1: grid OPACITY at the surface voxel (should resemble the volume)
-		else if (dbg == 2) o = gs.rgb;                  // 2: grid RADIANCE (injected light) at the surface voxel
+		if      (dbg == 1) o = saturate(gs.aaa / max(gcov, 1e-3f)); // 1: OBSCURANCE field at the surface voxel (flat ~0.3, crevices -> 1, ridges -> 0)
+		else if (dbg == 2) o = (1.0f - VXGI_SCATTER_GAIN) * gs.rgb; // 2: grid RADIANCE at the surface voxel (consumption-scaled: converged -> ~1)
 		else if (dbg == 3) o = N_vox * 0.5f + 0.5f;     // 3: surface NORMAL in voxel space (should look like a smooth normal map)
-		else if (dbg == 4) o = saturate(aoTerm).xxx;    // 4: raw AO term (white = fully occluded)
-		else if (dbg == 5) o = indirectRgb;             // 5: raw INDIRECT radiance
+		else if (dbg == 4) o = saturate(aoTerm).xxx;    // 4: cone AO over the MAT grid's coverage (white = fully occluded) [legacy]
+		else if (dbg == 5) o = indirectRgb;             // 5: cone-traced INDIRECT radiance [legacy]
 		else if (dbg == 6) o = saturate(p0);            // 6: voxel COORD p0 (should be a smooth 0..1 gradient; flat/black = mapping bug)
 		else               o = frac(pos_ts);            // 7: volume TEX coord of the surface point
 		rgba_out[xy] = float4(o, 1.0f);

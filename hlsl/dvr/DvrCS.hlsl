@@ -22,7 +22,8 @@
 Texture3D tex3D_volume : register(t0);
 Texture3D tex3D_volblk : register(t1);
 Texture3D tex3D_volmask : register(t2);
-Texture3D vxgi_grid : register(t8); // VXGI radiance grid (volumetric in-scatter); aligned with volume tex space
+Texture3D vxgi_grid : register(t8); // VXGI radiance grid (rgb = in-scatter, a = obscurance*coverage PREMULTIPLIED)
+Texture3D vxgi_grid_mat : register(t9); // VXGI MAT grid (a = coverage) — un-premultiplies the AO at the same lod
 Buffer<float4> buf_otf : register(t3); // unorm
 Buffer<float4> buf_preintotf : register(t13); // unorm
 Buffer<float4> buf_windowing : register(t4); // not used here.
@@ -1405,15 +1406,25 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 						// classic sample-quantization (wood-grain) banding — the pre-integrated OTF machinery
 						// only covers the OTF's own steepness, not this external factor. The coarser mip
 						// flattens the ramp so the fixed-step march no longer quantizes it visibly.
-						float ao_s = vxgi_grid.SampleLevel(g_samplerLinear_clamp, sc_p, 2.5f).a;
+						// The stored alpha is PREMULTIPLIED (obscurance * coverage): un-premultiply with the
+						// MAT coverage at the SAME lod. A raw (un-premultiplied) mip read mixed the field with
+						// empty voxels in proportion to the LOCAL occupancy — an AO dilution following the
+						// shell geometry, i.e. low-frequency banding in the final shading.
+						float ao_pm = vxgi_grid.SampleLevel(g_samplerLinear_clamp, sc_p, 2.5f).a;
+						float ao_cov = vxgi_grid_mat.SampleLevel(g_samplerLinear_clamp, sc_p, 2.5f).a;
+						float ao_s = ao_pm / max(ao_cov, 1e-3f);
 						// sqrt response: the density-based obscurance field is inherently soft/low-frequency
 						// compared to the retired surface cone AO (fine-scale cones + direct final-color
 						// multiply). The sqrt lifts mid values (flat 0.3->0.55, crevice 0.7->0.84) so the
 						// shading reads with comparable punch, without touching the phase-free field itself.
 						vis_sample.rgb *= 1.0f - saturate(sqrt(ao_s) * VXGI_AO_INTENSITY); // volumetric AO
-						// The radiance field is direct-scale by construction (damped-Jacobi bake in
-						// VXGI_Propagate), so it is consumed unscaled — no series-gain compensation here.
-						vis_sample.rgb += sc.rgb * (VXGI_GI_INTENSITY * vis_otf.a); // volumetric in-scatter
+						// Series-bound normalization: the source-term propagate (r' = D + GAIN*albedo*gather)
+						// converges to up to direct/(1-GAIN) in dense interiors, and the exp-tau inject also
+						// brightened the shell (~2x vs the old per-step compositing) — unscaled, the additive
+						// in-scatter saturates at moderate slider values. Scale UNIFORMLY by (1-GAIN): unlike
+						// the retired field-side damping this does not distort the thin:interior ratio (the
+						// field itself keeps direct preserved everywhere); it only restores slider headroom.
+						vis_sample.rgb += sc.rgb * ((1.0f - VXGI_SCATTER_GAIN) * VXGI_GI_INTENSITY * vis_otf.a); // volumetric in-scatter
 					}
 					depth_sample = depth_hit + (float)(i + j) * sample_dist;
 #pragma region VR_MODE 2: context-aware
