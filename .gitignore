@@ -281,3 +281,4 @@ __pycache__/
 .claude/
 CLAUDE.md
 /.claude/settings.local.json
+/secret_recipies
