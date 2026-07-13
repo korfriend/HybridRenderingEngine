@@ -98,9 +98,9 @@ void VXGI_InjectLight(uint3 id : SV_DispatchThreadID)
 	if (VXGI_PRESERVE_AO)
 	{
 		// SPLIT-STAMP light-only rebuild: the material did not change, so the baked alpha (cubic
-		// obscurance + the optional blur pass) in the previous DIRECT is still exact — re-emit it
-		// instead of re-running the 3x8 cubic taps and forcing the blur to re-run. The C++ copied
-		// DIRECT -> PING and bound it here as t11 (a UAV cannot read its own previous texels).
+		// obscurance) in the previous DIRECT is still exact — re-emit it instead of re-running the
+		// 3x8 cubic taps. The C++ copied DIRECT -> PING and bound it here as t11 (a UAV cannot read
+		// its own previous texels).
 		a_out = prev_direct.Load(int4(id, 0)).a;
 	}
 	else

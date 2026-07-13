@@ -36,6 +36,32 @@ Texture3D<uint> sculpt_bits_tex : register(t7);
 
 RWTexture3D<float4> vxgi_grid : register(u0); // R16G16B16A16_FLOAT radiance/opacity grid
 
+// Sub-sample jitter: 1 = stratified-jittered lattice (moire fix, default), 0 = regular +0.5 centers
+// (A/B comparison only). WHY: the REGULAR 4^3 sub-lattice has a ~1.5-2.5 volume-texel pitch, which
+// UNDERSAMPLES the OTF-stepped signal (the alpha step re-sharpens trilinear intensity to texel-period
+// detail); a regular lattice beating against the volume texel lattice at a rational ratio prints a
+// COHERENT multi-voxel moire into the coverage field itself — the contour-following "wave" bands seen
+// in the obscurance (debug 2) and surface-normal (debug 6) views. Every consumer inherits a baked
+// pattern; no read-side reconstruction filter can remove it. Jittering each sub-sample inside its
+// stratum decorrelates the beat into fine noise that the ~2-voxel coverage ramp, the obscurance
+// mips+blur and the cubic gradient taps all absorb.
+// The jitter is seeded on the GLOBAL half-voxel stratum coordinate (not the local sub-sample index):
+// neighbouring voxels' 2-voxel footprints OVERLAP at half-voxel pitch, so with global seeding the
+// overlapping strata reuse the IDENTICAL jittered sample points — the whole field becomes a box
+// average over ONE consistent jittered point set, so neighbour DIFFERENCES (the normal gradient!)
+// carry no sampling noise. Deterministic (pure function of voxel id): stable across rebuilds, no
+// temporal wobble, no stamp interaction.
+#define VXGI_VOX_SS_JITTER 1
+
+uint3 VXGI_Pcg3d(uint3 v) // Jarzynski & Olano PCG-3D
+{
+	v = v * 1664525u + 1013904223u;
+	v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+	v ^= v >> 16u;
+	v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+	return v;
+}
+
 [numthreads(8, 8, 8)]
 void VXGI_VoxelizeVolume(uint3 id : SV_DispatchThreadID)
 {
@@ -79,7 +105,16 @@ void VXGI_VoxelizeVolume(uint3 id : SV_DispatchThreadID)
 	[loop]
 	for (int s = 0; s < SS * SS * SS; s++)
 	{
-		float3 off = (float3(s & 3, (s >> 2) & 3, s >> 4) + 0.5f) * inv_ss; // sub-sample center in [0,1)
+		int3 sc = int3(s & 3, (s >> 2) & 3, s >> 4); // stratum cell in the 4^3 footprint lattice
+#if VXGI_VOX_SS_JITTER == 1
+		// global half-voxel stratum coordinate (footprint spans [id-0.5, id+1.5] voxels = strata
+		// 2*id-1 .. 2*id+2) -> overlapping footprints of neighbouring voxels hash to the SAME points
+		uint3 gsi = asuint(int3(id) * 2 + sc - 1);
+		float3 jit = float3(VXGI_Pcg3d(gsi)) * (1.0f / 4294967296.0f);
+#else
+		const float3 jit = 0.5f; // regular centers (moire-prone — A/B only)
+#endif
+		float3 off = (float3(sc) + jit) * inv_ss; // sub-sample position in [0,1)
 		float3 ts = ts_min + off * (2.0f * ts_cell);
 
 		// ---- visibility parity with DvrCS (hidden material contributes EMPTY, exactly like air) ----

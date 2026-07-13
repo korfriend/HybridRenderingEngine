@@ -279,10 +279,9 @@
 #define IDR_RCDATA52001					  52001
 #define IDR_RCDATA52002					  52002
 #define IDR_RCDATA52003					  52003
-#define IDR_RCDATA52004					  52004
-#define IDR_RCDATA52005					  52005
-#define IDR_RCDATA52006					  52006
+// 52004..52006 retired (BlurObscuranceX/Y/Z — superseded by the MAT blur, IDR_RCDATA52008)
 #define IDR_RCDATA52007					  52007
+#define IDR_RCDATA52008					  52008
 
 // MeshPainter Shaders
 #define IDR_RCDATA80001					  80001

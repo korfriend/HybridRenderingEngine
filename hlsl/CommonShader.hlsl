@@ -440,7 +440,8 @@ cbuffer cbGlobalParams : register(b13)
 #define VXGI_DEBUG_MIP        ((g_cbVxgi.vxgi_flag >> 28) & 0xFu)
 #define VXGI_GI_INTENSITY     f16tof32(g_cbVxgi.gi_ao_intensity & 0xFFFFu)
 #define VXGI_AO_INTENSITY     f16tof32(g_cbVxgi.gi_ao_intensity >> 16)
-#define VXGI_INDIRECT_INTENSITY f16tof32(g_cbVxgi.indirect_aperture & 0xFFFFu)
+// (VXGI_INDIRECT_INTENSITY removed — the retired v1..v4 screen-space surface-indirect modulation
+//  was its only reader; the CB half-slot stays as padding next to cone_aperture for layout stability.)
 #define VXGI_CONE_APERTURE    f16tof32(g_cbVxgi.indirect_aperture >> 16)
 #define VXGI_AO_PIVOT         f16tof32(g_cbVxgi.ao_pivot_slope & 0xFFFFu)
 #define VXGI_AO_SLOPE         f16tof32(g_cbVxgi.ao_pivot_slope >> 16)
@@ -451,9 +452,10 @@ cbuffer cbGlobalParams : register(b13)
 // that restores slider headroom without distorting the thin:interior ratio (the field itself keeps
 // direct preserved everywhere; contrast the retired field-side damping). MUST stay < 1: the gather is
 // a weighted neighbour average (gain <= 1), so GAIN < 1 makes the iteration a contraction.
-// RUNTIME knob since v4.7 (dev channel _float_VxgiScatterGain, def 0.5, CPU-clamped to [0.05, 0.95]):
-// higher gain = deeper light creep but slower convergence (error ~ gain^n) — raise the bounce-target
-// knob together. Brightness self-normalizes: the DVR consumption and the debug views all scale by
+// RUNTIME knob since v4.7 (public since v5: EnableVoxelGI scatter_gain, def 0.75, CPU-clamped to
+// [0.05, 0.95]): higher gain = deeper light creep but slower convergence — COUPLED with the bounce
+// target (error ~ gain^n => target >= ln(0.01)/ln(gain) for ~1%: 0.75 -> ~16; defaults 0.75/15 are
+// a matched pair). Brightness self-normalizes: the DVR consumption and the debug views all scale by
 // (1-GAIN) from this same CB value.
 #define VXGI_SCATTER_GAIN (g_cbVxgi.scatter_gain)
 // Part C (surface cone indirect, VXGI v5) composite gains — consumed by VXGI_Propagate:

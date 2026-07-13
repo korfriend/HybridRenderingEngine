@@ -74,7 +74,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	int vxgi_resolution = _fncontainer->fnParams.GetParam("_int_VxgiResolution", (int)128);
 	float vxgi_gi_intensity = _fncontainer->fnParams.GetParam("_float_VxgiGiIntensity", 1.f);       // volumetric in-scatter (0 = off)
 	float vxgi_ao_intensity = _fncontainer->fnParams.GetParam("_float_VxgiAoIntensity", 1.f);       // surface AO (0 = off)
-	float vxgi_indirect_intensity = _fncontainer->fnParams.GetParam("_float_VxgiIndirectIntensity", 1.f); // surface indirect (0 = off)
+	// (indirect_intensity retired — the v1..v4 screen-space surface-indirect term is gone; removed from
+	// EnableVoxelGI too. SetCb_VXGI's indirect arg defaults to a harmless 1.f into the now-unused CB half.)
 	int vxgi_debug = _fncontainer->fnParams.GetParam("_int_VxgiDebug", (int)0); // 0=render, 1..7=debug viz (screen gather)
 	// Slow-motion diffusion toggle (SetRenderTestParam "_bool_VxgiSlowMotion"): 1 bounce per 8 rendered
 	// frames so the progressive inward spread is observable; full speed when off. The frame index is the
@@ -85,8 +86,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	uint64_t temporal_render_count = (uint64_t)_fncontainer->fnParams.GetParam("_uint64_TemporalRenderCount", (uint64_t)0);
 	GpuRes gres_vxgi;
 	bool vxgi_ready = false;
-	ID3D11ShaderResourceView* vxgi_vol_srv = NULL;
 	ID3D11ShaderResourceView* vxgi_mat_srv_dbg = NULL; // MAT grid (coverage) for the debug gather pass
+	ID3D11ShaderResourceView* vxgi_surf_srv_dbg = NULL; // SURF grid (Part C) for the debug gather pass ONLY (voxel modes 3..6)
 	// Default the convergence demand to "done" each frame; the build block below overwrites it when it actually
 	// runs. Prevents a stale bounce target from keeping the app's re-render loop spinning after VXGI is turned
 	// off or the volume switches to an x-ray mode (where the block is skipped).
@@ -188,9 +189,24 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 
 #pragma region // SHADER SETTING
+	// HLSL hot-reload GENERATION — bumped every time the block below actually re-creates the compute shaders
+	// from the .cso files on disk (i.e. after a ShaderCompile.bat run, with _bool_ReloadHLSLObjFiles armed).
+	// VXGI caches its bake ACROSS frames and only re-runs Voxelize / BlurMat / InjectLight when its content
+	// stamp moves. A pure shader swap touches no content, so without this the newly loaded bake shaders would
+	// NEVER execute — the radiance grid would keep serving the field baked by the OLD code and the edit would
+	// look like a no-op (the long-standing "nudge the AO pivot slider to make a Voxelize edit show up" dance).
+	// Folding this counter into the VXGI stamps (see the stamp block below) makes a reload read as a content
+	// change: full re-voxelize + re-inject + a hard restart of the diffusion bounces.
+	// LEVEL-triggered on purpose, not edge: the flag is per (scene, camera) and the samples arm it for several
+	// cameras independently, so a shared rising-edge latch here would oscillate between their DoModule calls.
+	// The samples' idiom is one-shot (arm -> render -> disarm), so this bumps once or twice per press; the
+	// stamp compare is an inequality, so an extra bump costs at most one redundant re-bake on a dev button.
+	static uint64_t vxgi_hlsl_reload_gen = 0;
+
 	// Shader Re-Compile Setting //
 	if (reload_hlsl_objs)
 	{
+		vxgi_hlsl_reload_gen++;
 		char ownPth[2048];
 		GetModuleFileNameA(NULL, ownPth, (sizeof(ownPth)));
 		string exe_path = ownPth;
@@ -269,7 +285,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			}
 		}
 #else
-#define CS_NUM 52
+#define CS_NUM 50
 #define SET_CS(NAME) psoManager->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::COMPUTE_SHADER, NAME), dx11CShader, true)
 
 		string strNames_CS[CS_NUM] = {
@@ -322,9 +338,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			,"VXGI_Gather_cs_5_0"
 			,"VXGI_Propagate_cs_5_0"
 			,"VXGI_SurfaceGather_cs_5_0"
-			,"VXGI_BlurObscuranceX_cs_5_0"
-			,"VXGI_BlurObscuranceY_cs_5_0"
-			,"VXGI_BlurObscuranceZ_cs_5_0"
+			,"VXGI_BlurMat_cs_5_0"
 		};
 
 		for (int i = 0; i < CS_NUM; i++)
@@ -1258,8 +1272,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			grd_helper::UpdateVoxelGrid(gres_vxgi_ping, iobj, "VXGI_GRID_PING", vxgi_R, DXGI_FORMAT_R16G16B16A16_FLOAT);
 			grd_helper::UpdateVoxelGrid(gres_vxgi_direct, iobj, "VXGI_GRID_DIRECT", vxgi_R, DXGI_FORMAT_R16G16B16A16_FLOAT); // stable diffusion source
 			grd_helper::UpdateVoxelGrid(gres_vxgi_surf, iobj, "VXGI_GRID_SURF", vxgi_R, DXGI_FORMAT_R16G16B16A16_FLOAT); // Part C surface cone term
-			vxgi_vol_srv = (ID3D11ShaderResourceView*)gres_vol.alloc_res_ptrs[DTYPE_SRV];
 			vxgi_mat_srv_dbg = (ID3D11ShaderResourceView*)gres_vxgi_mat.alloc_res_ptrs[DTYPE_SRV];
+			vxgi_surf_srv_dbg = (ID3D11ShaderResourceView*)gres_vxgi_surf.alloc_res_ptrs[DTYPE_SRV];
 			vxgi_ready = true;
 
 			// CB_VXGI (b13): grid aligned with the volume, so world->voxel[0,1] == the volume's world->texture
@@ -1287,22 +1301,31 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			// change re-bakes the field immediately.
 			const float vxgi_ao_pivot = _fncontainer->fnParams.GetParam("_float_VxgiAoPivot", 0.3f);
 			const float vxgi_ao_slope = _fncontainer->fnParams.GetParam("_float_VxgiAoSlope", 1.5f);
-			// Optional post-bake obscurance blur (3^3 gaussian on the premultiplied alpha, once per
-			// rebuild) — cleans residual band energy the cubic taps can't see (see BlurObscurance.hlsl).
-			const bool vxgi_ao_blur = _fncontainer->fnParams.GetParam("_bool_VxgiAoBlur", true);
-			// Diffusion gain (dev knob): deeper light creep at higher values; consumption/debug scale by
-			// (1-gain) so brightness self-normalizes. Folded into the content stamp (light side) so a
-			// change re-runs the diffusion to the new fixed point.
-			const float vxgi_scatter_gain = _fncontainer->fnParams.GetParam("_float_VxgiScatterGain", 0.5f);
+			// MAT blur (gaussian on the voxelized coverage/albedo, BEFORE mip-gen): the single-source
+			// fix for the stored mip-lattice phase banding the surface cones integrate (see BlurMat.hlsl).
+			// It SUBSUMED the retired post-bake obscurance blur (_bool_VxgiAoBlur / BlurObscuranceX/Y/Z):
+			// smoothing the source before the cubic density taps removes the same residual band energy
+			// that pass cleaned after them, and A/B showed no remaining visible contribution.
+			const bool vxgi_mat_blur = _fncontainer->fnParams.GetParam("_bool_VxgiMatBlur", true);
+			// Diffusion gain: deeper light creep at higher values; consumption/debug scale by (1-gain)
+			// so brightness self-normalizes. Folded into the content stamp (light side) so a change
+			// re-runs the diffusion to the new fixed point. COUPLED with _int_VxgiBounceTarget
+			// (convergence error ~ gain^n). The bounce budget is DERIVED from this by formula below
+			// (not a separate knob); keep this default in sync with EnableVoxelGI's (VisMtvApi.h).
+			const float vxgi_scatter_gain = _fncontainer->fnParams.GetParam("_float_VxgiScatterGain", 0.75f);
 			// Part C (surface cone indirect + cone AO, VXGI v5) knobs — dev channel (SetRenderTestParam),
 			// to be promoted to EnableVoxelGI trailing defaults once tuning stabilizes (plan §4.5).
 			//   _int_VxgiSurfaceCheckpoints (N, def 2): SurfaceGather refinement count; the checkpoint
 			//     bounce set is derived from N and the bounce target T: {0}, {0,T/2}, {0,T/2,T-1}.
 			//     N=0 disables Part C entirely (D-only — useful for A/B comparison).
-			//   _float_VxgiSurfaceGiGain (def 0.95): surface indirect strength (CPU clamp [0,0.95], §4.4).
+			//   _float_VxgiSurfaceGiGain (def 0.15): surface indirect strength (CPU clamp [0,0.95], §4.4).
+			//     NOTE the 0.95 clamp is the STABILITY ceiling, not a display default: the cone gather
+			//     returns O(direct)-scale radiance and the grazing side cones self-collect the curved
+			//     shell nearly everywhere (the v1 AO history's ~0.3-0.5 flat-surface base, same geometry),
+			//     so raw gains beyond ~0.2 saturate the additive DVR in-scatter (measured; plan §4.5).
 			//   _float_VxgiSurfaceConeAoGain (def 1.0): cone AO screen-blend strength (0 = density AO only).
 			const int vxgi_surface_checkpoints = max(0, min(3, _fncontainer->fnParams.GetParam("_int_VxgiSurfaceCheckpoints", (int)2)));
-			float vxgi_surf_gi_gain = _fncontainer->fnParams.GetParam("_float_VxgiSurfaceGiGain", 0.95f);
+			float vxgi_surf_gi_gain = _fncontainer->fnParams.GetParam("_float_VxgiSurfaceGiGain", 0.15f);
 			float vxgi_surf_ao_gain = _fncontainer->fnParams.GetParam("_float_VxgiSurfaceConeAoGain", 1.0f);
 			if (vxgi_surface_checkpoints == 0)
 			{
@@ -1311,7 +1334,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				vxgi_surf_gi_gain = 0.f;
 				vxgi_surf_ao_gain = 0.f;
 			}
-			grd_helper::SetCb_VXGI(cbVxgi, TRANSPOSE(cbVolumeObj.mat_ws2ts), vxgi_R, vxgi_gi_intensity, vxgi_ao_intensity, true, vxgi_indirect_intensity, vxgi_debug_byte, vxgi_medium_flags, vxgi_ao_pivot, vxgi_ao_slope, vxgi_scatter_gain, vxgi_surf_gi_gain, vxgi_surf_ao_gain);
+			grd_helper::SetCb_VXGI(cbVxgi, TRANSPOSE(cbVolumeObj.mat_ws2ts), vxgi_R, vxgi_gi_intensity, vxgi_ao_intensity, true, 1.f /* indirect retired */, vxgi_debug_byte, vxgi_medium_flags, vxgi_ao_pivot, vxgi_ao_slope, vxgi_scatter_gain, vxgi_surf_gi_gain, vxgi_surf_ao_gain);
 			// NOTE the CB is mapped BELOW, after the stamp split decides the light-only preserve-AO flag
 			// (vxgi_flag bit4) — it must be part of the uploaded flags for the InjectLight dispatch.
 
@@ -1325,7 +1348,13 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				vxgi_light_hash ^= (f2u64(lposf[lh]) << (lh * 8 + 4)) ^ (f2u64(ldirf[lh]) << (lh * 8));
 			// _int_VxgiRestart: app-driven counter (debug UI) folded into the stamp so a button press restarts
 			// the diffusion from bounce 0 without touching the actual content.
-			const uint64_t vxgi_restart = (uint64_t)_fncontainer->fnParams.GetParam("_int_VxgiRestart", (int)0);
+			// An HLSL hot-reload rides the SAME channel (high bits, so it cannot collide with the app's 32-bit
+			// counter): a reloaded Gather / Propagate / SurfaceGather changes the diffusion's FIXED POINT, and
+			// re-converging from the old field would just creep toward it — the restart hard-seeds the grid back
+			// to DIRECT so the new shader's field is what you actually watch converge. Persisted through
+			// _uint64_VxgiRestartApplied, so it fires exactly ONCE per reload.
+			const uint64_t vxgi_restart = (uint64_t)_fncontainer->fnParams.GetParam("_int_VxgiRestart", (int)0)
+				^ (vxgi_hlsl_reload_gen << 32);
 			// MEDIUM state: what the DVR hides is part of the grid content — mask/sculpt edits, sculpt mode,
 			// and the ACTIVE clip state must re-voxelize (a moving clip box re-voxelizes every drag frame; the
 			// rebuild branch's per-frame propagate step crossfades the visible field along with the drag —
@@ -1337,7 +1366,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				vxgi_medium_stamp ^= sculptBitPackedObj->GetContentUpdateTime() << 3;
 			vxgi_medium_stamp ^= (uint64_t)(uint32_t)sculpt_index << 16;
 			vxgi_medium_stamp ^= (f2u64(vxgi_ao_pivot) << 20) ^ (f2u64(vxgi_ao_slope) << 28); // AO remap knobs re-bake
-			vxgi_medium_stamp ^= vxgi_ao_blur ? (1ull << 59) : 0ull; // blur toggle re-bakes too
+			vxgi_medium_stamp ^= vxgi_mat_blur ? (1ull << 58) : 0ull; // MAT blur re-voxel-bakes too
 			if (cbClipInfo.clip_flag != 0)
 			{	// FNV-1a over the clip CB (flag/plane/box matrix) — inactive clip contributes nothing, so
 				// toggling it off still changes the stamp exactly once.
@@ -1360,8 +1389,16 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			// ---- SPLIT STAMPS: material/AO state vs light state. The baked obscurance (cubic taps +
 			// blur) depends ONLY on the MAT side, so a light-only change (dragging the light) must not
 			// re-run Voxelize or the blur — it re-runs InjectLight alone, in alpha-preserving mode.
+			// An HLSL hot-reload folds in HERE, on the MAT side, not just into the light-side content stamp:
+			// Voxelize and BlurMat are MAT-side bakes, so only a mat_stamp move re-runs them (a content-only
+			// move takes the LIGHT-ONLY inject path and leaves the MAT grid — the old shader's output — intact).
+			// Landing it here makes both vxgi_mat_changed AND vxgi_rebuild true (content_stamp XORs mat_stamp in
+			// below), which is the full chain: Voxelize -> BlurMat -> mips -> InjectLight -> grid advance.
+			// (The reload bits in vxgi_restart shift out of range in content_stamp's `<< 40` — irrelevant, the
+			//  signal reaches content_stamp through mat_stamp; vxgi_restart carries it for the re-seed compare.)
 			const uint64_t vxgi_mat_stamp = vobj->GetContentUpdateTime()
-				^ (tobj_otf->GetContentUpdateTime() << 1) ^ ((uint64_t)vxgi_R << 48) ^ vxgi_medium_stamp;
+				^ (tobj_otf->GetContentUpdateTime() << 1) ^ ((uint64_t)vxgi_R << 48) ^ vxgi_medium_stamp
+				^ (vxgi_hlsl_reload_gen << 24);
 			const uint64_t vxgi_content_stamp = vxgi_mat_stamp ^ vxgi_light_hash ^ (vxgi_restart << 40)
 				^ (f2u64(vxgi_scatter_gain) << 6) // gain change re-converges the diffusion (light-side)
 				// Part C knobs fold in too (stale-prevention, plan §4.5): once converged, propagate skips —
@@ -1369,12 +1406,20 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				^ (f2u64(vxgi_surf_gi_gain) << 10) ^ (f2u64(vxgi_surf_ao_gain) << 14)
 				^ ((uint64_t)(uint32_t)vxgi_surface_checkpoints << 44);
 
-			// Diffusion iteration budget (dev knob _int_VxgiBounceTarget via vzm::SetRenderTestParam,
-			// def 12): light creeps ~2 voxels inward per iteration. Raise together with a higher
-			// VXGI_SCATTER_GAIN (higher gain converges slower: error ~ gain^n). NOT folded into the
-			// content stamp on purpose — raising it mid-flight simply resumes the stamp-unchanged
-			// propagate loop (bounce < target again), no rebuild needed.
-			const int VXGI_BOUNCE_TARGET = max(1, min(64, _fncontainer->fnParams.GetParam("_int_VxgiBounceTarget", (int)12)));
+			// Diffusion iteration budget — DERIVED from the scatter gain, not an independent knob.
+			// The diffusion converges with error ~ gain^n, so the bounces needed for a fixed residual
+			// are fully determined by the gain: target = ceil(ln(residual)/ln(gain)). The residual is a
+			// fixed internal constant (1e-2 = ~1%: 0.5 -> 7, 0.75 -> 16, 0.9 -> 44). This is why
+			// bounce_target is NOT a public API arg (it must track the gain by formula; exposing it
+			// independently invited under-converged images when only the gain was raised). Uses the
+			// SAME [0.05,0.95] clamp the shader applies to the gain so the count matches the field.
+			// DEBUG override: _int_VxgiBounceTarget (SetRenderTestParam) > 0 forces a manual count for
+			// convergence experiments; 0 (the default) means "use the derived value".
+			const float VXGI_CONV_RESIDUAL = 1e-2f; // fixed convergence tolerance (~1%; the "2" of 10^-2)
+			const float vxgi_gain_clamped = max(0.05f, min(0.95f, vxgi_scatter_gain));
+			const int vxgi_bounce_derived = max(1, min(64, (int)ceil(log(VXGI_CONV_RESIDUAL) / log(vxgi_gain_clamped))));
+			const int vxgi_bounce_test = _fncontainer->fnParams.GetParam("_int_VxgiBounceTarget", (int)0);
+			const int VXGI_BOUNCE_TARGET = (vxgi_bounce_test > 0) ? max(1, min(64, vxgi_bounce_test)) : vxgi_bounce_derived;
 			int vxgi_bounce = iobj->GetObjParam<int>("_int_VxgiBounce", (int)0);
 			const uint32_t vxgi_groups = (uint32_t)ceil(vxgi_R / 8.f);
 			ID3D11ShaderResourceView* vxgi_grid_srv = (ID3D11ShaderResourceView*)gres_vxgi.alloc_res_ptrs[DTYPE_SRV];
@@ -1420,6 +1465,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			auto vxgi_surface_gather = [&]()
 			{
 				ID3D11UnorderedAccessView* vxgi_uav_surf = (ID3D11UnorderedAccessView*)gres_vxgi_surf.alloc_res_ptrs[DTYPE_UAV];
+				// (The shader's t0 volume slot serves the RETIRED CT-normal path — VXGI_SURF_CT_NORMAL 0
+				// — so no explicit volume bind here; re-add a gres_vol SRV bind at t0 if that path is
+				// ever revived.)
 				SET_SHADER_RES(8, 1, &vxgi_grid_srv);
 				SET_SHADER_RES(9, 1, &vxgi_mat_srv);
 				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, &vxgi_uav_surf, (UINT*)(&vxgi_uav_surf));
@@ -1457,13 +1505,33 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 					SET_SHADER(GETCS(VXGI_VoxelizeVolume_cs_5_0), NULL, 0);
 					dx11DeviceImmContext->Dispatch(vxgi_groups, vxgi_groups, vxgi_groups);
 					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+
+					// 1.5) MAT blur (3^3 gaussian, BEFORE GenerateMips): kills the stored surface-vs-
+					// mip-lattice phase banding at its single source — box mips of the blurred field
+					// get OVERLAPPING effective kernels, so the band energy the surface cones were
+					// integrating (the AO contour bands that survived a FIXED normal, cubic taps at
+					// every lod, large origin offsets and the slab clip) never gets baked. PING is
+					// free here (its obscurance-blur / prev-DIRECT uses come later). See BlurMat.hlsl.
+					if (vxgi_mat_blur)
+					{
+						ID3D11UnorderedAccessView* vxgi_uav_ping_m = (ID3D11UnorderedAccessView*)gres_vxgi_ping.alloc_res_ptrs[DTYPE_UAV];
+						SET_SHADER_RES(9, 1, &vxgi_mat_srv);
+						dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, &vxgi_uav_ping_m, (UINT*)(&vxgi_uav_ping_m));
+						SET_SHADER(GETCS(VXGI_BlurMat_cs_5_0), NULL, 0);
+						dx11DeviceImmContext->Dispatch(vxgi_groups, vxgi_groups, vxgi_groups);
+						dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+						SET_SHADER_RES(9, 1, dx11SRVs_NULL);
+						dx11DeviceImmContext->CopySubresourceRegion(
+							(ID3D11Resource*)gres_vxgi_mat.alloc_res_ptrs[DTYPE_RES], 0, 0, 0, 0,
+							(ID3D11Resource*)gres_vxgi_ping.alloc_res_ptrs[DTYPE_RES], 0, NULL);
+					}
 					dx11DeviceImmContext->GenerateMips(vxgi_mat_srv);
 				}
 
 				// 2) Inject: light-transmittance march through MAT (t9, mips) -> DIRECT field (u0).
-				// LIGHT-ONLY rebuild: the shader re-emits the previous baked alpha (cubic + blur) instead
-				// of recomputing it — DIRECT is copied to PING first and bound at t11 as the alpha source
-				// (a UAV cannot read its own previous texels without typed-UAV loads).
+				// LIGHT-ONLY rebuild: the shader re-emits the previous baked alpha (cubic obscurance)
+				// instead of recomputing it — DIRECT is copied to PING first and bound at t11 as the
+				// alpha source (a UAV cannot read its own previous texels without typed-UAV loads).
 				ID3D11ShaderResourceView* vxgi_ping_srv_a = (ID3D11ShaderResourceView*)gres_vxgi_ping.alloc_res_ptrs[DTYPE_SRV];
 				if (!vxgi_mat_changed)
 				{
@@ -1480,48 +1548,10 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				SET_SHADER_RES(9, 1, dx11SRVs_NULL);
 				SET_SHADER_RES(11, 1, dx11SRVs_NULL);
 
-				// 2.5) OPTIONAL obscurance blur — SEPARABLE normalized-convolution gaussian, once per
-				// rebuild, BEFORE the seed / propagate consume the alpha (see BlurObscurance.hlsl: both
-				// G(A*C) and G(C) blur separably; the division runs once in pass Z). ~14 loads/voxel vs
-				// 56 for the single-pass 3^3 form. All three passes run within THIS rebuild on purpose —
-				// the alpha path has no temporal accumulator, so axis-per-frame amortization would show
-				// anisotropic AO flicker. Toggled by _bool_VxgiAoBlur (folded into the stamp).
-				// MAT-side changes only — a light-only rebuild carried the blurred alpha through inject.
-				if (vxgi_ao_blur && vxgi_mat_changed)
-				{
-					GpuRes gres_vxgi_blur; // R16G16F scratch for the xy-blurred (A*C, C) partial sums
-					grd_helper::UpdateVoxelGrid(gres_vxgi_blur, iobj, "VXGI_GRID_BLUR", vxgi_R, DXGI_FORMAT_R16G16_FLOAT);
-					ID3D11UnorderedAccessView* vxgi_uav_ping_b = (ID3D11UnorderedAccessView*)gres_vxgi_ping.alloc_res_ptrs[DTYPE_UAV];
-					ID3D11UnorderedAccessView* vxgi_uav_blur = (ID3D11UnorderedAccessView*)gres_vxgi_blur.alloc_res_ptrs[DTYPE_UAV];
-					ID3D11ShaderResourceView* vxgi_ping_srv = (ID3D11ShaderResourceView*)gres_vxgi_ping.alloc_res_ptrs[DTYPE_SRV];
-					ID3D11ShaderResourceView* vxgi_blur_srv = (ID3D11ShaderResourceView*)gres_vxgi_blur.alloc_res_ptrs[DTYPE_SRV];
-
-					SET_SHADER_RES(9, 1, &vxgi_mat_srv);     // coverage (X: source, Z: center re-premultiply)
-					SET_SHADER_RES(10, 1, &vxgi_direct_srv); // premultiplied alpha (X) + rgb passthrough (Z)
-					// X: DIRECT.a / MAT.a -> PING.rg
-					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, &vxgi_uav_ping_b, (UINT*)(&vxgi_uav_ping_b));
-					SET_SHADER(GETCS(VXGI_BlurObscuranceX_cs_5_0), NULL, 0);
-					dx11DeviceImmContext->Dispatch(vxgi_groups, vxgi_groups, vxgi_groups);
-					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-					// Y: PING.rg (t8) -> BLUR.rg (u1)
-					SET_SHADER_RES(8, 1, &vxgi_ping_srv);
-					dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 1, &vxgi_uav_blur, (UINT*)(&vxgi_uav_blur));
-					SET_SHADER(GETCS(VXGI_BlurObscuranceY_cs_5_0), NULL, 0);
-					dx11DeviceImmContext->Dispatch(vxgi_groups, vxgi_groups, vxgi_groups);
-					dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-					// Z: BLUR.rg (t8) + DIRECT.rgb + MAT center -> PING (full float4)
-					SET_SHADER_RES(8, 1, &vxgi_blur_srv);
-					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, &vxgi_uav_ping_b, (UINT*)(&vxgi_uav_ping_b));
-					SET_SHADER(GETCS(VXGI_BlurObscuranceZ_cs_5_0), NULL, 0);
-					dx11DeviceImmContext->Dispatch(vxgi_groups, vxgi_groups, vxgi_groups);
-					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-					SET_SHADER_RES(8, 1, dx11SRVs_NULL);
-					SET_SHADER_RES(9, 1, dx11SRVs_NULL);
-					SET_SHADER_RES(10, 1, dx11SRVs_NULL);
-					dx11DeviceImmContext->CopySubresourceRegion(
-						(ID3D11Resource*)gres_vxgi_direct.alloc_res_ptrs[DTYPE_RES], 0, 0, 0, 0,
-						(ID3D11Resource*)gres_vxgi_ping.alloc_res_ptrs[DTYPE_RES], 0, NULL);
-				}
+				// (The former "2.5) post-bake obscurance blur" — BlurObscuranceX/Y/Z on the baked DIRECT
+				// alpha, _bool_VxgiAoBlur — was REMOVED: the MAT blur in step 1.5 smooths the same band
+				// energy at its source, before the cubic density taps, and A/B showed no remaining
+				// visible contribution from the post-pass.)
 
 				// 3) Advance the RADIANCE grid this frame — the rebuild branch must never leave it stale.
 				// First build (or a runtime resolution change): the grid texture is UNINITIALIZED — seed it
@@ -2104,14 +2134,12 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 #ifdef DX10_0
 #else
-	// ----- VXGI v1 screen-space gather: DISABLED (superseded by v2 per-sample volumetric in-scatter) -----
-	// v4: DEBUG-ONLY pass. The surface AO/indirect modulation this pass used to apply is retired — sampling
-	// the grid at arbitrary reconstructed surface points is inherently surface-vs-lattice phase-sensitive
-	// (the stripe artifacts, at every mip), and its position/normal came from a depth-reconstruction
-	// roundtrip. Both GI terms are now PER-SAMPLE inside the DVR march (fully volumetric): the radiance
-	// grid's alpha carries a per-voxel obscurance baked lattice-aligned by InjectLight/Propagate, and the
-	// march's single grid fetch applies AO + in-scatter together. This dispatch remains only for the debug
-	// visualizations (modes 1..9 short-circuit inside the shader).
+	// ----- VXGI debug view (v5): voxel ray-march visualizations ONLY -----
+	// The v1..v4 screen-space half (DVR-first-hit probes + legacy hemisphere cone AO/indirect) is
+	// REMOVED (plan §3.6) — sampling the grid at arbitrary reconstructed surface points was
+	// surface-vs-lattice phase-sensitive (the stripe artifacts that retired v1..v3), and the
+	// production GI terms are per-sample inside the DVR march since v4. Modes 1..6 (radiance/
+	// obscurance at LOD, SURF indirect/cone-AO/state/normal) all ray-march the grids in Gather.hlsl.
 	if (vxgi_on && vxgi_ready && (vxgi_debug & 0xFF) != 0)
 	{
 		// The trailing SSAO path can leave gres_fb_rgba bound at UAV u2; release the DVR UAV slots first so
@@ -2120,17 +2148,16 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 		ID3D11ShaderResourceView* vxgi_grid_srv = (ID3D11ShaderResourceView*)gres_vxgi.alloc_res_ptrs[DTYPE_SRV];
 		SET_SHADER_RES(0, 1, &vxgi_grid_srv);
-		SET_SHADER_RES(1, 1, (ID3D11ShaderResourceView**)&gres_fb_vrdepthcs.alloc_res_ptrs[DTYPE_SRV]);
-		SET_SHADER_RES(2, 1, &vxgi_vol_srv);
+		// t1 (first-hit depth) / t2 (volume) binds removed with the screen-space modes (plan §3.6).
 		SET_SHADER_RES(3, 1, &vxgi_mat_srv_dbg); // MAT grid: true coverage — radiance grid alpha is OBSCURANCE
+		SET_SHADER_RES(4, 1, &vxgi_surf_srv_dbg); // SURF grid (Part C): DEBUG-ONLY bind — voxel modes 3..6; the normal render path never binds t4
 
-		// Re-bind the CBs the gather shader reads (b0=camera, b4=last volume, b13=VXGI); the trailing SSAO pass
-		// may have rebound these slots. The buffers still hold the correct last-camera / last-volume / VXGI data.
+		// Re-bind the CBs the debug shader reads (b0=camera, b13=VXGI); the trailing SSAO pass may have
+		// rebound these slots. (b4=volume rebind removed with the screen-space modes — the voxel-march
+		// views never touch g_cbVobj.) The buffers still hold the correct last-camera / VXGI data.
 		ID3D11Buffer* cbuf_cam_g = psoManager->get_cbuf("CB_CameraState");
-		ID3D11Buffer* cbuf_vol_g = psoManager->get_cbuf("CB_VolumeObject");
 		ID3D11Buffer* cbuf_vxgi_g = psoManager->get_cbuf("CB_VXGI");
 		SET_CBUFFERS(0, 1, &cbuf_cam_g);
-		SET_CBUFFERS(4, 1, &cbuf_vol_g);
 		SET_CBUFFERS(13, 1, &cbuf_vxgi_g);
 
 		ID3D11UnorderedAccessView* vxgi_out_uav = (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV];
@@ -2143,7 +2170,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 		// Release the RT UAV + SRVs so the later DoModule composite / TaaResolve can rebind RENDER_OUT_RGBA_0.
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(1, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-		SET_SHADER_RES(0, 4, dx11SRVs_NULL);
+		SET_SHADER_RES(0, 5, dx11SRVs_NULL);
 	}
 #endif
 

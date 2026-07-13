@@ -140,6 +140,9 @@
     <None Include="hlsl\vxgi\ConeTrace.hlsli">
       <Filter>hlsl source code\vxgi</Filter>
     </None>
+    <None Include="hlsl\vxgi\SurfaceVoxel.hlsli">
+      <Filter>hlsl source code\vxgi</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="resources">
@@ -293,10 +296,10 @@
     <FxCompile Include="hlsl\vxgi\Propagate.hlsl">
       <Filter>hlsl source code\vxgi</Filter>
     </FxCompile>
-    <FxCompile Include="hlsl\vxgi\BlurObscurance.hlsl">
+    <FxCompile Include="hlsl\vxgi\SurfaceGather.hlsl">
       <Filter>hlsl source code\vxgi</Filter>
     </FxCompile>
-    <FxCompile Include="hlsl\vxgi\SurfaceGather.hlsl">
+    <FxCompile Include="hlsl\vxgi\BlurMat.hlsl">
       <Filter>hlsl source code\vxgi</Filter>
     </FxCompile>
   </ItemGroup>

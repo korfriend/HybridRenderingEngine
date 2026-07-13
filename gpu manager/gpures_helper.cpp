@@ -891,10 +891,8 @@ int grd_helper::Initialize(VmGpuManager* pCGpuManager, PSOManager* gpu_params)
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52001), "VXGI_InjectLight_cs_5_0", "cs_5_0"), VXGI_InjectLight_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52002), "VXGI_Gather_cs_5_0", "cs_5_0"), VXGI_Gather_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52003), "VXGI_Propagate_cs_5_0", "cs_5_0"), VXGI_Propagate_cs_5_0);
-		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52004), "VXGI_BlurObscuranceX_cs_5_0", "cs_5_0"), VXGI_BlurObscuranceX_cs_5_0);
-		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52005), "VXGI_BlurObscuranceY_cs_5_0", "cs_5_0"), VXGI_BlurObscuranceY_cs_5_0);
-		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52006), "VXGI_BlurObscuranceZ_cs_5_0", "cs_5_0"), VXGI_BlurObscuranceZ_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52007), "VXGI_SurfaceGather_cs_5_0", "cs_5_0"), VXGI_SurfaceGather_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52008), "VXGI_BlurMat_cs_5_0", "cs_5_0"), VXGI_BlurMat_cs_5_0);
 
 #endif
 	}

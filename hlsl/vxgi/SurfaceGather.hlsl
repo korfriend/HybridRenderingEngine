@@ -1,5 +1,6 @@
 #include "../CommonShader.hlsl"
 #include "ConeTrace.hlsli"
+#include "SurfaceVoxel.hlsli"
 
 // -----------------------------------------------------------------------------
 // VXGI v5 - Part C : SURFACE-voxel cone-traced indirect + cone AO.
@@ -27,102 +28,34 @@
 // density obscurance now brings the directional cone term back as a complement
 // (open vs blocked far-field visibility that the isotropic density obscurance
 // cannot see). Propagate screen-blends it with the density obscurance (§3.5).
+//
+// Classification + normal derivation live in SurfaceVoxel.hlsli — SHARED with
+// the voxel debug views (Gather.hlsl modes 12/13), so the debug visualization
+// always shows exactly what this pass computes.
 // -----------------------------------------------------------------------------
 
+Texture3D tex3D_volume : register(t0); // ORIGINAL intensity volume (~4x grid res): CT-gradient normal refinement
 Texture3D grid_prev : register(t8); // radiance grid (MIP CHAIN): cone gather source (bounce 0: = DIRECT seed)
 Texture3D grid_mat  : register(t9); // rgb = albedo, a = TRUE coverage (MIP CHAIN): surface test + normal + cone visibility
 RWTexture3D<float4> grid_surf : register(u0); // OUT rgb = albedo * hemisphere indirect, a = cone occlusion
 
-// Surface classification thresholds (coverage is Voxelize's true-coverage field: the boundary is a
-// ~2-voxel anti-aliased ramp, not a 1-voxel shell — both tests below key off that ramp).
-#define VXGI_SURF_EMPTY_EPS 0.001f // a neighbour below this counts as EMPTY (occupied/empty boundary)
-#define VXGI_SURF_GRAD_TH   0.15f  // |central-difference gradient| above this marks the ramp band
-#define VXGI_SURF_EPS2      1e-8f  // degenerate-direction threshold (gradient/face-sum fallback chain)
+// Self-intersection margins (production values): origin pushed 2 voxels off the iso anchor, cones
+// start another 2 voxels out along their own direction — together with the tangent-plane slab clip
+// (VXGI_TraceCone_2Tex) this clears the voxel's own ~2-voxel coverage ramp for the 60-deg side cones
+// too. Raising these to 5/4 was the banding-hunt diagnostic; the bands turned out to be the debug
+// viewer's coverage-proportional transparency blending, so contact-AO reach wins the trade again.
+#define VXGI_SURF_TRACE_OFFSET_VOX 2.0f
+#define VXGI_SURF_CONE_START_VOX   2.0f
 
-float CoverageAt(const in int3 p, const in int Rmax)
-{
-	return grid_mat.Load(int4(clamp(p, (int3) 0, (int3) Rmax), 0)).a;
-}
-
-// Result of the surface-normal estimation (plan §3.3 contract — the double-sided path cannot be
-// expressed by a bare float3 return, so it is pinned in the struct to prevent implementation drift).
-struct SurfaceNormal
-{
-	float3 normal_ws;    // primary normal, WORLD space (per-cone WS->vox conversion happens in the trace)
-	bool   double_sided; // symmetric thin plate (both opposite faces empty): caller traces +/- hemispheres
-	bool   valid;        // false: no direction could be derived (defensive; classification makes this unreachable)
-};
-
-// Normal from the SAME field that defines the surface — grid_mat.a (post-OTF true coverage):
-//  * consistent: exactly perpendicular to the isosurface the classification found;
-//  * noise-immune: the surface is defined by the OTF, not CT intensity — where the OTF puts an alpha
-//    step on a soft CT ramp the raw CT gradient is noise-dominated, while the coverage field is already
-//    OTF-stepped AND anti-aliased by Voxelize's 4x4x4 sub-sample averaging (a built-in binarize+smooth);
-//  * lighting-invariant: material-only field, so light moves never bend the normals (grid_direct's rgb
-//    gradient would be dominated by lighting, not geometry).
-// Reuses the 6 face-neighbour fetches the surface test already made — zero extra fetches.
-SurfaceNormal CoverageGradientNormal(const in float3 g_vox,
-	const in float a_px, const in float a_mx, const in float a_py,
-	const in float a_my, const in float a_pz, const in float a_mz)
-{
-	SurfaceNormal sn;
-	sn.double_sided = false;
-	sn.valid = true;
-
-	[branch]
-	if (dot(g_vox, g_vox) > VXGI_SURF_EPS2)
-	{
-		// COORDINATE CONVENTION (plan §3.3, team-review pinned): the normal, the hemisphere basis and
-		// the 6 cone directions are all built in WS; each cone direction converts to voxel space for
-		// the march. A voxel-space gradient normalized as-is mixes coordinate systems on anisotropic
-		// grids (slice thickness 2-3x the pixel pitch skews the normal past the ~10-deg tolerance of
-		// the 60-deg diffuse cones). Gradients map by the inverse-transpose: with orthogonal grid axes
-		// A = R*S (S = diag(grid_axis_ws)), A^-T = A*S^-2 — divide componentwise by axis^2, then push
-		// through mat_vox2ws (this includes the rotation the bare axis-divide convention would drop).
-		float3 axis2 = g_cbVxgi.grid_axis_ws * g_cbVxgi.grid_axis_ws;
-		sn.normal_ws = -normalize(TransformVector(g_vox / axis2, g_cbVxgi.mat_vox2ws)); // outward = -coverage gradient
-		return sn;
-	}
-
-	// DEGENERATE GRADIENT — a symmetric thin plate (1-voxel slab) has a central difference of exactly
-	// 0 on both sides (a(x+1) = a(x-1) = 0); a wider gradient cannot fix that (team-review corrected).
-	// Fall back to the EMPTY-FACE weighted sum of the six face directions already fetched:
-	// one exposed side -> that face's direction; asymmetric exposure -> the composite direction.
-	// NOTE dir_f is a voxel-space axis — convert to WS before returning (returning a vox axis as a WS
-	// normal re-introduces the coordinate mixing on anisotropic grids).
-	float3 nf_vox = float3(1, 0, 0) * (1.0f - a_px) + float3(-1, 0, 0) * (1.0f - a_mx)
-	              + float3(0, 1, 0) * (1.0f - a_py) + float3(0, -1, 0) * (1.0f - a_my)
-	              + float3(0, 0, 1) * (1.0f - a_pz) + float3(0, 0, -1) * (1.0f - a_mz);
-	[branch]
-	if (dot(nf_vox, nf_vox) > VXGI_SURF_EPS2)
-	{
-		sn.normal_ws = normalize(TransformVector(nf_vox, g_cbVxgi.mat_vox2ws));
-		return sn;
-	}
-
-	// STILL cancelled — symmetric two-sided plate: an opposite face PAIR is empty on both sides.
-	// DOUBLE-SIDED: report the pair's + axis; the caller cone-traces BOTH hemispheres at 0.5 weight
-	// (2x cost for these voxels only). Physically right — a thin plate really is lit from both sides,
-	// and thin cortical shells / septa are exactly the geometry that needs GI most, so no skipping.
-	float best = 1e9f;
-	float3 axis_vox = (float3) 0;
-	if (a_px < VXGI_SURF_EMPTY_EPS && a_mx < VXGI_SURF_EMPTY_EPS) { best = a_px + a_mx; axis_vox = float3(1, 0, 0); }
-	if (a_py < VXGI_SURF_EMPTY_EPS && a_my < VXGI_SURF_EMPTY_EPS && a_py + a_my < best) { best = a_py + a_my; axis_vox = float3(0, 1, 0); }
-	if (a_pz < VXGI_SURF_EMPTY_EPS && a_mz < VXGI_SURF_EMPTY_EPS && a_pz + a_mz < best) { best = a_pz + a_mz; axis_vox = float3(0, 0, 1); }
-	[branch]
-	if (best < 1e8f)
-	{
-		sn.normal_ws = normalize(TransformVector(axis_vox, g_cbVxgi.mat_vox2ws));
-		sn.double_sided = true;
-		return sn;
-	}
-
-	// Unreachable by construction (the classification passed via an empty face or a strong gradient),
-	// kept as a defensive guard: report invalid so the caller writes 0.
-	sn.normal_ws = float3(0, 0, 1);
-	sn.valid = false;
-	return sn;
-}
+// DIAGNOSTIC isolation switches (0 in production) — each removes ONE phase-dependent input wholesale:
+//  * FIXED_NORMAL: every surface voxel traces the SAME WS hemisphere. AO bands still present with
+//    this on => the normal pipeline (gradient, gate, fallbacks) is fully exonerated and the bands
+//    enter through the traced field / anchor geometry. Bands gone => normal path is the carrier.
+//  * NO_ISO_ANCHOR: disable the iso-surface origin refinement (iso_d = 0). The anchor's ramp-slope
+//    estimate uses the RAW gradient, so its own phase noise can wobble the origin height while the
+//    slab still assumes a constant clearance — this switch isolates that channel.
+#define VXGI_SURF_DIAG_FIXED_NORMAL 0
+#define VXGI_SURF_DIAG_NO_ISO_ANCHOR 0
 
 [numthreads(8, 8, 8)]
 void VXGI_SurfaceGather(uint3 id : SV_DispatchThreadID)
@@ -142,56 +75,72 @@ void VXGI_SurfaceGather(uint3 id : SV_DispatchThreadID)
 	}
 
 	// ---- surface classification, INLINE (plan §3.1 — no separate classify pass in v1: the test costs
-	// only the 6 face-neighbour fetches below, and it runs on checkpoint frames only (2-3 per rebuild),
-	// so a reusable mask texture buys nearly nothing. Split into a SurfaceClassify pass + R8 mask if
+	// only the 6 face-neighbour fetches, and it runs on checkpoint frames only (2-3 per rebuild), so a
+	// reusable mask texture buys nearly nothing. Split into a SurfaceClassify pass + R8 mask if
 	// profiling ever shows this inline cost — the criteria are material-only, so the mask would stamp
-	// with the MAT stamp.) Criterion: occupied AND (any empty face neighbour OR on the coverage ramp).
-	const int Rmax = (int) R - 1;
-	const int3 ip = int3(id);
-	float a_px = CoverageAt(ip + int3(1, 0, 0), Rmax);
-	float a_mx = CoverageAt(ip - int3(1, 0, 0), Rmax);
-	float a_py = CoverageAt(ip + int3(0, 1, 0), Rmax);
-	float a_my = CoverageAt(ip - int3(0, 1, 0), Rmax);
-	float a_pz = CoverageAt(ip + int3(0, 0, 1), Rmax);
-	float a_mz = CoverageAt(ip - int3(0, 0, 1), Rmax);
-
-	float a_min = min(min(min(a_px, a_mx), min(a_py, a_my)), min(a_pz, a_mz));
-	float3 g_vox = float3(a_px - a_mx, a_py - a_my, a_pz - a_mz); // central difference (2-voxel baseline)
-	bool is_surface = (a_min < VXGI_SURF_EMPTY_EPS) || (dot(g_vox, g_vox) > VXGI_SURF_GRAD_TH * VXGI_SURF_GRAD_TH);
+	// with the MAT stamp.)
+	VXGI_SurfaceTest st = VXGI_ClassifySurface(grid_mat, int3(id), (int) R - 1);
 	[branch]
-	if (!is_surface)
+	if (!st.is_surface)
 	{
 		grid_surf[id] = (float4) 0; // interior voxel: Part D's in-medium diffusion owns it
 		return;
 	}
 
-	SurfaceNormal sn = CoverageGradientNormal(g_vox, a_px, a_mx, a_py, a_my, a_pz, a_mz);
+	SurfaceNormal sn = VXGI_CoverageGradientNormal(grid_mat, tex3D_volume, int3(id), st);
 	[branch]
 	if (!sn.valid)
 	{
 		grid_surf[id] = (float4) 0;
 		return;
 	}
+#if VXGI_SURF_DIAG_FIXED_NORMAL == 1
+	// DIAGNOSTIC: identical hemisphere everywhere — removes the normal as a variable entirely.
+	sn.normal_ws = float3(0, 0, 1);
+	sn.double_sided = false;
+#endif
 
 	// ---- hemisphere cone gather (2-texture march, plan §3.5): visibility/occlusion from grid_mat.a
 	// (true coverage), radiance from the CURRENT radiance field (bounce 0: the DIRECT seed; later
 	// checkpoints: direct + everything diffused so far — the refinement this pass exists for).
-	// Origin: pushed 2 voxels off the surface along the WS normal CONVERTED to voxel space (the same
-	// direction the cones will march), to dodge self-occlusion by the source voxel's own ramp.
 	float3 uv = (float3(id) + 0.5f) / (float) R;
 	float3 N_vox_axial = normalize(TransformVector(sn.normal_ws, g_cbVxgi.mat_ws2vox));
 
+	// PHASE-CONTINUOUS trace anchor: a fixed "center + 2 voxels" push gives every band voxel a
+	// DIFFERENT clearance above the true surface — the voxel center sits at a lattice-quantized,
+	// sub-voxel-phase-varying depth inside the ~2-voxel coverage ramp, so the cones' near-field
+	// occlusion oscillates with the surface phase and prints contour-following wave bands into
+	// surf.a. That is trace GEOMETRY: no sampling filter (cubic taps, jittered voxelize, exact DDA)
+	// can remove it — which is exactly how it survived all of them. Anchor the origin on the
+	// cov=0.5 ISOSURFACE instead: its distance along +N is ~(cov_center - 0.5)/slope with the ramp
+	// slope from the classification's own central difference (|g|/2 per voxel, floored against
+	// blow-up). Every band voxel then starts its cones at the SAME height above the SAME local
+	// surface — the lattice phase cancels out of the trace geometry entirely.
+	float slope = max(0.5f * length(st.g_vox), 0.15f); // coverage drop per voxel along N
+	float iso_d = sn.double_sided ? 0.0f               // thin plate: center IS the natural anchor
+	            : clamp((mat.a - 0.5f) / slope, -1.5f, 1.5f); // voxels from center to the iso, along +N
+#if VXGI_SURF_DIAG_NO_ISO_ANCHOR == 1
+	iso_d = 0.0f; // DIAGNOSTIC: plain voxel-center origins — isolates the anchor's slope-noise channel
+#endif
+
+	// start_dist = 2 voxels: together with the origin push this clears the local ramp for the 60-deg
+	// side cones too (their height gain is only 0.5/voxel — with a 1-voxel start their first samples
+	// grazed the ramp: systematic false cone occlusion; see the note in VXGI_TraceCone_2Tex).
+	// clearance above the local tangent plane (the iso anchor) = the origin push; the slab clip
+	// inside the trace measures every sample's height against that plane (staircase guard).
+	const float cone_start = VXGI_SURF_CONE_START_VOX / (float) R;
+	const float cone_clearance = VXGI_SURF_TRACE_OFFSET_VOX / (float) R;
 	float4 gi = VXGI_ConeTraceGI_2Tex(grid_mat, grid_prev, g_samplerLinear_clamp,
-		uv + N_vox_axial * (2.0f / (float) R), sn.normal_ws,
-		VXGI_CONE_APERTURE, g_cbVxgi.max_trace_dist, (float) R, VXGI_NUM_CONES);
+		uv + N_vox_axial * ((VXGI_SURF_TRACE_OFFSET_VOX + iso_d) / (float) R), sn.normal_ws,
+		VXGI_CONE_APERTURE, g_cbVxgi.max_trace_dist, (float) R, VXGI_NUM_CONES, cone_start, cone_clearance);
 	[branch]
 	if (sn.double_sided)
 	{
 		// symmetric thin plate: trace the opposite hemisphere too and average — both sides really
 		// receive light (2x cost on these voxels only).
 		float4 gi_back = VXGI_ConeTraceGI_2Tex(grid_mat, grid_prev, g_samplerLinear_clamp,
-			uv - N_vox_axial * (2.0f / (float) R), -sn.normal_ws,
-			VXGI_CONE_APERTURE, g_cbVxgi.max_trace_dist, (float) R, VXGI_NUM_CONES);
+			uv - N_vox_axial * (VXGI_SURF_TRACE_OFFSET_VOX / (float) R), -sn.normal_ws,
+			VXGI_CONE_APERTURE, g_cbVxgi.max_trace_dist, (float) R, VXGI_NUM_CONES, cone_start, cone_clearance);
 		gi = 0.5f * (gi + gi_back);
 	}
 
