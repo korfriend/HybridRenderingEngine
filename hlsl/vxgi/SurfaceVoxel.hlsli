@@ -114,9 +114,17 @@ struct SurfaceNormal
 // (the empty-face tests are occupancy semantics — smoothing them would blur the very emptiness they test).
 SurfaceNormal VXGI_CoverageGradientNormal(Texture3D grid_mat, Texture3D tex_vol, const in int3 id, const in VXGI_SurfaceTest st)
 {
+	// Fully initialized at declaration, as a DEFENSIVE default only — every return path below already
+	// assigns all four fields, and this is NOT what silenced the X4000 the struct appeared to be causing
+	// (that was g_vox's component-wise init; see the note there). Dead stores — the optimizer drops them.
+	// The defaults are the INVALID state deliberately, not a plausible-looking normal: if a future edit
+	// ever adds a return path that forgets `path`, the debug state view paints it magenta instead of
+	// silently reporting a healthy GRADIENT (a zero-default would have made exactly that mistake invisible).
 	SurfaceNormal sn;
+	sn.normal_ws = float3(0, 0, 1);
 	sn.double_sided = false;
 	sn.valid = true;
+	sn.path = VXGI_SURF_PATH_INVALID;
 
 	float Rf = (float) g_cbVxgi.grid_res;
 	float3 uvc = (float3(id) + 0.5f) / Rf;
@@ -126,13 +134,18 @@ SurfaceNormal VXGI_CoverageGradientNormal(Texture3D grid_mat, Texture3D tex_vol,
 	// knobs above (ring-ripple suppression: the support must exceed the ring wavelength).
 	float Rg = max(Rf / exp2(VXGI_SURF_GRAD_MIP), 1.0f); // texel count at the gradient mip
 	float e = VXGI_SURF_GRAD_STEP / Rf;                  // half-baseline in uv units
-	float3 g_vox;
-	g_vox.x = VXGI_SampleDensityCubic(grid_mat, uvc + float3(e, 0, 0), VXGI_SURF_GRAD_MIP, Rg)
-	        - VXGI_SampleDensityCubic(grid_mat, uvc - float3(e, 0, 0), VXGI_SURF_GRAD_MIP, Rg);
-	g_vox.y = VXGI_SampleDensityCubic(grid_mat, uvc + float3(0, e, 0), VXGI_SURF_GRAD_MIP, Rg)
-	        - VXGI_SampleDensityCubic(grid_mat, uvc - float3(0, e, 0), VXGI_SURF_GRAD_MIP, Rg);
-	g_vox.z = VXGI_SampleDensityCubic(grid_mat, uvc + float3(0, 0, e), VXGI_SURF_GRAD_MIP, Rg)
-	        - VXGI_SampleDensityCubic(grid_mat, uvc - float3(0, 0, e), VXGI_SURF_GRAD_MIP, Rg);
+	// Built with a single float3 constructor, NOT declare-then-write-.x/.y/.z: fxc does not treat the three
+	// component writes as proving the vector whole, so the declared-empty form left g_vox "potentially
+	// uninitialized" (X4000). The taint then propagated through out_vox into sn.normal_ws, and fxc reported
+	// it at the two enclosing branch merge points (the closing braces of the gradient / grad_sane blocks) —
+	// which is why the warning did NOT come from the struct it appeared to point at. Same math, no warning.
+	float3 g_vox = float3(
+		VXGI_SampleDensityCubic(grid_mat, uvc + float3(e, 0, 0), VXGI_SURF_GRAD_MIP, Rg)
+	  - VXGI_SampleDensityCubic(grid_mat, uvc - float3(e, 0, 0), VXGI_SURF_GRAD_MIP, Rg),
+		VXGI_SampleDensityCubic(grid_mat, uvc + float3(0, e, 0), VXGI_SURF_GRAD_MIP, Rg)
+	  - VXGI_SampleDensityCubic(grid_mat, uvc - float3(0, e, 0), VXGI_SURF_GRAD_MIP, Rg),
+		VXGI_SampleDensityCubic(grid_mat, uvc + float3(0, 0, e), VXGI_SURF_GRAD_MIP, Rg)
+	  - VXGI_SampleDensityCubic(grid_mat, uvc - float3(0, 0, e), VXGI_SURF_GRAD_MIP, Rg));
 #else
 	float3 g_vox = st.g_vox; // raw texel central difference (band-prone — A/B only)
 #endif
@@ -151,6 +164,14 @@ SurfaceNormal VXGI_CoverageGradientNormal(Texture3D grid_mat, Texture3D tex_vol,
 	// ISOLINES — manufacturing the very normal bands it was meant to prevent, immune to any amount
 	// of gradient smoothing (the flip happened after it).
 	bool face_valid = dot(nf_vox, nf_vox) > 0.25f;
+
+	// SINGLE EXIT (one `return sn` at the end), gated by this flag rather than an early return per path.
+	// fxc restructures a multi-return function into a single exit itself, and on the fall-through edges of
+	// these nested [branch] blocks its synthesized return temp reads as un-set — that, not the struct or the
+	// gradient vector, was the real source of the X4000 pair reported at the two closing braces. Writing the
+	// single exit explicitly removes the synthesized temp and the warning with it. Codegen is unchanged
+	// (fxc was already producing this shape); the flag folds away.
+	bool resolved = false;
 
 	[branch]
 	if (dot(g_vox, g_vox) > VXGI_SURF_EPS2)
@@ -199,22 +220,22 @@ SurfaceNormal VXGI_CoverageGradientNormal(Texture3D grid_mat, Texture3D tex_vol,
 			// through mat_vox2ws (this includes the rotation the bare axis-divide convention would drop).
 			float3 axis2 = g_cbVxgi.grid_axis_ws * g_cbVxgi.grid_axis_ws;
 			sn.normal_ws = normalize(TransformVector(out_vox / axis2, g_cbVxgi.mat_vox2ws));
-			return sn;
+			resolved = true;
 		}
 		// ring-corrupted gradient: fall through to the face path below (face_valid is true here)
 	}
-	
+
 	// DEGENERATE (thin plate: central difference exactly 0 on both sides — a wider gradient cannot
 	// fix that) or RING-CORRUPTED gradient — use the empty-face weighted sum:
 	// one exposed side -> that face's direction; asymmetric exposure -> the composite direction.
 	// NOTE dir_f is a voxel-space direction — convert to WS before returning (returning a vox axis as
 	// a WS normal re-introduces the coordinate mixing on anisotropic grids).
 	[branch]
-	if (face_valid)
+	if (!resolved && face_valid)
 	{
 		sn.normal_ws = normalize(TransformVector(nf_vox, g_cbVxgi.mat_vox2ws));
 		sn.path = VXGI_SURF_PATH_FACE;
-		return sn;
+		resolved = true;
 	}
 
 	// STILL cancelled — symmetric two-sided plate: an opposite face PAIR is empty on both sides.
@@ -227,19 +248,20 @@ SurfaceNormal VXGI_CoverageGradientNormal(Texture3D grid_mat, Texture3D tex_vol,
 	if (st.a_py < VXGI_SURF_EMPTY_EPS && st.a_my < VXGI_SURF_EMPTY_EPS && st.a_py + st.a_my < best) { best = st.a_py + st.a_my; axis_vox = float3(0, 1, 0); }
 	if (st.a_pz < VXGI_SURF_EMPTY_EPS && st.a_mz < VXGI_SURF_EMPTY_EPS && st.a_pz + st.a_mz < best) { best = st.a_pz + st.a_mz; axis_vox = float3(0, 0, 1); }
 	[branch]
-	if (best < 1e8f)
+	if (!resolved && best < 1e8f)
 	{
 		sn.normal_ws = normalize(TransformVector(axis_vox, g_cbVxgi.mat_vox2ws));
 		sn.double_sided = true;
 		sn.path = VXGI_SURF_PATH_DOUBLE;
-		return sn;
+		resolved = true;
 	}
 
 	// Unreachable by construction (the classification passed via an empty face or a strong gradient),
 	// kept as a defensive guard: report invalid so the caller writes 0 (debug mode 12 paints it magenta).
-	sn.normal_ws = float3(0, 0, 1);
-	sn.valid = false;
-	sn.path = VXGI_SURF_PATH_INVALID;
+	// The declaration defaults already ARE the invalid state, so this only has to clear `valid`.
+	if (!resolved)
+		sn.valid = false;
+
 	return sn;
 }
 

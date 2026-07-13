@@ -142,9 +142,15 @@ void VXGI_Gather(uint3 DTid : SV_DispatchThreadID)
 			float mata = grid_mat.Load(int4(vid, 0)).a;
 			if (dbg <= 4)
 			{
-				float4 sg = grid_surf.Load(int4(vid, 0));
-				// SurfaceGather writes non-surface voxels as exact 0 — that IS the surface mask.
-				bool has_surf = (sg.a > 0.0f) || any(sg.rgb > 0.0f);
+				// SURFACE MASK from the CLASSIFIER, not from the stored value. SurfaceGather does write
+				// non-surface voxels as exact 0, but the CONVERSE does not hold: a genuine surface voxel
+				// legitimately stores exact 0 when its hemisphere is fully open (cone occ = 0) and it sits
+				// in shadow (gathered indirect = 0) — i.e. an exposed, unlit surface. Inferring the mask
+				// from the value therefore erased precisely those voxels from these two views. Re-run the
+				// same predicate the real pass uses (mat.a > 0, then VXGI_ClassifySurface), exactly as
+				// modes 5/6 below already do, so all four SURF views agree on what a surface is.
+				bool has_surf = (mata > 0.0f) && VXGI_ClassifySurface(grid_mat, vid, Rm - 1).is_surface;
+				float4 sg = has_surf ? grid_surf.Load(int4(vid, 0)) : (float4) 0;
 				// 3: the surface indirect at the scale Propagate actually composites it
 				//    (SURFACE_GI_GAIN * (1-SCATTER_GAIN)), sqrt tone boost like mode 1;
 				// 4: cone occlusion, at the screen-blend scale (AO gain), white = blocked.

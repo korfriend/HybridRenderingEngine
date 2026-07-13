@@ -1482,6 +1482,37 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			const uint64_t vxgi_prev_mat_stamp = iobj->GetObjParam<uint64_t>("_uint64_VxgiMatStamp", (uint64_t)~0ull);
 			const bool vxgi_mat_changed = (vxgi_prev_mat_stamp != vxgi_mat_stamp);
 			const bool vxgi_rebuild = (vxgi_prev_stamp != vxgi_content_stamp);
+			// SUSTAINED-EDIT detection, for the surface-gather throttle in the rebuild branch below.
+			// grid_surf is stale the moment ANY rebuild lands (a MAT change moves the surface band itself;
+			// a light change moves the radiance the cones integrated). Propagate composites it (t11) on every
+			// bounce, so if the gather is skipped on the edit frame the OLD content's surface GI/AO rides the
+			// field all the way to the next refinement checkpoint at T/2 — 7 bounces at the default gain. The
+			// old gate made that the COMMON case AND a nondeterministic one: it keyed on the GLOBAL render
+			// counter, so a one-shot edit hit `% 8 == 0` only ~1 frame in 8 and the same edit behaved
+			// differently run to run.
+			// Gathering on the edit frame does NOT zero the stale term — the gather runs AFTER that frame's
+			// propagate (see the crossfade note below), so the old surf is still consumed by exactly ONE
+			// propagation and is then replaced. That single step is the intended crossfade residue; what this
+			// removes is the 7-bounce tail behind it and the pop when the T/2 checkpoint finally lands.
+			// Throttle only what actually needs throttling: a SUSTAINED edit (clip/OTF/light drag, sculpt
+			// stroke), where the rebuild branch is hit every frame and the stale surf is merely the PREVIOUS
+			// DRAG FRAME's — a small, gain-composited delta. There the 6-cone pass (a rebuild-class spike, on
+			// top of the per-frame re-voxelize) must stay throttled to keep the drag interactive.
+			// On stability: gathering more often is not a divergence risk, but not because the pass is
+			// feedback-free — it isn't. SurfaceGather writes grid_surf (u0) and reads the radiance grid (t8),
+			// which a previous Propagate already composited grid_surf INTO: the loop closes indirectly, through
+			// the checkpoints. It stays bounded because Propagate is a contraction (scatter gain clamped < 1)
+			// and the surface term enters at surface_gi_gain (~0.15). So the honest claim is not "cannot
+			// flicker" but: this trades the single large pop at bounce T/2 for smaller continuous change.
+			// ~0ull = "no rebuild yet" (same sentinel convention as _uint64_VxgiStamp above). NOT 0: core's
+			// renderer_excute_count starts at 0 and is forwarded BEFORE its post-render increment, so frame 0
+			// is a real frame index — a 0 default would alias "rebuilt on frame 0" with "never rebuilt" and
+			// mis-read the second frame of a drag that began on frame 0 as a fresh edit (a harmless extra
+			// gather, but the sentinel should not be ambiguous).
+			const uint64_t vxgi_prev_rebuild_frame = iobj->GetObjParam<uint64_t>("_uint64_VxgiRebuildFrame", (uint64_t)~0ull);
+			const bool vxgi_edit_sustained = (vxgi_prev_rebuild_frame != (uint64_t)~0ull)
+				&& (temporal_render_count >= vxgi_prev_rebuild_frame)
+				&& (temporal_render_count - vxgi_prev_rebuild_frame) <= 1;
 			if (vxgi_rebuild && !vxgi_mat_changed)
 				cbVxgi.vxgi_flag |= 0x10u; // bit4: LIGHT-ONLY inject — re-emit the baked DIRECT alpha (t11)
 			// upload the CB (deferred to here so the preserve-AO bit above is part of it)
@@ -1602,13 +1633,19 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 					// (same pattern as _bool_VxgiSlowMotion); the in-between frames keep the slightly stale
 					// surf (gain-composited, so no jump) and the convergence-loop checkpoints refine after
 					// release.
-					if (vxgi_surface_checkpoints > 0 && (temporal_render_count % 8) == 0)
+					// The throttle applies to SUSTAINED edits ONLY (see vxgi_edit_sustained): on the first
+					// frame of an edit the stale surf is the OLD content's, and it would otherwise ride the
+					// field for every bounce up to the T/2 checkpoint.
+					if (vxgi_surface_checkpoints > 0 && (!vxgi_edit_sustained || (temporal_render_count % 8) == 0))
 						vxgi_surface_gather();
 				}
 				iobj->SetObjParam("_uint64_VxgiStamp", vxgi_content_stamp);
 				iobj->SetObjParam("_uint64_VxgiMatStamp", vxgi_mat_stamp);
 				iobj->SetObjParam("_uint64_VxgiRestartApplied", vxgi_restart);
 				iobj->SetObjParam("_int_VxgiGridRes", (int)vxgi_R);
+				// Frame of THIS rebuild — the next one compares against it to tell a sustained drag (rebuilt
+				// on the previous frame too) from the first frame of an edit, which must gather immediately.
+				iobj->SetObjParam("_uint64_VxgiRebuildFrame", temporal_render_count);
 			}
 			else if (vxgi_bounce < VXGI_BOUNCE_TARGET
 				// Slow-motion is an explicit app toggle (SetRenderTestParam "_bool_VxgiSlowMotion"), no longer
