@@ -17,6 +17,14 @@
 //   * sculpt bits       : packed hidden-voxel bit test              [t7]
 // gated by the VXGI_MEDIUM_* flag bits (mirroring the DVR's mode selection).
 //
+// VXGI_MEDIUM_CONTEXT (VR_MODE 2) is a FIFTH gate but NOT one of these, and is
+// OPT-IN / DEFAULT OFF. The four above remove material — it is not there, so it
+// must not occlude. Context modulation makes material see-through — it IS still
+// there, and context-preserving DVR exists to keep it as context, so it should
+// still block and scatter. Also, DvrCS applies MODULATE to the whole sample
+// AFTER adding the in-scatter, so baking it here would apply it a second time
+// and wash the GI out. Left in as an option (A/B, or a modulated-look GI).
+//
 // DO NOT "unify" further than visibility: DvrCS's opacity_correction and
 // pre-integration MUST NOT be applied here. Those are ray-marching quantities
 // tied to the DVR's sample step (opacity per sample distance / OTF aliasing
@@ -96,7 +104,12 @@ void VXGI_VoxelizeVolume(uint3 id : SV_DispatchThreadID)
 	const float ts_cell = (1.0f / (float) R) / g_cbVxgi.vox_fit_scale; // one grid voxel, in volume ts units
 	const float3 ts_min = tsc - 1.0f * ts_cell;                       // 2-voxel footprint centered on the voxel
 
-	const bool clip_on = g_cbClipInfo.clip_flag != 0;
+	// Clip is now FLAGGED like the other medium gates (it used to read g_cbClipInfo.clip_flag directly).
+	// The C++ sets VXGI_MEDIUM_CLIP only when the clip is BOTH active and wanted in the medium — turning
+	// it off leaves the clipped material in the grid, so the clip becomes a pure viewing cutaway and its
+	// state stops driving the content stamp (no re-voxelize per drag frame). The clip_flag test is kept
+	// as a cheap belt-and-braces so a stale flag bit can never make IsInsideClipBound run on a zeroed CB.
+	const bool clip_on = VXGI_MEDIUM_CLIP && (g_cbClipInfo.clip_flag != 0);
 	const bool use_mask = VXGI_MEDIUM_OTF_MASK || VXGI_MEDIUM_SCULPT_MASK;
 	const int sculpt_value = (int) (g_cbVobj.vobj_flag >> 24);
 
@@ -143,6 +156,45 @@ void VXGI_VoxelizeVolume(uint3 id : SV_DispatchThreadID)
 		// opacity_correction / pre-integration must NOT be applied to this coverage field.
 		int oi_off = VXGI_MEDIUM_OTF_MASK ? mask_vint * (int) g_cbTmap.tmap_size_x : 0;
 		float4 o = buf_otf[oi + oi_off]; // unorm rgba : rgb = albedo, a = opacity
+
+		// ---- CONTEXT-AWARE (VR_MODE 2) medium — OPT-IN, DEFAULT OFF (_bool_VxgiContextMedium).
+		// See the header: this is deliberately NOT one of the parity gates. It makes the grid's medium
+		// follow the modulated picture, which measurably washes the GI out (the modulator then lands
+		// twice: once here, once when DvrCS scales the composited sample), and it deletes from the light
+		// transport the very material context-preserving DVR exists to preserve. Kept for A/B and for a
+		// deliberately modulated-look GI.
+		//
+		// What gets baked: MODULATE = A * B * C, of which only A is view-independent:
+		//     A = min(|grad| * 2 * value_range * grad_scale / grad_max, 1)   <- baked here
+		//     B = pow(clamp(depth_along_ray, .1, 1), kappa_i)                <- view: NOT bakeable
+		//     C = pow(max(1 - |dot(view, N)|, .1), kappa_s)                  <- view: NOT bakeable
+		// kappa_i/kappa_s default to 0 in the 3D DVR (VolumeRenderer.cpp), so pow(x,0)==1 and MODULATE
+		// reduces exactly to A there. (Raising kappa makes this an over-occluding approximation; the
+		// Curved slicer defaults kappa to 1 and is not covered — see VXGI_CONTEXT_DVR_PLAN.md.)
+		//
+		// The gradient comes from the ORIGINAL CT volume (t0) with the DVR's own voxel-step basis, via
+		// CENTRAL DIFFERENCE. NOT the DVR's GRAD_VOL (= GradientVolume3): that one is built on the ray
+		// basis and scaled by sample_dist, i.e. view- and samplerate-dependent, so it cannot be
+		// reproduced in a view-independent grid. The calibration point therefore differs slightly from
+		// the screen's; VXGI_CONTEXT_ALPHA_GAIN absorbs it.
+		//
+		// PER SUB-SAMPLE, like the OTF above, and for the same reason: modulating the AVERAGED alpha
+		// would re-sharpen the coverage ramp to ~1 voxel and reintroduce the interference the
+		// per-sub-sample OTF exists to prevent.
+		if (VXGI_MEDIUM_CONTEXT)
+		{
+			float3 g = GradientVolume(ts, g_cbVobj.vec_grad_x, g_cbVobj.vec_grad_y, g_cbVobj.vec_grad_z, tex3D_volume);
+			// grad_max == 0 is reachable (homogeneous / degenerate volume: GradientMagnitudeAnalysis).
+			// The DVR would only produce a bad pixel; here a NaN would be BAKED into the grid and then
+			// spread through mips / InjectLight / Propagate / SurfaceGather until the next rebuild.
+			// Same epsilon as the screen-side guard in MODULATE — they must saturate at the same point.
+			float m = min(length(g) * 2.f * g_cbVobj.value_range * g_cbVobj.grad_scale
+				/ max(g_cbVobj.grad_max, 1e-6f), 1.f);
+			// saturate: coverage in [0,1] is a contract (sigma_t conversion, cone visibility, surface
+			// classification all assume it) and the gain is allowed to exceed 1.
+			o.a = saturate(o.a * m * VXGI_CONTEXT_ALPHA_GAIN);
+		}
+
 		a_sum += o.a;
 		rgb_sum += o.rgb * o.a; // opacity-weighted albedo (empty sub-samples must not darken the color)
 	}

@@ -135,12 +135,20 @@
 		sort_shellOpt(num, fragments, FRAG)\
 }
 
-// sampling range Àû¿ë
+// sampling range ï¿½ï¿½ï¿½ï¿½
+/* GRAD_LENGTH must be the RAW gradient magnitude â€” do NOT pass a value with a normalization epsilon
+   folded in (that would give homogeneous regions a bogus non-zero modulator floor whose size scales
+   with value_range/grad_max, i.e. dataset-dependent). Keep the epsilon for `nrl` separate.
+   grad_max is guarded: GradientMagnitudeAnalysis (RendererHeader.cpp) yields 0 for a homogeneous or
+   degenerate volume, and this divide would then produce inf/NaN. The same epsilon appears in
+   hlsl/vxgi/Voxelize.hlsl, which bakes this very term into the VXGI coverage for VR_MODE 2 â€” the two
+   must saturate at the same point or screen and grid disagree. */
 #define MODULATE(NORM_D2, GRAD_LENGTH) {\
 			float __s = GRAD_LENGTH > 0.001f ? abs(dot(view_dir, nrl)) : 0;\
 			float kappa_t = g_cbVobj.kappa_i; /*5*/\
 			float kappa_s = g_cbVobj.kappa_s; /*0.5*/\
-			float modulator = min(GRAD_LENGTH * 2.f * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);\
+			float __grad_denom = max(g_cbVobj.grad_max, 1e-6f);\
+			float modulator = min(GRAD_LENGTH * 2.f * g_cbVobj.value_range * g_cbVobj.grad_scale / __grad_denom, 1.f);\
 			modulator *= pow(min(max(NORM_D2, 0.1), 1.f), kappa_t) * pow(max(1.f - __s, 0.1), kappa_s);\
 			vis_sample *= modulator;\
 }

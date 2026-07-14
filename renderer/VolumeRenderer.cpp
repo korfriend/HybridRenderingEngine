@@ -1263,7 +1263,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		// stamp, so camera moves no longer re-voxelize (the grid is view-independent). While the content is
 		// static, ONE VXGI_Propagate iteration runs per frame (up to a target bounce count): the radiance field
 		// visibly refines frame over frame, driven by the same convergence re-render loop TAA uses.
-		if (vxgi_on && is_last_dvr && !is_xray_mode)
+		const bool vxgi_active = vxgi_on && is_last_dvr && !is_xray_mode;
+		if (vxgi_active)
 		{
 			const uint32_t vxgi_R = (uint32_t)(vxgi_resolution > 0 ? vxgi_resolution : 128);
 			GpuRes gres_vxgi_mat, gres_vxgi_ping, gres_vxgi_direct, gres_vxgi_surf;
@@ -1282,19 +1283,77 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			CB_VXGI cbVxgi;
 			// debug byte for vxgi_flag[24:31]: mode (4b, from VXGI_DEBUG low byte) | mip (4b, from its high bits)
 			const uint32_t vxgi_debug_byte = ((uint32_t)vxgi_debug & 0xFu) | ((((uint32_t)vxgi_debug >> 8) & 0xFu) << 4);
-			// Medium-visibility parity with the DVR: material the DVR hides (multi-OTF row, sculpt mask/bits,
-			// clip box/plane) must not occlude or scatter light in the grid. Mirror the DVR's mode gating here;
-			// the Voxelize shader reads the SAME bindings the DVR march uses (t2 mask, t7 sculpt bits, b2 clip —
-			// all already bound above), gated by these flag bits. Clip needs no flag: g_cbClipInfo.clip_flag is
-			// authoritative in the shader.
+			// Medium-visibility gates: what of the DVR's own visibility the grid reproduces. The Voxelize
+			// shader reads the SAME bindings the DVR march uses (t2 mask, t7 sculpt bits, b2 clip — all bound
+			// above) and tests them PER SUB-SAMPLE, gated by these flag bits.
+			//
+			// CLIP and SCULPT are OPTIONAL, and DEFAULT OFF — a clip box or a sculpt is treated as a VIEWING
+			// CUTAWAY, not as a physical cut. The DVR still cuts the picture, but the grid keeps the whole
+			// volume, so the lighting stays that of the INTACT anatomy: you look inside a body that is still
+			// lit as a body. The cut interior is then lit as if the removed material were still there (a real
+			// consequence — it reads darker than a physically-cut face would).
+			//
+			// Turning a gate ON gives the physical reading instead: the material is removed from the grid, so
+			// it no longer shadows what it no longer covers, and the exposed cut face becomes a genuine
+			// surface (Voxelize's per-sub-sample test leaves it a ~2-voxel coverage ramp, so the surface
+			// classifier picks it up and it gets cone AO + surface GI).
+			//
+			// The default is OFF because ON is expensive in a way that is easy to under-estimate: the gate's
+			// state is exactly what puts clip/sculpt into the VXGI CONTENT STAMP (below). With a gate ON,
+			// every DRAG FRAME changes that state, which changes the MAT stamp, which re-runs Voxelize +
+			// BlurMat + GenerateMips + InjectLight — a rebuild-class spike per frame — while the crossfade
+			// path pins the bounce counter at 1, so the GI never converges for as long as you are dragging.
+			// With the gate OFF none of it is stamped: a clip drag costs the VXGI pipeline nothing and the
+			// diffusion keeps converging right through it.
+			//
+			// The multi-OTF gate is NOT optional: it selects WHICH OTF row defines the material, i.e. it is
+			// part of the material definition, not a removal.
+			const bool vxgi_clip_medium = _fncontainer->fnParams.GetParam("_bool_VxgiClipMedium", false);
+			const bool vxgi_sculpt_medium = _fncontainer->fnParams.GetParam("_bool_VxgiSculptMedium", false);
 			uint32_t vxgi_medium_flags = 0;
 			const bool vxgi_mask_bound = mask_vol_obj != NULL; // t2 bound above whenever present
 			if (vxgi_mask_bound && (ray_cast_type == __RM_MULTIOTF || ray_cast_type == __RM_MULTIOTF_MODULATION || ray_cast_type == __RM_OPAQUE_MULTIOTF))
 				vxgi_medium_flags |= 0x1; // per-mask OTF row
-			if (is_sculpt_mode && sculptBitPackedObj == NULL && vxgi_mask_bound)
+			if (vxgi_sculpt_medium && is_sculpt_mode && sculptBitPackedObj == NULL && vxgi_mask_bound)
 				vxgi_medium_flags |= 0x2; // sculpt mask (mask value vs sculpt_value)
-			if (is_sculpt_mode && sculptBitPackedObj != NULL)
+			if (vxgi_sculpt_medium && is_sculpt_mode && sculptBitPackedObj != NULL)
 				vxgi_medium_flags |= 0x4; // packed sculpt bits (t7)
+			// Set only when the clip is BOTH active and wanted, so the flag alone answers "is clip baked?" —
+			// the shader needs no second test and the stamp below keys off the same bit.
+			if (vxgi_clip_medium && cbClipInfo.clip_flag != 0)
+				vxgi_medium_flags |= 0x10; // clip box / plane (b2)
+			// CONTEXT-AWARE (VR_MODE 2) medium — OPT-IN, DEFAULT OFF. Bakes MODULATE's gradient-length term
+			// into the coverage so the grid's medium matches the modulated picture.
+			//
+			// OFF is the DEFAULT because it is the more correct model, not merely the better-looking one:
+			//
+			//  * Modulation is NOT the same kind of thing as clip / sculpt / OTF-mask. Those REMOVE material
+			//    — it is not there, so it must not occlude or scatter (that is the parity rule the other
+			//    three flags enforce). Context modulation makes material SEE-THROUGH: the skin is still
+			//    there, you are just looking past it at the bone. Context-preserving DVR exists precisely to
+			//    keep that material as context — so it should still block and scatter light. Baking the
+			//    modulation into the medium deletes from the light transport the very thing the mode is
+			//    named after.
+			//
+			//  * The modulator would be applied TWICE. On screen the in-scatter is added to vis_sample and
+			//    then MODULATE scales the whole sample (DvrCS.hlsl), so the GI term already carries the
+			//    modulator exactly once. Baking it into the grid dims the radiance field as well, and the
+			//    two compound — which is the washed-out look this flag produces in practice. With the flag
+			//    OFF the grid transports light through the REAL material and the modulator lands exactly
+			//    once, at display, on emission and in-scatter alike.
+			//
+			// Kept as an option for A/B and for anyone who does want the GI to follow the modulated look.
+			// Expect to raise the in-scatter intensity in VR_MODE 2 either way: the display is globally more
+			// transparent, so the GI reads fainter and the SOURCE is what compensates (a plain exposure
+			// adjustment — unlike the compounding above, it is not a structural error).
+			const bool vxgi_context_medium = _fncontainer->fnParams.GetParam("_bool_VxgiContextMedium", false);
+			const bool vxgi_context_on = is_modulation_mode && vxgi_context_medium;
+			if (vxgi_context_on)
+				vxgi_medium_flags |= 0x8; // all three modulation ray-cast types (is_modulation_mode), not just the plain one
+			// Coverage boost for the above (dev channel). The gradient shell the modulation leaves is thin
+			// against a grid voxel (grid ~1/4 the volume res), so the baked coverage can collapse to ~0.1-0.2
+			// and take the GI/AO with it. 1.0 = plain MODULATE parity. > 1 is legal (Voxelize saturates).
+			const float vxgi_context_gain = _fncontainer->fnParams.GetParam("_float_VxgiContextAlphaGain", 1.f);
 			// AO remap tuning knobs (dev channel: vzm::SetRenderTestParam -> fnParams, no public API).
 			// The cubic B-spline density taps spread thin-shell density more than the old trilinear ones,
 			// so pivot/slope may need per-dataset retuning; folded into the content stamp below so a
@@ -1334,9 +1393,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				vxgi_surf_gi_gain = 0.f;
 				vxgi_surf_ao_gain = 0.f;
 			}
-			grd_helper::SetCb_VXGI(cbVxgi, TRANSPOSE(cbVolumeObj.mat_ws2ts), vxgi_R, vxgi_gi_intensity, vxgi_ao_intensity, true, 1.f /* indirect retired */, vxgi_debug_byte, vxgi_medium_flags, vxgi_ao_pivot, vxgi_ao_slope, vxgi_scatter_gain, vxgi_surf_gi_gain, vxgi_surf_ao_gain);
+			grd_helper::SetCb_VXGI(cbVxgi, TRANSPOSE(cbVolumeObj.mat_ws2ts), vxgi_R, vxgi_gi_intensity, vxgi_ao_intensity, true, 1.f /* indirect retired */, vxgi_debug_byte, vxgi_medium_flags, vxgi_ao_pivot, vxgi_ao_slope, vxgi_scatter_gain, vxgi_surf_gi_gain, vxgi_surf_ao_gain, vxgi_context_gain);
 			// NOTE the CB is mapped BELOW, after the stamp split decides the light-only preserve-AO flag
-			// (vxgi_flag bit4) — it must be part of the uploaded flags for the InjectLight dispatch.
+			// (vxgi_flag bit6) — it must be part of the uploaded flags for the InjectLight dispatch.
 
 			// CONTENT stamp: volume voxels + OTF (transfer function) + the RESOLVED light state (post headlight
 			// resolution, so a camera-locked light correctly retriggers, while pure camera moves do not).
@@ -1355,21 +1414,47 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			// _uint64_VxgiRestartApplied, so it fires exactly ONCE per reload.
 			const uint64_t vxgi_restart = (uint64_t)_fncontainer->fnParams.GetParam("_int_VxgiRestart", (int)0)
 				^ (vxgi_hlsl_reload_gen << 32);
-			// MEDIUM state: what the DVR hides is part of the grid content — mask/sculpt edits, sculpt mode,
-			// and the ACTIVE clip state must re-voxelize (a moving clip box re-voxelizes every drag frame; the
-			// rebuild branch's per-frame propagate step crossfades the visible field along with the drag —
-			// staged rebuild is the future amortization if needed).
+			// MEDIUM state: whatever the grid actually BAKES is part of its content and must re-voxelize when
+			// it changes. The converse is what makes the gates worth having: a state the grid does NOT bake
+			// must NOT be stamped, or it would trigger rebuilds that change nothing.
+			//
+			// So every term below is keyed on the medium flag that put it into the bake, not on the DVR mode
+			// that made it visible. Concretely: with _bool_VxgiClipMedium off, dragging the clip box changes
+			// cbClipInfo every frame but touches no stamp — no Voxelize, no InjectLight, and the bounce
+			// counter is free to keep converging instead of being pinned at 1. That is the whole point.
+			//
+			// vxgi_medium_flags itself is stamped (<< 56), so toggling any gate re-bakes exactly once.
 			uint64_t vxgi_medium_stamp = (uint64_t)vxgi_medium_flags << 56;
-			if (mask_vol_obj)
+			const bool vxgi_stamp_otf_mask = (vxgi_medium_flags & 0x1) != 0;
+			const bool vxgi_stamp_sculpt_mask = (vxgi_medium_flags & 0x2) != 0;
+			const bool vxgi_stamp_sculpt_bits = (vxgi_medium_flags & 0x4) != 0;
+			const bool vxgi_stamp_clip = (vxgi_medium_flags & 0x10) != 0;
+			// The mask volume feeds TWO gates (multi-OTF row selection and mask-value sculpt), so it is
+			// content whenever EITHER reaches the bake — not whenever the object merely exists.
+			if (mask_vol_obj && (vxgi_stamp_otf_mask || vxgi_stamp_sculpt_mask))
 				vxgi_medium_stamp ^= mask_vol_obj->GetContentUpdateTime() << 2;
-			if (sculptBitPackedObj)
+			if (sculptBitPackedObj && vxgi_stamp_sculpt_bits)
 				vxgi_medium_stamp ^= sculptBitPackedObj->GetContentUpdateTime() << 3;
-			vxgi_medium_stamp ^= (uint64_t)(uint32_t)sculpt_index << 16;
+			// sculpt_index is the mask-value threshold: only the two sculpt gates read it.
+			if (vxgi_stamp_sculpt_mask || vxgi_stamp_sculpt_bits)
+				vxgi_medium_stamp ^= (uint64_t)(uint32_t)sculpt_index << 16;
 			vxgi_medium_stamp ^= (f2u64(vxgi_ao_pivot) << 20) ^ (f2u64(vxgi_ao_slope) << 28); // AO remap knobs re-bake
 			vxgi_medium_stamp ^= vxgi_mat_blur ? (1ull << 58) : 0ull; // MAT blur re-voxel-bakes too
-			if (cbClipInfo.clip_flag != 0)
-			{	// FNV-1a over the clip CB (flag/plane/box matrix) — inactive clip contributes nothing, so
-				// toggling it off still changes the stamp exactly once.
+			// CONTEXT (VR_MODE 2, opt-in): when the context medium is ON its inputs are baked into the
+			// coverage, so they are CONTENT — without this, dragging the grad-scale or gain slider would
+			// change the picture but not the grid. Keyed on vxgi_context_on, NOT on is_modulation_mode:
+			// with the flag off these values never reach the bake, so stamping them would trigger
+			// meaningless rebuilds on every modulation-knob tweak. (Toggling the flag itself re-bakes
+			// already — vxgi_medium_flags is stamped above.) kappa_i/kappa_s are deliberately absent even
+			// when on: they are the view-dependent factors, which are never baked.
+			if (vxgi_context_on)
+				vxgi_medium_stamp ^= f2u64(grad_minmax.y) ^ (f2u64(cbVolumeObj.grad_scale) << 8)
+					^ (f2u64(vxgi_context_gain) << 12);
+			if (vxgi_stamp_clip)
+			{	// FNV-1a over the clip CB (flag/plane/box matrix). Keyed on the medium flag, which is only set
+				// when the clip is active AND baked — so an inactive clip, or an active one with the gate off,
+				// contributes nothing. Either way toggling the state changes the stamp exactly once (the flag
+				// bits are stamped above), and with the gate off a clip DRAG costs zero VXGI work.
 				uint64_t clip_hash = 0xcbf29ce484222325ull;
 				const uint32_t* clip_w = (const uint32_t*)&cbClipInfo;
 				for (size_t cw = 0; cw < sizeof(CB_ClipInfo) / 4; cw++)
@@ -1514,7 +1599,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				&& (temporal_render_count >= vxgi_prev_rebuild_frame)
 				&& (temporal_render_count - vxgi_prev_rebuild_frame) <= 1;
 			if (vxgi_rebuild && !vxgi_mat_changed)
-				cbVxgi.vxgi_flag |= 0x10u; // bit4: LIGHT-ONLY inject — re-emit the baked DIRECT alpha (t11)
+				cbVxgi.vxgi_flag |= 0x40u; // bit6: LIGHT-ONLY inject — re-emit the baked DIRECT alpha (t11)
 			// upload the CB (deferred to here so the preserve-AO bit above is part of it)
 			D3D11_MAPPED_SUBRESOURCE mappedResVxgi;
 			dx11DeviceImmContext->Map(cbuf_vxgi, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResVxgi);
@@ -1677,6 +1762,29 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			// with the MAT coverage at the same lod — see the AO fetch in DvrCS.
 			SET_SHADER_RES(8, 1, &vxgi_grid_srv);
 			SET_SHADER_RES(9, 1, &vxgi_mat_srv);
+		}
+		else
+		{
+			// DISABLED-STATE CONTRACT. b13 and t8/t9 are immediate-context state that OUTLIVES this draw:
+			// bindings persist across volumes and across frames. Leave them alone and a VXGI-off (or
+			// non-owner, or x-ray) march reads whatever the last VXGI-on draw left there — in particular
+			// cbuf_vxgi still holds vxgi_flag bit0 = 1, so VXGI_IS_ENABLED is STALE TRUE and the shader
+			// takes the in-scatter path against grids it does not own.
+			//
+			// This has been harmless only by luck: the SRVs happen to be null by then, and a null-SRV
+			// sample returns 0, which sends the AO term through 0/max(0,1e-3) -> sqrt(0) -> factor 1 (an
+			// identity) and the in-scatter to +0. Any change to that arithmetic breaks it silently. So
+			// state it as a contract instead: when VXGI is not active for this draw, b13 carries a
+			// DISABLED CB and t8/t9 are explicitly null.
+			CB_VXGI cbVxgiOff; // ZERO_SET ctor: vxgi_flag = 0 => VXGI_IS_ENABLED reads false
+			ID3D11Buffer* cbuf_vxgi_off = psoManager->get_cbuf("CB_VXGI");
+			D3D11_MAPPED_SUBRESOURCE mappedResVxgiOff;
+			dx11DeviceImmContext->Map(cbuf_vxgi_off, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResVxgiOff);
+			memcpy(mappedResVxgiOff.pData, &cbVxgiOff, sizeof(CB_VXGI));
+			dx11DeviceImmContext->Unmap(cbuf_vxgi_off, 0);
+			SET_CBUFFERS(13, 1, &cbuf_vxgi_off);
+			SET_SHADER_RES(8, 1, dx11SRVs_NULL);
+			SET_SHADER_RES(9, 1, dx11SRVs_NULL);
 		}
 #endif
 
@@ -1960,11 +2068,12 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		// VXGI v2: the RayCasting dispatch above sampled the voxel grid as SRV t8 (in-scatter) and the MAT
 		// grid as t9 (coverage for AO un-premultiply). The grid build + binds now happen BEFORE RayCasting
 		// (see the block right after the volume CB setup); release both here.
-		if (vxgi_on && is_last_dvr && !is_xray_mode)
-		{
-			SET_SHADER_RES(8, 1, dx11SRVs_NULL);
-			SET_SHADER_RES(9, 1, dx11SRVs_NULL);
-		}
+		// UNCONDITIONAL on purpose (it used to be gated on vxgi_active): these slots are rebound as UAVs by
+		// the next rebuild's Voxelize/Propagate dispatches, so leaving a live SRV here is an SRV/UAV hazard —
+		// and a conditional release is exactly what lets a binding survive into a draw that does not own it.
+		// Nulling slots this draw never bound is free.
+		SET_SHADER_RES(8, 1, dx11SRVs_NULL);
+		SET_SHADER_RES(9, 1, dx11SRVs_NULL);
 
 		// Slicer x-ray image-level post-processing filter + mesh composite (single fused pass).
 		// Runs once, after the LAST DVR volume, when the post-filter is enabled. On that volume DvrCS wrote

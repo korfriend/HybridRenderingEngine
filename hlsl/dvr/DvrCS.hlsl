@@ -1295,8 +1295,15 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 #pragma region VR_MODE 2: context-aware
 #if VR_MODE == 2
-			float grad_len = length(grad) + 0.001f;
-			float3 nrl = grad / grad_len;
+			// The epsilon belongs to the NORMALIZATION only. It used to be folded into grad_len itself,
+			// which then went to MODULATE as GRAD_LENGTH — giving homogeneous regions a non-zero
+			// modulator floor of eps*2*value_range*grad_scale/grad_max (dataset-dependent, not small),
+			// and saturating to 1 outright when grad_max == 0. It also made THIS slab disagree with the
+			// rest of the ray: the main march below and the CurvedSlicer both pass the raw length.
+			// VXGI bakes the same raw-|grad| term into its coverage (hlsl/vxgi/Voxelize.hlsl), so the
+			// screen/grid parity the context-aware VXGI path relies on needs the raw value here too.
+			float grad_len = length(grad);
+			float3 nrl = grad / max(grad_len, 1e-3f);
 #endif
 #pragma endregion // VR_MODE 2: context-aware
 			//float4 vis_sample = vis_otf;

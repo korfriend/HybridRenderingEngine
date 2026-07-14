@@ -2739,7 +2739,7 @@ void grd_helper::SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, 
 	cb_cam.far_plane = (float)fp;
 }
 
-void grd_helper::SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const uint32_t resolution, const float gi_intensity, const float ao_intensity, const bool enabled, const float indirect_intensity, const uint32_t debug_byte, const uint32_t medium_flags, const float ao_pivot, const float ao_slope, const float scatter_gain, const float surface_gi_gain, const float surface_cone_ao_gain)
+void grd_helper::SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const uint32_t resolution, const float gi_intensity, const float ao_intensity, const bool enabled, const float indirect_intensity, const uint32_t debug_byte, const uint32_t medium_flags, const float ao_pivot, const float ao_slope, const float scatter_gain, const float surface_gi_gain, const float surface_cone_ao_gain, const float context_alpha_gain)
 {
 	// mat_ws2vox_raw maps world -> voxel [0,1]. For v1 the caller passes the volume's world->texture matrix
 	// (grd_helper::SetCb_VolumeObj mat_ws2ts), so the grid aligns with the volume box. Stored transposed for
@@ -2767,9 +2767,10 @@ void grd_helper::SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const u
 	cb.mat_ws2vox = TRANSPOSE(mat_ws2vox);
 	cb.grid_res = resolution;
 	cb.vxgi_flag = (enabled ? 0x1u : 0x0u)             // [0:7]  flags
-		| ((medium_flags & 0x7u) << 1)                 //        bit1..3: otf-mask / sculpt-mask / sculpt-bits (DVR visibility parity)
+		| ((medium_flags & 0x1Fu) << 1)                //        bit1..5: otf-mask / sculpt-mask / sculpt-bits / context / clip
 		| ((num_cones & 0xFFFFu) << 8)                 // [8:23] cone count
 		| ((debug_byte & 0xFFu) << 24);                // [24:31] debug: mode(4b) | mip(4b)
+	// (bit6 = preserve-AO is OR'd in by VolumeRenderer after the stamp split, not here. bit7 free.)
 	cb.gi_ao_intensity = (uint32_t)XMConvertFloatToHalf(gi_intensity)
 		| ((uint32_t)XMConvertFloatToHalf(ao_intensity) << 16);
 	cb.indirect_aperture = (uint32_t)XMConvertFloatToHalf(indirect_intensity)
@@ -2805,7 +2806,12 @@ void grd_helper::SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const u
 	// checkpoint count — do not widen this clamp.
 	cb.surface_gi_gain = max(0.f, min(0.95f, surface_gi_gain));
 	cb.surface_cone_ao_gain = max(0.f, surface_cone_ao_gain); // shader saturates the blended product
-	cb.vxgi_dummy4 = 0;
+	// VR_MODE 2 coverage boost. NO upper clamp — the Voxelize saturate() owns that end, and > 1 is the
+	// whole point (the modulated gradient shell is thin relative to a grid voxel, so its baked coverage
+	// needs lifting). The lower guard is really a NaN guard: a NaN would be baked into grid_mat and then
+	// spread through mips / InjectLight / Propagate until the next rebuild, and saturate(NaN) is not
+	// guaranteed to be 0 across drivers — so it must not reach the shader in the first place.
+	cb.context_alpha_gain = (context_alpha_gain > 0.f) ? context_alpha_gain : 0.f; // false for NaN too
 }
 
 void grd_helper::SetCb_Env(CB_EnvState& cb_env, VmCObject* ccobj, const LightSource& light_src, const GlobalLighting& global_lighting, const LensEffect& lens_effect)

@@ -116,7 +116,7 @@ struct HxCB_VXGI
 	float4x4 mat_ws2vox;     // world -> voxel [0,1] space
 
 	uint  grid_res;
-	uint  vxgi_flag;         // [0:7] flags (bit0=enabled, bit1=otf-mask, bit2=sculpt-mask, bit3=sculpt-bits, bit4=preserve-AO light-only inject) | [8:23] num_cones | [24:27] debug mode | [28:31] debug mip
+	uint  vxgi_flag;         // [0:7] flags (bit0=enabled, bit1=otf-mask, bit2=sculpt-mask, bit3=sculpt-bits, bit4=context/VR_MODE2, bit5=clip, bit6=preserve-AO light-only inject) | [8:23] num_cones | [24:27] debug mode | [28:31] debug mip
 	uint  gi_ao_intensity;   // half(gi = volumetric in-scatter) | half(ao = surface AO) << 16
 	uint  indirect_aperture; // half(indirect = surface bounce) | half(cone_aperture) << 16
 
@@ -137,7 +137,7 @@ struct HxCB_VXGI
 	float scatter_gain;       // diffusion in-scatter gain per iteration (runtime knob; read via VXGI_SCATTER_GAIN)
 	float surface_gi_gain;    // Part C: surface cone indirect strength (read via VXGI_SURFACE_GI_GAIN)
 	float surface_cone_ao_gain; // Part C: surface cone AO blend strength (read via VXGI_SURFACE_CONE_AO_GAIN)
-	float vxgi_dummy4;
+	float context_alpha_gain;   // VR_MODE 2 coverage boost (read via VXGI_CONTEXT_ALPHA_GAIN; 1 = off)
 };
 
 struct HxCB_ClipInfo
@@ -432,9 +432,25 @@ cbuffer cbGlobalParams : register(b13)
 #define VXGI_MEDIUM_OTF_MASK    ((g_cbVxgi.vxgi_flag & 0x2u) != 0) // per-mask OTF row (t2 mask id)
 #define VXGI_MEDIUM_SCULPT_MASK ((g_cbVxgi.vxgi_flag & 0x4u) != 0) // mask-value sculpt hiding (t2)
 #define VXGI_MEDIUM_SCULPT_BITS ((g_cbVxgi.vxgi_flag & 0x8u) != 0) // packed sculpt-bit hiding (t7)
+// CLIP (box/plane) — OPTIONAL, DEFAULT OFF (_bool_VxgiClipMedium). Off => the clip is a pure VIEWING
+// cutaway: the DVR still cuts the picture, but the grid keeps the whole volume, so the lighting stays
+// that of the intact anatomy — and, decisively, clip state stops feeding the VXGI content stamp, so
+// dragging the clip box no longer re-voxelizes every frame. On => the physical reading (material removed,
+// the cut face becomes a lit surface), at the cost of a rebuild-class spike per drag frame.
+// Set only when the clip is BOTH active and baked, so the shader needs no second test.
+#define VXGI_MEDIUM_CLIP        ((g_cbVxgi.vxgi_flag & 0x20u) != 0)
+// CONTEXT-AWARE DVR (VR_MODE 2) medium — OPT-IN, DEFAULT OFF (_bool_VxgiContextMedium). Bakes the
+// view-independent factor of the MODULATE macro (hlsl/macros.hlsl) into the coverage, so the grid's
+// medium matches the modulated picture. It is NOT a parity flag like the three above, and that is the
+// point: clip/sculpt/OTF-mask REMOVE material (not there -> must not occlude), while modulation only
+// makes material SEE-THROUGH (still there -> should still block and scatter). On top of that, the DVR
+// already applies MODULATE to the whole sample AFTER adding the in-scatter, so baking it here applies
+// it twice and washes the GI out. Default OFF => the grid transports light through the real material
+// and the modulator lands exactly once, at display. See hlsl/vxgi/Voxelize.hlsl.
+#define VXGI_MEDIUM_CONTEXT     ((g_cbVxgi.vxgi_flag & 0x10u) != 0)
 // LIGHT-ONLY rebuild (split stamps): InjectLight re-emits the baked DIRECT alpha (t11 = prev DIRECT
 // copy) instead of recomputing the material-only cubic obscurance
-#define VXGI_PRESERVE_AO        ((g_cbVxgi.vxgi_flag & 0x10u) != 0)
+#define VXGI_PRESERVE_AO        ((g_cbVxgi.vxgi_flag & 0x40u) != 0)
 #define VXGI_NUM_CONES        ((g_cbVxgi.vxgi_flag >> 8) & 0xFFFFu)
 #define VXGI_DEBUG_MODE       ((g_cbVxgi.vxgi_flag >> 24) & 0xFu)
 #define VXGI_DEBUG_MIP        ((g_cbVxgi.vxgi_flag >> 28) & 0xFu)
@@ -468,6 +484,11 @@ cbuffer cbGlobalParams : register(b13)
 // obscurance: obsc' = 1 - (1-obsc_density)*(1-saturate(GAIN*surf.a)); 0 = density AO only (v4 exact).
 #define VXGI_SURFACE_GI_GAIN      (g_cbVxgi.surface_gi_gain)
 #define VXGI_SURFACE_CONE_AO_GAIN (g_cbVxgi.surface_cone_ao_gain)
+// VR_MODE 2 coverage boost (VXGI_MEDIUM_CONTEXT only; 1 = plain MODULATE parity). The gradient shell
+// the modulation leaves behind is thin relative to a grid voxel (the grid is ~1/4 the volume res), so
+// the baked coverage can collapse to ~0.1-0.2 and take the GI/AO with it. This scales the modulated
+// coverage back up; the shader saturates afterwards, so values > 1 are legal (CPU clamps the low end).
+#define VXGI_CONTEXT_ALPHA_GAIN   (g_cbVxgi.context_alpha_gain)
 // ---------------------------------------------------------------------------------------------------
 // VXGI AO history — how obscurance/AO was computed in previous versions, and why it is THIS way now:
 //  * v1..v3 (RETIRED): a screen-space gather pass (hlsl/vxgi/Gather.hlsl, now debug-only) reconstructed

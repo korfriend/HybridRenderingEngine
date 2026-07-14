@@ -640,7 +640,7 @@ namespace grd_helper
 		vmmat44f mat_ws2vox;         // world -> voxel [0,1] space (= volume mat_ws2ts)
 
 		uint32_t grid_res;           // cubic grid resolution (voxels per axis)
-		uint32_t vxgi_flag;          // [0:7] flags (bit0=enabled, bit1=otf-mask, bit2=sculpt-mask, bit3=sculpt-bits, bit4=preserve-AO light-only inject — set by VolumeRenderer, not SetCb_VXGI) | [8:23] num_cones | [24:27] debug mode | [28:31] debug mip
+		uint32_t vxgi_flag;          // [0:7] flags (bit0=enabled, bit1=otf-mask, bit2=sculpt-mask, bit3=sculpt-bits, bit4=context/VR_MODE2, bit5=clip, bit6=preserve-AO light-only inject — set by VolumeRenderer, not SetCb_VXGI) | [8:23] num_cones | [24:27] debug mode | [28:31] debug mip
 		uint32_t gi_ao_intensity;    // half(gi_intensity = volumetric in-scatter) | half(ao_intensity = surface AO) << 16
 		uint32_t indirect_aperture;  // half(indirect_intensity = surface bounce) | half(cone_aperture) << 16
 
@@ -663,7 +663,7 @@ namespace grd_helper
 		float    scatter_gain;       // diffusion in-scatter gain per iteration (HLSL VXGI_SCATTER_GAIN)
 		float    surface_gi_gain;    // Part C surface cone indirect strength (HLSL VXGI_SURFACE_GI_GAIN; clamped [0, 0.95])
 		float    surface_cone_ao_gain; // Part C surface cone AO blend strength (HLSL VXGI_SURFACE_CONE_AO_GAIN; 0 = density AO only)
-		float    vxgi_dummy4;
+		float    context_alpha_gain; // VR_MODE 2 coverage boost (HLSL VXGI_CONTEXT_ALPHA_GAIN; 1 = plain MODULATE parity, > 1 legal — shader saturates)
 
 		ZERO_SET(CB_VXGI)
 	};
@@ -1029,9 +1029,13 @@ namespace grd_helper
 	// Fill the VXGI constant buffer (register b13). mat_ws2vox_raw = world->voxel[0,1] (volume mat_ws2ts for v1).
 	// gi/ao/indirect intensities gate the three effects individually (0 = off); they are half-packed into the
 	// CB. debug_byte = (mode & 0xF) | (mip & 0xF) << 4, packed into vxgi_flag's top byte.
-	// medium_flags: visibility parity with the DVR mode (bit0=multi-OTF, bit1=sculpt-mask, bit2=sculpt-bits)
-	// — packed into vxgi_flag bits [1:3]; the Voxelize shader gates its per-sub-sample tests on them.
-	void SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const uint32_t resolution, const float gi_intensity, const float ao_intensity, const bool enabled, const float indirect_intensity = 1.f, const uint32_t debug_byte = 0, const uint32_t medium_flags = 0, const float ao_pivot = 0.3f, const float ao_slope = 1.5f, const float scatter_gain = 0.75f, const float surface_gi_gain = 0.15f, const float surface_cone_ao_gain = 1.f);
+	// medium_flags: what the Voxelize shader reproduces of the DVR's own visibility (bit0=multi-OTF,
+	// bit1=sculpt-mask, bit2=sculpt-bits, bit3=context/VR_MODE2, bit4=clip) — packed into vxgi_flag bits
+	// [1:5]; Voxelize gates its per-sub-sample tests on them. The caller decides which of these to enable:
+	// a gate NOT set means that material stays in the grid (it still occludes and scatters) AND its state
+	// stops feeding the VXGI content stamp, so editing it does not re-voxelize.
+	// context_alpha_gain applies to the context flag only (see VXGI_CONTEXT_ALPHA_GAIN).
+	void SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const uint32_t resolution, const float gi_intensity, const float ao_intensity, const bool enabled, const float indirect_intensity = 1.f, const uint32_t debug_byte = 0, const uint32_t medium_flags = 0, const float ao_pivot = 0.3f, const float ao_slope = 1.5f, const float scatter_gain = 0.75f, const float surface_gi_gain = 0.15f, const float surface_cone_ao_gain = 1.f, const float context_alpha_gain = 1.f);
 	// each object
 	void SetCb_TMap(CB_TMAP& cb_tmap, VmObject* tobj);
 	//bool SetCbVrShadowMap(CB_VrShadowMap* pCBVrShadowMap, CB_VrCameraState* pCBVrCamStateForShadowMap, vmfloat3 f3PosOverviewBoxMinWS, vmfloat3 f3PosOverviewBoxMaxWS, map<string, void*>* pmapCustomParameter);
