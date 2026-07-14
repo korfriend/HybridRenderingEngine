@@ -273,6 +273,7 @@
 
 #define IDR_RCDATA72000					  72000
 #define IDR_RCDATA72001					  72001
+#define IDR_RCDATA72002					  72002
 
 // VXGI (Voxel Cone Tracing GI) compute shaders
 #define IDR_RCDATA52000					  52000

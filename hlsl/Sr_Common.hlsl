@@ -151,7 +151,7 @@ VS_OUTPUT_TTT CommonVS_PTTT(VS_INPUT_PTTT input)
 
 // POBJ_PRE_CONTEXT(EXIT_OUT)
 
-Texture2D<unorm float4> sr_fragment_vis : register(t10);
+Texture2D<float4> sr_fragment_vis : register(t10);
 Texture2D<float> sr_fragment_zdepth : register(t11);
 #if DX10_0 == 1
 Texture2D<float> sr_fragment_zdepth_prev : register(t12);

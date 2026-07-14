@@ -468,7 +468,7 @@ ByteAddressBuffer moment_container_buf : register(t20);
 
 // unless PIXEL_SYNCH, use built-in blending pipeline (not stable implementation at this moment)
 #if PIXEL_SYNCH
-RWTexture2D<unorm float4> fragment_blendout : register(u2);
+RWTexture2D<float4> fragment_blendout : register(u2);
 RWTexture2D<float> fragment_zdepth : register(u3);
 #if USE_ROV == 0
 RWTexture2D<uint> fragment_spinlock : register(u4); // ROV or not

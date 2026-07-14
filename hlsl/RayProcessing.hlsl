@@ -206,7 +206,7 @@ Texture2D prev_fragment_vis : register(t20);
 //RWByteAddressBuffer deep_k_buf : register(u4);
 #endif
 RWBuffer<uint> picking_buf : register(u2);
-RWTexture2D<unorm float4> fragment_vis : register(u3);
+RWTexture2D<float4> fragment_vis : register(u3);
 RWTexture2D<float> fragment_zdepth : register(u4);
 #endif
 

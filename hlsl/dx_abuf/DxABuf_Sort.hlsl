@@ -2,7 +2,7 @@
 
 RWTexture2D<uint> fragment_counter : register(u0);
 RWByteAddressBuffer deep_dynK_buf : register(u1);
-RWTexture2D<unorm float4> fragment_blendout : register(u2);
+RWTexture2D<float4> fragment_blendout : register(u2);
 RWTexture2D<float> fragment_zdepth : register(u3);
 RWBuffer<uint> offsettable_buf : register(u4); // gres_fb_ref_pidx // only for the count pass
 //RWByteAddressBuffer deep_ubk_buf : register(u5); // only for the resolve pass
@@ -11,10 +11,10 @@ RWBuffer<uint> offsettable_buf : register(u4); // gres_fb_ref_pidx // only for t
 Texture2D<uint> srv_fragment_counter : register(t0);
 #endif
 
-Texture2D<unorm float4> srv_fragment_rgba_singleLayer : register(t1);
+Texture2D<float4> srv_fragment_rgba_singleLayer : register(t1);
 Texture2D<float> srv_fragment_zdepth_singleLayer : register(t2);
 
-Texture2D<unorm float4> srv_fragment_blendout : register(t3);
+Texture2D<float4> srv_fragment_blendout : register(t3);
 Texture2D<float> srv_fragment_zdepth : register(t4);
 
 //#define NUM_K 8 // (must be 4x)

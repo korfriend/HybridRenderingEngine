@@ -35,7 +35,7 @@ Buffer<uint> sr_offsettable_buf : register(t50); // gres_fb_ref_pidx (non-slicer
 //   u5 : fragment_zthick (read the volume slab thickness DvrCS wrote in the bit-2 path)
 RWTexture2D<uint> fragment_counter : register(u0);
 RWByteAddressBuffer deep_dynK_buf : register(u1);
-RWTexture2D<unorm float4> fragment_vis : register(u2);
+RWTexture2D<float4> fragment_vis : register(u2);
 RWTexture2D<float> fragment_zdepth : register(u3);
 RWTexture2D<float> fragment_zthick : register(u5);
 
@@ -119,6 +119,6 @@ void XrayFilterComposite(uint3 DTid : SV_DispatchThreadID)
 	INTERMIX(vis_out, idx_dlayer, num_frags, vol, vol_depth, vthick, fs, 1.0);
 	REMAINING_MIX(vis_out, idx_dlayer, num_frags, fs);
 			
-	fragment_vis[xy] = saturate(vis_out);
+	fragment_vis[xy] = StoreRadiance(vis_out); // FP16 linear: keep HDR (see StoreRadiance)
 	fragment_zdepth[xy] = min(vol_depth, fs[0].z); // final composited depth for downstream passes
 }

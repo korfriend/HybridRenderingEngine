@@ -320,6 +320,45 @@ bool __InitializeDevice()
 		HRESULT hh = g_pdx11Device->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS3, &FeatureData, sizeof(D3D11_FEATURE_DATA_D3D11_OPTIONS3));
 		if (!SUCCEEDED(hh)) {
 		}
+		// Diagnostic for the HDR color chain. The FP16 targets need two things:
+		//   * typed UAV STORE on R16G16B16A16_FLOAT -- required at feature level 11_0, so never in question;
+		//   * typed UAV LOAD on the same format -- gated by TypedUAVLoadAdditionalFormats.
+		//
+		// The load is NOT a new requirement this pipeline introduces. The compositing passes already read their
+		// color target through a UAV (DvrCS fragment_vis, RayProcessing fragment_vis, SecondLayerBlend), and
+		// R8G8B8A8_UNORM typed UAV load is outside the 11_0 required set for exactly the same reason -- it sits
+		// behind the same all-or-nothing cap, whose guaranteed list covers RGBA8_UNORM and RGBA16F together. So
+		// any device already running this renderer reports the cap TRUE; widening the targets from RGBA8 to FP16
+		// cannot make a machine that worked stop working. (TaaResolve has in fact been doing an RGBA16F UAV load
+		// on its history buffer all along.)
+		//
+		// Logged, never silently acted on: a quiet fallback would produce a subtly different image on some
+		// machines with no clue as to why, which is far worse to chase than a loud line in the log.
+		{
+			D3D11_FEATURE_DATA_D3D11_OPTIONS2 opts2 = {};
+			bool typed_uav_ok = false;
+			if (SUCCEEDED(g_pdx11Device->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS2, &opts2, sizeof(opts2)))
+				&& opts2.TypedUAVLoadAdditionalFormats)
+			{
+				D3D11_FEATURE_DATA_FORMAT_SUPPORT2 fs2 = {};
+				fs2.InFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
+				if (SUCCEEDED(g_pdx11Device->CheckFeatureSupport(D3D11_FEATURE_FORMAT_SUPPORT2, &fs2, sizeof(fs2))))
+					typed_uav_ok = (fs2.OutFormatSupport2 & D3D11_FORMAT_SUPPORT2_UAV_TYPED_LOAD)
+						&& (fs2.OutFormatSupport2 & D3D11_FORMAT_SUPPORT2_UAV_TYPED_STORE);
+			}
+			if (!typed_uav_ok)
+			{
+				// Hard minimum requirement, not a warning. A device that cannot do this cannot run the HDR
+				// compositing chain at all, and continuing would hand the app a silently wrong image -- far
+				// harder to diagnose than a refused init. Failing here states the contract in one place.
+				vzlog_error("Unsupported GPU: the DX11.3 renderer requires typed UAV load/store for "
+					"R16G16B16A16_FLOAT (D3D11_FEATURE_D3D11_OPTIONS2::TypedUAVLoadAdditionalFormats). "
+					"This is the minimum device capability for the HDR color pipeline / tonemapper.");
+				return false;
+			}
+			vzlog("HDR pipeline: R16G16B16A16_FLOAT typed UAV load/store supported.");
+		}
+
 		HRESULT hr = g_pdx11Device->QueryInterface(IID_PPV_ARGS(&g_pdx11Device3));
 		if (SUCCEEDED(hr) && g_pdx11Device3)
 		{

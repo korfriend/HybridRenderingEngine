@@ -16,7 +16,7 @@ cbuffer cbGlobalParams : register(b11)
 	HxCB_Particle_Blob g_cbPclBlob;
 }
 
-RWTexture2D<unorm float4> fragment_rgba_singleLayer : register(u1);
+RWTexture2D<float4> fragment_rgba_singleLayer : register(u1);
 RWTexture2D<float> fragment_zdepth_singleLayer : register(u2);
 RWTexture2D<float> fragment_temp_zdepth_singleLayer : register(u3);
 

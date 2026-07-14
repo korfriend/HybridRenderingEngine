@@ -8,6 +8,49 @@ using namespace fncontainer;
 
 #define TRANSPOSE(A) glm::transpose(A)
 
+// ---- HDR color pipeline (DirectX 11.3 only) ----
+// The renderers composite in LINEAR HDR and a single tonemap pass converts to display range at the very end
+// (after the TAA resolve, before the D2D overlay and the present copy). Two things force these to be macros
+// rather than per-call-site constants:
+//
+//  * __COLOR_RT_FORMAT is the format of EVERY color target the renderers composite into ("RENDER_OUT_RGBA_0"
+//    and "_1"). It has to change at ALL creation sites at once, because GenerateGpuResource caches on
+//    {src_id, res_name} ALONE and never compares the requested format (gpures_interface.cpp) -- so whichever
+//    call site misses the cache first silently defines the format for the rest of the session. Converting a
+//    subset would give you HDR or LDR depending on which renderer happened to run first.
+//  * D2D cannot draw into an FP16 surface with its R8G8B8A8_UNORM pixel format, so the tonemap output has to
+//    land in a separate LDR target. __PRESENT_RT_NAME is what D2D, the shared-present copy, the HWND swapchain
+//    copy and the CPU readback all consume.
+//
+// FEATURE LEVEL. The TONEMAPPER is a DX11.3 feature (__TONEMAP_ENABLED). Below that, the rendered image is the
+// un-tonemapped one -- identical to what the renderer produced before this pipeline existed. The two lower
+// configurations reach that same result by different routes, and the difference is structural, not a choice:
+//
+//   * DX10.0 stays fully LDR. It has its own shader set (shader_compiled_objs_4_0/) whose DVR path is a pixel
+//     shader writing SV_TARGET and never sees the RWTexture2D declarations at all. There simply is no tonemap
+//     pass to run.
+//   * DX11.0 SHARES the one cs_5_0 blob set with DX11.3. The compositing shaders declare RWTexture2D<float4>,
+//     which only binds to a float-typed UAV, so DX11.0 cannot be handed LDR targets without a second,
+//     unorm-declared copy of every affected shader. It therefore keeps the FP16 targets -- but the tonemap is
+//     pinned to identity (clip + unit exposure + no encode), whose output is saturate(hdr): bit-for-bit the
+//     un-tonemapped image. The operators and the exposure knob are DX11.3-only.
+#if defined(DX10_0)
+#define __HDR_PIPELINE      0
+#define __TONEMAP_ENABLED   0
+#define __COLOR_RT_FORMAT   DXGI_FORMAT_R8G8B8A8_UNORM
+#define __PRESENT_RT_NAME   "RENDER_OUT_RGBA_0"
+#elif defined(DX11_3)
+#define __HDR_PIPELINE      1
+#define __TONEMAP_ENABLED   1
+#define __COLOR_RT_FORMAT   DXGI_FORMAT_R16G16B16A16_FLOAT
+#define __PRESENT_RT_NAME   "RENDER_OUT_LDR_RGBA_0"
+#else // DX11_0
+#define __HDR_PIPELINE      1
+#define __TONEMAP_ENABLED   0
+#define __COLOR_RT_FORMAT   DXGI_FORMAT_R16G16B16A16_FLOAT
+#define __PRESENT_RT_NAME   "RENDER_OUT_LDR_RGBA_0"
+#endif
+
 namespace grd_helper
 {
 	using namespace std;
@@ -588,6 +631,24 @@ namespace grd_helper
 		uint32_t iSrCamDummy__3;
 		uint32_t iSrCamDummy__4;
 
+		// ---- Tonemap post-pass (mirrors the tail of HxCB_CameraState) ----
+		// Appended here rather than given their own CB because shader model 5.0 offers 14 cbuffer slots and
+		// CommonShader.hlsl already uses b0..b13. Deliberately NOT reusing one of the iSrCamDummy fields:
+		// iSrCamDummy__0 is already double-booked by Blend2ndLayer and TaaResolve, and a third meaning on it
+		// would be a trap for the next reader.
+		//
+		// Only TaaResolve and the tonemap pass read these; every other shader ignores the tail. Filled by
+		// TonemapParams::ApplyTo at each of those two dispatch sites.
+		uint32_t tm_operator;
+		uint32_t tm_encode;
+		float tm_exposure;
+		float tm_knee;
+
+		float tm_white_point;
+		float tm_radiance_ceiling;
+		float tm_pad__0;
+		float tm_pad__1;
+
 		ZERO_SET(CB_CameraState)
 	};
 
@@ -666,6 +727,36 @@ namespace grd_helper
 		float    context_alpha_gain; // VR_MODE 2 coverage boost (HLSL VXGI_CONTEXT_ALPHA_GAIN; 1 = plain MODULATE parity, > 1 legal — shader saturates)
 
 		ZERO_SET(CB_VXGI)
+	};
+
+	// Tonemap post-pass config. Plain CPU-side POD, NOT a GPU constant buffer: the values are copied into the
+	// tail of CB_CameraState (see TonemapParams::ApplyTo). Shader model 5.0 has exactly 14 cbuffer slots
+	// (b0..b13) and CommonShader.hlsl already claims every one of them, so there is no slot left to bind a
+	// dedicated CB -- and both passes that need these values (TaaResolve, Tonemap) already bind and fill
+	// CB_CameraState at their dispatch sites anyway.
+	//
+	// The defaults reproduce today's image exactly: TM_CLIP + exposure 1 + encode none == saturate(hdr).
+	struct TonemapParams
+	{
+		uint32_t tm_operator = 0;         // 0 = clip (identity), 1 = knee/shoulder, 2 = Reinhard-ext, 3 = Hable, 4 = ACES
+		uint32_t encode = 0;              // 0 = none (today), 1 = sRGB, 2 = gamma 2.2
+		float    exposure = 1.f;          // linear scale applied before the curve (1 = off)
+		float    knee = 1.f;              // operator 1: identity below this, shoulder above it (1 = pure clip)
+		float    white_point = 4.f;       // operators 2/3: the value that maps to 1.0
+		float    radiance_ceiling = 64.f; // NaN/Inf/firefly guard; also the sanitize bound shared with TaaResolve
+
+		// Both TaaResolve and the tonemap pass map CB_CameraState with WRITE_DISCARD and repopulate only the
+		// fields they read, so each of them has to stamp these in. They must agree on radiance_ceiling: one
+		// sanitizes what enters the TAA history, the other what reaches the screen.
+		void ApplyTo(CB_CameraState& cb) const
+		{
+			cb.tm_operator = tm_operator;
+			cb.tm_encode = encode;
+			cb.tm_exposure = exposure;
+			cb.tm_knee = knee;
+			cb.tm_white_point = white_point;
+			cb.tm_radiance_ceiling = radiance_ceiling;
+		}
 	};
 
 	struct CB_ClipInfo

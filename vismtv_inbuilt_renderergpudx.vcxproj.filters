@@ -202,6 +202,12 @@
     <Filter Include="hlsl source code\vxgi">
       <UniqueIdentifier>{19209593-5c69-4c59-83d0-96de37c3a974}</UniqueIdentifier>
     </Filter>
+    <Filter Include="hlsl source code\taa">
+      <UniqueIdentifier>{a6101123-093a-4124-a664-e735cc2e6009}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="hlsl source code\tonemapper">
+      <UniqueIdentifier>{81504db8-c121-4ffd-ad36-8a8870efd1a1}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="vismtv_inbuilt_renderergpudx.rc">
@@ -301,6 +307,12 @@
     </FxCompile>
     <FxCompile Include="hlsl\vxgi\BlurMat.hlsl">
       <Filter>hlsl source code\vxgi</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\TaaResolve.hlsl">
+      <Filter>hlsl source code\tonemapper</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\Tonemap.hlsl">
+      <Filter>hlsl source code\taa</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>

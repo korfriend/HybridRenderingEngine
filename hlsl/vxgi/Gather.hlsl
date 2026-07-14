@@ -39,7 +39,7 @@ Texture3D tex3D_volume : register(t2); // ORIGINAL intensity volume — CT-gradi
 Texture3D grid_mat  : register(t3); // rgb = albedo, a = COVERAGE (occupancy source)
 Texture3D grid_surf : register(t4); // Part C SURF grid (rgb = albedo*indirect, a = cone occ), single mip
 
-RWTexture2D<unorm float4> rgba_out : register(u1); // RENDER_OUT_RGBA_0 (in/out)
+RWTexture2D<float4> rgba_out : register(u1); // RENDER_OUT_RGBA_0 (in/out)
 
 [numthreads(8, 8, 1)]
 void VXGI_Gather(uint3 DTid : SV_DispatchThreadID)

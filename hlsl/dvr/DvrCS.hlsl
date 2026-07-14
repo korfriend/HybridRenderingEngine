@@ -66,7 +66,7 @@ struct PS_FILL_OUTPUT_SURF
 #else
 RWTexture2D<uint> fragment_counter : register(u0);
 RWByteAddressBuffer deep_dynK_buf : register(u1);
-RWTexture2D<unorm float4> fragment_vis : register(u2);
+RWTexture2D<float4> fragment_vis : register(u2);
 RWTexture2D<float> fragment_zdepth : register(u3);
 RWTexture2D<float> vr_fragment_1sthit_write : register(u4);	// use this as a z-thickness in Single layer mode!
 RWTexture2D<float> fragment_zthick : register(u5);
@@ -1773,7 +1773,9 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	//vis_out = float4(ao_vr, ao_vr, ao_vr, 1);
 	//vis_out = float4(TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts), 1);
 
-			vis_out = saturate(vis_out);
+			// No saturate: this target is FP16 linear and the VXGI in-scatter can legitimately exceed 1.0.
+			// Clamping here would strip the highlight before the tonemapper ever sees it.
+			vis_out = StoreRadiance(vis_out);
 			fragment_vis[tex2d_xy] = vis_out;
 #pragma region single-layer path (no K-buffer)
 #if ONLY_SINGLE_LAYER == 1
@@ -2656,7 +2658,7 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 	output.depthcs = depth_sample;
 	return output;
 #else
-                    fragment_vis[cip_xy] = saturate(vis_out);
+                    fragment_vis[cip_xy] = StoreRadiance(vis_out); // FP16 linear: keep HDR (see StoreRadiance)
 #pragma region RAYMODE != 0: MIP / MinIP / RaySum
 #if RAYMODE != 0
 #pragma region DX11+ only (resource/feature absent on DX10.0)

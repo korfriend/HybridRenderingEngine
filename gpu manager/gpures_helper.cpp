@@ -887,6 +887,8 @@ int grd_helper::Initialize(VmGpuManager* pCGpuManager, PSOManager* gpu_params)
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA72001), "CS_TaaResolve_cs_5_0", "cs_5_0"), CS_TaaResolve_cs_5_0);
 
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA72002), "CS_Tonemap_cs_5_0", "cs_5_0"), CS_Tonemap_cs_5_0);
+
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52000), "VXGI_VoxelizeVolume_cs_5_0", "cs_5_0"), VXGI_VoxelizeVolume_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52001), "VXGI_InjectLight_cs_5_0", "cs_5_0"), VXGI_InjectLight_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52002), "VXGI_Gather_cs_5_0", "cs_5_0"), VXGI_Gather_cs_5_0);

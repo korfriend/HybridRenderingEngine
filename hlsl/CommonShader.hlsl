@@ -72,6 +72,26 @@ struct HxCB_CameraState // Hlsl dX Contant Buffer
 	float hoverBand;
 	uint iSrCamDummy__3;
 	uint iSrCamDummy__4;
+
+	// ---- Tonemap post-pass (linear HDR -> display range) ----
+	// Named fields appended to the camera CB rather than a CB of their own: shader model 5.0 has exactly 14
+	// cbuffer slots (b0..b13) and CommonShader already claims all of them, so there is no slot left to bind a
+	// dedicated one. Appending is also cheap -- TaaResolve and the tonemap pass both already bind and fill this
+	// CB at their dispatch sites. What they must NOT do is squat on iSrCamDummy__0, which Blend2ndLayer and
+	// TaaResolve have already double-booked for unrelated scratch.
+	//
+	// Both passes read tm_radiance_ceiling: TaaResolve sanitizes what enters the history, the tonemap sanitizes
+	// what reaches the screen. They have to agree on the bound, or the invariant would depend on whether TAA
+	// happened to be on.
+	uint tm_operator;   // TM_*
+	uint tm_encode;     // TME_*
+	float tm_exposure;
+	float tm_knee;
+
+	float tm_white_point;
+	float tm_radiance_ceiling;
+	float tm_pad__0;
+	float tm_pad__1;
 };
 
 struct HxCB_EnvState
@@ -426,6 +446,19 @@ cbuffer cbGlobalParams : register(b13)
 {
 	HxCB_VXGI g_cbVxgi;
 }
+
+// Tonemap operator / encode selectors (values live in HxCB_CameraState -- see the note there on why they are
+// not a cbuffer of their own). Defaults reproduce today's image exactly: TM_CLIP + exposure 1 + TME_NONE is
+// bit-for-bit saturate(hdr), which is what the UNORM store used to do implicitly.
+#define TM_CLIP     0
+#define TM_KNEE     1
+#define TM_REINHARD 2
+#define TM_HABLE    3
+#define TM_ACES     4
+
+#define TME_NONE    0
+#define TME_SRGB    1
+#define TME_GAMMA22 2
 // HxCB_VXGI decode helpers (see the packed layout in the struct above)
 #define VXGI_IS_ENABLED       ((g_cbVxgi.vxgi_flag & 0x1u) != 0)
 // medium-visibility parity flags (mirror the DVR's mode selection; set by SetCb_VXGI medium_flags)
@@ -625,6 +658,45 @@ float4 BlendFloat4AndFloat4(const in float4 fColor1, const in float4 fColor2)
 	//color_merge.a = fColor1.a + fColor2.a - fColor1.a * fColor2.a;
 	//color_merge.rgb = (fColor1.rgb + fColor2.rgb) / _a_sum * color_merge.a;
 	//return color_merge;
+}
+
+// Guard for the linear-HDR color targets. While they were UNORM the stores silently absorbed every NaN, Inf
+// and negative the shaders could produce. FP16 stores do not, and two of those now stick:
+//   * a NaN folded into the TAA history is PERMANENT -- lerp(NaN, x, w) == NaN for every subsequent frame, so
+//     one bad sample leaves a dead pixel that never heals.
+//   * an unclamped firefly accumulates into a bright speck that reads like a small hyperdense focus
+//     (calcification, metal fragment). On a medical image that is a misread, not an artifact.
+// Applied on the TAA input and again on the tonemap input, so the invariant holds with TAA both on and off.
+// Alpha is coverage, never radiance, so it stays in [0,1].
+float4 SanitizeRadiance(float4 c, const float ceiling)
+{
+	c = (isfinite(c.x) && isfinite(c.y) && isfinite(c.z) && isfinite(c.w)) ? c : (float4) 0;
+	c.rgb = clamp(c.rgb, 0.f, ceiling);
+	c.a = saturate(c.a);
+	return c;
+}
+
+// Final store into the FP16 linear color target.
+//
+// The RGB upper clamp is deliberately NOT here. These write sites used to end in saturate(), which was free
+// when the target was UNORM (the store clamped anyway) -- but against an FP16 target it would destroy the very
+// thing the HDR pipeline exists to carry. The VXGI in-scatter added in DvrCS is purely additive and its gain is
+// unbounded, so a lit sample can legitimately exceed 1.0; clamping at the write means that highlight never
+// reaches the tonemapper and the whole chain silently degrades to the old look.
+//
+// Alpha still saturates: it is coverage, not radiance, and the D2D overlay and the host's background composite
+// both use it directly as a blend factor, which is only meaningful in [0,1].
+//
+// Note this deliberately does NOT preserve rgb <= a. In linear HDR that inequality is simply not an invariant
+// any more -- the additive VXGI in-scatter routinely produces rgb > a -- and preserving it is exactly the
+// clamping we are removing. It is restored where it has to be: the tonemap's final saturate, on the LDR target
+// the compositors actually read.
+//
+// Negatives are clamped because they are never meaningful radiance and would otherwise survive into the TAA
+// mean. NaN/Inf and the firefly ceiling are handled downstream by SanitizeRadiance (TaaResolve + Tonemap).
+float4 StoreRadiance(const float4 c)
+{
+	return float4(max(c.rgb, 0.f), saturate(c.a));
 }
 
 float4 ConvertUIntToFloat4(const uint iColor)

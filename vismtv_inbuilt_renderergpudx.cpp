@@ -411,11 +411,15 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		GpuRes gres_fb_sys_rgba, gres_fb_sys_depthcs;
 #ifdef DX10_0
 		grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, is_vr? "RENDER_OUT_RGBA_1" : "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D,
-			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE, __COLOR_RT_FORMAT, 0);
 		grd_helper::UpdateFrameBuffer(gres_fb_depthcs, iobj, is_vr? "RENDER_OUT_DEPTH_1" : "RENDER_OUT_DEPTH_0", RTYPE_TEXTURE2D,
 			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE, DXGI_FORMAT_R32_FLOAT, 0);
 #else
-		grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D,
+		// The LDR target, not RENDER_OUT_RGBA_0: this lambda feeds the HWND swapchain copy and the CPU readback,
+		// and both must see the tonemapped image. It is also a correctness requirement, not just a semantic one --
+		// SYSTEM_OUT_RGBA is R8G8B8A8_UNORM and CopyResource demands matching formats, so copying from the FP16
+		// scene target would simply fail.
+		grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, __PRESENT_RT_NAME, RTYPE_TEXTURE2D,
 			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
 		grd_helper::UpdateFrameBuffer(gres_fb_depthcs, iobj, "RENDER_OUT_DEPTH_0", RTYPE_TEXTURE2D,
 			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_FLOAT, 0);
@@ -547,11 +551,100 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		g_psoManager.GpuProfile("Copyback", true);
 	};
 
+#if __HDR_PIPELINE
+	// ---- Tonemap: linear HDR -> display range ----
+	// The renderers composite into an FP16 linear target; this is the single point where the frame commits to
+	// display range.
+	//
+	// Why AFTER the TAA resolve: TAA takes an unbiased running mean of N jittered samples, i.e. it averages
+	// RADIANCE. Since mean(tonemap(L)) != tonemap(mean(L)), curving each sample first would bake the operator
+	// into the mean and bias the converged image. Keeping the curve out of the history also means an exposure
+	// change costs nothing -- the HDR mean is still valid, only its presentation changed.
+	//
+	// Why BEFORE the D2D overlay: text and annotation lines must not go through the curve. That is also forced,
+	// since D2D cannot draw into an FP16 surface with its R8G8B8A8_UNORM pixel format.
+	//
+	// Defaults are an exact no-op: TM_CLIP + exposure 1 + encode none == saturate(hdr) == today's image. Dev
+	// channel until the look settles; promoting them means CameraParameters::script_params, not new struct
+	// fields (ABI).
+	grd_helper::TonemapParams tmParams;
+	{
+		// The VXGI debug views (_int_VxgiDebug 1..7 -> the screen-gather visualisation) are meant to be read as
+		// data, not looked at as a picture: they show cone coverage, occlusion, raw radiance. A tone curve or an
+		// exposure gain would rescale exactly the quantity being inspected and make the readout lie. Pinned to
+		// identity, same as the DX11.0 path below.
+		const bool vxgi_debug_view = _fncontainer.fnParams.GetParam("_int_VxgiDebug", (int)0) != 0;
+
+#if __TONEMAP_ENABLED
+		if (!vxgi_debug_view)
+		{
+		tmParams.tm_operator = (uint32_t)max(0, _fncontainer.fnParams.GetParam("_int_TonemapOperator", (int)0));
+		tmParams.encode = (uint32_t)max(0, _fncontainer.fnParams.GetParam("_int_TonemapEncode", (int)0));
+		tmParams.exposure = max(0.f, _fncontainer.fnParams.GetParam("_float_TonemapExposure", 1.f));
+		tmParams.knee = std::clamp(_fncontainer.fnParams.GetParam("_float_TonemapKnee", 1.f), 0.f, 1.f);
+		tmParams.white_point = max(1e-3f, _fncontainer.fnParams.GetParam("_float_TonemapWhitePoint", 4.f));
+		}
+#else
+		// DX11.0: the tonemapper is a DX11.3 feature, so the knobs are ignored and the pass is pinned to its
+		// identity (TonemapParams' defaults: clip + unit exposure + no encode). Its output is then saturate(hdr)
+		// -- bit-for-bit the un-tonemapped image. The pass still runs because this configuration shares the
+		// cs_5_0 blobs with DX11.3 and therefore still composites into FP16 targets; something has to bring the
+		// frame down to the RGBA8 target that D2D and the present copy require.
+		(void)vxgi_debug_view;
+#endif
+		// Not a look control in either configuration -- a NaN/Inf and firefly guard, and the bound TaaResolve
+		// sanitizes against. A tighter value would silently cap legitimate HDR highlights before the operator
+		// ever saw them.
+		tmParams.radiance_ceiling = max(1.f, _fncontainer.fnParams.GetParam("_float_RadianceCeiling", 64.f));
+	}
+
+	// Reads RENDER_OUT_RGBA_0 (FP16) and writes the LDR target that D2D, the shared present, the HWND copy and
+	// the CPU readback all consume. The input is bound as an SRV rather than a UAV: SRV loads are guaranteed for
+	// every format, so this pass does not widen the engine's dependency on typed-UAV-load support.
+	auto DispatchTonemap = [&tmParams, &iobj, &_fncontainer]() {
+		const uint32_t tmbind = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+		GpuRes gres_hdr, gres_ldr;
+		grd_helper::UpdateFrameBuffer(gres_hdr, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D, tmbind, __COLOR_RT_FORMAT, 0);
+		grd_helper::UpdateFrameBuffer(gres_ldr, iobj, __PRESENT_RT_NAME, RTYPE_TEXTURE2D, tmbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+
+		vmint2 fb_tm;
+		iobj->GetFrameBufferInfo(&fb_tm);
+
+		__ID3D11DeviceContext* ctx = g_psoManager.dx11DeviceImmContext;
+
+		CB_CameraState cbTm;
+		cbTm.rt_width = fb_tm.x;
+		cbTm.rt_height = fb_tm.y;
+		tmParams.ApplyTo(cbTm);
+
+		ID3D11Buffer* cbuf_cam = g_psoManager.get_cbuf("CB_CameraState");
+		D3D11_MAPPED_SUBRESOURCE mappedTm;
+		ctx->Map(cbuf_cam, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedTm);
+		memcpy(mappedTm.pData, &cbTm, sizeof(CB_CameraState));
+		ctx->Unmap(cbuf_cam, 0);
+		ctx->CSSetConstantBuffers(0, 1, &cbuf_cam);
+
+		ID3D11ShaderResourceView* tmSRV = (ID3D11ShaderResourceView*)gres_hdr.alloc_res_ptrs[DTYPE_SRV];
+		ID3D11UnorderedAccessView* tmUAV = (ID3D11UnorderedAccessView*)gres_ldr.alloc_res_ptrs[DTYPE_UAV];
+		ctx->CSSetShaderResources(0, 1, &tmSRV);
+		ctx->CSSetUnorderedAccessViews(0, 1, &tmUAV, NULL);
+		ctx->CSSetShader(g_psoManager.get_cshader("CS_Tonemap_cs_5_0"), NULL, 0);
+
+		int __BLOCKSIZE_TM = _fncontainer.fnParams.GetParam("_int_GpuThreadBlockSize", (int)4);
+		ctx->Dispatch((uint32_t)ceil(fb_tm.x / (float)__BLOCKSIZE_TM), (uint32_t)ceil(fb_tm.y / (float)__BLOCKSIZE_TM), 1);
+
+		ID3D11ShaderResourceView* srvNull = NULL;
+		ID3D11UnorderedAccessView* uavNull = NULL;
+		ctx->CSSetShaderResources(0, 1, &srvNull);
+		ctx->CSSetUnorderedAccessViews(0, 1, &uavNull, NULL);
+	};
+#endif
+
 	if (is_final_render_out && !is_picking_routine)
 	{
 		const uint32_t rtbind = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 		GpuRes gres_fb_rgba;
-		grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+		grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D, rtbind, __COLOR_RT_FORMAT, 0);
 
 #ifndef DX10_0
 		// here, compose the 2nd layer rendering target texture onto the final render out texture... 
@@ -564,8 +657,12 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 			grd_helper::UpdateFrameBuffer(gres_fb_depthcs, iobj, "RENDER_OUT_DEPTH_0", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
 
 			GpuRes gres_fb_2ndlayer_rgba, gres_fb_2ndlayer_depthcs;
-			grd_helper::UpdateFrameBuffer(gres_fb_2ndlayer_rgba, iobj, "RENDER_OUT_RGBA_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
-			grd_helper::UpdateFrameBuffer(gres_fb_2ndlayer_depthcs, iobj, "RENDER_OUT_DEPTH_2", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+			grd_helper::UpdateFrameBuffer(gres_fb_2ndlayer_rgba, iobj, "RENDER_OUT_RGBA_1", RTYPE_TEXTURE2D, rtbind, __COLOR_RT_FORMAT, 0);
+			// R32_FLOAT, not RGBA8: this is a depth buffer. PrimitiveRenderer.cpp creates the same resource as
+			// R32_FLOAT and wins the race (UpdateFrameBuffer caches on {src_id, res_name} and early-returns
+			// without ever comparing the requested format), so the wrong constant here was inert -- but it would
+			// have decided the format outright had the call order ever changed.
+			grd_helper::UpdateFrameBuffer(gres_fb_2ndlayer_depthcs, iobj, "RENDER_OUT_DEPTH_2", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
 
 			ID3D11UnorderedAccessView* dx11UAVs[4] = {
 					(ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
@@ -637,6 +734,12 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 			cbTaa->rt_width = fb_taa.x;
 			cbTaa->rt_height = fb_taa.y;
 			cbTaa->iSrCamDummy__0 = (uint32_t)taa_accum; // samples already accumulated in history
+#if __HDR_PIPELINE
+			// TaaResolve sanitizes its input against tm_radiance_ceiling, and WRITE_DISCARD above means nothing
+			// survives from the previous fill. The tonemap pass uses the SAME bound on the way to the screen --
+			// if the two disagreed, the invariant they enforce would depend on whether TAA happened to be on.
+			tmParams.ApplyTo(*cbTaa);
+#endif
 			dx11ImmCtx->Unmap(cbuf_cam_state, 0);
 			dx11ImmCtx->CSSetConstantBuffers(0, 1, &cbuf_cam_state);
 
@@ -655,6 +758,13 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 			// Advance accumulation for the next frame; core's CheckRenderConvergence reads this back.
 			iobj->SetObjParam("_int_TaaAccum", (taa_accum + 1 < taa_max_samples) ? taa_accum + 1 : taa_max_samples);
 		}
+
+		DispatchTonemap();
+
+		// From here on the presented image IS the LDR target: D2D binds it, the shared-present copy sources it,
+		// and RenderOut() re-fetches it by name. RENDER_OUT_RGBA_0 (FP16) is scene data from this point, not
+		// output -- nothing downstream may touch it.
+		grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, __PRESENT_RT_NAME, RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
 
 #endif
 
@@ -864,8 +974,10 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 
 			// RENDER_TARGET bind is only requested so gpures_interface auto-adds D3D11_RESOURCE_MISC_SHARED
 			// (see gpures_interface.cpp: it flags any non-staging RENDER_TARGET texture as shareable); the buffer
-			// itself is used purely as CopyResource-dest + shared SRV source. Same width/height/format as
-			// RENDER_OUT_RGBA_0, so it is recreated by UpdateFrameBuffer on a framebuffer resize just like it.
+			// itself is used purely as CopyResource-dest + shared SRV source. Same width/height/format as the
+			// tonemapped LDR target it is copied from (gres_fb_rgba was repointed at it above -- CopyResource
+			// requires matching formats, and the FP16 scene target would not qualify), so it is recreated by
+			// UpdateFrameBuffer on a framebuffer resize just like it.
 			GpuRes gres_present;
 			grd_helper::UpdateFrameBuffer(gres_present, iobj, present_name, RTYPE_TEXTURE2D,
 				D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
@@ -903,6 +1015,13 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	}
 	else if (_fncontainer.fnParams.GetParam("STORE_RT_IOBJ", false) && !is_vr)
 	{
+#if __HDR_PIPELINE
+		// This path skips the final-render-out block entirely, so it would skip the tonemap with it -- and
+		// RenderOut() now sources the LDR target, which would still be empty. Tonemap here too: the readback is
+		// an RGBA8 CPU framebuffer, so it needs the display-range image, and CopyResource into SYSTEM_OUT_RGBA
+		// (R8G8B8A8_UNORM) would fail outright against the FP16 scene target.
+		DispatchTonemap();
+#endif
 		RenderOut();
 		LeaveCriticalSection(&cs);
 		return true;
@@ -1085,9 +1204,13 @@ bool GetSharedShaderResView(const int iobjId, const void* dx11devPtr, void** sha
 		return false;
 	}
 
+	// The tonemapped LDR target, never RENDER_OUT_RGBA_0. What the app receives here is a shared R8G8B8A8_UNORM
+	// SRV, and under the HDR pipeline RENDER_OUT_RGBA_0 is R16G16B16A16_FLOAT -- handing that out would either
+	// fail to create the view or feed the app raw un-tonemapped linear radiance. Under DX10 the macro collapses
+	// back to RENDER_OUT_RGBA_0 and this is exactly the previous behaviour.
 	GpuRes gres_fb;
 	gres_fb.vm_src_id = iobjId;
-	gres_fb.res_name = "RENDER_OUT_RGBA_0";
+	gres_fb.res_name = __PRESENT_RT_NAME;
 	if (!g_pCGpuManager->UpdateGpuResource(gres_fb)) {
 		vmlog::LogErr("No GPU Rendertarget is assigned! (" + std::to_string(iobjId) + ")");
 		return false;

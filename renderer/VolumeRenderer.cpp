@@ -440,7 +440,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	const uint32_t rtbind = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 	
 	GpuRes gres_fb_rgba, gres_fb_depthcs;
-	grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+	grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_1", RTYPE_TEXTURE2D, rtbind, __COLOR_RT_FORMAT, 0);
 	grd_helper::UpdateFrameBuffer(gres_fb_depthcs, iobj, "RENDER_OUT_DEPTH_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
 	
 	GpuRes gres_fb_vrdepthcs, gres_fb_vrenc;
@@ -448,13 +448,13 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	grd_helper::UpdateFrameBuffer(gres_fb_vrenc, iobj, "RENDER_OUT_VRENC", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8_UINT, 0);
 
 	GpuRes gres_fb_rgba_prev, gres_fb_depthcs_prev;
-	grd_helper::UpdateFrameBuffer(gres_fb_rgba_prev, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+	grd_helper::UpdateFrameBuffer(gres_fb_rgba_prev, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D, rtbind, __COLOR_RT_FORMAT, 0);
 	grd_helper::UpdateFrameBuffer(gres_fb_depthcs_prev, iobj, "RENDER_OUT_DEPTH_0", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
 #else
 	const uint32_t rtbind = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 
 	GpuRes gres_fb_rgba, gres_fb_depthcs, gres_fb_vrdepthcs;
-	grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+	grd_helper::UpdateFrameBuffer(gres_fb_rgba, iobj, "RENDER_OUT_RGBA_0", RTYPE_TEXTURE2D, rtbind, __COLOR_RT_FORMAT, 0);
 	grd_helper::UpdateFrameBuffer(gres_fb_depthcs, iobj, "RENDER_OUT_DEPTH_0", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
 	grd_helper::UpdateFrameBuffer(gres_fb_vrdepthcs, iobj, "RENDER_OUT_DEPTH_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R32_FLOAT, 0);
 
@@ -566,7 +566,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			// and the volume renderer is the final renderer — so it is idle for the duration of this pass.
 			// The volume slab thickness (u5) reuses gres_fb_vrdepthcs ("RENDER_OUT_DEPTH_1") the same way:
 			// it is always allocated and VR_SURFACE (its only writer) is skipped in x-ray mode, so it is idle.
-			grd_helper::UpdateFrameBuffer(gres_fb_xray_vol, iobj, "RENDER_OUT_RGBA_1", RTYPE_TEXTURE2D, rtbind, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+			grd_helper::UpdateFrameBuffer(gres_fb_xray_vol, iobj, "RENDER_OUT_RGBA_1", RTYPE_TEXTURE2D, rtbind, __COLOR_RT_FORMAT, 0);
 	}
 #endif // !DX10_0
 #pragma endregion

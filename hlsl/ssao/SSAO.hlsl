@@ -5,7 +5,7 @@
 Texture2D<uint> fragment_counter : register(t10);
 ByteAddressBuffer deep_k_buf : register(t11);
 
-RWTexture2D<unorm float4> rw_fragment_blendout : register(u10);
+RWTexture2D<float4> rw_fragment_blendout : register(u10);
 
 //Texture2D<float4> mip_z_textures[MAX_LAYERS / 4] : register(t15);
 //RWTexture2D<float4> rw_mip_z_textures[MAX_LAYERS / 4] : register(u15);

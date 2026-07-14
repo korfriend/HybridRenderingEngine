@@ -1,8 +1,8 @@
 #include "Sr_Common.hlsl"
 
-RWTexture2D<unorm float4> fragment_rgba_out : register(u1);
+RWTexture2D<float4> fragment_rgba_out : register(u1);
 RWTexture2D<float> fragment_zdepth_out : register(u2);
-RWTexture2D<unorm float4> fragment_rgba_secondLayer : register(u3);
+RWTexture2D<float4> fragment_rgba_secondLayer : register(u3);
 RWTexture2D<float> fragment_zdepth_secondLayer : register(u4);
 
 [numthreads(GRIDSIZE, GRIDSIZE, 1)]
