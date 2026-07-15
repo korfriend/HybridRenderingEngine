@@ -1531,9 +1531,8 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 #else // ~(RAYMODE==1 || RAYMODE==2) ... RAYMODE==3
 	float depth_sample = depth_begin + g_cbVobj.sample_dist * (float)(num_ray_samples);
-	int num_valid_samples = 0;
-	float sampleSum = 0; // F13: raw-HU accumulator for AvgIP. The correct RaySum is OTF(mean HU), not
-	                     // mean(OTF(HU)); classifying the averaged density matches the curved path.
+	float sampleSum = 0;  // F13 + air-exclusion: opacity-weighted numerator  Sum(HU * OTFalpha)
+	float weightSum = 0;  // Sum(OTFalpha) — air (alpha~=0) drops out; the mean is over material only
 #endif
 #pragma endregion // RAYMODE 1/2: MIP or MinIP
 	
@@ -1618,25 +1617,25 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		//i -= 1;
 #else	// ~(RAYMODE == 1 || RAYMODE == 2) , which means RAYSUM 
 		float sample_v_norm = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
-		// AvgIP accumulates raw density only; the mean is classified once below (F13).
-		// Per-sample OTF classification removed here: its only consumer (the classified-color sum)
-		// is gone, no RAYSUM variant builds OTF_MASK (DVR-only), and sculpt never gated the sum (the
-		// `if (vis_otf.a > 0)` guard was long disabled), so this stays bit-identical for
-		// VR_RAYSUM / _SCULPTMASK / _SCULPTBITS.
-		sampleSum += sample_v_norm;
-		num_valid_samples++;
+		// AvgIP = opacity-weighted mean density, classified once below (F13 + air-exclusion).
+		// Weight each sample by its OTF opacity so air (alpha~=0) is smoothly excluded from the mean
+		// instead of washing it out. A continuous weight avoids the aliasing a hard HU/alpha gate
+		// caused (the old `if (vis_otf.a > 0)` note). opacity_correction=1 -> raw OTF alpha.
+		float w = LoadOtfBuf(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, 1).a;
+		sampleSum += sample_v_norm * w;
+		weightSum += w;
 #endif
 #pragma endregion // RAYMODE 1/2: MIP or MinIP
 	}
 	
 #pragma region RAYMODE 3: RaySum / AvgIP
 #if RAYMODE == 3
-	if (num_valid_samples == 0)
-		num_valid_samples = 1;
-	// F13: AvgIP must be OTF(mean HU), not mean(OTF(HU)). Averaging already-classified RGBA is not
-	// an attenuation average and diverged from the curved path for any non-linear OTF; classify the
-	// averaged raw density once instead (opacity_correction = 1).
-	float4 vis_otf = LoadOtfBuf(sampleSum / num_valid_samples * g_cbTmap.tmap_size_x, buf_otf, 1);
+	// F13 + air-exclusion: classify the opacity-weighted mean density once. When the whole slab is
+	// OTF-transparent (all air) weightSum -> 0, so output empty — the same near-transparent result the
+	// unweighted mean gave for an all-air slab, so there is no visible seam at the fallback.
+	float4 vis_otf = (weightSum > 1e-5f)
+		? LoadOtfBuf(sampleSum / weightSum * g_cbTmap.tmap_size_x, buf_otf, 1)
+		: (float4)0;
 #else // RAYMODE != 3
 
 	// MIP / MinIP: classify the winning sample. OTF_MASK is DVR-only (no MIP/MinIP x OTF_MASK
@@ -2473,8 +2472,8 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 
 #else // ~(RAYMODE==1 || RAYMODE==2)
 			float depth_sample = depth_begin + g_cbVobj.sample_dist * (float) (num_ray_samples);
-			int num_valid_samples = 0;
-			float sampleSum = 0;
+			float sampleSum = 0;  // F13 + air-exclusion: opacity-weighted  Sum(HU * OTFalpha)
+			float weightSum = 0;  // Sum(OTFalpha)
 #endif
 #pragma endregion // RAYMODE 1/2: MIP or MinIP
 			float3 pos_ray_start_ts = TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts);
@@ -2519,20 +2518,23 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 #else	// ~(RAYMODE == 1 || RAYMODE == 2) , which means RAYSUM 
 		// use g_samplerLinear instead of g_samplerLinear_clamp
 		float sample_v_norm = tex3D_volume.SampleLevel(g_samplerLinear, pos_sample_ts, 0).r;
-		// AvgIP accumulates raw density only; the mean is classified once below (F13).
+		// AvgIP = opacity-weighted mean density (F13 + air-exclusion): weight each sample by its OTF
+		// opacity so air (alpha~=0) drops out of the mean. opacity_correction=1 -> raw OTF alpha.
 		// https://github.com/korfriend/OsstemCoreAPIs/discussions/185#discussion-4843169
-		sampleSum += sample_v_norm;
-		num_valid_samples++;
+		float w = LoadOtfBuf(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, 1).a;
+		sampleSum += sample_v_norm * w;
+		weightSum += w;
 #endif
 #pragma endregion // RAYMODE 1/2: MIP or MinIP
 	}
 			
 #pragma region RAYMODE 3: RaySum / AvgIP
 #if RAYMODE == 3
-	if (num_valid_samples == 0)
-		num_valid_samples = 1;
-			
-	float4 vis_otf = LoadOtfBuf(sampleSum / num_valid_samples * g_cbTmap.tmap_size_x, buf_otf, 1); //float4(pos_sample_ts, 1);
+	// F13 + air-exclusion: classify the opacity-weighted mean density once; all-air slab (weightSum->0)
+	// outputs empty, matching the old all-air result (no seam).
+	float4 vis_otf = (weightSum > 1e-5f)
+		? LoadOtfBuf(sampleSum / weightSum * g_cbTmap.tmap_size_x, buf_otf, 1)
+		: (float4)0;
 #else // RAYMODE != 3
 
 	// MIP / MinIP: OTF_MASK is DVR-only, so no per-mask branch here.
