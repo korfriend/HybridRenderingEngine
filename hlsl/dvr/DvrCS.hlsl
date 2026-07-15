@@ -340,7 +340,7 @@ bool Vis_Volume_And_Check_Slab(inout float4 vis_otf, inout float sample_v, float
 #if OTF_MASK==1
 	int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint_clamp, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
 	
-	vis_otf = LoadSlabOtfBufId_PreInt(sample_v * g_cbTmap.tmap_size_x, sample_prev * g_cbTmap.tmap_size_x, buf_preintotf, g_cbVobj.opacity_correction, mask_vint);
+	vis_otf = LoadSlabOtfBufId_PreInt(sample_v * g_cbTmap.tmap_size_x, sample_prev * g_cbTmap.tmap_size_x, buf_preintotf, OPACITY_CORR, mask_vint);
 	//vis_otf = LoadSlabOtfBuf_PreInt(sample_v * g_cbTmap.tmap_size_x, sample_prev * g_cbTmap.tmap_size_x, buf_preintotf, g_cbVobj.opacity_correction);
 	//vis_otf = LoadOtfBufId(sample_v * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
 
@@ -350,11 +350,11 @@ bool Vis_Volume_And_Check_Slab(inout float4 vis_otf, inout float sample_v, float
 	int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint_clamp, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
 	//int mask_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, 255, tex3D_volmask);
 	int sculpt_value = (int)(g_cbVobj.vobj_flag >> 24);
-	vis_otf = LoadSlabOtfBuf_PreInt(sample_v * g_cbTmap.tmap_size_x, sample_prev * g_cbTmap.tmap_size_x, buf_preintotf, g_cbVobj.opacity_correction);
+	vis_otf = LoadSlabOtfBuf_PreInt(sample_v * g_cbTmap.tmap_size_x, sample_prev * g_cbTmap.tmap_size_x, buf_preintotf, OPACITY_CORR);
 	return ((uint)(vis_otf.a * 255.f) > 0) && (mask_vint == 0 || mask_vint > sculpt_value);
-#else 
+#else
 
-	vis_otf = LoadSlabOtfBuf_PreInt(sample_v * g_cbTmap.tmap_size_x, sample_prev * g_cbTmap.tmap_size_x, buf_preintotf, g_cbVobj.opacity_correction);
+	vis_otf = LoadSlabOtfBuf_PreInt(sample_v * g_cbTmap.tmap_size_x, sample_prev * g_cbTmap.tmap_size_x, buf_preintotf, OPACITY_CORR);
 #pragma region sculpt-bits visibility test
 #if SCULPT_BITS == 1
 #pragma region sculpt-bits source: tiled Tex3D (4x4x2 per texel)
@@ -1523,11 +1523,6 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #endif
 #pragma endregion // RAYMODE==2
 
-#pragma region multi-OTF (per-mask transfer function) path
-#if OTF_MASK == 1
-	float3 pos_mask_sample_ts = pos_lucky_sample_ts;
-#endif
-#pragma endregion // multi-OTF (per-mask transfer function) path
 #pragma region sculpt-mask path
 #if SCULPT_MASK == 1
 	int sculpt_value = (int)(g_cbVobj.vobj_flag >> 24);
@@ -1537,7 +1532,8 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #else // ~(RAYMODE==1 || RAYMODE==2) ... RAYMODE==3
 	float depth_sample = depth_begin + g_cbVobj.sample_dist * (float)(num_ray_samples);
 	int num_valid_samples = 0;
-	float4 vis_otf_sum = (float4)0;
+	float sampleSum = 0; // F13: raw-HU accumulator for AvgIP. The correct RaySum is OTF(mean HU), not
+	                     // mean(OTF(HU)); classifying the averaged density matches the curved path.
 #endif
 #pragma endregion // RAYMODE 1/2: MIP or MinIP
 	
@@ -1612,11 +1608,6 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #endif
 #pragma endregion // RAYMODE 1: MIP (max intensity)
 				{
-#pragma region multi-OTF (per-mask transfer function) path
-#if OTF_MASK == 1
-					pos_mask_sample_ts = pos_sample_in_blk_ts;
-#endif
-#pragma endregion // multi-OTF (per-mask transfer function) path
 					sample_v_prev = sample_v;
 					depth_sample = depth_begin + g_cbVobj.sample_dist * (float)i;
 				}
@@ -1627,59 +1618,13 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		//i -= 1;
 #else	// ~(RAYMODE == 1 || RAYMODE == 2) , which means RAYSUM 
 		float sample_v_norm = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
-#pragma region multi-OTF (per-mask transfer function) path
-#if OTF_MASK == 1
-		float sample_mask_v = tex3D_volmask.SampleLevel(g_samplerPoint_clamp, pos_sample_ts, 0).r * g_cbVolObj.mask_value_range;
-		int mask_vint = (int)(sample_mask_v + 0.5f);
-		float4 vis_otf = LoadOtfBufId(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
-#elif SCULPT_MASK == 1
-		int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint_clamp, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
-		int sculpt_value = (int)(g_cbVobj.vobj_flag >> 24);
-		float4 vis_otf = (float4)0;
-		if (mask_vint == 0 || mask_vint > sculpt_value)
-		{
-			vis_otf = LoadOtfBuf(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
-		}
-#else	// OTF_MASK != 1
-
-
-#pragma region sculpt-bits visibility test
-#if SCULPT_BITS == 1
-#pragma region sculpt-bits source: tiled Tex3D (4x4x2 per texel)
-#if USE_SCULPT_BITS_TEX3D_TILED == 1
-		int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
-		uint3 tex_id = uint3((uint)voxel_id.x >> 2, (uint)voxel_id.y >> 2, (uint)voxel_id.z >> 1);
-		uint sub = ((uint)voxel_id.x & 3u) | (((uint)voxel_id.y & 3u) << 2) | (((uint)voxel_id.z & 1u) << 4);
-		uint word = sculpt_bits_tex.Load(int4((int3)tex_id, 0));
-		bool visible = !(bool)(word & (1u << sub));
-#elif USE_SCULPT_BITS_TEX3D == 1
-		int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
-		uint word = sculpt_bits_tex.Load(int4(voxel_id.x >> 5, voxel_id.y, voxel_id.z, 0));
-		bool visible = !(bool)(word & (1u << ((uint)voxel_id.x & 31u)));
-#else
-		int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
-		int wwh = g_cbVobj.vol_original_size.x * g_cbVobj.vol_original_size.y;
-		uint bit_id = voxel_id.x + voxel_id.y * g_cbVobj.vol_original_size.x + voxel_id.z * wwh;
-		uint mod = bit_id % 32;
-		bool visible = !(bool)(sculpt_bits[bit_id / 32] & (0x1u << mod));
-#endif
-#pragma endregion // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
-		float4 vis_otf = (float4)0;
-		if (visible)
-			vis_otf = LoadOtfBuf(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
-#else
-		float4 vis_otf = LoadOtfBuf(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
-#endif
-#pragma endregion // sculpt-bits visibility test
-
-#endif
-#pragma endregion // multi-OTF (per-mask transfer function) path
-		// otf sum is necessary for multi-otf case (tooth segmentation-out case)
-		//if (vis_otf.a > 0) // results in discontinuous visibility caused by aliasing problem
-		{
-			vis_otf_sum += vis_otf;
-			num_valid_samples++;
-		}
+		// AvgIP accumulates raw density only; the mean is classified once below (F13).
+		// Per-sample OTF classification removed here: its only consumer (the classified-color sum)
+		// is gone, no RAYSUM variant builds OTF_MASK (DVR-only), and sculpt never gated the sum (the
+		// `if (vis_otf.a > 0)` guard was long disabled), so this stays bit-identical for
+		// VR_RAYSUM / _SCULPTMASK / _SCULPTBITS.
+		sampleSum += sample_v_norm;
+		num_valid_samples++;
 #endif
 #pragma endregion // RAYMODE 1/2: MIP or MinIP
 	}
@@ -1688,20 +1633,15 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #if RAYMODE == 3
 	if (num_valid_samples == 0)
 		num_valid_samples = 1;
-	float4 vis_otf = vis_otf_sum / (float)num_valid_samples;
+	// F13: AvgIP must be OTF(mean HU), not mean(OTF(HU)). Averaging already-classified RGBA is not
+	// an attenuation average and diverged from the curved path for any non-linear OTF; classify the
+	// averaged raw density once instead (opacity_correction = 1).
+	float4 vis_otf = LoadOtfBuf(sampleSum / num_valid_samples * g_cbTmap.tmap_size_x, buf_otf, 1);
 #else // RAYMODE != 3
 
-#pragma region multi-OTF (per-mask transfer function) path
-#if OTF_MASK == 1
-	float sample_mask_v = tex3D_volmask.SampleLevel(g_samplerPoint_clamp, pos_sample_ts, 0).r * g_cbVolObj.mask_value_range;
-	int mask_vint = (int)(sample_mask_v + 0.5f);
-	float4 vis_otf = LoadOtfBufId(sample_v_prev * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
-#elif SCULPT_MASK == 1 && RAYMODE == 3
-	vis_otf = LoadOtfBuf(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
-#else
+	// MIP / MinIP: classify the winning sample. OTF_MASK is DVR-only (no MIP/MinIP x OTF_MASK
+	// variant is built), so no per-mask branch here.
 	float4 vis_otf = LoadOtfBuf(sample_v_prev * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
-#endif
-#pragma endregion // multi-OTF (per-mask transfer function) path
 #endif
 #pragma endregion // RAYMODE 3: RaySum / AvgIP
 	uint idx_dlayer = 0;
@@ -2247,6 +2187,12 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
             else
             {
                 hits_t.y = min(hits_t.y, fPlaneThickness);
+                // F15: the "+ 0.5" makes this CLOSED-interval sampling on purpose. sample_dist evenly
+                // divides fPlaneThickness (sample_dist = thickness/iThicknessStep in SetCb_CurvedSlicer),
+                // so ceil(iThicknessStep + 0.5) = iThicknessStep + 1 -> i = 0..iThicknessStep includes both
+                // slab faces (N+1 samples). Correct/desired for MIP/MinIP (back face included); DVR uses its
+                // own separate count (num_new_ray_samples) so it is unaffected; AvgIP carries a slight
+                // endpoint bias, deemed negligible. This is the single source of truth for the sample count.
                 num_ray_samples = ceil((hits_t.y - hits_t.x) / sample_dist + 0.5);
                 if (num_ray_samples <= 0)
 					__EXIT_VR_RayCasting;
@@ -2524,16 +2470,10 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 #endif
 #pragma endregion // RAYMODE==2
 
-#pragma region multi-OTF (per-mask transfer function) path
-#if OTF_MASK == 1
-	float3 pos_mask_sample_ts = pos_lucky_sample_ts;
-#endif
-#pragma endregion // multi-OTF (per-mask transfer function) path
 
 #else // ~(RAYMODE==1 || RAYMODE==2)
 			float depth_sample = depth_begin + g_cbVobj.sample_dist * (float) (num_ray_samples);
 			int num_valid_samples = 0;
-			float4 vis_otf_sum = (float4) 0;
 			float sampleSum = 0;
 #endif
 #pragma endregion // RAYMODE 1/2: MIP or MinIP
@@ -2570,11 +2510,6 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 #endif
 #pragma endregion // RAYMODE 1: MIP (max intensity)
 				{
-#pragma region multi-OTF (per-mask transfer function) path
-#if OTF_MASK == 1
-					pos_mask_sample_ts = pos_sample_in_blk_ts;
-#endif
-#pragma endregion // multi-OTF (per-mask transfer function) path
 					sample_v_prev = sample_v;
 					depth_sample = depth_begin + g_cbVobj.sample_dist * (float)i;
 				}
@@ -2584,21 +2519,10 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 #else	// ~(RAYMODE == 1 || RAYMODE == 2) , which means RAYSUM 
 		// use g_samplerLinear instead of g_samplerLinear_clamp
 		float sample_v_norm = tex3D_volume.SampleLevel(g_samplerLinear, pos_sample_ts, 0).r;
-#pragma region multi-OTF (per-mask transfer function) path
-#if OTF_MASK == 1
-		float sample_mask_v = tex3D_volmask.SampleLevel(g_samplerPoint_clamp, pos_sample_ts, 0).r * g_cbVolObj.mask_value_range;
-		int mask_vint = (int)(sample_mask_v + 0.5f);
-		float4 vis_otf = LoadOtfBufId(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
-#else	// OTF_MASK != 1
-				float4 vis_otf = LoadOtfBuf(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
-#endif
-#pragma endregion // multi-OTF (per-mask transfer function) path
+		// AvgIP accumulates raw density only; the mean is classified once below (F13).
 		// https://github.com/korfriend/OsstemCoreAPIs/discussions/185#discussion-4843169
-		{
-			sampleSum += sample_v_norm;
-			vis_otf_sum += vis_otf;
-            num_valid_samples++;
-        }
+		sampleSum += sample_v_norm;
+		num_valid_samples++;
 #endif
 #pragma endregion // RAYMODE 1/2: MIP or MinIP
 	}
@@ -2611,15 +2535,8 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 	float4 vis_otf = LoadOtfBuf(sampleSum / num_valid_samples * g_cbTmap.tmap_size_x, buf_otf, 1); //float4(pos_sample_ts, 1);
 #else // RAYMODE != 3
 
-#pragma region multi-OTF (per-mask transfer function) path
-#if OTF_MASK == 1
-	float sample_mask_v = tex3D_volmask.SampleLevel(g_samplerPoint_clamp, pos_sample_ts, 0).r * g_cbVolObj.mask_value_range;
-	int mask_vint = (int)(sample_mask_v + 0.5f);
-	float4 vis_otf = LoadOtfBufId(sample_v_prev * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
-#else
-			float4 vis_otf = LoadOtfBuf(sample_v_prev * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
-#endif
-#pragma endregion // multi-OTF (per-mask transfer function) path
+	// MIP / MinIP: OTF_MASK is DVR-only, so no per-mask branch here.
+	float4 vis_otf = LoadOtfBuf(sample_v_prev * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
 #endif
 #pragma endregion // RAYMODE 3: RaySum / AvgIP
 

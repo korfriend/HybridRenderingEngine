@@ -992,10 +992,17 @@ namespace grd_helper
 		vmfloat3 posBottomLeftCOS;
 		float thicknessPlane; // use cam's far_plane
 		vmfloat3 posBottomRightCOS;
-		uint32_t __dummy0;
+		float alphaCorrection; // F2: per-step DVR alpha correction (curved). Reuses the former __dummy0
+		                       // slot (uint32_t -> float, same 4B offset). Must mirror HxCB_CurvedSlicer
+		                       // in hlsl/CommonShader.hlsl. 1.0 = no correction. See CurvedSlicerVR.cpp.
 		vmfloat3 planeUp; // WS, length is planePitch
 		uint32_t flag; // 1st bit : isRightSide
 	};
+	// Phase 1 invariant (F16/G5): b10 is shared with out-of-scope consumers (SlicerSR.cpp and
+	// RayProcessing.hlsl's curved thick-slice variants). alphaCorrection reuses __dummy0 at the same
+	// offset, so size/layout must not change. Only an end-append (-> 96B) is permitted, and only in
+	// Phase 3-4. If this fires, the HLSL mirror (HxCB_CurvedSlicer) and this struct have diverged.
+	static_assert(sizeof(CB_CurvedSlicer) == 80, "CB_CurvedSlicer (b10) must stay 80B in Phase 1.");
 
 	struct CB_TestBuffer
 	{

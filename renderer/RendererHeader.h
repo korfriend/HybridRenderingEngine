@@ -80,6 +80,23 @@ void ComputeDOF(__ID3D11DeviceContext* dx11DeviceImmContext,
 
 void GradientMagnitudeAnalysis(vmfloat2& grad_minmax, VmVObjectVolume* vobj);
 
+// X-ray slicer image-level post-filter modes (mirror vzm::CameraParameters::XRayPostFilter). Shared by
+// the volume DVR (VolumeRenderer) and curved DVR (CurvedSlicerVR) x-ray post-filter paths (F10 dedup).
+#define __XRPF_NONE 0
+#define __XRPF_MEAN 1
+#define __XRPF_GAUSSIAN 2
+#define __XRPF_SHARPEN 3
+#define __XRPF_SHARPEN_GAUSSIAN 4
+#define __XRPF_LAPLACIAN 5
+#define __XRPF_EDGE 6
+
+// Fills weights[121] (row-major N*N, N=2*radius+1) with the X-ray post-filter convolution kernel for
+// `mode`. Pure math; the volume and curved DVR paths carried a verbatim copy of this (F10). The caller
+// supplies precomputed N/kcount/center and use_filter (0 = passthrough / mask stays zero), and owns the
+// change-detection cache and the GPU mask upload. Brightness-preserving modes sum to 1; EDGE sums to 0.
+void BuildXrayPostFilterKernel(int mode, float strength, int radius,
+	int N, int kcount, int center, int use_filter, float weights[121]);
+
 //#define IS_SAFE_OBJ(OBJID) ((OBJID & 0xFFFF) >= 65536 - 4096)
 
 enum MFR_MODE

@@ -30,14 +30,8 @@
 #define __RM_RAYMAX_SCULPTMASK 27
 #define __RM_RAYMIN_SCULPTMASK 28
 #define __RM_RAYSUM_SCULPTMASK 29
-// X-ray slicer post-filter modes (mirror vzm::CameraParameters::XRayPostFilter)
-#define __XRPF_NONE 0
-#define __XRPF_MEAN 1
-#define __XRPF_GAUSSIAN 2
-#define __XRPF_SHARPEN 3
-#define __XRPF_SHARPEN_GAUSSIAN 4
-#define __XRPF_LAPLACIAN 5
-#define __XRPF_EDGE 6
+// X-ray slicer post-filter modes (__XRPF_*) and the shared kernel builder now live in
+// renderer/RendererHeader.h (F10 dedup with the curved path in CurvedSlicerVR.cpp).
 #define __SRV_PTR ID3D11ShaderResourceView*
 
 using namespace grd_helper;
@@ -2122,66 +2116,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			float mask_weights[121];
 			if (filter_changed)
 			{
-				for (int t = 0; t < 121; t++) mask_weights[t] = 0.f;
-
-				// helper: fill mask_weights with a normalized 2D gaussian (sum == 1); sigma = scale*radius.
-				auto build_gaussian = [&](float sigma_scale) {
-					float sigma = (sigma_scale > 0.f ? sigma_scale : 0.5f) * (float)radius;
-					if (sigma < 1e-4f) sigma = 1e-4f;
-					const float two_s2 = 2.f * sigma * sigma;
-					float sum = 0.f; int t = 0;
-					for (int dy = -radius; dy <= radius; dy++)
-						for (int dx = -radius; dx <= radius; dx++) {
-							float wv = expf(-(float)(dx * dx + dy * dy) / two_s2);
-							mask_weights[t++] = wv; sum += wv;
-						}
-					if (sum > 0.f) for (int q = 0; q < kcount; q++) mask_weights[q] /= sum;
-				};
-				// helper: write the 4-neighbour laplacian stencil (center, up/down/left/right), rest zero.
-				auto build_laplacian = [&](float c, float nb) {
-					mask_weights[center] = c;
-					if (radius >= 1) {
-						mask_weights[(radius - 1) * N + radius] = nb; // up
-						mask_weights[(radius + 1) * N + radius] = nb; // down
-						mask_weights[radius * N + (radius - 1)] = nb; // left
-						mask_weights[radius * N + (radius + 1)] = nb; // right
-					}
-				};
-
-				switch (use_filter ? mode : __XRPF_NONE)
-				{
-				case __XRPF_MEAN: {
-					// uniform box blur, sum == 1.
-					const float w = 1.f / (float)kcount;
-					for (int t = 0; t < kcount; t++) mask_weights[t] = w;
-					break; }
-				case __XRPF_GAUSSIAN:
-					// normalized 2D gaussian; strength scales sigma (wider = more blur).
-					build_gaussian(strength);
-					break;
-				case __XRPF_SHARPEN: {
-					// unsharp via box : center = 1 + strength*(1 - 1/kcount), off-center = -strength/kcount. Sum == 1.
-					const float inv = 1.f / (float)kcount;
-					for (int t = 0; t < kcount; t++) mask_weights[t] = -strength * inv;
-					mask_weights[center] = 1.f + strength * (1.f - inv);
-					break; }
-				case __XRPF_SHARPEN_GAUSSIAN:
-					// unsharp via gaussian low-pass : (1+strength)*identity - strength*gaussian. Sum == 1.
-					build_gaussian(1.f);
-					for (int t = 0; t < kcount; t++) mask_weights[t] *= -strength;
-					mask_weights[center] += 1.f + strength;
-					break;
-				case __XRPF_LAPLACIAN:
-					// laplacian high-boost : identity + strength*L (L = 4-neighbour, sums to 0). Sum == 1.
-					build_laplacian(1.f + 4.f * strength, -strength);
-					break;
-				case __XRPF_EDGE:
-					// pure laplacian high-pass (edge map). Sum == 0 (not brightness-preserving).
-					build_laplacian(4.f * strength, -strength);
-					break;
-				default: // __XRPF_NONE / radius==0 : passthrough (mask stays zero; use_filter == 0)
-					break;
-				}
+				// F10 dedup: kernel math shared with the curved path (renderer/RendererHeader.cpp).
+				BuildXrayPostFilterKernel(mode, strength, radius, N, kcount, center, use_filter, mask_weights);
 
 				filter_time = vmhelpers::GetCurrentTimePack(); // advance so UpdateCustomBuffer re-uploads exactly once
 				iobj->SetObjParam("XRPF_MODE", mode);

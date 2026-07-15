@@ -367,7 +367,9 @@ struct HxCB_CurvedSlicer
 	float3 posBottomLeftCOS;
 	float thicknessPlane;
 	float3 posBottomRightCOS;
-	uint __dummy0;
+	float alphaCorrection; // F2: per-step DVR alpha correction for the curved path; 1.0 = no correction.
+	                       // Reuses the former __dummy0 slot (uint, same 4B offset) which no shader read,
+	                       // so b10 layout/size is unchanged and out-of-scope b10 consumers are unaffected.
 	float3 planeUp; // WS, length is planePitch
 	uint flag; // 1st bit : isRightSide
 };
@@ -2313,6 +2315,18 @@ cbuffer cbGlobalParams : register(b10)
 {
 	HxCB_CurvedSlicer g_cbCurvedSlicer;
 }
+
+// F2: opacity-correction selector. Curved-slicer DVR steps are up to 2x denser than a planar MPR at the
+// same OTF (sample_dist = thickness/ceil(thickness/min_pitch)), so the OTF alpha exponent must be rescaled
+// by alphaCorrection = sample_dist/min_pitch. This must NOT touch g_cbVobj.opacity_correction itself, which
+// the gradient-offset / pre-integration lookback (v_r,v_u,v_v /= opacity_correction) also consume.
+// Injection is compile-time: only the PanoVR_* variants are built with /D CURVED_SLICER=1 (ShaderCompile*.bat),
+// so planar RayCasting .cso expand OPACITY_CORR to the ORIGINAL token (no parens) => byte-identical output.
+#if defined(CURVED_SLICER) && CURVED_SLICER == 1
+	#define OPACITY_CORR (g_cbVobj.opacity_correction * g_cbCurvedSlicer.alphaCorrection)
+#else
+	#define OPACITY_CORR g_cbVobj.opacity_correction
+#endif
 
 // Slicer x-ray image-level post-processing filter (SliceXrayFilter.hlsl)
 //   filter_radius : convolution kernel radius (N = 2*radius+1); 0 = passthrough

@@ -33,17 +33,17 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	bool without_sr = _fncontainer->fnParams.GetParam("_bool_IsFirstRenderer", false);
 
 	int ray_cast_type = _fncontainer->fnParams.GetParam("_int_VolumeRayCastType", (int)0);
+	// Classify the intensity-projection (x-ray) modes from the ORIGINAL request. 10/11/12 ==
+	// __RM_RAYMAX/__RM_RAYMIN/__RM_RAYSUM (macros are defined further below, so use literals here, as
+	// the x-ray post-filter preset already does). The actor loop later remaps MULTIOTF/VISVOLMASK ->
+	// DEFAULT, but neither those nor their result are x-ray, so this stays valid past the loop.
+	// Hoisted to function scope (both DX10 and non-DX10 builds) so the b10 alphaCorrection write and the
+	// DX10 ps_4_0 path can gate on it: F2 alpha correction applies only to step-dependent DVR, not x-ray.
+	const bool global_is_xray = (ray_cast_type == 10 || ray_cast_type == 11 || ray_cast_type == 12);
 	float samplePrecisionLevel = _fncontainer->fnParams.GetParam("_float_SamplePrecisionLevel", 1.0f);
 
-	// X-ray slicer image-level post-filter modes (mirror vzm::CameraParameters::XRayPostFilter).
-	// Same values/structure as renderer/VolumeRenderer.cpp (the planar slicer reference).
-#define __XRPF_NONE 0
-#define __XRPF_MEAN 1
-#define __XRPF_GAUSSIAN 2
-#define __XRPF_SHARPEN 3
-#define __XRPF_SHARPEN_GAUSSIAN 4
-#define __XRPF_LAPLACIAN 5
-#define __XRPF_EDGE 6
+	// X-ray slicer post-filter modes (__XRPF_*) and the shared kernel builder now live in
+	// renderer/RendererHeader.h (F10 dedup with the planar path in renderer/VolumeRenderer.cpp).
 	// X-ray slicer post-filter request (CameraParameters::EnableXRayPostFilter). Mode != NONE means "requested";
 	// whether it actually runs is decided below (apply_postprocessing_filter), gated on an x-ray ray-cast mode.
 	bool try_postprocessing_filter = _fncontainer->fnParams.GetParam("_int_XRayPostFilterMode", (int)__XRPF_NONE) != __XRPF_NONE;
@@ -298,8 +298,8 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	//     defined further below). The curved slicer is single-volume, so this flag alone gates the redirect.
 	// DX10 is intentionally unsupported (compiled out, stays false in a DX10 build).
 	{
-		const int rct = ray_cast_type; // global request; not yet remapped in this single-volume path
-		const bool global_is_xray = (rct == 10 || rct == 11 || rct == 12);
+		// global_is_xray is hoisted to function scope (see near ray_cast_type read). Same single-volume
+		// request; not yet remapped in this path.
 		apply_postprocessing_filter = try_postprocessing_filter && global_is_xray;
 		if (apply_postprocessing_filter)
 		{
@@ -325,7 +325,11 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 			!actor->visible || actor->color.a == 0)
 			continue;
 
-		if (dvr_volumes.size() > 1) {
+		// The guard must run BEFORE the push and test ">= 1", not ">= 2" ("> 1"): this shader has no
+		// multi-DVR accumulation, so every dispatch rebuilds vis_out from the K-buffer and a second
+		// volume would simply overwrite the first. Testing "> 1" before pushing let TWO volumes in
+		// (0->push, 1->push, 2->break). Keep exactly the first defined volume.
+		if (dvr_volumes.size() >= 1) {
 			vmlog::LogWarn("WARNNING!! two rendering target volumes are not allowed!");
 			break;
 		}
@@ -480,7 +484,15 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	// 	const int __BLOCKSIZE = 8;
 	// 	uint32_t num_grid_x = (uint32_t)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
 	// 	uint32_t num_grid_y = (uint32_t)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
-	const int __BLOCKSIZE = _fncontainer->fnParams.GetParam("_int_GpuThreadBlockSize", (int)2);
+	// The default must equal GRIDSIZE_VR (== 8, CommonShader.hlsl), because the CurvedSlicer
+	// compute entry declares [numthreads(GRIDSIZE_VR, GRIDSIZE_VR, 1)] (DvrCS.hlsl). Dispatch groups
+	// are ceil(fb / __BLOCKSIZE), so a smaller __BLOCKSIZE launches (GRIDSIZE_VR/__BLOCKSIZE)^2 as
+	// many threads as pixels; the surplus returns at the range guard, wasting only launch overhead.
+	// This default applies unless a caller overrides it: GetParam still honors an explicit
+	// _int_GpuThreadBlockSize if one is supplied. No shipped code in the 5 repos sets it (only read
+	// sites exist), so in practice this default is what runs. The planar path (VolumeRenderer.cpp)
+	// already defaults to 8; this curved path was the outlier at 2.
+	const int __BLOCKSIZE = _fncontainer->fnParams.GetParam("_int_GpuThreadBlockSize", (int)8);
 	uint32_t num_grid_x = __BLOCKSIZE == 1 ? fb_size_cur.x : (uint32_t)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
 	uint32_t num_grid_y = __BLOCKSIZE == 1 ? fb_size_cur.y : (uint32_t)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
 
@@ -544,6 +556,14 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 
 	CB_CurvedSlicer cbCurvedSlicer;
 	grd_helper::SetCb_CurvedSlicer(cbCurvedSlicer, _fncontainer, iobj, sample_dist);
+	// F2: per-step alpha correction for the curved DVR path. The helper packs
+	// sample_dist = thickness/ceil(thickness/min_pitch) in (min_pitch/2, min_pitch], so DVR steps run up
+	// to 2x denser than a planar MPR at the same OTF, over-accumulating alpha. alphaCorrection =
+	// sample_dist/min_pitch in (0.5, 1] rescales the OTF alpha exponent (shader OPACITY_CORR under
+	// /D CURVED_SLICER=1). Applied to DVR only: x-ray (MIP/MinIP/AvgIP) is step-invariant, so load 1.0
+	// there and those .cso stay pixel-identical. thickness==0 (CPR) has sample_dist==min_pitch -> 1.0.
+	cbCurvedSlicer.alphaCorrection = (!global_is_xray && sample_dist > 0.f && min_pitch > 0.f)
+		? (sample_dist / min_pitch) : 1.0f;
 	D3D11_MAPPED_SUBRESOURCE mappedResCurvedSlicerState;
 	dx11DeviceImmContext->Map(cbuf_curvedslicer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResCurvedSlicerState);
 	CB_CurvedSlicer* cbCurvedSlicerData = (CB_CurvedSlicer*)mappedResCurvedSlicerState.pData;
@@ -729,6 +749,16 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 			else VMERRORMESSAGE("UNSUPPORTED FORMAT : MASK VOLUME");
 		}
 		cbVolumeObj.sample_dist = sample_dist;
+		// Force ert_ratio = 1.0 for the curved path. The shader reads asfloat(g_cbVobj.v_dummy0) as
+		// ert_ratio and scales the DVR sample count by it (DvrCS.hlsl, #if RAYMODE==0). v_dummy0 carries
+		// _float_SamplePrecisionLevel from SetCb_VolumeObj; for the curved slab that would march the slab
+		// deeper than `thickness` (precision 2 -> 2x depth) instead of denser, breaking slab==thickness.
+		// Overriding here (not in the shared SetCb_VolumeObj) keeps the planar path untouched. x-ray modes
+		// already carry 1.0, and ert_ratio is only read under RAYMODE==0, so this is a no-op for them.
+		{
+			const float ert_one = 1.0f;
+			cbVolumeObj.v_dummy0 = *(const uint32_t*)&ert_one; // as-float bit pattern; shader does asfloat()
+		}
 		D3D11_MAPPED_SUBRESOURCE mappedResVolObj;
 		dx11DeviceImmContext->Map(cbuf_vobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResVolObj);
 		CB_VolumeObject* cbVolumeObjData = (CB_VolumeObject*)mappedResVolObj.pData;
@@ -901,58 +931,8 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 			float mask_weights[121];
 			if (filter_changed)
 			{
-				for (int t = 0; t < 121; t++) mask_weights[t] = 0.f;
-
-				auto build_gaussian = [&](float sigma_scale) {
-					float sigma = (sigma_scale > 0.f ? sigma_scale : 0.5f) * (float)radius;
-					if (sigma < 1e-4f) sigma = 1e-4f;
-					const float two_s2 = 2.f * sigma * sigma;
-					float sum = 0.f; int t = 0;
-					for (int dy = -radius; dy <= radius; dy++)
-						for (int dx = -radius; dx <= radius; dx++) {
-							float wv = expf(-(float)(dx * dx + dy * dy) / two_s2);
-							mask_weights[t++] = wv; sum += wv;
-						}
-					if (sum > 0.f) for (int q = 0; q < kcount; q++) mask_weights[q] /= sum;
-				};
-				auto build_laplacian = [&](float c, float nb) {
-					mask_weights[center] = c;
-					if (radius >= 1) {
-						mask_weights[(radius - 1) * N + radius] = nb; // up
-						mask_weights[(radius + 1) * N + radius] = nb; // down
-						mask_weights[radius * N + (radius - 1)] = nb; // left
-						mask_weights[radius * N + (radius + 1)] = nb; // right
-					}
-				};
-
-				switch (use_filter ? mode : __XRPF_NONE)
-				{
-				case __XRPF_MEAN: {
-					const float w = 1.f / (float)kcount;
-					for (int t = 0; t < kcount; t++) mask_weights[t] = w;
-					break; }
-				case __XRPF_GAUSSIAN:
-					build_gaussian(strength);
-					break;
-				case __XRPF_SHARPEN: {
-					const float inv = 1.f / (float)kcount;
-					for (int t = 0; t < kcount; t++) mask_weights[t] = -strength * inv;
-					mask_weights[center] = 1.f + strength * (1.f - inv);
-					break; }
-				case __XRPF_SHARPEN_GAUSSIAN:
-					build_gaussian(1.f);
-					for (int t = 0; t < kcount; t++) mask_weights[t] *= -strength;
-					mask_weights[center] += 1.f + strength;
-					break;
-				case __XRPF_LAPLACIAN:
-					build_laplacian(1.f + 4.f * strength, -strength);
-					break;
-				case __XRPF_EDGE:
-					build_laplacian(4.f * strength, -strength);
-					break;
-				default: // __XRPF_NONE / radius==0 : passthrough
-					break;
-				}
+				// F10 dedup: kernel math shared with the planar path (renderer/RendererHeader.cpp).
+				BuildXrayPostFilterKernel(mode, strength, radius, N, kcount, center, use_filter, mask_weights);
 
 				filter_time = vmhelpers::GetCurrentTimePack(); // advance so UpdateCustomBuffer re-uploads exactly once
 				iobj->SetObjParam("XRPF_MODE", mode);

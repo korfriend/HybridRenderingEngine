@@ -3332,7 +3332,11 @@ void grd_helper::SetCb_CurvedSlicer(CB_CurvedSlicer& cb_curvedSlicer, VmFnContai
 		cb_curvedSlicer.numCurvePoints = num_interpolation;
 		cb_curvedSlicer.planeHeight = fPlaneSizeY;
 		cb_curvedSlicer.thicknessPlane = fPlaneThickness;
-		cb_curvedSlicer.__dummy0 = iThicknessStep;
+		// F2: default to no correction (1.0). This shared helper is also called by the mesh curved
+		// slicer (SlicerSR.cpp, out of scope), which must keep current behaviour -> 1.0 leaves it
+		// unchanged. The volume DVR path overrides this at its call site (CurvedSlicerVR.cpp) with
+		// sample_dist/min_pitch. The old `__dummy0 = iThicknessStep` write is removed: no shader read it.
+		cb_curvedSlicer.alphaCorrection = 1.0f;
 		vmfloat3 curvedPlaneUp;
 		fNormalizeVector(&curvedPlaneUp, &vtrCurveUpVectors[0]);
 		cb_curvedSlicer.planeUp = curvedPlaneUp * fPlanePitch;
