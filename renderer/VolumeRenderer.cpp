@@ -198,13 +198,6 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	// stamp compare is an inequality, so an extra bump costs at most one redundant re-bake on a dev button.
 	static uint64_t vxgi_hlsl_reload_gen = 0;
 
-	// D9.3 — session-monotonic IDENTITY counter. This engine RECYCLES object ids (ResourceManager
-	// issues next_count_id % MAX_COUNT and refills freed slots), so "same id == same object" is false
-	// across a delete/recreate. VXGI keys every identity decision (builder/owner gen, and the W1/W2
-	// suppression maps in Phase 2) on a gen issued once per object from this counter and never reused —
-	// a 64-bit monotonic counter cannot wrap in a session. Zero = unissued.
-	static uint64_t vxgi_gen_counter = 0;
-
 	// Shader Re-Compile Setting //
 	if (reload_hlsl_objs)
 	{
@@ -1265,14 +1258,10 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		// stamp, so camera moves no longer re-voxelize (the grid is view-independent). While the content is
 		// static, ONE VXGI_Propagate iteration runs per frame (up to a target bounce count): the radiance field
 		// visibly refines frame over frame, driven by the same convergence re-render loop TAA uses.
-		// D9.3 — issue-if-absent gen. Idempotent, order-independent; both the builder path (owner gen) and
-		// the vxgi-off invalidation below call it. Object recycling immunity: a recycled id makes a NEW object
-		// with an empty ObjParam map, so it cannot inherit an old gen — it is forced to take a fresh one.
-		auto vxgi_issue_gen = [&](VmObject* obj) -> uint64_t {
-			uint64_t g = obj->GetObjParam<uint64_t>("_uint64_VxgiGen", (uint64_t)0);
-			if (g == 0) { g = ++vxgi_gen_counter; obj->SetObjParam("_uint64_VxgiGen", g); }
-			return g;
-		};
+		// D9.3 — issue-if-absent gen, now the DLL-wide single issuer in grd_helper (the curved slicer consumer
+		// draws identities from the SAME counter — two counters would double-issue for one object). Idempotent,
+		// order-independent; recycled ids start with an empty ObjParam map so they can never inherit an old gen.
+		auto vxgi_issue_gen = [](VmObject* obj) -> uint64_t { return grd_helper::VxgiIssueGen(obj); };
 
 		// Build (bake+propagate) runs on NON-slicer 3D DVR views only. A slicer view's resolved light is
 		// camera-dependent (headlight), so letting it bake would flip the content stamp against the 3D
@@ -1632,7 +1621,17 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			const uint64_t vxgi_prev_stamp = vobj->GetObjParam<uint64_t>("_uint64_VxgiStamp", (uint64_t)~0ull);
 			const uint64_t vxgi_prev_mat_stamp = vobj->GetObjParam<uint64_t>("_uint64_VxgiMatStamp", (uint64_t)~0ull);
 			const bool vxgi_mat_changed = (vxgi_prev_mat_stamp != vxgi_mat_stamp);
-			const bool vxgi_rebuild = (vxgi_prev_stamp != vxgi_content_stamp);
+			// A RETRACTED bake must be re-baked even when the content stamp still matches: stamp equality only
+			// says "the inputs did not change", NOT "a valid bake is published". The D3 vxgi-off invalidation
+			// clears FieldReady but leaves the stamps, so an off->on toggle with unchanged content otherwise
+			// never rebuilds — no owner re-acquires, FieldReady stays false, and every draw (this builder's own
+			// included) falls to the disabled path: VXGI silently never comes back until some real content
+			// change happens to move the stamp. With FieldReady folded in, the re-enable takes the cheap
+			// light-only re-inject (mat stamp still matches -> no re-voxelize; the grids were never released)
+			// and re-converges via the normal crossfade. FieldReady=true is republished in the same rebuild
+			// pass, so this cannot self-retrigger.
+			const bool vxgi_rebuild = (vxgi_prev_stamp != vxgi_content_stamp)
+				|| !vobj->GetObjParam<bool>("_bool_VxgiFieldReady", false);
 			// SUSTAINED-EDIT detection, for the surface-gather throttle in the rebuild branch below.
 			// grid_surf is stale the moment ANY rebuild lands (a MAT change moves the surface band itself;
 			// a light change moves the radiance the cones integrated). Propagate composites it (t11) on every
@@ -2020,18 +2019,10 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			if (isSlicer && vxgi_on && !is_xray_mode)
 			{
 				const uint64_t vxgi_vobj_gen = vxgi_issue_gen(vobj);
-				// W1 suppression: warn once per (vobj gen, reason bit r1/r2/r3). Gen-keyed (ids recycle, D9.3),
-				// bounded at 64 with insertion-order eviction; a successful ready-consume drops the entry (re-arm).
-				typedef std::vector<std::pair<uint64_t, uint32_t>> VxgiW1Map;
+				// W1 suppression bookkeeping lives in grd_helper (SHARED with the curved consumer — one logic,
+				// no fork): warn once per (vobj gen, reason bit r1/r2/r3), re-armed by a successful consume.
 				auto vxgi_w1 = [&](int reason) {
-					VxgiW1Map* m = iobj->GetObjParamPtr<VxgiW1Map>("_VxgiW1Suppress");
-					if (m == NULL) { iobj->SetObjParam("_VxgiW1Suppress", VxgiW1Map()); m = iobj->GetObjParamPtr<VxgiW1Map>("_VxgiW1Suppress"); }
-					const uint32_t bit = 1u << (reason - 1);
-					bool emit = true, found = false;
-					for (auto& e : *m)
-						if (e.first == vxgi_vobj_gen) { found = true; emit = ((e.second & bit) == 0); e.second |= bit; break; }
-					if (!found) { if (m->size() >= 64) m->erase(m->begin()); m->push_back(std::make_pair(vxgi_vobj_gen, bit)); }
-					if (emit)
+					if (grd_helper::VxgiW1ShouldWarn(iobj, vxgi_vobj_gen, reason))
 					{
 						// vzlog_warning expands to a "{...}" block, so each arm MUST be braced (else C2181).
 						if (reason == 1) { vzlog_warning("[VXGI] slicer VXGI on but no usable bake (r1) - enable VXGI on a 3D DVR view of this volume"); }
@@ -2039,10 +2030,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 						else { vzlog_warning("[VXGI] slicer FieldReady but grid resource missing (r3, defensive)"); }
 					}
 				};
-				auto vxgi_w1_clear = [&]() {
-					VxgiW1Map* m = iobj->GetObjParamPtr<VxgiW1Map>("_VxgiW1Suppress");
-					if (m) { for (auto it = m->begin(); it != m->end(); ++it) if (it->first == vxgi_vobj_gen) { m->erase(it); break; } }
-				};
+				auto vxgi_w1_clear = [&]() { grd_helper::VxgiW1Clear(iobj, vxgi_vobj_gen); };
 
 				CB_VXGI cbVxgiC;
 				int vxgi_w1_reason = 0;

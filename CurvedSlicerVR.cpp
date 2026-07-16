@@ -801,7 +801,88 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		memcpy(cbVrEffectData, &cbVrEffect, sizeof(CB_VolumeMaterial));
 		dx11DeviceImmContext->Unmap(cbuf_vreffect, 0);
 		SET_CBUFFERS(3, 1, &cbuf_reffect);
-#pragma endregion 
+
+#ifndef DX10_0
+		// ===== VXGI consumption (curved slicer = PURE CONSUMER — plan §3.3) =====
+		// The curved slicer never builds the field: it binds the bake a 3D DVR view published on the VOLUME
+		// (vobj-keyed grids + CB blob) so CurvedSlicer's shared VXGI_ApplyVolumetricGI shows the IDENTICAL GI
+		// physics as the 3D view. Contract mirrors the 3D DVR disabled path: b13 ALWAYS carries a definite CB
+		// (bake-derived when consuming, zero/disabled otherwise) and t8/t9 are bound only on a verified bake
+		// (probe-only lookup — UpdateVoxelGrid is a CREATOR and must never run here, D4) and nulled after the
+		// dispatch below. Slot audit (§3.3): t8/t9/b13 are unused by this renderer — no collision.
+		// DX10 (#else of this guard): nothing at all — b13 stays unbound, an unbound cbuffer reads 0, so
+		// VXGI_IS_ENABLED is false in the ps_4_0 blobs (the RayCasting-proven pattern).
+		bool vxgi_curved_consumed = false;
+		{
+			const bool vxgi_on = _fncontainer->fnParams.GetParam("_bool_VxgiEnabled", false); // this camera's EnableVoxelGI
+			CB_VXGI cbVxgiC; // ZERO_SET ctor: vxgi_flag = 0 => VXGI_IS_ENABLED reads false (disabled contract)
+			GpuRes gres_c_grid, gres_c_mat;
+			if (vxgi_on && !is_xray_mode)
+			{
+				const float vxgi_gi_int = _fncontainer->fnParams.GetParam("_float_VxgiGiIntensity", 1.f);
+				const float vxgi_ao_int = _fncontainer->fnParams.GetParam("_float_VxgiAoIntensity", 1.f);
+				const uint64_t vxgi_vobj_gen = grd_helper::VxgiIssueGen(vobj); // DLL-wide single issuer (D9.3)
+				// W1 bookkeeping shared with the planar consumer via grd_helper — one suppression logic, no fork.
+				auto vxgi_w1 = [&](int reason) {
+					if (grd_helper::VxgiW1ShouldWarn(iobj, vxgi_vobj_gen, reason))
+					{
+						// vzlog_warning expands to a "{...}" block, so each arm MUST be braced (else C2181).
+						if (reason == 1) { vzlog_warning("[VXGI] curved slicer VXGI on but no usable bake (r1) - enable VXGI on a 3D DVR view of this volume"); }
+						else if (reason == 2) { vzlog_warning("[VXGI] curved slicer bake is stale (r2: content key mismatch) - a 3D DVR view must re-bake this volume"); }
+						else { vzlog_warning("[VXGI] curved slicer FieldReady but grid resource missing (r3, defensive)"); }
+					}
+				};
+				int vxgi_w1_reason = 0;
+				// Consumer CB: bake mapping/medium/scatter_gain verbatim + THIS view's gi/ao intensity, debug
+				// byte and preserve-AO cleared — the SAME §3.1 helper the planar consumer uses (rules never fork).
+				// mat_ws2ts: SetCb_VolumeObj stored it TRANSPOSED; the helper expects the raw matrix.
+				if (grd_helper::LoadVxgiConsumerCb(cbVxgiC, vxgi_w1_reason, vobj, tobj_otf,
+					TRANSPOSE(cbVolumeObj.mat_ws2ts), vxgi_gi_int, vxgi_ao_int))
+				{
+					// D4 probe: find the vobj-keyed grids WITHOUT creating them (absent => r3, defensive).
+					gres_c_grid.vm_src_id = vobj->GetObjectID(); gres_c_grid.res_name = "VXGI_VOXEL_GRID";
+					gres_c_mat.vm_src_id = vobj->GetObjectID();  gres_c_mat.res_name = "VXGI_GRID_MAT";
+					if (gpu_manager->UpdateGpuResource(gres_c_grid) && gpu_manager->UpdateGpuResource(gres_c_mat))
+					{
+						ID3D11ShaderResourceView* c_grid_srv = (ID3D11ShaderResourceView*)gres_c_grid.alloc_res_ptrs[DTYPE_SRV];
+						ID3D11ShaderResourceView* c_mat_srv = (ID3D11ShaderResourceView*)gres_c_mat.alloc_res_ptrs[DTYPE_SRV];
+						SET_SHADER_RES(8, 1, &c_grid_srv);
+						SET_SHADER_RES(9, 1, &c_mat_srv);
+						// Mirror the shared field's progress so this view's CheckRenderConvergence tracks it
+						// instead of waiting on a rebuild this consumer can never advance (D10 수렴 보고).
+						iobj->SetObjParam("_int_VxgiBounce", vobj->GetObjParam<int>("_int_VxgiBounce", (int)0));
+						iobj->SetObjParam("_int_VxgiBounceTarget", vobj->GetObjParam<int>("_int_VxgiSharedTarget", (int)0));
+						vxgi_curved_consumed = true;
+						grd_helper::VxgiW1Clear(iobj, vxgi_vobj_gen); // ready consume re-arms the warning
+					}
+					else
+					{
+						vxgi_w1(3);
+					}
+				}
+				else
+				{
+					vxgi_w1(vxgi_w1_reason); // r1 (no bake) / r2 (stale key), decided by the shared helper
+				}
+			}
+			if (!vxgi_curved_consumed)
+			{
+				// Stop this view's convergence loop from spinning on a stale mirrored target, and keep the
+				// null-SRV + disabled-CB pairing explicit (the zero cbVxgiC below carries vxgi_flag = 0).
+				iobj->SetObjParam("_int_VxgiBounceTarget", (int)0);
+				SET_SHADER_RES(8, 1, dx11SRVs_NULL);
+				SET_SHADER_RES(9, 1, dx11SRVs_NULL);
+			}
+			// b13 ALWAYS bound with a definite CB — never inherit another draw's leftover VXGI state.
+			ID3D11Buffer* cbuf_vxgi_c = psoManager->get_cbuf("CB_VXGI");
+			D3D11_MAPPED_SUBRESOURCE mappedVxgiC;
+			dx11DeviceImmContext->Map(cbuf_vxgi_c, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedVxgiC);
+			memcpy(mappedVxgiC.pData, &cbVxgiC, sizeof(CB_VXGI));
+			dx11DeviceImmContext->Unmap(cbuf_vxgi_c, 0);
+			SET_CBUFFERS(13, 1, &cbuf_vxgi_c);
+		}
+#endif // !DX10_0
+#pragma endregion
 
 #pragma region GPU resource updates
 #pragma endregion 
@@ -890,6 +971,10 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		}
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(50, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+		// VXGI consumer grids (t8/t9): released unconditionally after the dispatch — same discipline as the
+		// 3D DVR path (bindings are immediate-context state that outlives this draw).
+		SET_SHADER_RES(8, 1, dx11SRVs_NULL);
+		SET_SHADER_RES(9, 1, dx11SRVs_NULL);
 
 		// Slicer x-ray image-level post-processing filter + mesh composite (single fused pass).
 		// Runs once, after the DVR x-ray volume, when the post-filter is enabled. CurvedSlicer wrote the
