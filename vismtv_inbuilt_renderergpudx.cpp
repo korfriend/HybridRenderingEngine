@@ -306,6 +306,17 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	// That is correct as long as the scene is not mutated between the calls — any scene mutation moves the
 	// scene stamp and legitimately resets the accumulation.
 	// Reset when the scene content or the viewport changed. Picking is never jittered.
+	//
+	// Gated on the TAA config ALONE — do NOT engage it just because another temporal technique is running.
+	// VXGI is temporal too, but its temporal state lives in a DIFFERENT ASSET, and that is the whole point:
+	//   * TAA accumulates the IMAGE — a running mean of N sub-pixel-jittered samples, in the RT history.
+	//   * VXGI accumulates the VOXEL GRID — the field refines by one propagate per rendered frame, and the
+	//     grid IS the carrier of its cross-frame state.
+	// So every VXGI frame is already a COMPLETE render of the current field: the newest frame is the best one.
+	// Folding it into a TAA history would average the early UNCONVERGED field into the converged result —
+	// smearing, not anti-aliasing. Two temporal families, two accumulators; they share only the RE-RENDER LOOP
+	// (core's skip gate + CheckRenderConvergence keep the view drawing until EVERY technique reports done),
+	// which is why VXGI already progresses without TAA. Pairing them is a quality choice, not a dependency.
 	const bool taa_enabled = _fncontainer.fnParams.GetParam("_bool_TaaEnabled", false) && !is_picking_routine;
 	int taa_max_samples = _fncontainer.fnParams.GetParam("_int_TaaMaxSamples", (int)1);
 	if (taa_max_samples < 1) taa_max_samples = 1;

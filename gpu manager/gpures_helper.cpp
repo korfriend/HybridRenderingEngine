@@ -2861,6 +2861,42 @@ bool grd_helper::LoadVxgiConsumerCb(CB_VXGI& cb_out, int& w1_reason, VmObject* v
 	return true;
 }
 
+uint64_t grd_helper::VxgiIssueGen(VmObject* obj)
+{
+	// Engine entry points serialize renders behind the API mutex, so a plain static is safe here (the same
+	// assumption every other static in this DLL already makes). 64-bit monotonic: cannot wrap in a session.
+	static uint64_t vxgi_gen_counter = 0;
+	uint64_t g = obj->GetObjParam<uint64_t>("_uint64_VxgiGen", (uint64_t)0);
+	if (g == 0) { g = ++vxgi_gen_counter; obj->SetObjParam("_uint64_VxgiGen", g); }
+	return g;
+}
+
+typedef std::vector<std::pair<uint64_t, uint32_t>> __VxgiW1Map; // vobj gen -> warned reason bits (r1/r2/r3)
+
+bool grd_helper::VxgiW1ShouldWarn(VmObject* consumer_iobj, const uint64_t vobj_gen, const int reason)
+{
+	__VxgiW1Map* m = consumer_iobj->GetObjParamPtr<__VxgiW1Map>("_VxgiW1Suppress");
+	if (m == NULL)
+	{
+		consumer_iobj->SetObjParam("_VxgiW1Suppress", __VxgiW1Map());
+		m = consumer_iobj->GetObjParamPtr<__VxgiW1Map>("_VxgiW1Suppress");
+	}
+	const uint32_t bit = 1u << (reason - 1);
+	for (auto& e : *m)
+		if (e.first == vobj_gen) { const bool emit = ((e.second & bit) == 0); e.second |= bit; return emit; }
+	if (m->size() >= 64) m->erase(m->begin()); // evict oldest (insertion order) — long-session bound
+	m->push_back(std::make_pair(vobj_gen, bit));
+	return true;
+}
+
+void grd_helper::VxgiW1Clear(VmObject* consumer_iobj, const uint64_t vobj_gen)
+{
+	__VxgiW1Map* m = consumer_iobj->GetObjParamPtr<__VxgiW1Map>("_VxgiW1Suppress");
+	if (m == NULL) return;
+	for (auto it = m->begin(); it != m->end(); ++it)
+		if (it->first == vobj_gen) { m->erase(it); break; }
+}
+
 void grd_helper::SetCb_Env(CB_EnvState& cb_env, VmCObject* ccobj, const LightSource& light_src, const GlobalLighting& global_lighting, const LensEffect& lens_effect)
 {
 	vmfloat3 pos_cam, dir_cam;

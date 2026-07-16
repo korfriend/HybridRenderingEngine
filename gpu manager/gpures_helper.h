@@ -1150,6 +1150,21 @@ namespace grd_helper
 	// and the debug byte + transient preserve-AO bit cleared (D3 consume rules). Never runs any bake work.
 	bool LoadVxgiConsumerCb(CB_VXGI& cb_out, int& w1_reason, VmObject* vobj, VmObject* tobj_otf,
 		const vmmat44f& mat_ws2ts, const float gi_intensity, const float ao_intensity);
+
+	// D9.3 — session-monotonic VXGI identity token, the SINGLE issuer for the whole DLL. Object ids are
+	// RECYCLED by the engine's ResourceManager, so every VXGI identity decision (builder/owner gen, warning
+	// suppression keys) uses a gen issued once per object and never reused. Both the 3D builder
+	// (VolumeRenderer) and the slicer consumers (planar + curved) MUST draw from this one counter — a second
+	// counter would double-issue different identities for the same object. Zero = unissued.
+	uint64_t VxgiIssueGen(VmObject* obj);
+
+	// W1 ("consumer has no usable bake") warning suppression, shared by the planar and curved consumers so
+	// the bookkeeping cannot fork: warn once per (vobj gen, reason bit r1/r2/r3), stored on the CONSUMER's
+	// iobj, bounded at 64 entries with insertion-order eviction. A successful ready-consume clears the vobj's
+	// entry (re-arm), so the next not-ready warns exactly once again. Returns true when the caller should
+	// emit the warning (message text stays at the call site).
+	bool VxgiW1ShouldWarn(VmObject* consumer_iobj, const uint64_t vobj_gen, const int reason);
+	void VxgiW1Clear(VmObject* consumer_iobj, const uint64_t vobj_gen);
 	// each object
 	void SetCb_TMap(CB_TMAP& cb_tmap, VmObject* tobj);
 	//bool SetCbVrShadowMap(CB_VrShadowMap* pCBVrShadowMap, CB_VrCameraState* pCBVrCamStateForShadowMap, vmfloat3 f3PosOverviewBoxMinWS, vmfloat3 f3PosOverviewBoxMaxWS, map<string, void*>* pmapCustomParameter);

@@ -687,6 +687,51 @@ bool OverlapTest(const in Fragment f_1, const in Fragment f_2)
 #endif
 #pragma endregion // Z-thickness fragment merging
 
+// ---- VXGI volumetric GI consumption — the SINGLE body shared by RayCasting and CurvedSlicer (plan §D5) ----
+// Runtime-gated by g_cbVxgi.vxgi_flag (VXGI_IS_ENABLED): no shader variant, .bat files unchanged. Extracted
+// as ONE function on purpose: the sampling constants below (in-scatter mip 1.0, AO lod 2.5, sqrt response,
+// (1-GAIN) normalization) define the physical quantity BOTH screens display — a per-entry copy would let the
+// 3D view and the slicers drift into showing different physics. Per-view tuning is INTENSITY-only (gi/ao in
+// the per-view CB, substituted by the consumer path). pos_sample_ts is the sample position in VOLUME texture
+// space — identical in both entry points — and the fit mapping places it in the margin-shelled grid box.
+// On DX10 (ps_4_0) b13 is never bound, an unbound cbuffer reads 0, VXGI_IS_ENABLED is false: dead code, the
+// same already-proven pattern as the pre-extraction RayCasting block.
+void VXGI_ApplyVolumetricGI(inout float4 vis_sample, const float3 pos_sample_ts, const float vis_otf_a)
+{
+	if (!VXGI_IS_ENABLED)
+		return;
+	// grid box = volume box + margin shell: volume ts -> grid coord via the fit mapping.
+	// ONE fetch yields the whole per-voxel GI field: rgb = scattered radiance (in-scatter),
+	// a = baked obscurance — so BOTH terms apply PER SAMPLE (fully volumetric, no surface
+	// bias), and the lattice-aligned baking makes them free of surface-phase striping.
+	float3 sc_p = pos_sample_ts * g_cbVxgi.vox_fit_scale + g_cbVxgi.vox_fit_offset;
+	float4 sc = vxgi_grid.SampleLevel(g_samplerLinear_clamp, sc_p, 1.0f);
+	// AO from a WIDER filter (lod 2.5): the obscurance ramp rises 0->1 within a few voxels
+	// of the surface, and multiplying such a steep per-sample factor re-exposes the DVR's
+	// classic sample-quantization (wood-grain) banding — the pre-integrated OTF machinery
+	// only covers the OTF's own steepness, not this external factor. The coarser mip
+	// flattens the ramp so the fixed-step march no longer quantizes it visibly.
+	// The stored alpha is PREMULTIPLIED (obscurance * coverage): un-premultiply with the
+	// MAT coverage at the SAME lod. A raw (un-premultiplied) mip read mixed the field with
+	// empty voxels in proportion to the LOCAL occupancy — an AO dilution following the
+	// shell geometry, i.e. low-frequency banding in the final shading.
+	float ao_pm = vxgi_grid.SampleLevel(g_samplerLinear_clamp, sc_p, 2.5f).a;
+	float ao_cov = vxgi_grid_mat.SampleLevel(g_samplerLinear_clamp, sc_p, 2.5f).a;
+	float ao_s = ao_pm / max(ao_cov, 1e-3f);
+	// sqrt response: the density-based obscurance field is inherently soft/low-frequency
+	// compared to the retired surface cone AO (fine-scale cones + direct final-color
+	// multiply). The sqrt lifts mid values (flat 0.3->0.55, crevice 0.7->0.84) so the
+	// shading reads with comparable punch, without touching the phase-free field itself.
+	vis_sample.rgb *= 1.0f - saturate(sqrt(ao_s) * VXGI_AO_INTENSITY); // volumetric AO
+	// Series-bound normalization: the source-term propagate (r' = D + GAIN*albedo*gather)
+	// converges to up to direct/(1-GAIN) in dense interiors, and the exp-tau inject also
+	// brightened the shell (~2x vs the old per-step compositing) — unscaled, the additive
+	// in-scatter saturates at moderate slider values. Scale UNIFORMLY by (1-GAIN): unlike
+	// the retired field-side damping this does not distort the thin:interior ratio (the
+	// field itself keeps direct preserved everywhere); it only restores slider headroom.
+	vis_sample.rgb += sc.rgb * ((1.0f - VXGI_SCATTER_GAIN) * VXGI_GI_INTENSITY * vis_otf_a); // volumetric in-scatter
+}
+
 #pragma region DX10.0 path (pixel-shader fallback, SRV inputs)
 #if DX10_0 == 1
 #define __EXIT_VR_RayCasting return output
@@ -1394,45 +1439,14 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 					}
 
 					float4 vis_sample = float4(shade * vis_otf.rgb, vis_otf.a);
-					// VXGI volumetric in-scatter (runtime-gated by g_cbVxgi.vxgi_flag, no shader variant).
+					// VXGI volumetric in-scatter + AO (runtime-gated by g_cbVxgi.vxgi_flag, no shader variant).
 					// The radiance grid IS the scattered-light field: InjectLight bakes the light arriving at
 					// every voxel (transmittance through the medium), and VXGI_Propagate diffuses it inward one
-					// iteration per frame. So the in-scatter here is a single trilinear fetch (mip 1 = slightly
-					// smoothed) — per-sample light marching is no longer needed, and the progressive refinement
-					// of the grid shows up directly in the render. Grid == volume texture space.
-					if (VXGI_IS_ENABLED)
-					{
-						// grid box = volume box + margin shell: volume ts -> grid coord via the fit mapping.
-						// ONE fetch yields the whole per-voxel GI field: rgb = scattered radiance (in-scatter),
-						// a = baked obscurance — so BOTH terms apply PER SAMPLE (fully volumetric, no surface
-						// bias), and the lattice-aligned baking makes them free of surface-phase striping.
-						float3 sc_p = pos_sample_blk_ts * g_cbVxgi.vox_fit_scale + g_cbVxgi.vox_fit_offset;
-						float4 sc = vxgi_grid.SampleLevel(g_samplerLinear_clamp, sc_p, 1.0f);
-						// AO from a WIDER filter (lod 2.5): the obscurance ramp rises 0->1 within a few voxels
-						// of the surface, and multiplying such a steep per-sample factor re-exposes the DVR's
-						// classic sample-quantization (wood-grain) banding — the pre-integrated OTF machinery
-						// only covers the OTF's own steepness, not this external factor. The coarser mip
-						// flattens the ramp so the fixed-step march no longer quantizes it visibly.
-						// The stored alpha is PREMULTIPLIED (obscurance * coverage): un-premultiply with the
-						// MAT coverage at the SAME lod. A raw (un-premultiplied) mip read mixed the field with
-						// empty voxels in proportion to the LOCAL occupancy — an AO dilution following the
-						// shell geometry, i.e. low-frequency banding in the final shading.
-						float ao_pm = vxgi_grid.SampleLevel(g_samplerLinear_clamp, sc_p, 2.5f).a;
-						float ao_cov = vxgi_grid_mat.SampleLevel(g_samplerLinear_clamp, sc_p, 2.5f).a;
-						float ao_s = ao_pm / max(ao_cov, 1e-3f);
-						// sqrt response: the density-based obscurance field is inherently soft/low-frequency
-						// compared to the retired surface cone AO (fine-scale cones + direct final-color
-						// multiply). The sqrt lifts mid values (flat 0.3->0.55, crevice 0.7->0.84) so the
-						// shading reads with comparable punch, without touching the phase-free field itself.
-						vis_sample.rgb *= 1.0f - saturate(sqrt(ao_s) * VXGI_AO_INTENSITY); // volumetric AO
-						// Series-bound normalization: the source-term propagate (r' = D + GAIN*albedo*gather)
-						// converges to up to direct/(1-GAIN) in dense interiors, and the exp-tau inject also
-						// brightened the shell (~2x vs the old per-step compositing) — unscaled, the additive
-						// in-scatter saturates at moderate slider values. Scale UNIFORMLY by (1-GAIN): unlike
-						// the retired field-side damping this does not distort the thin:interior ratio (the
-						// field itself keeps direct preserved everywhere); it only restores slider headroom.
-						vis_sample.rgb += sc.rgb * ((1.0f - VXGI_SCATTER_GAIN) * VXGI_GI_INTENSITY * vis_otf.a); // volumetric in-scatter
-					}
+					// iteration per frame — so the consumption is a couple of trilinear fetches. Body extracted
+					// to VXGI_ApplyVolumetricGI (above the entry points) so CurvedSlicer consumes the IDENTICAL
+					// physics (plan §D5); it must stay BEFORE the VR_MODE 2 MODULATE below, so the GI terms
+					// inherit the modulator exactly once.
+					VXGI_ApplyVolumetricGI(vis_sample, pos_sample_blk_ts, vis_otf.a);
 					depth_sample = depth_hit + (float)(i + j) * sample_dist;
 #pragma region VR_MODE 2: context-aware
 #if VR_MODE == 2
@@ -2409,6 +2423,14 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 #pragma endregion // VR_MODE != 2: opacity-corrected sample scaling
 					
 					float4 vis_sample = float4(shade * vis_otf.rgb, vis_otf.a);
+					// VXGI consumption (plan §D5): the SAME shared body the 3D DVR march calls, so the curved
+					// slicer displays the identical GI physics. pos_sample_blk_ts is the same volume texture
+					// space. MUST stay BEFORE the VR_MODE 2 MODULATE below — AO/in-scatter first, modulator
+					// second, so the GI terms inherit the modulator exactly once (plan §1.3). The first-hit
+					// isOnPlane block deliberately gets NO call — parity with RayCasting's first-hit slab.
+					// Runtime-gated (b13 disabled CB when the C++ consumer is not ready): PanoVR_RAY* variants
+					// never reach here (this is the RAYMODE==0 region).
+					VXGI_ApplyVolumetricGI(vis_sample, pos_sample_blk_ts, vis_otf.a);
 					float depth_sample = depthHit + (float)(i + j) * sample_dist;
 #pragma region VR_MODE 2: context-aware
 #if VR_MODE == 2
