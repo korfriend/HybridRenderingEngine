@@ -298,8 +298,13 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 
 	// ---- TAA accumulation state (renderer-owned algorithm; core only forwards config + scene stamp) ----
 	// DoModule is invoked once per render source (MESH then VOLUME are separate calls sharing this iobj), so
-	// the jitter and accumulation index live on the iobj: the first source of the frame computes them, every
-	// source reads the same jitter (in grd_helper::SetCb_Camera), and the last source resolves + advances.
+	// the jitter and accumulation index live on the iobj: the FIRST source of the RENDER CALL computes them,
+	// every source reads the same jitter (in grd_helper::SetCb_Camera), and the last source resolves + advances.
+	// NOTE is_first_renderer means "first DoModule within ONE vzm::RenderScene call" — NOT "first of a presented
+	// frame". An app frame may issue several RenderScene calls for the same camera (e.g. an event callback that
+	// re-renders it); each call is one full TAA step (sig check + jitter here, resolve + accum++ at the end).
+	// That is correct as long as the scene is not mutated between the calls — any scene mutation moves the
+	// scene stamp and legitimately resets the accumulation.
 	// Reset when the scene content or the viewport changed. Picking is never jittered.
 	const bool taa_enabled = _fncontainer.fnParams.GetParam("_bool_TaaEnabled", false) && !is_picking_routine;
 	int taa_max_samples = _fncontainer.fnParams.GetParam("_int_TaaMaxSamples", (int)1);

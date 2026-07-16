@@ -1875,12 +1875,23 @@ PS_FILL_OUTPUT_SURF VR_SURFACE(VS_OUTPUT input)
 
 			float depth_hit = length(pos_hit_ws - pos_ip_ws);
 
-			if (BitCheck(g_cbVolMaterial.flag, 0))
+			// Ray-start dither: offset the first-hit depth by a per-pixel random fraction of a sample step to
+			// break up wood-grain/slice banding. Gated on TAA being ACTIVE (camera cam_flag bit12) — the dither
+			// is only clean when it is averaged over the accumulated jittered frames; on a single non-TAA frame
+			// it would just add noise. (Replaces the retired per-volume _bool_JitteringSample / CB_VolumeMaterial
+			// flag bit0.)
+			if (BitCheck(g_cbCamState.cam_flag, 12))
 			{
 		// additional feature : https://koreascience.kr/article/JAKO201324947256830.pdf
-				float rand = _random(float2(tex2d_xy.x + g_cbCamState.rt_width * tex2d_xy.y, depth_hit));
+				// SEED MUST CHANGE ACROSS THE ACCUMULATED FRAMES, or TAA averages the SAME noise 32 times and
+				// the dither never smooths out. The old seed (pixel index, depth_hit) is jitter-INVARIANT on a
+				// slicer: the sub-pixel jitter shifts the ray laterally, and a planar slab viewed head-on keeps
+				// depth_hit identical — a static pattern (the 3D view only decorrelated by luck, via depth
+				// variation on non-planar surfaces; an orthogonal view of a flat face had the same flaw).
+				// pos_ip_ws is the JITTERED ray origin: unique per pixel (replaces the pixel-index term) and
+				// moved every accumulated frame by the jitter, so _random's bit-hash fully decorrelates it.
+				float rand = _random(float4(pos_ip_ws, depth_hit));
 				depth_hit -= rand * g_cbVobj.sample_dist;
-		//float3 random_samples = float3(_random(DTid.x + g_cbCamState.rt_width * DTid.y), _random(DTid.x + g_cbCamState.rt_width * DTid.y + g_cbCamState.rt_width * g_cbCamState.rt_height), _random(DTid.xy));
 			}
 
 			uint dvr_hit_enc = length(pos_hit_ws - pos_start_ws) < g_cbVobj.sample_dist ? 2 : 1;

@@ -609,6 +609,7 @@ namespace grd_helper
 		// 9-  bit : 0 : outlint mode (solid), 1 : outlint mode (gradient alpha)
 		// 10- bit : 0 : 3D camera, 1 : Slicer
 		// 11- bit : 0 : no external K-buffer, 1 : put an external RT to K-buffer (OIT_RESOLVE)
+		// 12- bit : 0 : TAA off, 1 : TAA active (sub-pixel jitter this frame) — gates temporal-only effects (DVR ray-start dither)
 		uint32_t cam_flag;
 		// used for 
 		// 1) A-Buffer prefix computations /*deprecated*/ or 2) beta (asfloat) for merging operation
@@ -915,8 +916,7 @@ namespace grd_helper
 
 		float occ_sample_dist_scale; // for occlusion
 		float sdm_sample_dist_scale; // for shadow
-		// 0-bit : 0 - normal surface hit, 1 - jittering 
-		uint32_t flag;
+		uint32_t flag; // (bit0 "jittering" retired; ray-start dither now keyed on TAA via CB_CameraState.cam_flag bit12)
 		uint32_t vrf_dummy_1;
 
 		ZERO_SET(CB_VolumeMaterial)
@@ -1134,6 +1134,22 @@ namespace grd_helper
 	// stops feeding the VXGI content stamp, so editing it does not re-voxelize.
 	// context_alpha_gain applies to the context flag only (see VXGI_CONTEXT_ALPHA_GAIN).
 	void SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const uint32_t resolution, const float gi_intensity, const float ao_intensity, const bool enabled, const float indirect_intensity = 1.f, const uint32_t debug_byte = 0, const uint32_t medium_flags = 0, const float ao_pivot = 0.3f, const float ao_slope = 1.5f, const float scatter_gain = 0.75f, const float surface_gi_gain = 0.15f, const float surface_cone_ao_gain = 1.f, const float context_alpha_gain = 1.f);
+
+	// D9.1 bake CONTENT KEY — the SINGLE function computing it, so the producer (VolumeRenderer bake
+	// publish) and the consumer (LoadVxgiConsumerCb) cannot drift. View-INDEPENDENT by construction:
+	// volume content time + OTF content time + the actor's world->texture transform (FNV-1a). Clip and
+	// resolved-light are deliberately excluded — they are per-view / builder-only, so a slicer consumer
+	// could never reproduce them (would false-mismatch forever). See plan §D9.1.
+	uint64_t VxgiBakeContentKey(VmObject* vobj, VmObject* tobj_otf, const vmmat44f& mat_ws2ts);
+
+	// §3.1 shared slicer / non-owner CONSUMER helper. Loads the vobj-published bake CB into cb_out for a
+	// consuming draw. Returns true ONLY when FieldReady is set AND the recomputed content key still matches
+	// the published one; otherwise false with w1_reason = 1 (r1: no usable bake) or 2 (r2: stale bake). The
+	// r3 case (resource lookup failure) is the caller's probe AFTER this returns true. On success cb_out
+	// carries the bake's mapping / medium bits / scatter_gain, with THIS view's gi/ao intensity substituted
+	// and the debug byte + transient preserve-AO bit cleared (D3 consume rules). Never runs any bake work.
+	bool LoadVxgiConsumerCb(CB_VXGI& cb_out, int& w1_reason, VmObject* vobj, VmObject* tobj_otf,
+		const vmmat44f& mat_ws2ts, const float gi_intensity, const float ao_intensity);
 	// each object
 	void SetCb_TMap(CB_TMAP& cb_tmap, VmObject* tobj);
 	//bool SetCbVrShadowMap(CB_VrShadowMap* pCBVrShadowMap, CB_VrCameraState* pCBVrCamStateForShadowMap, vmfloat3 f3PosOverviewBoxMinWS, vmfloat3 f3PosOverviewBoxMaxWS, map<string, void*>* pmapCustomParameter);

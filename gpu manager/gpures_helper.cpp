@@ -2721,6 +2721,12 @@ void grd_helper::SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, 
 	cb_cam.cam_flag = 0;
 	if (ccobj->IsPerspective())
 		cb_cam.cam_flag |= 0x1;
+	// bit12 — TAA ACTIVE this frame. A non-zero sub-pixel jitter is applied iff TAA is on (jitter is exactly
+	// (0,0) when off; when on, the Halton base-3 y term is never exactly 0.5, so y is never exactly 0). Shaders
+	// use this to enable temporal-only effects (e.g. the DVR ray-start dither) that are clean only under
+	// accumulation. Set AFTER the cam_flag reset above (the jitter block near the top runs before it).
+	if (taa_jitter_px.x != 0.f || taa_jitter_px.y != 0.f)
+		cb_cam.cam_flag |= (1u << 12);
 
 	cb_cam.pos_cam_ws = pos_cam;
 	cb_cam.dir_view_ws = dir_cam;
@@ -2814,6 +2820,45 @@ void grd_helper::SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const u
 	// spread through mips / InjectLight / Propagate until the next rebuild, and saturate(NaN) is not
 	// guaranteed to be 0 across drivers — so it must not reach the shader in the first place.
 	cb.context_alpha_gain = (context_alpha_gain > 0.f) ? context_alpha_gain : 0.f; // false for NaN too
+}
+
+uint64_t grd_helper::VxgiBakeContentKey(VmObject* vobj, VmObject* tobj_otf, const vmmat44f& mat_ws2ts)
+{
+	// FNV-1a over the raw bytes of the actor's world->texture matrix (view-INDEPENDENT: it is the
+	// volume placement, not the camera). Both the producer and this file compute the key through THIS
+	// one function, so the byte layout / hash constants can never diverge between the two sides.
+	uint64_t xform = 1469598103934665603ull;           // FNV-1a 64-bit offset basis
+	const uint8_t* mp = (const uint8_t*)&mat_ws2ts;
+	for (size_t i = 0; i < sizeof(vmmat44f); i++) { xform ^= (uint64_t)mp[i]; xform *= 1099511628211ull; }
+	const uint64_t vk = (vobj != NULL) ? vobj->GetContentUpdateTime() : 0ull;
+	const uint64_t ok = (tobj_otf != NULL) ? tobj_otf->GetContentUpdateTime() : 0ull;
+	return vk ^ (ok << 1) ^ xform;
+}
+
+bool grd_helper::LoadVxgiConsumerCb(CB_VXGI& cb_out, int& w1_reason, VmObject* vobj, VmObject* tobj_otf,
+	const vmmat44f& mat_ws2ts, const float gi_intensity, const float ao_intensity)
+{
+	w1_reason = 0;
+	// r1 — no usable bake: FieldReady not set (old self-build users land here) or, defensively, the flag
+	// is set but the CB blob is missing.
+	if (vobj == NULL || !vobj->GetObjParam<bool>("_bool_VxgiFieldReady", false)) { w1_reason = 1; return false; }
+	// r2 — stale bake: the volume / OTF / transform moved since the builder last published (or the builder
+	// is gone and can no longer re-bake). The consumer detects this itself via the shared content key.
+	const uint64_t want_key = VxgiBakeContentKey(vobj, tobj_otf, mat_ws2ts);
+	if (want_key != vobj->GetObjParam<uint64_t>("_uint64_VxgiBakeContentKey", (uint64_t)0)) { w1_reason = 2; return false; }
+	CB_VXGI* bake = vobj->GetObjParamPtr<CB_VXGI>("_VXGI_BakeCb");
+	if (bake == NULL) { w1_reason = 1; return false; } // ready without a blob — treat as r1 (defensive)
+
+	cb_out = *bake; // bake mapping / medium bits / scatter_gain verbatim (D3: builder is the bake authority)
+	using namespace DirectX::PackedVector;
+	// D3 consume rules: THIS view's gi/ao intensity (EnableVoxelGI is per-camera), debug byte forced 0
+	// (a consume draw never runs the debug gather), and the transient preserve-AO (light-only inject) bit
+	// cleared — it describes a builder inject frame, not a steady consumption.
+	cb_out.gi_ao_intensity = (uint32_t)XMConvertFloatToHalf(gi_intensity)
+		| ((uint32_t)XMConvertFloatToHalf(ao_intensity) << 16);
+	cb_out.vxgi_flag &= ~((uint32_t)0xFFu << 24); // clear debug byte [24:31]
+	cb_out.vxgi_flag &= ~(uint32_t)0x40u;         // clear bit6 (preserve-AO)
+	return true;
 }
 
 void grd_helper::SetCb_Env(CB_EnvState& cb_env, VmCObject* ccobj, const LightSource& light_src, const GlobalLighting& global_lighting, const LensEffect& lens_effect)
@@ -3175,8 +3220,9 @@ void grd_helper::SetCb_VolumeRenderingEffect(CB_VolumeMaterial& cb_vreffect, VmV
 	cb_vreffect.occ_sample_dist_scale = actor->GetParam("_float_OccSampleDistScale", 1.f);
 	cb_vreffect.sdm_sample_dist_scale = actor->GetParam("_float_SdmSampleDistScale", 1.f);
 
-	bool jitteringSample = actor->GetParam("_bool_JitteringSample", true);
-	cb_vreffect.flag |= (int)jitteringSample;
+	// (_bool_JitteringSample / CB_VolumeMaterial.flag bit0 retired: the DVR ray-start dither it gated is now
+	//  keyed on TAA being active — camera cam_flag bit12, set in SetCb_Camera — since the dither is only clean
+	//  under temporal accumulation. cb_vreffect.flag stays 0 here.)
 }
 
 void grd_helper::SetCb_ClipInfo(CB_ClipInfo& cb_clip, VmVObject* obj, VmActor* actor, const int camClipMode, const std::set<int> camClipperFreeActor,
