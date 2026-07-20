@@ -199,24 +199,8 @@ void OIT_RESOLVE_OLD(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, u
 	cnt_sorted_ztsurf = valid_frag_cnt;
 #endif
     
-	// disable when SSAO is activated
-	if (g_cbEnv.r_kernel_ao > 0)
-	{
-		cnt_sorted_ztsurf = valid_frag_cnt;
-	}
-	else
-	{
-		/*
-		Fragment f_invalid = (Fragment)0;
-		f_invalid.z = FLT_MAX;
-		[loop]
-		for (i = cnt_sorted_ztsurf; i < frag_cnt; i++)
-		{
-			int idx = i;
-			fs[idx] = f_invalid; // when displaying layers for test, disable this.
-		}
-		*/
-	}
+	// (v76) the SSAO count-override (`if (r_kernel_ao > 0) cnt_sorted_ztsurf = valid_frag_cnt;`) lived
+	// here -- retired with the feature (its else arm was already commented-out test code).
 
 	bool store_to_kbuf = BitCheck(g_cbCamState.cam_flag, 3);
 #if FRAG_MERGING == 1
@@ -554,24 +538,7 @@ void OIT_RESOLVE(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3
 
 #endif
 
-	// disable when SSAO is activated
-	if (g_cbEnv.r_kernel_ao > 0)
-	{
-		cnt_sorted_ztsurf = valid_frag_cnt;
-	}
-	else
-	{
-		/*
-		Fragment f_invalid = (Fragment)0;
-		f_invalid.z = FLT_MAX;
-		[loop]
-		for (i = cnt_sorted_ztsurf; i < frag_cnt; i++)
-		{
-			int idx = i;
-			fs[idx] = f_invalid; // when displaying layers for test, disable this.
-		}
-		*/
-	}
+	// (v76) SSAO count-override retired (see the twin note above).
 #if OLD_VER == 1
 #if FRAG_MERGING == 1
 	if (store_to_kbuf)

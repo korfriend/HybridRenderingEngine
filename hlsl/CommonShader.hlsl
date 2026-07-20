@@ -98,9 +98,9 @@ struct HxCB_EnvState
 {
 	float3 pos_light_ws;
 	// 1st bit : 0 (parallel), 1 : (spot)
-	// 2nd bit : 0 (only polygons for SSAO), 1 : (volume G buffer for SSAO)
+	// 2nd bit : RETIRED (was: volume G buffer for SSAO) -- never set anymore (v76, SSAO retired)
 	// 3rd bit : 0 (use light source), 1 : (use view dir for light)
-	// 10th~13th bit : 0 (no SSAO output to render buffer), 1~8: (0~7th layer of SSAO to render buffer), 9: vr layer of SSAO to render buffer
+	// 10th~13th bit : RETIRED (was: SSAO debug-output layer select) -- never set anymore (v76)
 	uint env_flag;
 
 	float3 dir_light_ws;
@@ -113,12 +113,14 @@ struct HxCB_EnvState
 	float4x4	mat_ws2lss_smap;	// for shadow : Sample Depth Map (ws2ss)
 	float4x4	mat_ws2lcs_smap;	// for shadow : Depth Comparison 
 
-	float r_kernel_ao;
-	int num_dirs;
-	int num_steps;
-	float tangent_bias;
+	// (v76) SSAO RETIRED: same-size reserved pads keep the b7 layout (and every downstream offset)
+	// unchanged -- must mirror CB_EnvState in gpu manager/gpures_helper.h. Always 0 from the C++ side.
+	float env_reserved_ssao_0;   // was r_kernel_ao
+	int env_reserved_ssao_1;     // was num_dirs
+	int env_reserved_ssao_2;     // was num_steps
+	float env_reserved_ssao_3;   // was tangent_bias
 
-	float ao_intensity;
+	float env_reserved_ssao_4;   // was ao_intensity
 	uint num_safe_loopexit;
 	uint env_dummy_1;
 	uint env_dummy_2;
@@ -444,6 +446,9 @@ cbuffer cbGlobalParams : register(b7)
 // header, so b13 is safe here — no CommonShader-including shader binds b13, and Sort never sees this
 // declaration. Kept in CommonShader (shared) on purpose: cone tracing is a common function to extend from
 // volume (v1) to mesh shading later. (Runtime: the C++ binds CB_VXGI to slot 13 for the VXGI/DVR passes.)
+// SLOT LEDGER addendum (Multi-Light): b11 is ALSO used by hlsl/vxgi/InjectLight.hlsl's LOCAL cbVxgiLights
+// (the VXGI light set) — legal because CommonShader itself declares nothing at b11 and BlobParticle (the
+// other b11 user) never shares a dispatch with InjectLight; the C++ binds/unbinds b11 around that dispatch.
 cbuffer cbGlobalParams : register(b13)
 {
 	HxCB_VXGI g_cbVxgi;
@@ -954,7 +959,9 @@ float4 LoadOtfBufId(const in int sample_v, const in Buffer<float4> buf_otf, cons
 {
 	float4 vis_otf = buf_otf[sample_v + id * g_cbTmap.tmap_size_x];
 #ifdef OPACITY_CORRECTION
-	vis_otf.a = 1.0 - pow(1.0 - vis_otf.a, opacity_correction);
+	// max(0,..): the base 1-a is >= 0 for a valid opacity a in [0,1], but the OTF LUT is not guaranteed
+	// to clamp, and pow() of a negative base is undefined (warning X3571). Clamp the base, not the result.
+	vis_otf.a = 1.0 - pow(max(0.0, 1.0 - vis_otf.a), opacity_correction);
 #endif
 #if VR_MODE == 1
 	vis_otf.a = 1.f;

@@ -1,22 +1,22 @@
 ﻿/**
  * @mainpage    VizMotive Framework
  *
- * @section intro 소개
- *      - VizMotive Framework 을 이루는 Global Data Structures, Helper Functions 그리고 Engine APIs를 설명한다.
+ * @section intro Introduction
+ *      - Describes the Global Data Structures, Helper Functions, and Engine APIs that make up the VizMotive Framework.
  *
- * @section CREATEINFO 작성정보
- *      - 작성자      :   김동준
- *      - 작성일      :   2019/7/11
+ * @section CREATEINFO Authoring Information
+ *      - Author       :   DongJoon Kim
+ *      - Date         :   2019/7/11
  *      - Contact     :   korfriend@gmail.com
  *
- * @section MODIFYINFO 수정정보
- *      - 2019.7.11    :   이 일짜 소스를 기준으로 Framework Doxygen 0.0.1 최초 작성
+ * @section MODIFYINFO Revision Information
+ *      - 2019.7.11    :   Initial Framework Doxygen 0.0.1 documentation authored against the source as of this date
  */
  
 /**
  * @file VimCommon.h
- * @brief Global Data Structures 및 Classes 그리고 Helper Functions 선언된 파일.
- * @section Include & Link 정보
+ * @brief File declaring the Global Data Structures, Classes, and Helper Functions.
+ * @section Include & Link Information
  *		- Include : VimCommon.h
  *		- Library : CommonUnits.lib
  *		- Linking Binary : CommonUnits.dll
@@ -39,7 +39,10 @@
 //#define __VERSION "1.41" // released at 25.12.01
 //#define __VERSION "1.50" // released at 25.12.29
 //#define __VERSION "1.51" // released at 26.01.12
-#define __VERSION "1.52" // released at 26.01.17
+//#define __VERSION "1.52" // released at 26.01.17
+//#define __VERSION "1.60" // released at 26.07.17
+//#define __VERSION "1.61" // released at 26.07.18
+#define __VERSION "1.70" // released at 26.07.19 : VmObject family -> virtual interface + _Detail (cobj->VmLens pilot)
 
 #define _HAS_STD_BYTE 0
 
@@ -54,6 +57,7 @@
 #include <algorithm>
 #include <typeinfo>
 #include <typeindex>
+#include <type_traits> // (rev.14) the LIGHT-actor invariant static_assert in VisMtvApi.cpp
 #include <any>
 
 #include "VimHelpers.h"
@@ -80,7 +84,7 @@ using namespace vz;
 
 
 // ONLY FOR WINDOWS VERSION
-#define VMENGINEVERSION 0x29AD7‬	// 170711(allocating 20 bits) and  12 bits for modules and engine enhancement version
+#define VMENGINEVERSION 0x29AD7	// 170711(allocating 20 bits) and  12 bits for modules and engine enhancement version
 #define VMSAFE_DELETE(p)	{ if(p) { delete (p); (p)=NULL; } }
 #define VMSAFE_DELETEARRAY(p)	{ if(p) { delete[] (p); (p)=NULL; } }
 #define VMSAFE_DELETE2DARRAY(pp, numPtrs)	{ if(pp){ for(int i = 0; i < numPtrs; i++){ VMSAFE_DELETEARRAY(pp[i]);} VMSAFE_DELETEARRAY(pp); } }
@@ -98,6 +102,10 @@ using namespace vz;
 #define __vmstaticinline extern "C" __declspec(dllexport) inline
 #define __vmstaticclass class __declspec(dllexport)
 #define __vmstaticstruct struct __declspec(dllexport)
+
+// (1.70) VmCamera (namespace fncontainer, defined far below) is referenced by pointer from vmobjects::VmIObject.
+// Forward-declare it here so the iobj can hold/return a VmCamera* (the dropped VmLens' role folded into VmCamera).
+namespace fncontainer { struct VmCamera; }
 
 #define VM_PI 3.14159265358979323846
 #define VM_fPI    ((float)  3.141592654f)
@@ -164,27 +172,27 @@ namespace vmlog {
 
 /**
  * @package vmenums
- * @brief Common Data Structure로 사용되는 enumeration 을 모은 namespace
+ * @brief Namespace collecting the enumerations used as common data structures.
  */
 namespace vmenums {
-	/*! Framework에서 지원하는 변환 좌표계의 종류, 4x4 matrix가 정의하는 Projecting 변환에서 닫혀 있음 */
+	/*! Kinds of coordinate spaces supported by the framework; closed under the projective transform defined by a 4x4 matrix */
 	enum EvmCoordSpace {
-		CoordSpaceSCREEN = 0,/*!< Pixel로 정의되는 Screen Space */
-		CoordSpacePROJECTION,/*!< Normalized Frustrum으로 정의되는 Projection Space */
-		CoordSpaceCAMERA,/*!< Viewing Frustrum으로 정의되는 Camera Space */
-		CoordSpaceWORLD,/*!< 객체가 실제로 배치되는 World Space */
-		CoordSpaceOBJECT/*!< 객체가 정의되는 Object Space */
+		CoordSpaceSCREEN = 0,/*!< Screen space, defined in pixels */
+		CoordSpacePROJECTION,/*!< Projection space, defined by a normalized frustum */
+		CoordSpaceCAMERA,/*!< Camera space, defined by the viewing frustum */
+		CoordSpaceWORLD,/*!< World space, where objects are actually placed */
+		CoordSpaceOBJECT/*!< Object space, where an object is defined */
 	};
 
-	/*! Camera의 초기 States(위치, View 및 Up Vector)에 대한 종류 */
+	/*! Kinds of initial camera states (position, view and up vectors) */
 	enum EvmStageViewType {
-		StageViewORTHOBOXOVERVIEW = 0,/*!< 3D View에서 OS의 Object Bounding Box의 대각선 방향에 대한 Overview를 정의 */
-		StageViewCENTERFRONT,/*!< 단면 영상에서 OS의 Object Bounding Box의 기준 Front (or Coronal) View 정의 */
-		StageViewCENTERRIGHT,/*!< 단면 영상에서 OS의 Object Bounding Box의 기준 Right (or Sagittal) View 정의 */
-		StageViewCENTERHORIZON/*!< 단면 영상에서 OS의 Object Bounding Box의 기준 Top (or Axial) View 정의 */
+		StageViewORTHOBOXOVERVIEW = 0,/*!< 3D view: an overview looking along the diagonal of the object bounding box in OS */
+		StageViewCENTERFRONT,/*!< Cross-sectional view: the front (coronal) view centered on the object bounding box in OS */
+		StageViewCENTERRIGHT,/*!< Cross-sectional view: the right (sagittal) view centered on the object bounding box in OS */
+		StageViewCENTERHORIZON/*!< Cross-sectional view: the top (axial) view centered on the object bounding box in OS */
 	};
 
-	/*! Polygonal VObject를 정의하는 Primitive 종류 */
+	/*! Kinds of primitives that define a polygonal VObject */
 	enum EvmPrimitiveType {
 		PrimitiveTypeUNDEFINED = 0,/*!< Undefined */
 		PrimitiveTypeLINE,/*!< Line */
@@ -192,22 +200,22 @@ namespace vmenums {
 		PrimitiveTypePOINT/*!< Point */
 	};
 
-	/*! VObject 의 Element 단위의 Bounding Unit 의 종류 */
+	/*! Kinds of per-element bounding units for a VObject */
 	enum EvmBoundingUnitType {
 		BoundingUnitTypeOBB = 0,/*!< OBB */
 		BoundingUnitTypeAABB,/*!< AABB */
 		BoundingUnitTypeSPHERE,/*!< Sphere */
 	};
 
-	/*! Module-Platform interoperation에 사용되는 VmObject의 type 종류 */
+	/*! Kinds of VmObject types used in module-platform interoperation */
 	enum EvmObjectType {
 		ObjectTypeOBJECT = 1,/*!< Just an Object for archiving something */
 		ObjectTypeVOLUME,/*!< Volume Object */
 		ObjectTypePRIMITIVE,/*!< Polygon Object */
-		ObjectTypeIMAGEPLANE/*!< Image Plane을 정의하는 VmObject이며 Camera Object를 갖음 */
+		ObjectTypeIMAGEPLANE/*!< A VmObject that defines an image plane and owns a camera object */
 	};
 
-	/*! VmIObject에서 사용하는 Frame Buffer 종류 */
+	/*! Kinds of frame buffers used by VmIObject */
 	enum EvmFrameBufferUsage {
 		FrameBufferUsageNONE = 0,/*!< Undefined, There is no allocated frame buffer */
 		// Render //
@@ -223,22 +231,22 @@ namespace vmenums {
 
 /**
 * @class LocalProgress
-* @brief Framework에서 정의하는 progress 에 대한 자료구조
+* @brief Data structure describing progress as defined by the framework.
 */
 struct LocalProgress {
 	/**
-	 * @brief progress의 시작, 0.0 에서 100.0 사이
+	 * @brief Start of the progress range, between 0.0 and 100.0
 	 */
 	double start;
 	/**
-	 * @brief progress의 범위, 0.0 에서 100.0 사이
+	 * @brief Extent of the progress range, between 0.0 and 100.0
 	 */
 	double range;
 	/**
-	 * @brief progress의 현재 진행 정도가 기록되는 module/function 내의 static parameter 에 대한 포인터
+	 * @brief Pointer to a static parameter inside a module/function where the current progress is recorded
 	 */
 	double* progress_ptr; /*out*/
-	/// constructor, 초기화
+	/// constructor; initialization
 	LocalProgress()
 	{
 		start = 0;
@@ -282,7 +290,7 @@ typedef void(*VmDelegate)(void* pv);
 
 /**
  * @package vmobjects
- * @brief Framework의 Global Data Structures 및 VmObject Classes를 모은 namespace
+ * @brief Namespace collecting the framework's global data structures and VmObject classes.
  */
 namespace vmobjects
 {
@@ -438,14 +446,14 @@ namespace vmobjects
 	};
 	/**
 	 * @class AaBbMinMax
-	 * @brief 현재 좌표계의 Axis에 평행한 Box를 정의하는 자료구조
+	 * @brief Data structure defining a box axis-aligned with the current coordinate space
 	 */
 	struct AaBbMinMax {
-		/// 현재 좌표계의 Axis에 평행한 Box에 대한 최소점, 최대점 위치
+		/// Minimum and maximum corner positions of the box axis-aligned with the current coordinate space
 		vmdouble3 pos_min, pos_max;
-		/// constructor, 모두 0 (NULL or false)으로 초기화
+		/// constructor; initializes everything to 0 (NULL or false)
 		AaBbMinMax() { }
-		/// 현재 좌표계의 AaBbMinMax 가 유효하게 정의되었는가 확인
+		/// Checks whether the AaBbMinMax is validly defined in the current coordinate space
 		AaBbMinMax(vmint3 volSize) {
 			pos_min = vmdouble3(-0.5, -0.5, -0.5);
 			vmint3 idx_max = volSize - vmint3(1, 1, 1);
@@ -460,31 +468,31 @@ namespace vmobjects
 
 	/**
 	 * @class AxisInfoRS2OS
-	 * @brief Resource Space 에 정의된 x축(1,0,0), y축(0,1,0), z축(0,0,z)이 처음 Object Space (RHS) 에 배치될 때의 방향을 정의 \n
-	 * pitch 는 고려되지 않으며 방향만 정의, (즉 vector 에 대해서만 유효함)
+	 * @brief Defines the orientation in which the Resource-Space axes x(1,0,0), y(0,1,0), z(0,0,1) are initially placed into Object Space (RHS). \n
+	 * Pitch is not considered; only direction is defined (i.e. valid for vectors only)
 	 * @sa
 	 * @ref vmobjects::VolumeData
 	 */
 	struct AxisInfoRS2OS {
 		/**
-		 * @brief Resource Space 정의된 x축(1,0,0)에 대응되는 Object Space 상에 배치된 Object의 x축을 정의, unit vector
+		 * @brief Defines the placed object's x-axis in Object Space corresponding to the Resource-Space x-axis (1,0,0); unit vector
 		 */
 		vmdouble3 vec_axisx_os;
 		/**
-		 * @brief Resource Space 정의된 y축(0,1,0)에 대응되는 Object Space 상에 배치된 Object의 y축을 정의, unit vector
+		 * @brief Defines the placed object's y-axis in Object Space corresponding to the Resource-Space y-axis (0,1,0); unit vector
 		 */
 		vmdouble3 vec_axisy_os;
 		/**
-		 * @brief Object Space 정의된 z축(0,0,1)에 대응되는 World Space 상에 배치된 Object의 z축을 정의하기 위한 XY RHS cross vecor 방향의 reverse 여부\n
-		 * true 면 RHS 로 배치되며 Affine Space 에서 변환 성립, false 면 LHS 로 z툭이 배치
+		 * @brief Whether the XY right-handed cross-product direction is reversed when defining the placed object's z-axis in World Space corresponding to the Object-Space z-axis (0,0,1)\n
+		 * If true, it is placed right-handed and the transform holds in affine space; if false, the z-axis is placed left-handed
 		 */
 		bool is_rhs;
 		/**
-		 * @brief vec_axisx_ws, vec_axisy_ws, is_rhs 로부터 정의되는 초기 RS2OS 변환 행렬
+		 * @brief Initial RS2OS transform matrix derived from vec_axisx_ws, vec_axisy_ws, and is_rhs
 		 */
 		vmmat44 mat_rs2os;
 		/**
-		 * @brief constructor, 초기화 작업 수행
+		 * @brief constructor; performs initialization
 		 * @details
 		 * >> vec_axisx_ws = (1, 0, 0);
 		 * >> vec_axisy_ws = (0, 1, 0);
@@ -505,7 +513,7 @@ namespace vmobjects
 			is_rhs = _is_rhs;
 			ComputeInitalMatrix();
 		}
-		/// 정의된 vec_axisx_ws와 vec_axisy_ws로부터 mat_os2ws 계산하여 등록
+		/// Computes and registers mat_os2ws from the defined vec_axisx_ws and vec_axisy_ws
 		void ComputeInitalMatrix() {
 			vmdouble3 z_vec_rhs;
 			vmmath::CrossDotVector(&z_vec_rhs, &vec_axisy_os, &vec_axisx_os); // note the z-dir in lookat
@@ -523,27 +531,27 @@ namespace vmobjects
 
 	/**
 	 * @class VolumeData
-	 * @brief Framework에서 정의하는 Volume의 상세 정보를 위한 자료구조
+	 * @brief Data structure holding the detailed information of a volume as defined by the framework
 	 * @sa
 	 * @ref vmobjects::VmVObjectVolume \n
 	 */
 	struct VolumeData {
 		/**
-		 * @brief Volume array 의 data type, <typeinfo>
+		 * @brief Data type of the volume array, <typeinfo>
 		 */
 		data_type store_dtype;
 		/**
-		 * @brief 메모리에 저장되기 전 Volume Original data type 
+		 * @brief Original volume data type before it was stored in memory
 		 */
 		data_type origin_dtype;
 		/**
-		 * @brief Volume을 저장한 2D array (safe sample version)
+		 * @brief 2D array storing the volume (safe-sample version)
 		 * @details
-		 * 실제 할당된 x 축 방향 크기 = i3VolumeSize.x + i3SizeExtraBoundary.x*2 \n
-		 * 실제 할당된 y 축 방향 크기 = i3VolumeSize.y + i3SizeExtraBoundary.y*2 \n
-		 * 실제 할당된 z 축 방향 크기 = i3VolumeSize.z + i3SizeExtraBoundary.z*2 \n
+		 * Actual allocated size along x = i3VolumeSize.x + i3SizeExtraBoundary.x*2 \n
+		 * Actual allocated size along y = i3VolumeSize.y + i3SizeExtraBoundary.y*2 \n
+		 * Actual allocated size along z = i3VolumeSize.z + i3SizeExtraBoundary.z*2 \n
 		 * @par ex.
-		 * uint16_t 512x512x512 Volume에서 (100, 120, 150) index 값 sample \n
+		 * Sampling the value at index (100, 120, 150) in a uint16_t 512x512x512 volume \n
 		 * @par
 		 * >> int iSamplePosX = 100 + i3SizeExtraBoundary.x; \n
 		 * >> int iSamplePosY = 120 + i3SizeExtraBoundary.y; \n
@@ -552,45 +560,45 @@ namespace vmobjects
 		 */
 		void** vol_slices;
 		/**
-		 * @brief CPU Memory Access Violation을 피하기 위해 System Memory 상의 Extra Boundary 영역의 한쪽면 크기
-		 * @details bnd_size = (한쪽 x축 방향 크기, 한쪽 y축 방향 크기, 한쪽 z축 방향 크기)
+		 * @brief One-side thickness of the extra boundary region in system memory, used to avoid CPU memory access violations
+		 * @details bnd_size = (one-side size along x, one-side size along y, one-side size along z)
 		 */
 		vmint3 bnd_size;
 		/**
-		 * @brief Volume 의 크기 vol_size = (width, height, depth or slices)
-		 * @details bnd_size 가 포함되지 않음
+		 * @brief Volume size, vol_size = (width, height, depth or slices)
+		 * @details bnd_size is not included
 		 */
 		vmint3 vol_size;
 		/**
-		 * @brief 단위 Voxel에 대해 OS 상 cell 의 WS 상의 크기
-		 * @details vox_pitch = (OS 상의 x 방향 voxel 크기, OS 상의 y 방향 voxel 크기, OS 상의 z 방향 voxel 크기)
+		 * @brief WS-space size of a single OS-space voxel cell
+		 * @details vox_pitch = (OS-space voxel size along x, along y, along z)
 		 */
 		vmdouble3 vox_pitch;
 		/**
-		 * @brief Volume으로 저장된(ppvVolumeSlices)의 최소값 store_Mm_values.x, 최대값 store_Mm_values.y
+		 * @brief Minimum (store_Mm_values.x) and maximum (store_Mm_values.y) of the stored volume (ppvVolumeSlices)
 		 */
 		vmdouble2 store_Mm_values;
 		/**
-		 * @brief Volume으로 저장되기 전에 정의된 최소값 actual_Mm_values.x, 최대값 actual_Mm_values.y
+		 * @brief Minimum (actual_Mm_values.x) and maximum (actual_Mm_values.y) defined before the volume was stored
 		 * @par ex.
-		 * file format float으로 -1.5 ~ 2.5 저장된 볼륨을 uint16_t 으로 저장할 경우
+		 * e.g. when a volume stored as float in the range -1.5 ~ 2.5 is stored as uint16_t
 		 * @par
 		 * >> store_Mm_values = vmdouble2(0, 65535), actual_Mm_values = vmdouble2(-1.5, 2.5);
 		 */
 		vmdouble2 actual_Mm_values;
 		/**
-		 * @brief Volume에 대한 Histogram 을 정의하는 array
+		 * @brief Array defining the histogram of the volume
 		 * @details
-		 * array 크기는 uint32_t(d2MinMaxValue.y - d2MinMaxValue.x + 1.5) \n
+		 * The array size is uint32_t(d2MinMaxValue.y - d2MinMaxValue.x + 1.5) \n
 		 * pullHistogram[volume value] = # of voxels
 		 */
 		uint64_t* histo_values;
 		/**
-		 * @brief memory 에 저장된 volume space (샘플 좌표)와 초기 world space 에 배치되는 변환 matrix 정의
+		 * @brief Transform matrix mapping the volume space stored in memory (sample coordinates) to its initial placement in world space
 		 */
 		AxisInfoRS2OS axis_info;
 		/**
-		 * @brief constructor, 초기화 작업 수행
+		 * @brief constructor; performs initialization
 		 */
 		VolumeData() {
 			vol_size = vox_pitch = bnd_size = vmdouble3(0);
@@ -603,15 +611,15 @@ namespace vmobjects
 		}
 
 		/**
-		 * @brief Histogram array 의 크기를 얻음, uint32_t(store_Mm_values.y - store_Mm_values.x + 1.5)
+		 * @brief Returns the histogram array size, uint32_t(store_Mm_values.y - store_Mm_values.x + 1.5)
 		 */
 		uint32_t GetHistogramSize() { return (uint32_t)((double)__max(store_Mm_values.y - store_Mm_values.x + 1.5, 1.0)); }
 		/**
-		 * @brief ppvVolumeSlices array 크기를 얻음, Extra Boundary가 적용된 크기
+		 * @brief Returns the ppvVolumeSlices array size, including the extra boundary
 		 */
 		vmint3 GetSampleSize() { return vmint3(vol_size.x + bnd_size.x * 2, vol_size.y + bnd_size.y * 2, vol_size.z + bnd_size.z * 2); }
 
-		// 포인터 ppvVolumeSlices 및 pullHistogram 에 할당된 메모리 해제
+		// Frees the memory allocated for the ppvVolumeSlices and pullHistogram pointers
 		void Delete() {
 			VMSAFE_DELETE2DARRAY_VOID(vol_slices, vol_size.z + bnd_size.z * 2);
 			VMSAFE_DELETEARRAY(histo_values);
@@ -620,21 +628,21 @@ namespace vmobjects
 
 	/**
 	 * @class PrimitiveData
-	 * @brief Framework 에서 정의하는 Primitive 로 이루어진 객체의 상세 정보를 위한 자료구조
+	 * @brief Data structure holding the detailed information of a primitive-based object as defined by the framework
 	 * @sa vmobjects::VmVObjectPrimitive
 	 */
 	struct PrimitiveData {
 	private:
 		/**
-		 * @brief vertex array를 저장하는 container map
+		 * @brief Container map storing the vertex arrays
 		 * string ==> POSITION, NORMAL, TEXCOORD[n], ...
-		 * memory 할당된 pointer를 value로 갖고, @ref PrimitiveData::Delete 에서 해제됨.
+		 * Holds the allocated pointers as values, which are freed in @ref PrimitiveData::Delete.
 		 */
 		std::map<std::string, uint8_t*> defined_vtxbuffers;
 		std::map<std::string, uint8_t*> defined_custombuffers;
 	public:
 		/**
-		 * @brief Primitive로 구성 된 객체의 Polygon 의 normal vector 기준의 vertex 배열 방향
+		 * @brief Vertex winding order of the object's polygons relative to their normal vectors
 		 */
 		bool is_ccw;	// will be deprecated
 		/**
@@ -642,23 +650,23 @@ namespace vmobjects
 		 */
 		EvmPrimitiveType ptype;
 		/**
-		 * @brief Primitive를 정의하는 vertex의 배열 기준, true : stripe, false : list
+		 * @brief How the primitive's vertices are arranged; true: strip, false: list
 		 */
 		bool is_stripe;
 		/**
-		* @brief Primitive를 정의하는 vertex 및 edge 의 중복성을 없앴는가의 유무
+		* @brief Whether redundancy among the primitive's vertices and edges has been removed
 		*/
 		bool check_redundancy;
 		/**
-		 * @brief Primitive로 구성 된 객체의 Polygon 개수
+		 * @brief Number of polygons in the primitive-based object
 		 */
 		uint32_t num_prims;
 		/**
-		 * @brief 하나의 Primitive(Polygon)을 정의하는 index 개수
+		 * @brief Number of indices that define a single primitive (polygon)
 		 */
 		uint32_t idx_stride;
 		/**
-		 * @brief Vertex의 Index기반으로 Polygon을 정의하기 위한 Index Buffer (puiIndexList) 의 크기
+		 * @brief Size of the index buffer (puiIndexList) used to define polygons by vertex index
 		 * @details
 		 * >> if(is_stripe)\n
 		 * >>    num_vidx = num_prims + (idx_stride - 1);\n
@@ -667,19 +675,19 @@ namespace vmobjects
 		 */
 		uint32_t num_vidx;
 		/**
-		 * @brief Vertex의 Index 기반으로 Polygon를 위한 Index Buffer가 정의된 array
+		 * @brief Array holding the index buffer that defines polygons by vertex index
 		 */
 		uint32_t* vidx_buffer;
 		/**
-		 * @brief Primitive로 구성 된 객체의 Vertex 개수
+		 * @brief Number of vertices in the primitive-based object
 		 */
 		uint32_t num_vtx;
 		/**
-		 * @brief PrimitiveData 단위의 OS 상에서 정의되는 bounding box
+		 * @brief Bounding box defined in OS at the PrimitiveData level
 		 */
 		AaBbMinMax aabb_os;
 		/**
-		 * @brief Texture Resource 에 대한 정보 \n
+		 * @brief Information about the texture resource \n
 		 * <w, h, bytes_stride, res_ptr>
 		 */
 		std::map<std::string, std::tuple<int, int, int, uint8_t*>> texture_res_info;
@@ -696,7 +704,7 @@ namespace vmobjects
 			return true;
 		}
 
-		/// constructor, 모두 0 (NULL or false)으로 초기화
+		/// constructor; initializes everything to 0 (NULL or false)
 		PrimitiveData() {
 			is_ccw = true; num_prims = 0; num_vtx = 0;
 			idx_stride = num_vidx = 0;
@@ -707,7 +715,7 @@ namespace vmobjects
 		}
 		/*!
 		 * @fn void vmobjects::PrimitiveData::Delete()
-		 * @brief 포인터 puiIndexList 및 defined_buffers 의 value로 정의된 pointer 에 할당된 메모리 해제
+		 * @brief Frees the memory allocated for the puiIndexList pointer and the pointers stored as values in defined_buffers
 		*/
 		void Delete() {
 			VMSAFE_DELETEARRAY(vidx_buffer);
@@ -731,10 +739,10 @@ namespace vmobjects
 		}
 		/*!
 		 * @fn vmfloat3* vmobjects::PrimitiveData::GetVerticeDefinition(const string& vtype)
-		 * @brief defined_buffers 의 value로 정의된 pointer 반환하는 method,
-		 * @param vtype [in] \n string \n vertex buffer의 이름, (defined_buffers의 key) \n
+		 * @brief Method returning the pointer stored as a value in defined_buffers,
+		 * @param vtype [in] \n string \n Name of the vertex buffer (the key in defined_buffers) \n
 		 * keys : POSITION, NORMAL, TEXCOORD[n], ...
-		 * @return vmfloat3 \n vertex buffer 포인터. 없으면 NULL 반환
+		 * @return vmfloat3 \n Pointer to the vertex buffer; returns NULL if not found
 		 */
 		template<class T>
 		T* GetVerticeDefinition(const std::string& vtype) {
@@ -767,11 +775,11 @@ namespace vmobjects
 
 		/*!
 		 * @fn void vmobjects::PrimitiveData::ReplaceOrAddVerticeDefinition(const string& vtype, vmfloat3* vtx_buffer)
-		 * @brief defined_buffers 의 value로 정의된 pointer 반환하는 method,
-		 * @param vtype [in] \n string \n vertex buffer의 이름, POSITION, NORMAL, TEXCOORD[n], ...
-		 * @param vtx_buffer [in] \n vmfloat3* \n vertex buffer를 정의하는 vmfloat3의 포인터.
-		 * @remarks string vtype 을 키로 갖기 때문에 이미 등록된 vertex definition 이 있을 경우, \n
-		 * 해당 definition 의 vertex pointer 를 메모리에서 해제하고 새로운 vertex pointer 를 등록
+		 * @brief Method returning the pointer stored as a value in defined_buffers,
+		 * @param vtype [in] \n string \n Name of the vertex buffer: POSITION, NORMAL, TEXCOORD[n], ...
+		 * @param vtx_buffer [in] \n vmfloat3* \n Pointer to the vmfloat3 array defining the vertex buffer.
+		 * @remarks Because vtype is used as the key, if a vertex definition is already registered, \n
+		 * its existing vertex pointer is freed from memory and the new vertex pointer is registered
 		 */
 		void ReplaceOrAddVerticeDefinition(const std::string& vtype, void* vtx_buffer) {
 			uint8_t* vtx_buffer_old = GetVerticeDefinition<uint8_t>(vtype);
@@ -793,8 +801,8 @@ namespace vmobjects
 		}
 		/*!
 		 * @fn int vmobjects::PrimitiveData::GetNumVertexDefinitions()
-		 * @brief 등록된 vertex definition 의 개수를 얻음
-		 * @return int \n 등록된 vertex definition 의 개수
+		 * @brief Returns the number of registered vertex definitions
+		 * @return int \n Number of registered vertex definitions
 		 */
 		int GetNumVertexDefinitions() const
 		{
@@ -802,8 +810,8 @@ namespace vmobjects
 		}
 		/*!
 		 * @fn void vmobjects::PrimitiveData::ClearVertexDefinitionContainer()
-		 * @brief mapVerticeDefinitions 를 clear 함.
-		 * @remarks 등록된 vertex pointer 에 대한 메모리 해제는 하지 않고 container 만 clear 함.
+		 * @brief Clears mapVerticeDefinitions.
+		 * @remarks Only the container is cleared; the memory of the registered vertex pointers is not freed.
 		 */
 		void ClearVertexDefinitionContainer()
 		{
@@ -815,8 +823,8 @@ namespace vmobjects
 		}
 		/*!
 		* @fn void vmobjects::PrimitiveData::ComputeOrthoBoundingBoxWithCurrentValues()
-		* @brief defined_buffers 에 등록된 POSITION vtx_buffer 의 position 을 기반으로 AABB min/max 를 구함.
-		* @remarks 이미 PrimitiveData 의 aabb_os 를 계산했으면 하지 않아도 되나, 그렇지 않으면 반드시 이를 실행하여 AABB 를 정의해야 함.
+		* @brief Computes the AABB min/max from the positions in the POSITION vtx_buffer registered in defined_buffers.
+		* @remarks Unnecessary if the PrimitiveData's aabb_os has already been computed; otherwise this must be run to define the AABB.
 		*/
 		void ComputeOrthoBoundingBoxWithCurrentValues()
 		{
@@ -842,12 +850,11 @@ namespace vmobjects
 
 	/**
 	 * @class TMapData
-	 * @brief Framework에서 정의하는 OTF에 대한 상세 정보를 위한 자료구조
-	 * @sa vmobjects::VmTObject
+	 * @brief Data structure holding the detailed information of an OTF as defined by the framework
 	 */
 	struct MapTable {
 		/**
-		 * @brief OTF array 의 pointer
+		 * @brief Pointer to the OTF array
 		 * @details
 		 * 1D : [0][0 to (array_lengths.x - 1)] - default, [1][0 to (array_lengths.x - 1)] - customized
 		 * 2D : [0][0 to (array_lengths.x*array_lengths.y - 1)] - default, [...][0 to (array_lengths.x*array_lengths.y - 1)] - customized
@@ -855,48 +862,48 @@ namespace vmobjects
 		 */
 		void** tmap_buffers;
 		/**
-		 * @brief OTF array 의 pointer dimension
+		 * @brief Pointer dimensionality of the OTF array
 		 * @details num_dim = 1 or 2 or 3
 		 */
 		int num_dim;
 		/**
-		 * @brief OTF array 에 할당되어 있는 각각의 dimension에 대한 OTF array index 중 최소값
+		 * @brief Minimum valid OTF array index for each allocated dimension
 		 * @details
-		 * valid_min_idx.x : 1st dimension 의 array index 의 최소값 \n
-		 * valid_min_idx.y : 2nd dimension 의 array index 의 최소값 \n
-		 * valid_min_idx.z : 3rd dimension 의 array index 의 최소값
+		 * valid_min_idx.x : minimum array index of the 1st dimension \n
+		 * valid_min_idx.y : minimum array index of the 2nd dimension \n
+		 * valid_min_idx.z : minimum array index of the 3rd dimension
 		 */
 		vmint3 valid_min_idx;
 		/**
-		 * @brief OTF array 에 할당되어 있는 각각의 dimension에 대한 OTF array 값 중 최대값
+		 * @brief Maximum valid OTF array index for each allocated dimension
 		 * @details
-		 * valid_max_idx.x : 1st dimension 의 array 의 최대값 \n
-		 * valid_max_idx.y : 2nd dimension 의 array 의 최대값 \n
-		 * valid_max_idx.z : 3rd dimension 의 array 의 최대값
+		 * valid_max_idx.x : maximum array index of the 1st dimension \n
+		 * valid_max_idx.y : maximum array index of the 2nd dimension \n
+		 * valid_max_idx.z : maximum array index of the 3rd dimension
 		 */
 		vmint3 valid_max_idx;
 		/**
-		 * @brief OTF array 의 각 dimension 에 대한 크기
+		 * @brief Size of the OTF array along each dimension
 		 * @details
-		 * array_lengths.x : 1st dimension 의 array 크기 \n
-		 * array_lengths.y : 2nd dimension 의 array 크기 \n
-		 * array_lengths.z : 3rd dimension 의 array 크기 \n
-		 * Valid dimension에 대하여 array_lengths.xyz > 0, Invalid demension에 대하여 array_lengths.xyz <= 0
+		 * array_lengths.x : array size of the 1st dimension \n
+		 * array_lengths.y : array size of the 2nd dimension \n
+		 * array_lengths.z : array size of the 3rd dimension \n
+		 * For valid dimensions array_lengths.xyz > 0; for invalid dimensions array_lengths.xyz <= 0
 		 */
 		vmint3 array_lengths;
 		/**
-		 * @brief OTF metric의 기준이 되는 Volume 값의 범위에 대한 bin 크기
+		 * @brief Bin size over the range of volume values that the OTF metric is based on
 		 * @par ex.
-		 * 16 bit Volume Data에 대한 2D OTF (density, gradient magnitude), 각각의 범위를 0~65535 라고 가정할 때 \n
-		 * 512x1024 크기의 2D OTF 를 정의하면, bin 의 XY 크기는 (65536/512, 65536/1024) 가 됨.
+		 * For a 2D OTF (density, gradient magnitude) over 16-bit volume data, assuming each range is 0~65535 \n
+		 * defining a 512x1024 2D OTF makes the bin's XY size (65536/512, 65536/1024).
 		 */
 		vmdouble3 bin_size;
 		/**
-		 * @brief OTF array 값에 대한 data type
+		 * @brief Data type of the OTF array values
 		 */
 		data_type dtype;
 		/**
-		 * @brief constructor, 모두 0 (NULL or false)으로 초기화
+		 * @brief constructor; initializes everything to 0 (NULL or false)
 		 */
 		MapTable() {
 			tmap_buffers = NULL;
@@ -907,13 +914,13 @@ namespace vmobjects
 
 		// Static Helper Functions //
 		/*!
-		 * @brief VolumeData 에 저장되는 OTF array를 할당하는 static helper 함수
+		 * @brief Static helper function that allocates the OTF array stored in VolumeData
 		 * @param num_dim [in] \n int \n OTF dimension
-		 * @param dim_length [in] \n int 3 \n OTF dimension 의 크기
-		 * @param dtype [in] \n data_type \n OTF array의 data type
-		 * @param res_tmap [in] \n void \n 2D OTF array에 대한 void**의 포인터 (3D 포인터)
-		 * @return bool \n 성공하면 true, 실패하면 false 반환
-		 * @remarks OTF array 는 항상 2D OTF로 저장됨
+		 * @param dim_length [in] \n int 3 \n Size of each OTF dimension
+		 * @param dtype [in] \n data_type \n Data type of the OTF array
+		 * @param res_tmap [in] \n void \n Pointer to the void** of the 2D OTF array (a 3D pointer)
+		 * @return bool \n Returns true on success, false on failure
+		 * @remarks The OTF array is always stored as a 2D OTF
 		 * @sa vmobjects::TMapData
 		 */
 		bool CreateTMapBuffer(const int num_dim, const vmint3& dim_length)
@@ -953,7 +960,7 @@ namespace vmobjects
 
 		/*!
 		 * @fn void vmobjects::TMapData::Delete()
-		 * @brief OTF array 에 대한 포인터 ppvArchiveTF 에 할당된 memory 해제
+		 * @brief Frees the memory allocated for the OTF array pointer ppvArchiveTF
 		*/
 		void Delete() {
 			switch (num_dim)
@@ -973,39 +980,39 @@ namespace vmobjects
 
 	/**
 	 * @class VolumeBlocks
-	 * @brief block 기반의 volume에 대한 자료구조
+	 * @brief Data structure for a block-based volume
 	 * @sa vmobjects::VmVObjectVolume, vmobjects::VolumeData
 	 */
 	struct VolumeBlocks {
 		/**
-		 * @brief 단위 block의 크기
-		 * @details extra boundary가 포함되지 않은 크기 \n
+		 * @brief Size of a single block
+		 * @details Size excluding the extra boundary \n
 		 * unitblk_size = vmint3(size of x, size of y, size of z)
 		 */
 		vmint3 unitblk_size;
 		/**
-		* @brief block 정보를 저장하는 mM_blks 및 pbTaggedActivatedBlocks 의 extra boundary 의 크기
-		* @details 이를 고려하여 mM_blks 및 pbTaggedActivatedBlocks 의 값을 샘플해야 함 \n
+		* @brief Extra-boundary size of mM_blks and pbTaggedActivatedBlocks, which store the block information
+		* @details Sampling values from mM_blks and pbTaggedActivatedBlocks must account for this \n
 		*/
 		vmint3 blk_bnd_size;
 		/**
-		 * @brief 하나의 VolumeBlocks 에 각 축 방향으로 정의된 block들의 개수
-		 * @details 모든 block의 개수 = blk_vol_size.x * blk_vol_size.y * blk_vol_size.z;
+		 * @brief Number of blocks defined along each axis within a single VolumeBlocks
+		 * @details Total number of blocks = blk_vol_size.x * blk_vol_size.y * blk_vol_size.z;
 		 */
 		vmint3 blk_vol_size;
 		/**
-		 * @brief block 의 최소 최대 값에 대한 단일 channel data type
-		 * @details 일반적으로 vmobjects::VolumeData.store_dtype 와 같음
+		 * @brief Single-channel data type of the block's min/max values
+		 * @details Normally the same as vmobjects::VolumeData.store_dtype
 		 */
 		data_type dtype;
 		/**
-		 * @brief block 단위의 최소 최대값을 저장하는 1D array
+		 * @brief 1D array storing the per-block min/max values
 		 * @details
-		 * array의 크기는 block의 전체 개수와 동일, extra boundary을 고려하지 않음 \n
-		 * data type은 2 channel을 갖고 volume type과 같음. x : 최소값, y : 최대값
+		 * The array size equals the total number of blocks and does not account for the extra boundary \n
+		 * The data type has 2 channels and matches the volume type. x : minimum, y : maximum
 		 * @par ex.
-		 * 8x8x8 block을 단위로 정의된 512x512x512 volume (uint16_t) 에서 OS의 (100, 100, 100) 좌표에 해당하는 block의 최소 최대값 \n
-		 * 이 경우 unitblk_size = vmint3(8, 8, 8), blk_vol_size = (ceil(512/8), ceil(512/8), ceil(512/8)) \n
+		 * Min/max of the block at OS coordinate (100, 100, 100) in a 512x512x512 volume (uint16_t) partitioned into 8x8x8 blocks \n
+		 * In this case unitblk_size = vmint3(8, 8, 8), blk_vol_size = (ceil(512/8), ceil(512/8), ceil(512/8)) \n
 		 *
 		 * @par
 		 * >> vmint3 blk_id = vmint3(floor(100/8), floor(100/8), floor(100/8)); \n
@@ -1016,14 +1023,14 @@ namespace vmobjects
 		 */
 		void* mM_blks;
 		/**
-		 * @brief Object 별로 정의된, block 단위로 binary tag가 지정된 1D array
+		 * @brief 1D array of per-block binary tags, defined per object
 		 * @details
-		 * array의 크기는 block의 전체 개수와 동일, extra boundary을 고려하지 않음 \n
-		 * resource manager 에서 TObject 삭제 시, 등록된 Volume Object 의 Block 들에 대해 resouece 정리 수행 \n
-		 * VolumeBlocks::GetTaggedActivatedBlocks 와 VolumeBlocks::GetTaggedActivatedBlocks 로 Pointer 작업 가능 \n
+		 * The array size equals the total number of blocks and does not account for the extra boundary \n
+		 * When the resource manager deletes a TObject, it cleans up the resources of the registered volume object's blocks \n
+		 * Pointer operations are available via VolumeBlocks::GetTaggedActivatedBlocks and VolumeBlocks::GetTaggedActivatedBlocks \n
 		 * @par ex.
-		 * 8x8x8 block을 단위로 정의된 512x512x512 volume (uint16_t) 에서 OS의 (100, 100, 100) 좌표에 해당하는 block 의 tag \n
-		 * 이 경우 unitblk_size = vmint3(8, 8, 8), blk_vol_size = (ceil(512/8), ceil(512/8), ceil(512/8)) \n
+		 * Tag of the block at OS coordinate (100, 100, 100) in a 512x512x512 volume (uint16_t) partitioned into 8x8x8 blocks \n
+		 * In this case unitblk_size = vmint3(8, 8, 8), blk_vol_size = (ceil(512/8), ceil(512/8), ceil(512/8)) \n
 		 *
 		 * @par
 		 * >> uint8_t* tflag_blks = itratorMap->second;
@@ -1036,7 +1043,7 @@ namespace vmobjects
 		std::map<int, uint8_t*> tflag_blks_map;
 		std::map<int, uint64_t> updatetime_map;
 
-		/// constructor, 모두 0 (NULL or false)으로 초기화
+		/// constructor; initializes everything to 0 (NULL or false)
 		VolumeBlocks() {
 			unitblk_size = blk_vol_size = blk_bnd_size = vmint3(0);
 			mM_blks = NULL;
@@ -1044,7 +1051,7 @@ namespace vmobjects
 
 		/*!
 		 * @fn void vmobjects::VolumeBlocks::Delete()
-		 * @brief 할당된 memory 모두 해제
+		 * @brief Frees all allocated memory
 		*/
 		void Delete() {
 			VMSAFE_DELETEARRAY_VOID(mM_blks);
@@ -1056,7 +1063,7 @@ namespace vmobjects
 
 		/*!
 		* @fn void vmobjects::VolumeBlocks::GetTaggedActivatedBlocks(int iTObjectID)
-		* @brief 해당 TObjectID 의 Tagged Activated Blocks (uint8_t* tflag_blks) 포인터를 받음
+		* @brief Returns the tagged-activated-blocks pointer (uint8_t* tflag_blks) for the given TObjectID
 		*/
 		uint8_t* GetTaggedActivatedBlocks(int tobj_id)
 		{
@@ -1076,7 +1083,7 @@ namespace vmobjects
 
 		/*!
 		* @fn void vmobjects::VolumeBlocks::ReplaceOrAddTaggedActivatedBlocks(int tobj_id, uint8_t* tflag_blks)
-		* @brief 해당 TObjectID 에 대한 TaggedActivatedBlocks 을 등록
+		* @brief Registers the tagged-activated-blocks for the given TObjectID
 		*/
 		bool ReplaceOrAddTaggedActivatedBlocks(const int tobj_id, uint8_t* tflag_blks)
 		{
@@ -1090,7 +1097,7 @@ namespace vmobjects
 
 		/*!
 		* @fn void vmobjects::VolumeBlocks::DeleteTaggedActivatedBlocks()
-		* @brief 해당 TObjectID 의 TaggedActivatedBlocks 를 삭제
+		* @brief Deletes the tagged-activated-blocks for the given TObjectID
 		*/
 		void DeleteTaggedActivatedBlocks(const int tobj_id)
 		{
@@ -1117,44 +1124,44 @@ namespace vmobjects
 
 	/**
 	 * @class FrameBuffer
-	 * @brief Framework 에서 정의하는 frame buffer에 대한 상세 정보를 위한 자료구조
+	 * @brief Data structure holding the detailed information of a frame buffer as defined by the framework
 	 * @sa vmobjects::VmIObject
 	 */
 	struct FrameBuffer {
 		/**
-		 * @brief frame buffer 의 width
+		 * @brief Width of the frame buffer
 		 */
 		int w;
 		/**
-		 * @brief frame buffer 의 height
+		 * @brief Height of the frame buffer
 		 */
 		int h;
 		/**
-		 * @brief array로 정의된 frame buffer
+		 * @brief Frame buffer defined as an array
 		 */
 		void* fbuffer;
 		/**
-		 * @brief frame buffer 의 data type
+		 * @brief Data type of the frame buffer
 		 */
 		data_type dtype;
 		/**
-		 * @brief frame buffer 의 사용 용도
-		 * @details buffer_usage == FrameBufferUsageRENDEROUT 일 경우, 반드시 vmbyte4 로 설정됨.
+		 * @brief Intended usage of the frame buffer
+		 * @details When buffer_usage == FrameBufferUsageRENDEROUT, it must be set to vmbyte4.
 		 */
 		EvmFrameBufferUsage buffer_usage;
 		/**
-		 * @brief frame buffer 에 대한 descriptor
+		 * @brief Descriptor of the frame buffer
 		 */
 		std::string descriptor;
 
 #ifdef __WINDOWS
 		/**
-		 * @brief win32에서 file memory를 통한 buffer interoperation을 위한 handle
+		 * @brief Handle for buffer interoperation through file memory on win32
 		 */
 		HANDLE hFileMap;
 #endif
 
-		/// constructor, 모두 0 (NULL or false)으로 초기화
+		/// constructor; initializes everything to 0 (NULL or false)
 		FrameBuffer() {
 			w = h = 0;
 			fbuffer = NULL;
@@ -1167,7 +1174,7 @@ namespace vmobjects
 
 		/*!
 		 * @fn void vmobjects::FrameBuffer::Delete()
-		 * @brief 할당된 memory 모두 해제
+		 * @brief Frees all allocated memory
 		 */
 		void Delete() {
 			w = h = 0;
@@ -1208,7 +1215,7 @@ namespace vmobjects
 	struct ObjectArchive;
 	/**
 	 * @class VmObject
-	 * @brief VizMotive Framework Object 의 최상위 class 로 VmObject family 의 공통 parameter 를 갖음
+	 * @brief Topmost class of the VizMotive framework objects, holding the common parameters of the VmObject family
 	 */ // __vmstaticclass
 	__vmstaticclass VmObject
 	{
@@ -1222,53 +1229,53 @@ namespace vmobjects
 		~VmObject();
 
 		/*!
-		 * @brief VmObject의 contents가 정의되어 있는가를 확인
-		 * @remarks contents는 VmObject를 상속 받는 최하위 VmObject에서 정의됨
+		 * @brief Checks whether the VmObject's contents are defined
+		 * @remarks Contents are defined by the leaf-most VmObject subclass
 		 * @li @ref vmobjects::VmIObject
 		 * @li @ref vmobjects::VmVObjectVolume
 		 * @li @ref vmobjects::VmVObjectPrimitive
 		 */
 		bool IsDefined();
 		/*!
-		 * @brief VmObject의 Object ID 설정
+		 * @brief Sets the VmObject's object ID
 		 * @param obj_id [in] \n int \n 32 bit ID
 		 * @remarks
-		 * 일반적으로 Resource Manager (@ref VmResourceManager) 에서 지정 \n
+		 * Normally assigned by the resource manager (@ref VmResourceManager) \n
 		 * [8bit : Object Type][8bit : Magic Bits][16 bit : Count-based ID]
 		 */
 		void SetObjectID(const int obj_id);
 		/*!
-		 * @brief VmObject의 Object ID를 얻음
-		 * @return int \n Object ID를 반환
+		 * @brief Returns the VmObject's object ID
+		 * @return int \n Returns the object ID
 		 */
 		int GetObjectID() const;
 		/*!
-		 * @brief VmObject를 정의하는데 사용된 가장 연관성 높은 VmObject의 ID를 설정
-		 * @param ref_obj_id [in] \n int \n VmObject를 정의하는데 사용된 가장 연관성 높은 VmObject의 ID
-		 * @remarks default ID는 0으로 설정되어 있음
+		 * @brief Sets the ID of the most closely related VmObject used to define this VmObject
+		 * @param ref_obj_id [in] \n int \n ID of the most closely related VmObject used to define this VmObject
+		 * @remarks The default ID is 0
 		 */
 		void SetReferenceObjectID(const int ref_obj_id);
 		/*!
-		 * @brief VmObject를 정의하는데 사용된 가장 연관성 높은 VmObject의 ID를 얻음
-		 * @return int \n VmObject를 정의하는데 사용된 가장 연관성 높은 VmObject의 ID
-		 * @remarks 연관된 VmObject의 ID가 설정되어 있지 않은 경우 0을 반환
+		 * @brief Returns the ID of the most closely related VmObject used to define this VmObject
+		 * @return int \n ID of the most closely related VmObject used to define this VmObject
+		 * @remarks Returns 0 if no related VmObject ID has been set
 		 */
 		int GetReferenceObjectID() const;
 		/*!
-		 * @brief VmObject에 대한 사용자 description 을 설정
-		 * @param str [in] \n string \n 저장할 VmObject에 대한 사용자 description
+		 * @brief Sets the user description for the VmObject
+		 * @param str [in] \n string \n User description to store for the VmObject
 		 */
 		void SetDescriptor(const std::string& str);
 		/*!
-		 * @brief VmObject에 대한 사용자 description을 얻음
-		 * @return wstring \n VmObject에 대한 사용자 description 반환
+		 * @brief Returns the user description of the VmObject
+		 * @return wstring \n Returns the user description of the VmObject
 		 */
 		std::string GetDescriptor() const;
 		
 		/*!
-		 * @brief 정의된 VmObject의 type을 얻음
-		 * @return ObjectType:: \n 정의된 VmObject의 type 반환
-		 * @remarks VmObject가 정의되어 있는 상태면 이것에 따라 VmObject의 instance를 생성함
+		 * @brief Returns the type of the defined VmObject
+		 * @return ObjectType:: \n Returns the type of the defined VmObject
+		 * @remarks When the VmObject is defined, its instance is created according to this type
 		 */
 		EvmObjectType GetObjectType();
 
@@ -1298,19 +1305,19 @@ namespace vmobjects
 		bool RemoveObjParameter(const std::string& _key);
 		// Static Helper Functions //
 		/*!
-		 * @brief VmObject ID 값으로부터 object type을 반환하는 static helper 함수
-		 * @param obj_id [in] \n int \n VmObject 의 ID
-		 * @return ObjectType \n VmObject의 ID에 인코딩되어 있는 object type
+		 * @brief Static helper function that returns the object type from a VmObject ID
+		 * @param obj_id [in] \n int \n ID of the VmObject
+		 * @return ObjectType \n Object type encoded in the VmObject ID
 		 * @remarks
 		 *
 		 */
 		static EvmObjectType GetObjectTypeFromID(const int obj_id);
 		/*!
-		 * @brief VmObject ID 값으로부터 object type이 VmObject인가를 확인하는 static helper 함수
-		 * @param obj_id [in] \n int \n VmObject의 ID
-		 * @return bool \n VmVObject이면 true, 그렇지 않으면 false 반환
+		 * @brief Static helper function that checks, from a VmObject ID, whether the object type is a VObject
+		 * @param obj_id [in] \n int \n ID of the VmObject
+		 * @return bool \n Returns true if it is a VmVObject, false otherwise
 		 * @remarks
-		 * VmObject ID 형식에 대해서 지원.\n
+		 * Supported for the VmObject ID format.\n
 		 */
 		static bool IsVObject(const int obj_id);
 	};
@@ -1318,9 +1325,14 @@ namespace vmobjects
 	struct VObjectArchive;
 	/**
 	 * @class VmVObject
-	 * @brief VmObject를 상속 받으며 VmVObjectVolume과 VmVObjectPrimitive의 공간 정보를 갖는 상위 class
+	 * @brief Base class inheriting from VmObject that holds the spatial information shared by VmVObjectVolume and VmVObjectPrimitive
 	 * @sa vmobjects::VmVObjectVolume, vmobjects::VmVObjectPrimitive
 	 */
+	// (1.70) Live-instance census. Every VmObject ctor/dtor adjusts one CommonUnits-side atomic counter, so this
+	// returns how many VmObject instances (volume/primitive/iobj/tobj/...) are still alive. The API layer logs an
+	// error at DeinitEngineLib when it is non-zero, i.e. something outlived engine teardown.
+	__vmstatic int GetLiveVmObjectCount();
+
 	__vmstaticclass VmVObject : public VmObject
 	{
 	private:
@@ -1333,14 +1345,14 @@ namespace vmobjects
 		~VmVObject();
 	
 		/*!
-		 * @brief content를 포함하는 axis-aligned bounding box in OS 를 얻음
-		 * @param aabbMm [out] \n AaBbMinMax \n object space (OS) 에서의 axis-aligned bounding box
+		 * @brief Returns the axis-aligned bounding box in OS that contains the content
+		 * @param aabbMm [out] \n AaBbMinMax \n Axis-aligned bounding box in object space (OS)
 		 */
 		void GetOrthoBoundingBox(AaBbMinMax& aabbMm_os);
 	
 		/*!
-		 * @brief OS가 WS로 배치되는 것이 정의되었는지를 확인하는 함수
-		 * @return bool \n 정의되어 있으면 true, 그렇지 않으면 false
+		 * @brief Checks whether the OS-to-WS placement has been defined
+		 * @return bool \n true if defined, false otherwise
 		 */
 		bool IsGeometryDefined();
 	
@@ -1349,313 +1361,166 @@ namespace vmobjects
 		// here, RS normally refers to volume space (indexing the memory address), and MS refers to dicom-specified model
 		// Transform //
 		/*!
-		 * @brief VmVObject의 Resource Space (RS) 와 Model Space (MS) 의 변환을 정의하는 matrix를 설정
-		 * @param mat_os2ws [in] \n double44 \n RS와 MS의 변환을 정의하는 matrix를 저장
-		 * @remarks 내부적으로 RS와 MS 변환과 관련된 좌표계가 재설정되며 관련 matrix가 재설정됨
+		 * @brief Sets the matrix defining the transform between the VmVObject's Resource Space (RS) and Model Space (MS)
+		 * @param mat_os2ws [in] \n double44 \n Matrix defining the RS-to-MS transform to store
+		 * @remarks Internally the coordinate spaces related to the RS/MS transform are reset, along with the associated matrices
 		 */
 		void SetMatrixRS2OS(const vmmat44& mat_rs2os);
 		void SetMatrixRS2OSf(const vmmat44f& mat_rs2os);
 		/*!
-		 * @brief VmVObject에서 정의되어 있는 RS의 MS의 변환을 정의하는 matrix를 얻음
-		 * @return double44 \n OS의 WS의 변환을 정의하는 matrix
+		 * @brief Returns the matrix defining the RS-to-MS transform stored in the VmVObject
+		 * @return double44 \n Matrix defining the OS-to-WS transform
 		 */
 		vmmat44 GetMatrixRS2OS();
 		vmmat44f GetMatrixRS2OSf();
 		/*!
-		 * @brief VmVObject에서 정의되어 있는 RS의 MS의 변환을 정의하는 matrix를 얻음
-		 * @return double44 \n MS의 RS의 변환을 정의하는 matrix
+		 * @brief Returns the matrix defining the RS-to-MS transform stored in the VmVObject
+		 * @return double44 \n Matrix defining the MS-to-RS transform
 		 */
 		vmmat44 GetMatrixOS2RS();
 		vmmat44f GetMatrixOS2RSf();
 	};
 
-	struct VObjectVolumeArchive;
 	/**
 	 * @class VmVObjectVolume
-	 * @brief VmVObject를 통해 OS와 WS의 배치 관계가 설정된 Volume의 정보를 갖는 class
+	 * @brief Class holding volume information whose OS-to-WS placement is established through VmVObject
 	 * @sa vmobjects::VmVObject
 	 */
 	__vmstaticclass VmVObjectVolume : public VmVObject	// CT Volume or Processing Result Volume or Histogram (2D : Size(x, y, 1))
 	{
-	private:
-	protected:
-		VObjectVolumeArchive* voavol_res;
-		void Destroy();
-
 	public:
-		VmVObjectVolume();
-		~VmVObjectVolume();
+		// (1.70) leaf type -> pure-virtual interface; impl (holding the volume data as direct members) is
+		// VmVObjectVolume_Detail, hidden in VimCommon.cpp. Construct via NewVObjectVolume(). Static utilities stay.
+		virtual ~VmVObjectVolume() {}
 
 		// Basic Functions //
 		// Block & Brick for Interactive Rendering //
 		// Not Hierarchical blocking
 		// Octree : level 0, Large Block,  level 1, Small Block
 		/*!
-		 * @brief volume 정보를 갖고 있는 @ref vmobjects::VolumeData 자료 구조를 VmVObjectVolume 에 등록함
-		 * @param vol_data [in] \n VolumeData \n Volume 정보가 정의된 VolumeData
+		 * @brief Registers the @ref vmobjects::VolumeData structure holding the volume information into the VmVObjectVolume
+		 * @param vol_data [in] \n VolumeData \n VolumeData with the volume information defined
 		 * @param blk_size2[2] [in] \n int3 \n
-		 * volume을 정의하는 단위 block 자료구조에서 block 크기를 저장하고 있는 크기 2의 static array \n
-		 * block 크기가 지정되면 내부적으로 block 단위의 최소, 최대값 자료구조가 생성되나, block 단위로 volume 재구성되지는 않음 \n
-		 * blk_size2[0] : 큰 block, blk_size2[1] : 작은 block \n
-		 * NULL 이면 block 생성을 안 함
+		 * A static array of size 2 holding the block sizes of the unit-block structure that defines the volume \n
+		 * When block sizes are given, the per-block min/max structures are created internally, but the volume itself is not reorganized into blocks \n
+		 * blk_size2[0] : large block, blk_size2[1] : small block \n
+		 * If NULL, no blocks are created
 		 * @param ref_obj_id [in] \n int \n
-		 * content의 pointer reference를 다른 VmVObjectVolume와 공유할 때 해당 VmVObjectVolume의 ID \n
-		 * 일반적으로 copy method가 사용되며, pointer 공유를 안 하며, 이 경우 0을 씀. 기본값은 0
+		 * ID of the VmVObjectVolume to share the content's pointer reference with \n
+		 * Normally the copy method is used without pointer sharing, in which case 0 is used. The default is 0
 		 * @param progress [out](optional) \n LocalProgress \n
-		 * 함수가 진행되는 progress 정보를 포함하는 LocalProgress의 포인터 \n
-		 * 기본값은 NULL이며, NULL이면 사용 안 함.
-		 * @remarks blk_size2 이 주어지면 내부적으로 @ref VmVObjectVolume::GenerateVolumeMinMaxBlocks 이 호출됨,
+		 * Pointer to a LocalProgress carrying the function's progress information \n
+		 * The default is NULL; if NULL, it is not used.
+		 * @remarks If blk_size2 is given, @ref VmVObjectVolume::GenerateVolumeMinMaxBlocks is called internally,
 		 */
-		bool RegisterVolumeData(const VolumeData& vol_data, vmint3 blk_size2[2]/* 0 : Large, 1: Small */, const int ref_obj_id = 0, LocalProgress* progress = NULL);
+		virtual bool RegisterVolumeData(const VolumeData& vol_data, vmint3 blk_size2[2]/* 0 : Large, 1: Small */, const int ref_obj_id = 0, LocalProgress* progress = NULL) = 0;
 		/*!
-		 * @brief VmVObjectVolume에 정의되어 있는 volume 정보를 얻음.
-		 * @return VolumeData \n volume 정보가 저장되어 있는 VolumeData 의 포인터
+		 * @brief Returns the volume information defined in the VmVObjectVolume.
+		 * @return VolumeData \n Pointer to the VolumeData holding the volume information
 		 */
-		VolumeData* GetVolumeData();
+		virtual VolumeData* GetVolumeData() = 0;
 
 		// Optional //
 		/*!
-		* @brief volume 의 내부 값이 바뀌었을 경우, 해당 값에 대한 block 단위의 최소 최대값을 저장하고 있는 @ref VolumeBlock 자료구조를 갱신하는 함수
+		* @brief Updates the @ref VolumeBlock structure holding the per-block min/max values after the volume's internal values change
 		* @param progress [out](optional) \n LocalProgress \n
-		* 함수가 진행되는 progress 정보를 포함하는 LocalProgress 의 포인터 \n
-		* 기본값은 NULL이며, NULL이면 사용 안 함.
+		* Pointer to a LocalProgress carrying the function's progress information \n
+		* The default is NULL; if NULL, it is not used.
 		* @param i3BlockSizes[2] [in](optional) \n vmint3[] \n
-		* 생성할 Block Size. Array Index 는 Level 을 의미.
-		* 기본값은 NULL이며, NULL이면 내부 로직에 의거하여 Block 재사용 또는 재생성함.
-		* @return bool \n Update 에 성공하면 true, 아니면 false 반환.
+		* Block sizes to create. The array index denotes the level.
+		* The default is NULL; if NULL, blocks are reused or regenerated per internal logic.
+		* @return bool \n Returns true if the update succeeds, false otherwise.
 		* @remarks
-		* 기존에 생성되어 있는 최소, 최대값 block 에 값만 갱신하며, 생성되어 있지 않은 경우 내부적으로 VmVObjectVolume::GenerateVolumeMinMaxBlocks 를 통해 Block 을 생성함 \n
+		* Only refreshes the values of the existing min/max blocks; if none exist, blocks are created internally via VmVObjectVolume::GenerateVolumeMinMaxBlocks \n
 		*/
-		bool UpdateVolumeMinMaxBlocks(LocalProgress* progress = NULL, const vmint3 blk_size2[2] = NULL);
+		virtual bool UpdateVolumeMinMaxBlocks(LocalProgress* progress = NULL, const vmint3 blk_size2[2] = NULL) = 0;
 		
 		/*!
-		 * @brief volume 의 block 자료구조를 얻는 함수
-		 * @param level [in] \n int \n block 의 level, 0 or 1
+		 * @brief Returns the volume's block structure
+		 * @param level [in] \n int \n Block level, 0 or 1
 		 * @return VolumeBlocks \n
-		 * volume 의 block 자료구조가 저장된 VolumeBlocks 의 포인터 \n
-		 * volume 및 block 자료구조가 정의되어 있지 않거나 level 값이 잘못 들어가면 NULL 반환.
+		 * Pointer to the VolumeBlocks holding the volume's block structure \n
+		 * Returns NULL if the volume or block structure is undefined, or if the level value is invalid.
 		 */
-		VolumeBlocks* GetVolumeBlock(const int level);	// 0 or 1
+		virtual VolumeBlocks* GetVolumeBlock(const int level) = 0;	// 0 or 1
 
 		/*!
-		 * @brief volume 의 block 자료구조에서 설정하는 최소, 최대값 사이의 값을 포함하고 있는 block에 대한 tag를 update하는 함수
-		 * @param tobj_id [in] \n int \n block 에 의미 상 binding 되는 TObject ID
-		 * @param level [in] \n int \n block 의 level, 0 or 1
-		 * @param targetMm [in] \n double2 \n 사용할 최소(x), 최대값(y) \n
+		 * @brief Updates the tags of the blocks whose values fall within the min/max range configured in the volume's block structure
+		 * @param tobj_id [in] \n int \n TObject ID semantically bound to the block
+		 * @param level [in] \n int \n Block level, 0 or 1
+		 * @param targetMm [in] \n double2 \n Minimum (x) and maximum (y) to use \n
 		 * @param progress [out] \n LocalProgress \n
-		 * 함수가 진행되는 progress 정보를 포함하는 LocalProgress의 포인터 \n
-		 * 기본값은 NULL이며, NULL이면 사용 안 함.
+		 * Pointer to a LocalProgress carrying the function's progress information \n
+		 * The default is NULL; if NULL, it is not used.
 		 * @remarks
-		 * 기존에 생성되어 있는 최소, 최대값 block이 class에 등록되어 있어야 함 \n
+		 * The existing min/max blocks must already be registered in the class \n
 		 * @sa vmobjects::VolumeBlocks
 		 */
-		void UpdateTagBlocks(const int tobj_id, const int level, const vmdouble2& targetMm, LocalProgress* progress = NULL);
+		virtual void UpdateTagBlocks(const int tobj_id, const int level, const vmdouble2& targetMm, LocalProgress* progress = NULL) = 0;
 
 		/*!
 		 * @fn void FillBoundaryWithValue(const double v, const bool clamp_z = false, LocalProgress* progress = NULL)
-		 * @brief VolumeData 에서 정의되는 Extra Boundary 볼륨 영역에 Volume의 최소값을 채움
-		 * @param v [in] \n double \n 볼륨의 Extra Boundary에 채울 볼륨값
-		 * @param clamp_z [in] \n bool \n Volume이 z 축 방향에 대한 Extra Boundary 에 값을 Clamp 형식(경계값으로 통일)으로 채우는 가의 여부
+		 * @brief Fills the extra-boundary volume region defined in VolumeData with the volume's minimum value
+		 * @param v [in] \n double \n Volume value to fill into the volume's extra boundary
+		 * @param clamp_z [in] \n bool \n Whether to fill the z-axis extra boundary by clamping (replicating the border value)
 		 * @param progress [in](optional)
-		 * LocalProgress \n 현재 진행 정도를 처리하는 자료구조 LocalProgress에 대한 포인터 \n
-		 * Default는 NULL 이며, 이 경우 진행 정도를 처리하지 않고 함수 수행
-		 * @return true : 성공, false : 실패
+		 * LocalProgress \n Pointer to a LocalProgress that tracks the current progress \n
+		 * The default is NULL, in which case the function runs without tracking progress
+		 * @return true : success, false : failure
 		 * @remarks
-		 * vol_slices 가 정의되어 있어야 함. \n
-		 * clamp_z 가 false 이면 Extra Boundary 영역을 v 값으로 채움
+		 * vol_slices must be defined. \n
+		 * If clamp_z is false, the extra-boundary region is filled with the value v
 		*/
 		static bool FillBoundaryWithValue(VolumeData& vol_data, const double v, const bool clamp_z, LocalProgress* progress = NULL);
 
 		/*!
 		 * @fn void FillHistogram(LocalProgress* progress = NULL)
-		 * @brief VolumeData 에서 정의되는 볼륨에 대한 Histogram을 생성
+		 * @brief Builds the histogram for the volume defined in VolumeData
 		 * @param progress [in](optional) \n
-		 * LocalProgress \n 현재 진행 정도를 처리하는 자료구조 LocalProgress에 대한 포인터 \n
-		 * Default는 NULL 이며, 이 경우 진행 정도를 처리하지 않고 함수 수행
-		 * @return true : 성공, false : 실패
+		 * LocalProgress \n Pointer to a LocalProgress that tracks the current progress \n
+		 * The default is NULL, in which case the function runs without tracking progress
+		 * @return true : success, false : failure
 		 * @remarks
-		 * 기존에 생성 및 정의되어 있으면 기존 것을 삭제 후 다시 생성 및 정의 \n
-		 * Histogram의 Array(histo_values) 크기는 uint32_t(store_Mm_values.y - store_Mm_values.x + 1.5)으로 정함
+		 * If one already exists, it is deleted and then rebuilt and redefined \n
+		 * The histogram array (histo_values) size is set to uint32_t(store_Mm_values.y - store_Mm_values.x + 1.5)
 		*/
 		static bool FillHistogram(VolumeData& vol_data, LocalProgress* progress = NULL);
 		static bool FillMinMaxStoreValues(VolumeData& vol_data, LocalProgress* progress = NULL);
 		static bool ComputeIntialAlignmentMatrixRS2OS(vmmat44& mat_rs2os, AxisInfoRS2OS& axis_info, const vmdouble3& vox_pitch, const AaBbMinMax& aabbMm_rs);
 	};
+	__vmstatic VmVObjectVolume* NewVObjectVolume(); // (1.70) factory; VmVObjectVolume_Detail hidden in VimCommon.cpp
 
-	struct CObjectArchive;
 	/**
-	 * @class VmCObject
-	 * @brief 카메라 관련 정보를 다루는 VmIObject에 하나의 instance로 포함된 class
+	 * @class VmIObject camera doc (camera state now lives on fncontainer::VmCamera)
+	 * @brief Class, included as a single instance in VmIObject, that handles camera-related information
 	 * @remarks 
-	 * 본 class에서 사용되는 space는 다음과 같다.
-	 * @li WS (World Space) : 카메라 및 객체가 배치되는 real world.
-	 * @li CS (Camera Space or Viewing Space) : 카메라 기준의 space, WS와 unit이 같음 \n
-	 * 원점 : 카메라 위치, y축 : up vector, -z축 : viewing direction
-	 * @li PS (Projection Space) : CS에서 정의된 view frustum의 내부를 기준으로 normalized cube형태의 frustum으로 정의된 space \n
-	 * 원점 : near plane과 viewing direction이 만나는 점.\n
-	 * y 및 z 축은 CS의 방향과 같으나, 길이는 view frustum으로 정의되는 길이가 1로 normalized 되게끔 scaling 됨.
-	 * @li SS (Screen Space or Window Space) : buffer pixel에 대응하는 space \n
-	 * 원점 : PS 상의 normalized view frustum 기준 z = 0인 plane의 좌측상단 \n
-	 * x축 : PS 상의 x축 방향과 동일, y축 : PS 상의 -y축 방향, z축 : PS 상의 -z축 방향 \n
-	 * xy scaling : screen or window를 정의하는 buffer의 해상도 크기 \n
-	 * z scaling : 1 (즉 PS의 z값에 부호만 반대)
-	 * @remarks image plane은 near plane 상에 정의됨.
+	 * The spaces used by this class are as follows.
+	 * @li WS (World Space) : the real world where the camera and objects are placed.
+	 * @li CS (Camera Space or Viewing Space) : camera-relative space, same units as WS \n
+	 * origin : camera position, y-axis : up vector, -z-axis : viewing direction
+	 * @li PS (Projection Space) : space defined as a normalized cube-shaped frustum from the interior of the CS view frustum \n
+	 * origin : the point where the near plane meets the viewing direction.\n
+	 * The y and z axes match the CS directions, but are scaled so that the length defined by the view frustum is normalized to 1.
+	 * @li SS (Screen Space or Window Space) : space corresponding to buffer pixels \n
+	 * origin : the top-left of the z = 0 plane of the normalized view frustum in PS \n
+	 * x-axis : same as the PS x-axis, y-axis : PS -y-axis, z-axis : PS -z-axis \n
+	 * xy scaling : the resolution of the buffer that defines the screen or window \n
+	 * z scaling : 1 (i.e. the PS z value with its sign flipped)
+	 * @remarks The image plane is defined on the near plane.
 	 * @sa vmobjects::VmIObject
 	 */
-	__vmstaticclass VmCObject
-	{
-	private:
-	protected:
-		// Default Interest Coordinate System is World Space
-		// Camera Position : f3PosOriginInGlobalSpace
-		// Viewing Direction : -f3VecAxisZInGlobalSpace
-		// Up Vector : f3VecAxisYInGlobalSpace
-		// Left Vector : f3VecAxisXInGlobalSpace
-		CObjectArchive* coa_res;
-	
-	public:
-		/*!
-		 * @brief constructor, 카메라를 초기화하기 위한 parameter 필요
-		 * @param aabbMm [in] \n AaBbMinMax \n WS에 axis-aligned 된 cube인 scene stage 정의
-		 * @param stage_vtype [in] \n EvmStageViewType \n 주어진 scene stage 상의 어느 위치를 기준으로 camera를 설정하는가를 결정
-		 * @param w, h [in](optional) \n int \n 
-		 * SS를 정의하기 위한 screen 의 해상도 \n
-		 * vrtual rendering 경우, width = 1, height = 1로 설정
-		 */
-		VmCObject(const AaBbMinMax& aabbMm, const EvmStageViewType stage_vtype, const int w, const int h);
-		~VmCObject();
-		
-		/*!
-		 * @brief 카메라를 scene stage (or view stage) 기준으로 설정하는 함수
-		 * @param aabbMm [in] \n AaBbMinMax \n WS에 axis-aligned 된 cube인 scene stage가 정의된 AaBbMinMax 의 포인터
-		 * @param stage_vtype [in] \n EvmStageViewType \n 주어진 scene stage 상의 어느 위치를 기준으로 camera를 설정하는가를 결정
-		 * @remarks WS, CS, PS 간 변환 matrix가 다시 계산됨.
-		 */
-	 	void SetViewStage(const AaBbMinMax* aabbMm, const EvmStageViewType stage_vtype);
-	 
-		/*!
-		 * @brief CS 에서 PS 로 변환 (projection) 되는 상태를 설정
-		 * @param is_perspective [in] \n bool \n true 면 perspective projection이 되며, false 면 orthogonal projection이 됨.
-		 * @param fov_y [in] \n double \n 
-		 * perspective projection 시 up vector 방향 기준 field of view의 angle (radian) 이 정의된 float 포인터 \n
-		 * NULL이면 기존에 설정된 field of view 값을 사용.
-		 * @remarks field of view 의 초기값은 PI/4 로 설정되어 있음.
-		 */
-	 	void SetPerspectiveViewingState(const bool is_perspective, const double* fov_y = NULL); 
-		/*!
-		 * @brief perspective projection 의 상태를 얻는 함수
-		 * @param fov_y [out] \n double \n 
-		 * perspective projection 시 up vector 방향 기준 field of view의 angle (radian) 이 정의된 float 포인터 \n
-		 * null 이면 해당 파라미터에 값을 할당하지 않음
-		 * @return perspective 유무
-		 * @remarks field of view 의 초기값은 PI/4 로 설정되어 있음.
-		 */
-	 	bool GetPerspectiveViewingState(double* fov_y);
-	 
-	 	// Image Plane is defined as Near Plane from Camera
-		/*!
-		 * @brief viewing state를 통한 CS, PS, SS 의 변환 matrix를 재설정하는 함수
-		 * @param ipsize_cs [in] \n double 2 \n WS(or CS) 상의 near plane의 width(x), height(y)가 저장된 포인터
-		 * @param near_p [in] \n double \n WS(or CS) 상의 camera에서 near plane 사이의 거리가 정의된 포인터
-		 * @param far_p [in] \n double \n WS(or CS) 상의 camera에서 far plane 사이의 거리가 정의된 포인터
-		 * @param wh_ss [in] \n int 2 \n SS 상의 screen 크기(width(x), height(y))가 정의된 포인터. 
-		 * @param fit_ipsize [in] \n double 2 \n Orthogonal Projection에서 Camera 가로 세로 ratio 를 유지시키기 위한 Fitting 정보가 저장된 포인터
-		 * @param fit_fovy [in] \n double \n Perspective Projection에서 Camera 가로 세로 ratio 를 유지시키기 위한 Fitting 정보가 저장된 포인터
-		 * @remarks WS to CS, CS to PS, PS to SS 에 대한 변환 matrix 및 각각에 대한 inverse matrix가 다시 계산됨. \n
-		 * @ 파라미터가 NULL 이면 해당 파라미터는 기존값 사용
-		 */
-		void SetCameraIntState(const vmdouble2* ipsize_cs, const double* near_p, const double* far_p, const vmint2* wh_ss, vmdouble2* fit_ipsize = NULL, const double* fit_fovy = NULL);
-		void SetCameraIntStateAR(const double* fx, const double* fy, const double* sc, const double* cx, const double* cy, const double* near_p, const double* far_p, const vmint2* wh_ss);
-		/*!
-		 * @brief 현재 CS, PS, SS 의 변환 matrix를 정의하는 viewing state를 얻는 함수
-		 * @param ipsize_cs [in] \n double 2 \n WS(or CS) 상의 near plane의 width(x), height(y)가 저장된 포인터
-		 * @param near_p [in] \n double \n WS(or CS) 상의 camera에서 near plane 사이의 거리가 정의된 포인터
-		 * @param far_p [in] \n double \n WS(or CS) 상의 camera에서 far plane 사이의 거리가 정의된 포인터
-		 * @param wh_ss [in] \n int 2 \n SS 상의 screen 크기(width(x), height(y))가 정의된 포인터.
-		 * @param fit_ipsize [in] \n double 2 \n Orthogonal Projection에서 Camera 가로 세로 ratio 가 저장된 포인터
-		 * @param fit_fovy [in] \n double \n Perspective Projection에서 Camera 가로 세로 ratio 를 유지시키기 위한 Fitting 정보가 저장된 포인터
-		 * @remarks 얻고 싶지 않은 parameter에 대해 NULL을 넣으면 해당 parameter에 값을 저장 안 함.
-		 */
-		void GetCameraIntState(vmdouble2* ipsize_cs, double* near_p, double* far_p, vmint2* wh_ss, vmdouble2* fit_ipsize = NULL, double* fit_fovy = NULL);
-		void GetCameraIntStateAR(double* fx, double* fy, double* sc, double* cx, double* cy, double* near_p, double* far_p);
-		bool IsArIntrinsics();
-		/*!
-		 * @brief WS 상에서 정의된 카메라 state를 설정하는 함수
-		 * @param pos [in] \n double 3 \n WS 상의 카메라 위치가 정의된 포인터
-		 * @param view [in] \n double 3 \n WS 상의 viewing direction이 정의된 포인터
-		 * @param up [in] \n double 3 \n WS 상의 up vector가 정의된 포인터
-		 * @remarks WS 와 CS 의 변환을 정의하는 matrix가 다시 계산됨.\n
-		 * @ 파라미터가 NULL 이면 해당 파라미터는 기존값 사용\n
-		 * @ view 및 up 는 orthonormal 이며, unit vector 이어야 함.
-		 */
-		void SetCameraExtState(const vmdouble3* pos, const vmdouble3* view, const vmdouble3* up);
-		void SetCameraExtStatef(const vmfloat3* pos, const vmfloat3* view, const vmfloat3* up);
-		/*!
-		 * @brief WS 상의 카메라 정보를 얻는 함수
-		 * @param pos [in] \n double 3 \n WS 상의 카메라 위치가 정의된 포인터
-		 * @param view [in] \n double 3 \n WS 상의 viewing direction이 정의된 포인터
-		 * @param up [in] \n double 3 \n WS 상의 up vector가 정의된 포인터
-		 */
-		void GetCameraExtState(vmdouble3* pos, vmdouble3* view, vmdouble3* up);
-		void GetCameraExtStatef(vmfloat3* pos, vmfloat3* view, vmfloat3* up);
-		/*!
-		 * @brief WS 상에서 정의된 카메라 zoom 상태를 1.0 (100% 상태) 으로 정의하는 up vector 방향의 field of view (rad) 를 설정하는 함수
-		 * @param fitsize_fov_y [in] \n double \n WS 에서 up vector 방향의 field of view
-		 */
-		void SetZoomfactorFovY(const double fitting_fov_y);
-		/*!
-		 * @brief WS 상에서 정의된 카메라 zoom 상태를 1.0 (100% 상태) 으로 정의하는 up vector 방향의 field of view 를 얻는 함수
-		 * @return WS 상에서 정의된 카메라 zoom 상태를 1.0 (100% 상태) 으로 정의하는 up vector 방향의 field of view (rad)
-		 */
-		double GetZoomfactorFovY();
-		/*!
-		 * @brief perspective projection 의 여부를 얻는 함수
-		 * @return bool \n perspective projection 이면 true 반환, orthogonal projection 이면 false 반환
-		 */
-	 	bool IsPerspective();
-	 
-		/*!
-		 * @brief WS 에서 SS 로의 변환을 정의하는 matrix를 얻음
-		 * @param mat_ws2cs [out] \n double 44 \n WS 에서 CS로 변환하는 matrix가 저장될 포인터
-		 * @param mat_cs2ps [out] \n double 44 \n CS 에서 PS로 변환하는 matrix가 저장될 포인터
-		 * @param mat_ps2ss [out] \n double 44 \n PS 에서 SS로 변환하는 matrix가 저장될 포인터
-		 * @remarks 얻고 싶지 않은 parameter에 대해 NULL을 넣으면 해당 parameter에 값을 저장 안 함.
-		 */
-		void GetMatrixWStoSS(vmmat44* mat_ws2cs, vmmat44* mat_cs2ps, vmmat44* mat_ps2ss);
-		void GetMatrixWStoSSf(vmmat44f* mat_ws2cs, vmmat44f* mat_cs2ps, vmmat44f* mat_ps2ss);
-		/*!
-		 * @brief SS 에서 WS 로의 변환을 정의하는 matrix를 얻음
-		 * @param mat_ss2ps [out] \n double 44 \n SS 에서 PS로 변환하는 matrix가 저장될 포인터
-		 * @param mat_ps2cs [out] \n double 44 \n PS 에서 CS로 변환하는 matrix가 저장될 포인터
-		 * @param mat_cs2ws [out] \n double 44 \n CS 에서 WS로 변환하는 matrix가 저장될 포인터
-		 * @remarks 얻고 싶지 않은 parameter에 대해 NULL을 넣으면 해당 parameter에 값을 저장 안 함.
-		 */
-		void GetMatrixSStoWS(vmmat44* mat_ss2ps, vmmat44* mat_ps2cs, vmmat44* mat_cs2ws);
-		void GetMatrixSStoWSf(vmmat44f* mat_ss2ps, vmmat44f* mat_ps2cs, vmmat44f* mat_cs2ws);
-		
-		/*!
-		 * @brief WS or CS or PS or SS 에서 정의되는 image plane의 rectangle을 정의하는 네 점을 얻음
-		 * @param coord_space [in] \n EvmCoordSpace \n image plane을 얻고자 하는 space
-		 * @param pos_tl [out] \n double 3 \n coord_space 에서 정의된 image plane의 rectangle의 좌측상단 점이 저장될 포인터
-		 * @param pos_tr [out] \n double 3 \n coord_space 에서 정의된 image plane의 rectangle의 우측상단 점이 저장될 포인터
-		 * @param pos_bl [out] \n double 3 \n coord_space 에서 정의된 image plane의 rectangle의 좌측하단 점이 저장될 포인터
-		 * @param pos_br [out] \n double 3 \n coord_space 에서 정의된 image plane의 rectangle의 우측하단 점이 저장될 포인터
-		 * @remarks 
-		 * 얻고 싶지 않은 parameter에 대해 NULL을 넣으면 해당 parameter에 값을 저장 안 함. \n
-		 * OS 에 대해선 동작하지 않음.
-		 */
-		void GetImagePlaneRectPoints(const EvmCoordSpace coord_space, vmdouble3* pos_tl, vmdouble3* pos_tr, vmdouble3* pos_bl, vmdouble3* pos_br);
-		void GetImagePlaneRectPointsf(const EvmCoordSpace coord_space, vmfloat3* pos_tl, vmfloat3* pos_tr, vmfloat3* pos_bl, vmfloat3* pos_br);
-	};
+	// (1.70) VmLens was REMOVED: its optics/projection/pose + WS<->SS matrices are now plain fields on
+	// fncontainer::VmCamera, and the matrix math lives in the CommonApi layer (UpdateCameraTransforms, run during
+	// the scene-tree update). VmIObject holds a borrowed VmCamera* as its "camera object".
 
 	struct IObjectArchive;
 	/**
 	 * @class VmIObject
-	 * @brief image plane의 buffer 를 다루고 하나의 VmCObject를 갖는 VmObject를 상속 받는 class
+	 * @brief VmObject-derived render-target: holds image-plane buffers and references (non-owning) one camera (fncontainer::VmCamera).
 	 * @remarks
-	 * 하나의 해상도 (width, height)에 대해 다양한 용도에 사용될 여러개의 image buffer (frame buffer)가 정의됨. \n
-	 * image plane과 연결되는 하나의 카메라 정보를 갖는 VmCObject 의 instance를 갖음.
-	 * @sa vmobjects::VmObject, vmobjects::VmCObject
+	 * For a single resolution (width, height), several image buffers (frame buffers) for various uses are defined. \n
+	 * The connected camera (fncontainer::VmCamera) is referenced non-owningly; the VmCamera scene actor owns it.
+	 * @sa vmobjects::VmObject, fncontainer::VmCamera
 	 */
 	__vmstaticclass VmIObject : public VmObject
 	{
@@ -1665,157 +1530,145 @@ namespace vmobjects
 
 	public:
 		/*!
-		 * @brief constructor, image plane 에 mapping되는 frame buffer를 정의하는 해상도 필요
-		 * @param w [in](optional) \n int \n 해상도 width (pixel), 기본값은 0
-		 * @param h [in](optional) \n int \n 해상도 height (pixel), 기본값은 0
-		 * @remarks width 또는 height 가 0 이하면 frame buffer를 생성하는 함수 (@ref VmIObject::ResizeFrameBuffer, @ref  VmIObject::InsertFrameBuffer)가 실패
+		 * @brief constructor; requires the resolution that defines the frame buffer mapped to the image plane
+		 * @param w [in](optional) \n int \n Resolution width (pixels); default 0
+		 * @param h [in](optional) \n int \n Resolution height (pixels); default 0
+		 * @remarks If width or height is 0 or less, the frame-buffer creation functions (@ref VmIObject::ResizeFrameBuffer, @ref  VmIObject::InsertFrameBuffer) fail
 		 */
 		VmIObject(const int w = 0, const int h = 0);
 		~VmIObject();
 
 		/*!
-		 * @brief 정의되어 있는 frame buffer의 크기를 재설정하는 함수
-		 * @param w [in] \n int \n 해상도 width (pixel), 1 이상
-		 * @param h [in] \n int \n 해상도 height (pixel), 1 이상
+		 * @brief Resizes the defined frame buffers
+		 * @param w [in] \n int \n Resolution width (pixels), 1 or more
+		 * @param h [in] \n int \n Resolution height (pixels), 1 or more
 		 * @remarks
-		 * 기존에 정의된 frame buffer를 memory에서 해제  후 주어진 크기로 다시 할당\n
-		 * frame buffer에 저장되었던 내용물도 모두 삭제됨 (다시 채우는 module or function이 호출되야 함)\n
-		 * image plane의 pixel에 대한 x pitch와 y pitch가 같다고 가정하므로 width와 height에 대한 ratio가 바뀜\n
-		 * 따라서, VmCObject 에서 정의하는 WS 상의 image plane의 정보가 재설정되고, 관련된 변환 matrix가 재설정됨.
+		 * Frees the previously defined frame buffers from memory, then reallocates them at the given size\n
+		 * The contents stored in the frame buffers are also discarded (a module or function must be called to refill them)\n
+		 * The image plane's pixel x-pitch and y-pitch are assumed equal, so the width-to-height ratio changes\n
+		 * Accordingly, the WS image-plane information defined by VmCamera is reset, along with the associated transform matrices.
 		 */
 		void ResizeFrameBuffer(const int w, const int h);
 		/*!
-		 * @brief 정의되어 있는 frame buffer의 정보를 얻는 함수
-		 * @param buffer_size [out] \n int 2 \n frame buffer의 해상도가 저장될 포인터. width(x), height(y)
-		 * @param num_buffers [out](optional) \n int \n 현재 정의된 frame buffer의 개수가 저장될 포인터
-		 * @param bytes_per_pixel [out](optional) \n int \n 현재 정의된 모든 frame buffer에 대하여 하나의 pixel을 정의하는 type들의 크기합이 저장될 포인터
-		 * @remarks 얻고 싶지 않은 parameter에 대해 NULL을 넣으면 해당 parameter에 값을 저장 안 함.
+		 * @brief Returns information about the defined frame buffers
+		 * @param buffer_size [out] \n int 2 \n Pointer to receive the frame buffer resolution: width(x), height(y)
+		 * @param num_buffers [out](optional) \n int \n Pointer to receive the number of currently defined frame buffers
+		 * @param bytes_per_pixel [out](optional) \n int \n Pointer to receive the summed byte size of the per-pixel types across all currently defined frame buffers
+		 * @remarks Passing NULL for a parameter you do not need skips storing that value.
 		 */
 		void GetFrameBufferInfo(vmint2* buffer_size/*out*/, int* num_buffers = NULL/*out*/, int* bytes_per_pixel = NULL/*out*/);
 		/*!
-		 * @brief 정의되어 있는 frame buffer의 정보가 저장된(array 포함) @ref vmobjects::FrameBuffer 를 얻는 함수
-		 * @param fb_usage [in] \n EvmFrameBufferUsage \n 정의된 frame buffer들 중 해당 usage의 buffer를 얻음
-		 * @param buffer_idx [in] \n int \n 해당 usage의 frame buffer 중 index 번째로 정의되어 있는 buffer를 얻음
-		 * @return FrameBuffer \n frame buffer의 정보가 저장된(array 포함) @ref vmobjects::FrameBuffer 의 포인터
+		 * @brief Returns the @ref vmobjects::FrameBuffer (including its array) holding the defined frame buffer's information
+		 * @param fb_usage [in] \n EvmFrameBufferUsage \n Retrieves the buffer of this usage among the defined frame buffers
+		 * @param buffer_idx [in] \n int \n Retrieves the index-th buffer among the frame buffers of that usage
+		 * @return FrameBuffer \n Pointer to the @ref vmobjects::FrameBuffer (including its array) holding the frame buffer's information
 		 */
 		FrameBuffer* GetFrameBuffer(const EvmFrameBufferUsage fb_usage, const int buffer_idx);
 
 		/*!
-		 * @brief frame buffer를 하나 추가하는 함수
-		 * @param dtype [in] \n data_type \n 추가할 frame buffer의 data type
-		 * @param fb_usage [in] \n EvmFrameBufferUsage \n 추가할 frame buffer의 usage
-		 * @param descriptor [in] \n string \n 추가할 frame buffer에 대한 descriptor
-		 * @remarks fb_usage == vmenums::EvmFrameBufferUsage::FrameBufferUsageRENDEROUT 일 경우 data type 은 typeid(vmbyte4).name() 이어야 함.
+		 * @brief Adds a single frame buffer
+		 * @param dtype [in] \n data_type \n Data type of the frame buffer to add
+		 * @param fb_usage [in] \n EvmFrameBufferUsage \n Usage of the frame buffer to add
+		 * @param descriptor [in] \n string \n Descriptor for the frame buffer to add
+		 * @remarks When fb_usage == vmenums::EvmFrameBufferUsage::FrameBufferUsageRENDEROUT, the data type must be typeid(vmbyte4).name().
 		 */
 		void InsertFrameBuffer(const data_type& dtype, const EvmFrameBufferUsage fb_usage, const std::string& descriptor);
 
 		/*!
-		 * @brief frame buffer를 변경하는 함수
-		 * @param fb_usage [in] \n EvmFrameBufferUsage \n 변경할 frame buffer의 usage
-		 * @param buffer_idx [in] \n int \n 변경할 frame buffer의 index
-		 * @param dtype [in] \n data_type \n 변경할 frame buffer 를 data type 으로 변경
-		 * @param descriptor [in] \n string \n 변경할 frame buffer 를 descriptor 로 변경
-		 * @return bool \n 해당 buffer_idx 의 버퍼가 있으면 true, 없으면 false 반환
-		 * @remarks 해당 index 의 버퍼가 dtype 로 이미 선언되어 있으면 아무 작업 없이 true 반환
+		 * @brief Replaces a frame buffer
+		 * @param fb_usage [in] \n EvmFrameBufferUsage \n Usage of the frame buffer to replace
+		 * @param buffer_idx [in] \n int \n Index of the frame buffer to replace
+		 * @param dtype [in] \n data_type \n New data type for the frame buffer
+		 * @param descriptor [in] \n string \n New descriptor for the frame buffer
+		 * @return bool \n Returns true if a buffer exists at buffer_idx, false otherwise
+		 * @remarks If the buffer at that index is already declared with dtype, returns true without doing anything
 		 */
 		bool ReplaceFrameBuffer(const EvmFrameBufferUsage fb_usage, const int buffer_idx, const data_type& dtype, const std::string& descriptor);
 
 		/*!
-		 * @brief frame buffer를 삭제하는 함수
-		 * @param fb_usage [in] \n EvmFrameBufferUsage \n 삭제할 frame buffer의 usage
-		 * @param buffer_idx [in] \n int \n 해당 usage (eFrameBufferUsage)의 frame buffer 중 index 번째의 buffer를 삭제
-		 * @return 해당 frame buffer가 존재하며 삭제에 성공하면 true, 그렇지 않으면 false 반환
-		 * @remarks 해당 frame buffer(fb_usage && buffer_idx)는 memory에서 해제됨.
+		 * @brief Deletes a frame buffer
+		 * @param fb_usage [in] \n EvmFrameBufferUsage \n Usage of the frame buffer to delete
+		 * @param buffer_idx [in] \n int \n Deletes the index-th buffer among the frame buffers of that usage (eFrameBufferUsage)
+		 * @return Returns true if the frame buffer exists and is deleted successfully, false otherwise
+		 * @remarks The frame buffer (fb_usage && buffer_idx) is freed from memory.
 		 */
 		bool DeleteFrameBuffer(const EvmFrameBufferUsage fb_usage, const int buffer_idx);
 
 		/*!
-		 * @brief VmCObject의 instance를 생성.
-		 * @param aabbMm [in] \n AaBbMinMax \n WS에 axis-aligned 된 cube인 scene stage
-		 * @param stage_vtype [in] \n EvmStageViewType \n 주어진 scene stage 상의 어느 위치를 기준으로 camera를 설정하는가를 결정
-		 * @remarks
-		 * 이미 생성되어 있으면 동작하지 않음. \n
-		 * instance 생성 전 VmIObject 의 content 가 정의되어 있어야 함. (즉 buffer가 생성되어 있어야 함)
-		 * @sa vmobjects::VmObject, vmobjects::VmCObject
+		 * @brief (1.70) DEPRECATED no-op. Camera state lives on the VmCamera actor; nothing is created here.
+		 * @param aabbMm [ignored] retained for source/ABI compatibility; the no-op discards it.
+		 * @param stage_vtype [ignored] retained for source/ABI compatibility; the no-op discards it.
+		 * @remarks No-op since 1.70. The camera object IS the VmCamera scene actor, created by CommonApi (NewCamera)
+		 * and configured/connected by MakeCameraRes -- NOT by this method. The impl (void)-discards both parameters;
+		 * this stub is kept only so pre-1.70 callers keep compiling.
+		 * @sa vmobjects::VmObject, fncontainer::VmCamera
 		 */
 		void AttachCamera(const AaBbMinMax& aabbMm, const EvmStageViewType stage_vtype);
 		/*!
-		 * @brief VmCObject의 instance를 얻는 함수
-		 * @return VmCObject \n instance로 정의되어 있는 VmCObject 의 포인터
+		 * @brief returns this iobj's borrowed (non-owning) camera pointer (fncontainer::VmCamera*).
+		 * @return the borrowed (non-owning) fncontainer::VmCamera* connected to this iobj (NULL if none).
 		 */
-		VmCObject* GetCameraObject();
+		fncontainer::VmCamera* GetCameraObject();
+		// (1.70) non-owning setter: camera state is plain fields on VmCamera (no separate lens object); the iobj
+		// holds a borrowed VmCamera* so ResizeFrameBuffer can keep updating the camera's SS/projection on resize.
+		void SetCameraObject(fncontainer::VmCamera* camera);
 
 		/*!
-		 * @brief FrameBuffer 들이 저장된 vector container를 얻음
-		 * @param fb_usage [in] \n EvmFrameBufferUsage \n 얻고자 하는 Frame Usage
-		 * @return 정의된 FrameBuffer 들이 저장된 vector container에 대한 vector<FrameBuffer> 의 포인터
+		 * @brief Returns the vector container holding the frame buffers
+		 * @param fb_usage [in] \n EvmFrameBufferUsage \n The frame usage to retrieve
+		 * @return Pointer to the vector<FrameBuffer> holding the defined frame buffers
 		 */
 		std::vector<FrameBuffer>* GetBufferPointerList(const EvmFrameBufferUsage fb_usage);
 	};
 
-	struct VObjectPrimitiveArchive;
 	/**
 	 * @class VmVObjectPrimitive
-	 * @brief VmVObject를 통해 OS와 WS의 배치 관계가 설정된 Volume의 정보를 갖는 class.
+	 * @brief Class holding the information of a primitive object whose OS-to-WS placement is established through VmVObject.
 	 * @remarks
-	 * 기존의 OS를 OS 와 VOS 의 두개로 나누어 처리. \n
-	 * @li OS : PrimitiveData 저장되는 primitive 좌표계
-	 * @li VOS : PrimitiveData 로 정의되는 개별 객체가 WS 좌표계 이전에 배치되는 좌표계 \n
-	 * VmVObject 의 OS 가 VOS 가 되며, OS/VOS/WS 간 변환은 사용자 정의에 따름 \n
-	 * @remarks OS 가 VOS 로의 객체 변환을 통해 PrimitiveData 로 정의되는 개별 객체를 WS 상에 여러 형태(affine transform)로 배치 및 변형 할 수 있음.
-	 * @sa vmobjects::VmVObject, vmobjects::VmCObject
+	 * The original OS is split into two: OS and VOS. \n
+	 * @li OS : the primitive coordinate space in which PrimitiveData is stored
+	 * @li VOS : the coordinate space in which individual objects defined by PrimitiveData are placed before the WS coordinate space \n
+	 * The VmVObject's OS becomes the VOS, and the OS/VOS/WS transforms are user-defined \n
+	 * @remarks Through the OS-to-VOS object transform, individual objects defined by PrimitiveData can be placed and deformed in WS in various ways (affine transforms).
+	 * @sa vmobjects::VmVObject, fncontainer::VmCamera
 	 */
 	__vmstaticclass VmVObjectPrimitive : public VmVObject
 	{
-	private:
-	protected:
-		VObjectPrimitiveArchive* voaprim_res;
-
 	public:
-		VmVObjectPrimitive();
-		~VmVObjectPrimitive();
+		// (1.70) leaf type -> pure-virtual interface; impl (holding the primitive data as direct members) is
+		// VmVObjectPrimitive_Detail, hidden in VimCommon.cpp. Construct via NewVObjectPrimitive().
+		virtual ~VmVObjectPrimitive() {}
 
 		/*!
-		 * @brief primitive로 정의된 객체 정보를 갖고 있는 @ref vmobjects::PrimitiveData 자료 구조를 VObjectPrimitiveArchive에 등록함
-		 * @param prim_data [in] \n PrimitiveData \n primitive로 정의된 객체 정보
+		 * @brief Registers the @ref vmobjects::PrimitiveData structure holding the primitive-defined object information into this primitive object
+		 * @param prim_data [in] \n PrimitiveData \n Primitive-defined object information
 		 * @param progress [out](optional) \n LocalProgress \n
-		 * 함수가 진행되는 progress 정보를 포함하는 포인터 \n
-		 * 기본값은 NULL이며, NULL이면 사용 안 함.
+		 * Pointer carrying the function's progress information \n
+		 * The default is NULL; if NULL, it is not used.
 		 */
-		bool RegisterPrimitiveData(const PrimitiveData& prim_data, LocalProgress* progress = NULL);
-		bool RemovePrimitiveData();
+		virtual bool RegisterPrimitiveData(const PrimitiveData& prim_data, LocalProgress* progress = NULL) = 0;
+		virtual bool RemovePrimitiveData() = 0;
 		/*!
-		 * @brief VmVObjectPrimitive에 정의되어 있는 primitive로 정의된 객체 정보를 얻음.
-		 * @return PrimitiveData \n primitive로 정의된 객체 정보가 저장되어 있는 PrimitiveData 의 포인터
+		 * @brief Returns the primitive-defined object information stored in the VmVObjectPrimitive.
+		 * @return PrimitiveData \n Pointer to the PrimitiveData holding the primitive-defined object information
 		 */
-		PrimitiveData* GetPrimitiveData();
-		/*!
-		* @brief VmVObjectPrimitive 의 가시화 시 wireframe 가시화 상태를 설정.
-		* @param bIsVibible [in] \n bool \n true 면 가시화, false 면 가시화되지 않음
-		* @param color [in] \n double 4 \n RGBA = XYZW. [min, max] = [0.0f, 1.0f]
-		*/
-		//void SetPrimitiveWireframeVisibilityColor(const bool is_wireframe, const vmdouble4& color);
-		/*!
-		* @brief VmVObjectPrimitive 의 가시화 시 wireframe 가시화 상태를 가져옴.
-		* @param is_wireframe [out](optional) \n bool \n 가시화 여부를 저장하는 pointer
-		* @param color [out](optional) \n double 4 \n 색상 정보를 저장하는 pointer
-		*/
-		//void GetPrimitiveWireframeVisibilityColor(bool* is_wireframe, vmdouble4* color);
+		virtual PrimitiveData* GetPrimitiveData() = 0;
 
-		bool HasKDTree(int* num_updated = NULL);
-		void UpdateKDTree(); // just for point cloud
-		uint32_t KDTSearchRadius(const vmfloat3& p_src, const float r_sq, const bool is_sorted, std::vector<std::pair<size_t, float>>& ret_matches);
-		uint32_t KDTSearchKnn(const vmfloat3& p_src, const int k, size_t* out_ids, float* out_dists);
+		virtual bool HasKDTree(int* num_updated = NULL) = 0;
+		virtual void UpdateKDTree() = 0; // just for point cloud
+		virtual uint32_t KDTSearchRadius(const vmfloat3& p_src, const float r_sq, const bool is_sorted, std::vector<std::pair<size_t, float>>& ret_matches) = 0;
+		virtual uint32_t KDTSearchKnn(const vmfloat3& p_src, const int k, size_t* out_ids, float* out_dists) = 0;
 		
-		void UpdateBVHTree(int min_size = -1, int max_size = -1); // for primitives
-		void* GetBVHTree();
-		bool GetBVHTreeBuffers(vmint4** nodePtr, int* nodeSize, vmint4** triWoopPtr, int* triWoopSize,
-			vmint4** triDebugPtr, int* triDebugSize, int** cpuTriIndicesPtr, int* triIndicesSize);
+		virtual void UpdateBVHTree(int min_size = -1, int max_size = -1) = 0; // for primitives
+		virtual void* GetBVHTree() = 0;
+		virtual bool GetBVHTreeBuffers(vmint4** nodePtr, int* nodeSize, vmint4** triWoopPtr, int* triWoopSize,
+			vmint4** triDebugPtr, int* triDebugSize, int** cpuTriIndicesPtr, int* triIndicesSize) = 0;
 
 		// VZM2 features
-		const void UpdateBVH(const bool GPUBVHEnabled);
-		const geometrics::BVH& GetBVH() const;
+		virtual const void UpdateBVH(const bool GPUBVHEnabled) = 0;
+		virtual const geometrics::BVH& GetBVH() const = 0;
 	};
+	__vmstatic VmVObjectPrimitive* NewVObjectPrimitive(); // (1.70) factory; VmVObjectPrimitive_Detail hidden in VimCommon.cpp
 }; // namespace vmobjects
 
 
@@ -1834,34 +1687,6 @@ namespace vmgeom {
 //==========================================
 namespace fncontainer
 {
-	struct VmLight {
-		vmfloat3 pos = vmfloat3(0), dir = vmfloat3(0, 0, -1), up = vmfloat3(0, 1, 0); // Local coordinates
-		bool is_pointlight = false; // 'true' uses pos_light, 'false' uses dir_light
-		bool is_on_camera = true; // 'true' sets cam params to light source. in this case, it is unnecessary to set pos, dir, and up (ignore these)		
-		uint64_t timeStamp = 0ull; // will be automatically set 
-
-		//vmfloat3 ambient_color = vmfloat3(1.f);
-		//vmfloat3 diffuse_color = vmfloat3(1.f);
-		//vmfloat3 specular_color = vmfloat3(1.f);
-		struct SSAO_Params
-		{
-			bool is_on_ssao = false;
-			float kernel_r = 0;
-			float ao_power = 1.f;
-			float tangent_bias = 3.141592654f / 6.f;;
-			int num_dirs = 8;
-			int num_steps = 8;
-			bool smooth_filter;
-		};
-		SSAO_Params effect_ssao;
-	};
-	struct VmLens {
-		bool apply_ssdof = false;
-		float dof_lens_r = 3.f;
-		float dof_lens_F = 10.f;
-		int dof_ray_num_samples = 8;
-		float dof_focus_z = 20.f;
-	};
 	struct VmActor {
 	private:
 		vmobjects::VmVObject* _geometry_res = NULL;
@@ -1877,6 +1702,14 @@ namespace fncontainer
 		std::string name = "No Name";
 		int actorId = 0;
 		int sceneId = 0;
+		// (rev.14) LAST-CHANGE stamp, common to every actor kind (absorbed VmLight::timeStamp).
+		// POLICY: core updates it whenever the actor's state meaningfully changes, and EVERY plugin
+		// module must update it when it changes this actor -- it is the intended coarse clue for
+		// future process gates ("did anyone touch this?"). It does NOT replace the value-compare
+		// gates (__LightParamsEqual, the VXGI D11 deadband): those answer the different, finer
+        // question "did the value actually change?" -- a stamp moves even on a same-value re-set.
+		// Coarse then fine; the two stack, neither substitutes for the other.
+		uint64_t timeStamp = 0ull;
 
 		VmActor* parentActor = NULL;
 		std::vector<VmActor*> childActors;
@@ -1986,6 +1819,101 @@ namespace fncontainer
 		}
 	};
 
+	// (Multi-Light rev.14 -- user directive #6) A light IS an actor: it carries actorId / name /
+	// visible / matOS2WS / parent-child / timeStamp like any other, rides VmFnContainer::sceneActors
+	// BY POINTER, and is filtered by per-view hidden_actors + scene-level visible exactly like a
+	// geometry actor. Give it a geometry resource and the existing mesh path simply draws it (the
+	// debug-view use case that makes actor-hood mandatory).
+	//
+	// NEVER COPY THIS BY VALUE across the module boundary: it is an identity, and a copy would
+	// duplicate actorId / parentActor / childActors / _vmparams. That is why the old value channel
+	// "_VmLight_LightSource" (and the VmSceneLight { light_id; light; } pair, whose light_id is now
+	// simply actorId) were retired -- the renderer receives VmLight* out of sceneActors and the core
+	// only adds "_int_DominantLightId".
+	//
+	// pos/dir CONTRACT (ML-D9): these are the RESOLVED WORLD-SPACE values for a STATIONARY light --
+	// core writes them from the final matOS2WS in UpdateActorMatrix (view-independent, idempotent).
+	// For a CAMERA_ATTACHED light (type == AUTO_ATTACH_3DCAM) the renderer overrides them with its own
+	// camera, but ONLY when this light is the view's dominant (actorId == _int_DominantLightId);
+	// otherwise the light is interpreted as DIRECTIONAL/STATIONARY and the renderer warns (W-L4). The
+	// stored type is never rewritten -- the demotion is an interpretation, not a mutation of the param.
+	// (Multi-Light rev.18) Single light-type field replacing the base `is_pointlight` + `is_on_camera`
+	// bool pair (and the rev.17 `is_spotlight` proposal). Kept BYTE-VALUE-IDENTICAL to the public
+	// vzm::LightParameters::LightType in VisMtvApi.h (the two headers do not include each other; __LightParamsToVmLight
+	// converts field-wise). AUTO_ATTACH_3DCAM is the default = the old headlight (directional, pose
+	// follows the active 3D camera) so an unconfigured scene is unchanged.
+	enum class LightType : uint32_t {
+		DIRECTIONAL       = 0, // parallel light; STATIONARY pose (actor transform, local -z)
+		POINT             = 1, // omni positional; STATIONARY pose (matOS2WS origin)
+		SPOT              = 2, // positional cone (spot_inner/outer_deg); STATIONARY pose
+		AUTO_ATTACH_3DCAM = 3, // headlight: directional, pos/dir follow the active 3D camera.
+		                       // DOMINANT-only -- a non-dominant light is interpreted as DIRECTIONAL
+		                       // (STATIONARY) + W-L4; the stored type is never mutated (demotion is
+		                       // interpretation only) and takes effect the moment it becomes dominant.
+	};
+
+	struct VmLight : VmActor {
+		vmfloat3 pos = vmfloat3(0), dir = vmfloat3(0, 0, -1), up = vmfloat3(0, 1, 0);
+		// (rev.18) type replaces is_pointlight + is_on_camera. spot angles used only when type == SPOT.
+		LightType type = LightType::AUTO_ATTACH_3DCAM;
+		float spot_inner_deg = 30.f; // SPOT: full-intensity half-angle (deg); <= spot_outer_deg
+		float spot_outer_deg = 45.f; // SPOT: zero-intensity half-angle (deg); inner==outer = hard edge
+
+		// (Multi-Light ML-D10, API v76) light EMISSION color & intensity, consumed by the direct-shading
+		// tint (ambient/diffuse/specular alike) AND the VXGI light injection. The defaults (white, 1.0)
+		// reproduce the legacy fixed-white shading exactly.
+		//
+		// NAMED light_color, NOT color, ON PURPOSE (api-stability review, rev.14): VmActor::color already
+		// exists and means something else entirely -- the actor's RGBA render/cull color (a light drawn as
+		// a debug gizmo uses THAT one, and its alpha drives the a==0 cull). Two members called `color` on
+		// one type would resolve by the static type of the pointer you happen to hold, silently and with
+		// no compiler diagnostic: VmActor* -> RGBA, VmLight* -> emission. Different names, no trap.
+		vmfloat3 light_color = vmfloat3(1.f);
+		float intensity = 1.f;
+
+		VmLight() {
+			_actorType = "LIGHT";
+		}
+	};
+
+	// (2026-07-19, user directive) First-class camera scene node, symmetric with VmLight (both : VmActor, ride
+	// sceneActors). pose = its VmActor transform (matOS2WS). (1.70) The old VmLens object was DROPPED and its
+	// optics/projection/pose + WS<->SS matrices are now plain fields below; `iobj` is its render-target VmIObject,
+	// and the iobj holds a borrowed VmCamera* (iobj->GetCameraObject()) pointing back here.
+	struct VmCamera : VmActor {
+		vmobjects::VmIObject* iobj = nullptr; // render-target iobj; iobj->GetCameraObject() borrows this VmCamera*
+		// (1.70) camera optics + pose, absorbed from the dropped VmLens. intrinsics + extrinsics + cached
+		// WS<->SS matrices. The CommonApi layer writes these and recomputes the matrices via
+		// UpdateCameraTransforms during the scene-tree update (timestamp-gated on VmActor::timeStamp).
+		vmdouble3 pos_cam = vmdouble3(0);
+		vmdouble3 view_cam = vmdouble3(0, 0, -1.);
+		vmdouble3 up_cam  = vmdouble3(0, 1., 0);
+		vmdouble3 left_cam = vmdouble3(-1., 0, 0);
+		bool   is_perspective = false;
+		double fov_y = VM_PI / 4.;
+		double aspect_ratio = 1.0;
+		double near_p = 0, far_p = 1000.;
+		vmdouble2 ip_size = vmdouble2(1., 1.);
+		vmint2 pix_size = vmint2(1, 1);
+		vmdouble2 fitting_ip_size = vmdouble2(1., 1.);
+		double fitting_fov_y = VM_PI / 4.;
+		bool   is_ar_mode = false;
+		double fx = 0, fy = 0, sc = 0, cx = 0, cy = 0;
+		vmmat44  mat_ws2cs, mat_cs2ps, mat_ps2ss;
+		vmmat44  mat_cs2ws, mat_ps2cs, mat_ss2ps;
+		vmmat44f fmat_ws2cs, fmat_cs2ps, fmat_ps2ss;
+		vmmat44f fmat_cs2ws, fmat_ps2cs, fmat_ss2ps;
+		uint64_t _matrix_stamp = ~0ull; // last VmActor::timeStamp the matrices were computed for (UpdateCameraTransforms gate)
+		// (increment: post-processing payload) per-view render config that used to travel as loose
+		// fnParams channels; the CommonApi layer writes these in RenderScene from the camera's
+		// script_params, and renderers read them off the render VmCamera instead of fnParams.GetParam.
+		uint64_t temporal_render_count = 0; // TAA / frame-paced index (per-view; MAY be reset/overridden on accumulation restart)
+		uint64_t global_render_count = 0;   // API render count (renderer_excute_count); NEVER reset; lifetime == this VmCamera
+		// (1.70) tonemap presentation params moved to VmActor::_vmparams (Get/SetParam "TONEMAP_*") -- kept off the
+		// sizeof-fingerprinted VmCamera layout so tone-curve changes don't perturb VimCommonLayoutSig.
+		VmCamera() { _actorType = "CAMERA"; } // trivial: camera state is plain data now (no VmLens to own)
+	};
+
 	struct VmFnContainer {
 	private:
 	public:
@@ -1993,4 +1921,16 @@ namespace fncontainer
 		vmobjects::VmMap<int, VmActor*> sceneActors;
 		vmobjects::VmParamMap<std::string, std::any> fnParams;
 	};
+
+	// (1.61 size handshake) ABI layout fingerprint of the structs that cross the core<->renderer DLL boundary.
+	// __VERSION is a hand-maintained string that can lag a layout change (e.g. VmCamera grew a tonemap/temporal
+	// tail within 1.61 without a version bump); computed from sizeof, so a stale core/renderer pair with the SAME
+	// __VERSION but a drifted SIZE is caught at load (a size-preserving field reorder/type change is NOT -- add
+	// field offsets here if that becomes a risk). Core and each renderer compute it from their OWN header copy.
+	inline unsigned int VimCommonLayoutSig() {
+		return (unsigned int)( sizeof(VmCamera)
+			+ sizeof(VmLight)  * 131u
+			+ sizeof(VmActor)  * 131u * 131u
+			+ sizeof(VmFnContainer) * 131u * 131u * 131u );
+	}
 }

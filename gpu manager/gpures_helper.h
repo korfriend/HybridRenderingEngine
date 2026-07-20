@@ -3,6 +3,7 @@
 #include "../gpu_common_res.h"
 #include "meshpainter/MeshPainter.h"
 #include <functional>
+#include <cstddef> // offsetof (the CB_VxgiLights layout static_asserts)
 
 using namespace fncontainer;
 
@@ -267,6 +268,17 @@ namespace grd_helper
 			return (ID3D11Buffer*)it->second;
 		}
 
+		// Multi-Light (plan §0.2): get_cbuf dereferences the END iterator on a miss -- unusable as a probe.
+		// This is the RECOVERABLE lookup for the VXGI light-CB preflight (ML-D5): NULL on miss, no error
+		// spam (the caller owns the W-L3 warning policy). Existing get_cbuf calls are untouched on purpose.
+		ID3D11Buffer* try_get_cbuf(const string& name)
+		{
+			auto it = dx11_cbuf.find(name);
+			if (it == dx11_cbuf.end())
+				return NULL;
+			return (ID3D11Buffer*)it->second;
+		}
+
 		ID3D11SamplerState* get_sampler(const string& name)
 		{
 			return (ID3D11SamplerState*)safe_get_res(COMRES_INDICATOR(GpuhelperResType::SAMPLER_STATE, name));
@@ -524,7 +536,14 @@ namespace grd_helper
 	// UNORDERED_ACCESS | SHADER_RESOURCE. Keyed on srcObj + res_name so it persists across frames. with_mips
 	// adds a full auto-gen mip chain (+RENDER_TARGET for GenerateMips) so cone tracing can LOD-sample; the
 	// UAV stays on mip 0 — write mip 0, then call GenerateMips on the SRV.
-	bool UpdateVoxelGrid(GpuRes& gres, VmObject* srcObj, const string& res_name, const uint32_t resolution, const uint32_t dx_format, const bool with_mips = false);
+	// (rev.16) src_id = the SCENE id (VXGI is a scene-level field; a vobj can live in several scenes, so
+	// a vobj key cross-contaminated them). The actor tag / co-ownership is gone -- single owner = scene.
+	// out_recreated (verification round-1 Major 1): set true whenever the resource was (re)GENERATED this
+	// call -- its CONTENTS ARE UNDEFINED, so any bake meta describing the old grid is now a lie. The
+	// caller must drop _bool_VxgiFieldReady before any consume/gate logic can route this frame's reads
+	// to the fresh, un-baked texture (rev.9: preflight failure must serve previous bake or DISABLED,
+	// never a fresh grid). Returns false when generation failed (resource unusable).
+	bool UpdateVoxelGrid(GpuRes& gres, const int src_id, const string& res_name, const uint32_t resolution, const uint32_t dx_format, const bool with_mips = false, bool* out_recreated = NULL);
 
 	// Upload a CPU buffer as a DYNAMIC Texture3D (write-discard). The source is assumed to be tightly packed
 	// (row pitch = width * bytes_per_texel, depth pitch = row pitch * height); destination Texture3D pitches
@@ -534,7 +553,7 @@ namespace grd_helper
 		DXGI_FORMAT dxFormat, const int bytes_per_texel,
 		LocalProgress* progress = NULL, uint64_t cpu_update_custom_time = 0);
 
-	bool UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, VmCObject* camObj, const vmfloat2& paint_pos2d_ss, const BrushParams& brushParams);
+	bool UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, fncontainer::VmCamera* camObj, const vmfloat2& paint_pos2d_ss, const BrushParams& brushParams);
 
 #define ZERO_SET(T) T(){memset(this, 0, sizeof(T));}
 
@@ -553,9 +572,11 @@ namespace grd_helper
 	};
 
 	struct LightSource {
-		bool is_on_camera = false; 
-		bool is_pointlight = false; 
-		vmfloat3 light_dir = vmfloat3(0); 
+		// (rev.18) single LightType replaces the base is_on_camera/is_pointlight bool pair. Direct shading
+		// renders SPOT as POINT (Q7 -- the cone is VXGI-only for now), so the spot angles are not carried here.
+		// Default DIRECTIONAL reproduces the old (is_on_camera=false, is_pointlight=false) struct default.
+		fncontainer::LightType type = fncontainer::LightType::DIRECTIONAL;
+		vmfloat3 light_dir = vmfloat3(0);
 		vmfloat3 light_pos = vmfloat3(0); 
 
 		vmfloat3 light_ambient_color = vmfloat3(1);
@@ -563,16 +584,8 @@ namespace grd_helper
 		vmfloat3 light_specular_color = vmfloat3(1);
 	};
 
-	struct GlobalLighting {
-		bool apply_ssao = false; 
-		float ssao_r_kernel = 1.f; 
-		int ssao_num_dirs = 4; 
-		int ssao_num_steps = 4; 
-		float ssao_tangent_bias = (float)(VM_PI / 6.0); 
-		float ssao_intensity = 0.5f; 
-		bool ssao_blur = true;
-		int ssao_debug = 0;
-	};
+	// (v76) struct GlobalLighting REMOVED (user directive -- SSAO feature retired): it carried ONLY the
+	// SSAO parameters. SetCb_Env lost the parameter; the CB fields it fed are now reserved pads (above).
 
 	struct LensEffect {
 		bool apply_ssdof = false; 
@@ -675,12 +688,15 @@ namespace grd_helper
 		vmmat44f	mat_ws2ls_smap;	// for shadow : Sample Depth Map (ws2ss)
 		vmmat44f	mat_ls2ws_smap;	// for shadow : Depth Comparison (ss2ws)
 
-		float r_kernel_ao;
-		int num_dirs;
-		int num_steps;
-		float tangent_bias;
+		// (v76) SSAO RETIRED (user directive) -- the five parameter fields are kept as SAME-SIZE reserved
+		// pads so the b7 layout (and every downstream field offset: num_safe_loopexit, dof_*) is unchanged
+		// and no unrelated shader needs a relayout. ZERO_SET keeps them 0.
+		float env_reserved_ssao_0;   // was r_kernel_ao
+		int env_reserved_ssao_1;     // was num_dirs
+		int env_reserved_ssao_2;     // was num_steps
+		float env_reserved_ssao_3;   // was tangent_bias
 
-		float ao_intensity;
+		float env_reserved_ssao_4;   // was ao_intensity
 		uint32_t num_safe_loopexit;
 		uint32_t env_dummy_1;
 		uint32_t env_dummy_2;
@@ -729,6 +745,35 @@ namespace grd_helper
 
 		ZERO_SET(CB_VXGI)
 	};
+
+	// ---- Multi-Light (plan: secret_recipies/MULTI_LIGHT_PLAN.md, ML-D3) ----
+	// VXGI light-set CB, bound at register b11 which is declared LOCALLY in hlsl/vxgi/InjectLight.hlsl
+	// (CommonShader.hlsl declares nothing at b11 -- see its b-slot ledger comment). TOTAL cap,
+	// VIEW-INDEPENDENT: the scene-global visible lights with the smallest actorIds. 8 is PROVISIONAL
+	// (Q2): the final cap is a user decision from the V12 GPU-timing table (R=128/256 x 1/2/5/8 lights).
+	// Layout must match InjectLight.hlsl's cbVxgiLights byte-for-byte (static_asserts below).
+#define VXGI_MAX_LIGHTS 8
+	struct VxgiLight // 64 B = 4 HLSL float4 rows (rev.18: expanded from 48B/3 rows for the SPOT cone params)
+	{
+		vmfloat3 pos_ws;   uint32_t flags;      // bit0 = positional (point/spot), bit1 = spot (cone attenuation)
+		vmfloat3 dir_ws;   float    intensity;  // spot: cone axis (= ray travel dir, directional dir convention); point: ignored. dir CPU-normalized (never zero)
+		vmfloat3 color;    float    cos_inner;  // ML-D10 (default white); cos_inner = spot only: cos(inner half-angle) -- former pad0 slot
+		float    cos_outer;                     // spot only: cos(outer half-angle)
+		float    spot_rsv0, spot_rsv1, spot_rsv2; // reserved (range/exponent/etc. future spot params)
+
+		ZERO_SET(VxgiLight)
+	};
+	struct CB_VxgiLights // 16 + 8*64 = 528 B
+	{
+		uint32_t light_count;                  // lights actually in the CB (<= VXGI_MAX_LIGHTS); 0 = no light (dark field, V17)
+		uint32_t vxgil_pad1, vxgil_pad2, vxgil_pad3;
+		VxgiLight lights[VXGI_MAX_LIGHTS];
+
+		ZERO_SET(CB_VxgiLights)
+	};
+	static_assert(sizeof(VxgiLight) == 64, "VxgiLight must stay 4 float4 rows (HLSL cbuffer packing)");
+	static_assert(offsetof(CB_VxgiLights, lights) == 16, "CB_VxgiLights header must stay one float4 row");
+	static_assert(sizeof(CB_VxgiLights) == 16 + 8 * 64, "CB_VxgiLights must match InjectLight.hlsl's cbVxgiLights (528)");
 
 	// Tonemap post-pass config. Plain CPU-side POD, NOT a GPU constant buffer: the values are copied into the
 	// tail of CB_CameraState (see TonemapParams::ApplyTo). Shader model 5.0 has exactly 14 cbuffer slots
@@ -1122,8 +1167,8 @@ namespace grd_helper
 
 	// Compute Constant Buffers //
 	// global 
-	void SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, const vmmat44f& matSS2WS, const vmmat44f& matWS2CS, const vmmat44f& matWS2PS, VmCObject* ccobj, const vmint2& fb_size, const int k_value, const float vz_thickness, const vmfloat2& taa_jitter_px = vmfloat2(0.f, 0.f));
-	void SetCb_Env(CB_EnvState& cb_env, VmCObject* ccobj, const LightSource& light_src, const GlobalLighting& global_lighting, const LensEffect& lens_effect);
+	void SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, const vmmat44f& matSS2WS, const vmmat44f& matWS2CS, const vmmat44f& matWS2PS, fncontainer::VmCamera* ccobj, const vmint2& fb_size, const int k_value, const float vz_thickness, const vmfloat2& taa_jitter_px = vmfloat2(0.f, 0.f));
+	void SetCb_Env(CB_EnvState& cb_env, fncontainer::VmCamera* ccobj, const LightSource& light_src, const LensEffect& lens_effect); // (v76) GlobalLighting param removed (SSAO retired)
 	// Fill the VXGI constant buffer (register b13). mat_ws2vox_raw = world->voxel[0,1] (volume mat_ws2ts for v1).
 	// gi/ao/indirect intensities gate the three effects individually (0 = off); they are half-packed into the
 	// CB. debug_byte = (mode & 0xF) | (mip & 0xF) << 4, packed into vxgi_flag's top byte.
@@ -1148,7 +1193,8 @@ namespace grd_helper
 	// r3 case (resource lookup failure) is the caller's probe AFTER this returns true. On success cb_out
 	// carries the bake's mapping / medium bits / scatter_gain, with THIS view's gi/ao intensity substituted
 	// and the debug byte + transient preserve-AO bit cleared (D3 consume rules). Never runs any bake work.
-	bool LoadVxgiConsumerCb(CB_VXGI& cb_out, int& w1_reason, VmObject* vobj, VmObject* tobj_otf,
+	// (rev.16) state_anchor = scene state object (VXGI state); vobj = volume (for the content key only).
+	bool LoadVxgiConsumerCb(CB_VXGI& cb_out, int& w1_reason, VmObject* state_anchor, VmObject* vobj, VmObject* tobj_otf,
 		const vmmat44f& mat_ws2ts, const float gi_intensity, const float ao_intensity);
 
 	// D9.3 — session-monotonic VXGI identity token, the SINGLE issuer for the whole DLL. Object ids are

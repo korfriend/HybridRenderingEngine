@@ -136,12 +136,10 @@
 
 #define IDR_RCDATA21050					  21050
 #define IDR_RCDATA21051					  21051
-#define IDR_RCDATA21100					  21100
-#define IDR_RCDATA21101					  21101
+// 21100/21101 retired (KB_SSAO_FM / KB_SSAO_BLUR_FM — SSAO feature removed, v76)
 #define IDR_RCDATA21102					  21102
 
-#define IDR_RCDATA21110					  21110
-#define IDR_RCDATA21111					  21111
+// 21110/21111 retired (KB_SSAO / KB_SSAO_BLUR — SSAO feature removed, v76)
 #define IDR_RCDATA21112					  21112
 
 #define IDR_RCDATA21105					  21105
@@ -277,12 +275,17 @@
 
 // VXGI (Voxel Cone Tracing GI) compute shaders
 #define IDR_RCDATA52000					  52000
-#define IDR_RCDATA52001					  52001
+// 52001 retired (VXGI_InjectLight, single-light — superseded by the multi-light VXGI_InjectLightML,
+// then by the SPOT-capable VXGI_InjectLightMLspot, IDR_RCDATA52010; the id is contract-versioned ON
+// PURPOSE: a DLL rebuild without the new fxc output fails at the .rc = fail-fast, see plan §3.5/§9.2)
 #define IDR_RCDATA52002					  52002
 #define IDR_RCDATA52003					  52003
 // 52004..52006 retired (BlurObscuranceX/Y/Z — superseded by the MAT blur, IDR_RCDATA52008)
 #define IDR_RCDATA52007					  52007
 #define IDR_RCDATA52008					  52008
+// 52009 retired (VXGI_InjectLightML, 48B 3-row light — superseded by the 64B/4-row SPOT layout
+// VXGI_InjectLightMLspot, IDR_RCDATA52010; rev.18 §9.2 atomic rename = stale-CSO fail-fast)
+#define IDR_RCDATA52010					  52010
 
 // MeshPainter Shaders
 #define IDR_RCDATA80001					  80001

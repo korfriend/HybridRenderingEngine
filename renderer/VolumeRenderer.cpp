@@ -1,6 +1,7 @@
 #include "RendererHeader.h"
 #include <time.h>
 #include <utility> // std::pair for the VXGI W2 suppression map
+#include <cmath>   // std::isfinite -- final NaN guard on resolved light poses (black-volume fix)
 
 // Toggle SCULPT_PACKEDBITS upload path. Priority: TILED > TEX3D > default.
 //   USE_SCULPT_BITS_TEX3D_TILED == 1 : upload as Texture3D<R32_UINT> with 4x4x2 = 32-voxel 3D tiles
@@ -35,6 +36,30 @@
 // renderer/RendererHeader.h (F10 dedup with the curved path in CurvedSlicerVR.cpp).
 #define __SRV_PTR ID3D11ShaderResourceView*
 
+// ---- Multi-Light ML-D5: "LastInjectedLightState" ----
+// CPU-side per-light snapshot of what the LAST successful VXGI_InjectLightML Dispatch consumed. Stored on
+// the VOLUME (vobj) under "_vector_VxgiLastInjectedLightState" and compared against the CURRENT candidate
+// set every frame (unified snapshot gate -- replaces the old scalar _uint_VxgiBakedLightType /
+// _vmfloat3_VxgiBakedLightDir / _vmfloat3_VxgiBakedLightPos keys, which no code reads anymore).
+// (rev.18) eff_type is the EFFECTIVE LightType (§9.0a) -- one value that absorbs the base is_pointlight +
+// is_on_camera pair. It is stored INDEPENDENTLY of the resolved pose (rev.8 B2): a fixed<->headlight mode
+// flip is DIRECTIONAL<->AUTO_ATTACH_3DCAM, distinct eff_type values even when the resolved pose happens to
+// match, so the MEANING change re-injects unconditionally (no deadband). cos_inner/cos_outer are the SPOT
+// cone cosines, converted once here from spot_inner/outer_deg (1 == no cone for non-SPOT lights).
+struct VxgiLightState
+{
+	int light_id = 0;
+	uint32_t eff_type = 0;      // effective LightType value (§9.0a)
+	float cos_inner = 1.f;      // SPOT only: cos(inner half-angle); 1 = no cone (non-SPOT)
+	float cos_outer = 1.f;      // SPOT only: cos(outer half-angle); 1 = no cone (non-SPOT)
+	vmfloat3 pos = vmfloat3(0);
+	vmfloat3 dir = vmfloat3(0, 0, -1.f); // CPU-normalized (zero-dir already resolved)
+	vmfloat3 color = vmfloat3(1.f);
+	float intensity = 1.f;
+};
+typedef std::vector<VxgiLightState> VxgiLightStateVec;
+static bool operator==(const VxgiLightState&, const VxgiLightState&) = delete; // compare via the D11 gate only (deadbands)
+
 using namespace grd_helper;
 
 bool RenderVrDLS(VmFnContainer* _fncontainer,
@@ -53,7 +78,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	//clock_t start = clock();
 	
 #pragma region // Parameter Setting //
-	VmIObject* iobj = _fncontainer->fnParams.GetParam("_VmIObject*_RenderOut", (VmIObject*)NULL);
+	fncontainer::VmCamera* _rcam = _fncontainer->fnParams.GetParam("_VmCamera*_RenderCamera", (fncontainer::VmCamera*)NULL);
+	VmIObject* iobj = _rcam ? _rcam->iobj : NULL; // (increment 3) iobj derived from the render-from VmCamera
 	bool isSlicer = _fncontainer->fnParams.GetParam("_bool_IsSlicer", false);
 	int k_value_old = iobj->GetObjParam("_int_NumK", isSlicer? (int)K_NUM_SLICER : (int)K_NUM_3D);
 	int k_value = _fncontainer->fnParams.GetParam("_int_NumK", k_value_old);
@@ -78,7 +104,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	// "_int_NumCallRenders", which is a per-frame pass counter reset at frame start (using it froze the
 	// modulo at a constant, so slow-motion never advanced a bounce).
 	bool vxgi_slowmo = _fncontainer->fnParams.GetParam("_bool_VxgiSlowMotion", false);
-	uint64_t temporal_render_count = (uint64_t)_fncontainer->fnParams.GetParam("_uint64_TemporalRenderCount", (uint64_t)0);
+	uint64_t temporal_render_count = _rcam ? _rcam->temporal_render_count : (uint64_t)0; // (increment) from render VmCamera
 	GpuRes gres_vxgi;
 	bool vxgi_ready = false;
 	ID3D11ShaderResourceView* vxgi_mat_srv_dbg = NULL; // MAT grid (coverage) for the debug gather pass
@@ -110,7 +136,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	float merging_beta = (float)_fncontainer->fnParams.GetParam("_float_MergingBeta", 0.5f);
 	bool is_rgba = _fncontainer->fnParams.GetParam("_bool_IsRGBA", false); // false means bgra
 	bool is_ghost_mode = _fncontainer->fnParams.GetParam("_bool_GhostEffect", false);
-	bool blur_SSAO = _fncontainer->fnParams.GetParam("_bool_BlurSSAO", true);
+	// (v76) "_bool_BlurSSAO" channel retired with SSAO (user directive).
 	bool without_sr = _fncontainer->fnParams.GetParam("_bool_IsFirstRenderer", false);
 	bool test_consoleout = _fncontainer->fnParams.GetParam("_bool_TestConsoleOut", false);
 	auto test_out = [&test_consoleout](const string& _message)
@@ -150,36 +176,34 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	float samplePrecisionLevel = _fncontainer->fnParams.GetParam("_float_SamplePrecisionLevel", 1.0f);
 	float planeThickness = _fncontainer->fnParams.GetParam("_float_PlaneThickness", -1.f);
 
-	VmLight* light = _fncontainer->fnParams.GetParamPtr<VmLight>("_VmLight_LightSource");
-	VmLens* lens = _fncontainer->fnParams.GetParam("_VmLens*_CamLens", (VmLens*)NULL);
+	// (Multi-Light rev.14) the dominant light comes out of sceneActors via "_int_DominantLightId";
+	// NULL = no light = the legacy default path (also the graceful degrade against an old core).
+	VmLight* light = GetDominantLight(_fncontainer);
 	LightSource light_src;
-	GlobalLighting global_lighting;
 	LensEffect lens_effect;
 	if (light) {
-		light_src.is_on_camera = light->is_on_camera;
-		light_src.is_pointlight = light->is_pointlight;
+		light_src.type = light->type; // (rev.18) direct shading renders SPOT as POINT (Q7); cone is VXGI-only
 		light_src.light_pos = light->pos;
 		light_src.light_dir = light->dir;
-		light_src.light_ambient_color = vmfloat3(1.f);
-		light_src.light_diffuse_color = vmfloat3(1.f);
-		light_src.light_specular_color = vmfloat3(1.f);
+		// ML-D10 (rev.12 7R Major 2): the light's color/intensity land on ALL THREE channels
+		// (ambient/diffuse/specular) -- replacing the fixed white. Defaults (white, 1.0) are numerically
+		// identical to the old constants, so existing scenes render the same (V1/V19 parity).
+		const vmfloat3 light_tint = light->light_color * light->intensity;
+		light_src.light_ambient_color = light_tint;
+		light_src.light_diffuse_color = light_tint;
+		light_src.light_specular_color = light_tint;
 
-		global_lighting.apply_ssao = light->effect_ssao.is_on_ssao;
-		global_lighting.ssao_r_kernel = light->effect_ssao.kernel_r;
-		global_lighting.ssao_num_steps = light->effect_ssao.num_steps;
-		global_lighting.ssao_num_dirs = light->effect_ssao.num_dirs;
-		global_lighting.ssao_tangent_bias = light->effect_ssao.tangent_bias;
-		global_lighting.ssao_blur = light->effect_ssao.smooth_filter;
-		global_lighting.ssao_intensity = light->effect_ssao.ao_power;
-		global_lighting.ssao_debug = _fncontainer->fnParams.GetParam("_int_SSAOOutput", (int)0);
+		// (v76) SSAO RETIRED ENTIRELY (user directive): the per-light parameters, the GlobalLighting
+		// struct, the dispatches, hlsl/ssao/SSAO.hlsl and its 4 embedded CSOs are all gone. The
+		// CB_EnvState fields became same-size env_reserved_ssao_* pads, so the b7 layout is unchanged
+		// (that is what keeps unrelated shaders from needing a relayout -- but they DO need a recompile
+		// via BOTH ShaderCompile.bat and ShaderCompile_4_0.bat, see plan 8.6).
 	}
-	if (lens) {
-		lens_effect.apply_ssdof = lens->apply_ssdof;
-		lens_effect.dof_focus_z = lens->dof_focus_z;
-		lens_effect.dof_lens_F = lens->dof_lens_F;
-		lens_effect.dof_lens_r = lens->dof_lens_r;
-		lens_effect.dof_ray_num_samples = lens->dof_ray_num_samples;
-	}
+	// (2026-07-19) SSDOF existing version DEPRECATED (user directive): VmLens dropped its DOF fields;
+	// lens_effect keeps defaults (apply_ssdof=false) so DOF stays off. SSDOF shader/CB left dormant (SSAO pattern).
+
+	// (Multi-Light rev.14) the VXGI light set is no longer a channel: lights are actors in
+	// sceneActors, collected + sorted where they are used (see CollectViewLights at the VXGI block).
 #pragma endregion
 
 
@@ -329,7 +353,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			  ,"VR_SINGLE_CONTEXT_SCULPTBITS_FM_cs_5_0"
 			  ,"XrayFilterComposite_cs_5_0"
 			,"VXGI_VoxelizeVolume_cs_5_0"
-			,"VXGI_InjectLight_cs_5_0"
+			,"VXGI_InjectLightMLspot_cs_5_0" // multi-light + SPOT contract name (plan §3.5/§9.2 fail-fast rename)
 			,"VXGI_Gather_cs_5_0"
 			,"VXGI_Propagate_cs_5_0"
 			,"VXGI_SurfaceGather_cs_5_0"
@@ -465,9 +489,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	GpuRes gres_xray_filter_mask;
 
 	GpuRes gres_fb_k_buffer, gres_fb_counter;
-	GpuRes gres_fb_ao_texs[2], gres_fb_ao_blf_texs[2];
+	// (v76) the SSAO AO frame buffers (gres_fb_ao_texs / _blf / _vr) are gone with the feature -- their
+	// creation was already dead (`if (0)`) and every consumer (ComputeSSAO + the t10/t11/t20 binds) is removed.
 	//GpuRes gres_fb_mip_a_halftexs[2], gres_fb_mip_z_halftexs[2]; // deprecated
-	GpuRes gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex;
 	GpuRes gres_fb_ref_pidx;
 
 	const int num_frags_perpixel = k_value * 3 * buffer_ex;
@@ -476,31 +500,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 	grd_helper::UpdateFrameBuffer(gres_fb_counter, iobj, "RW_COUNTER", RTYPE_TEXTURE2D,
 		D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
-	// AO
-	if (0)
-	{
-		grd_helper::UpdateFrameBuffer(gres_fb_ao_texs[0], iobj, "RW_TEXS_AO_0", RTYPE_TEXTURE2D,
-			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_MIPMAP);
-		grd_helper::UpdateFrameBuffer(gres_fb_ao_texs[1], iobj, "RW_TEXS_AO_1", RTYPE_TEXTURE2D,
-			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_MIPMAP);
-		grd_helper::UpdateFrameBuffer(gres_fb_ao_blf_texs[0], iobj, "RW_TEXS_AO_BLF_0", RTYPE_TEXTURE2D,
-			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_MIPMAP);
-		grd_helper::UpdateFrameBuffer(gres_fb_ao_blf_texs[1], iobj, "RW_TEXS_AO_BLF_1", RTYPE_TEXTURE2D,
-			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_MIPMAP);
-		//grd_helper::UpdateFrameBuffer(gres_fb_mip_a_halftexs[0], iobj, "RW_TEXS_OPACITY_0", RTYPE_TEXTURE2D,
-		//	D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_MIPMAP | UPFB_HALF);
-		//grd_helper::UpdateFrameBuffer(gres_fb_mip_a_halftexs[1], iobj, "RW_TEXS_OPACITY_1", RTYPE_TEXTURE2D,
-		//	D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8G8B8A8_UNORM, UPFB_MIPMAP | UPFB_HALF);
-		//grd_helper::UpdateFrameBuffer(gres_fb_mip_z_halftexs[0], iobj, "RW_TEXS_Z_0", RTYPE_TEXTURE2D,
-		//	D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32G32B32A32_FLOAT, UPFB_MIPMAP | UPFB_HALF);
-		//grd_helper::UpdateFrameBuffer(gres_fb_mip_z_halftexs[1], iobj, "RW_TEXS_Z_1", RTYPE_TEXTURE2D,
-		//	D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32G32B32A32_FLOAT, UPFB_MIPMAP | UPFB_HALF);
-
-		grd_helper::UpdateFrameBuffer(gres_fb_ao_vr_tex, iobj, "RW_TEX_AO_VR", RTYPE_TEXTURE2D,
-			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8_UNORM, UPFB_MIPMAP);
-		grd_helper::UpdateFrameBuffer(gres_fb_ao_vr_blf_tex, iobj, "RW_TEX_AO_VR_BLF", RTYPE_TEXTURE2D,
-			D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R8_UNORM, UPFB_MIPMAP);
-	}
+	// (v76) the dead `if (0)` SSAO AO frame-buffer creation block (RW_TEXS_AO_* / RW_TEX_AO_VR*) lived
+	// here -- removed with the feature.
 
 	if (mode_OIT == MFR_MODE::DYNAMIC_FB || mode_OIT == MFR_MODE::DYNAMIC_KB)
 		grd_helper::UpdateFrameBuffer(gres_fb_ref_pidx, iobj, "BUFFER_RW_REF_PIDX_BUF", RTYPE_BUFFER, D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS, DXGI_FORMAT_R32_UINT, 0);
@@ -722,11 +723,11 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	uint32_t num_grid_x = __BLOCKSIZE == 1 ? fb_size_cur.x : (uint32_t)ceil(fb_size_cur.x / (float)__BLOCKSIZE);
 	uint32_t num_grid_y = __BLOCKSIZE == 1 ? fb_size_cur.y : (uint32_t)ceil(fb_size_cur.y / (float)__BLOCKSIZE);
 
-	VmCObject* cam_obj = iobj->GetCameraObject();
+	fncontainer::VmCamera* cam_obj = _rcam; // (1.70) VmLens dropped; render VmCamera IS the camera // (increment: lens absorption) cached lens, == the old iobj->GetCameraObject(); set by MakeCameraRes on the render VmCamera
 	vmmat44 dmatWS2CS, dmatCS2PS, dmatPS2SS;
 	vmmat44 dmatSS2PS, dmatPS2CS, dmatCS2WS;
-	cam_obj->GetMatrixWStoSS(&dmatWS2CS, &dmatCS2PS, &dmatPS2SS);
-	cam_obj->GetMatrixSStoWS(&dmatSS2PS, &dmatPS2CS, &dmatCS2WS);
+	dmatWS2CS = cam_obj->mat_ws2cs; dmatCS2PS = cam_obj->mat_cs2ps; dmatPS2SS = cam_obj->mat_ps2ss;
+	dmatSS2PS = cam_obj->mat_ss2ps; dmatPS2CS = cam_obj->mat_ps2cs; dmatCS2WS = cam_obj->mat_cs2ws;
 	vmmat44 dmatWS2PS = dmatWS2CS * dmatCS2PS;
 	vmmat44f matWS2CS = dmatWS2CS;
 	vmmat44f matWS2PS = dmatWS2PS;
@@ -755,8 +756,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	SET_CBUFFERS(0, 1, &cbuf_cam_state);
 
 	CB_EnvState cbEnvState;
-	grd_helper::SetCb_Env(cbEnvState, cam_obj, light_src, global_lighting, lens_effect);
-	cbEnvState.env_flag |= 0x2;
+	grd_helper::SetCb_Env(cbEnvState, cam_obj, light_src, lens_effect);
+	// (v76) `env_flag |= 0x2` (volume G-buffer for SSAO) retired -- only the removed SSAO.hlsl read bit1.
 	D3D11_MAPPED_SUBRESOURCE mappedResEnvState;
 	dx11DeviceImmContext->Map(cbuf_env_state, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResEnvState);
 	CB_EnvState* cbEnvStateData = (CB_EnvState*)mappedResEnvState.pData;
@@ -801,7 +802,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	psoManager->GpuProfile("VR Begin");
 
 	// Initial Setting of Frame Buffers //
-	bool is_performed_ssao = false;
+	// (v76) is_performed_ssao flag retired with SSAO.
 
 	int vr_render_count = 0;
 	for (VmActor* actor : dvr_volumes)
@@ -809,6 +810,17 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		bool is_last_dvr = vr_render_count == dvr_volumes.size() - 1;
 		VmVObjectVolume* vobj = (VmVObjectVolume*)actor->GetGeometryRes();
 		VolumeData* vol_data = vobj->GetVolumeData();
+
+		// (rev.16, user directive) VXGI is a SCENE-level field. Its STATE (the ~17 ObjParam keys) hangs on
+		// the scene state object, and its GRIDS key on scene_id -- NOT on vobj, because a vobj is a
+		// resource that can live in several scenes at once, so a vobj anchor cross-contaminated them.
+		// vxgi_anchor = where VXGI ObjParams live; vxgi_grid_src = the grid GpuRes src_id.
+		// Fallback to vobj/vobj-id if the core did not send the channels -- but note the v76 ABI handshake
+		// (GpuManager) refuses a version-mismatched renderer outright, so this fallback is belt-and-braces.
+		VmObject* vxgi_scene_state_obj = (VmObject*)_fncontainer->fnParams.GetParam("_VmObject*_VxgiSceneState", (void*)NULL);
+		const int vxgi_scene_id = _fncontainer->fnParams.GetParam("_int_SceneId", (int)0);
+		VmObject* const vxgi_anchor = vxgi_scene_state_obj ? vxgi_scene_state_obj : (VmObject*)vobj;
+		const int vxgi_grid_src = (vxgi_scene_state_obj && vxgi_scene_id != 0) ? vxgi_scene_id : vobj->GetObjectID();
 
 		// note that the actor is visible (already checked)
 #pragma region Actor Parameters
@@ -878,7 +890,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 #pragma endregion
 
 #pragma region GPU resource updates
-		VmObject* tobj_otf = (VmObject*)actor->GetAssociateRes("OTF"); // essential!
+		VmObject* tobj_otf = (VmObject*)actor->GetAssociateRes(isSlicer ? "MAPTABLE" : "OTF"); // essential!
 		if (is_xray_mode) {
 			VmObject* tobj_windowing = (VmObject*)actor->GetAssociateRes("WINDOWING");
 			if (tobj_windowing) 
@@ -1267,19 +1279,60 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		// camera-dependent (headlight), so letting it bake would flip the content stamp against the 3D
 		// builder every frame once the grid is vobj-shared (§2-D1 ping-pong). Slicers are pure consumers
 		// (Phase 2+); the field they read is keyed on the VOLUME (vobj), not on any one view (iobj).
-		const bool vxgi_build = vxgi_on && is_last_dvr && !is_xray_mode && !isSlicer;
+		//
+		// WHICH volume gets VXGI is a SCENE-level decision (first spec, user decision 2026-07-17:
+		// exactly ONE volume actor per scene may have VXGI), so core chooses it once and forwards
+		// "_int_VxgiActorId". It must NOT be re-derived from is_last_dvr here: that is "the last DVR
+		// volume of THIS VIEW", taken from a per-view (hidden/visible) filtered list, so two views could
+		// target different actors -- and two actors sharing one volume resource would then destroy and
+		// re-create each other's grid every frame, because the resource key (vobj, res_name) has no room
+		// for a second actor's grid. One scene-level answer removes that by construction.
+		// Absent channel (-1) = a core older than v76 -> fall back to the legacy per-view rule.
+		const int vxgi_scene_actor_id = _fncontainer->fnParams.GetParam("_int_VxgiActorId", (int)-1);
+		const bool vxgi_is_scene_vxgi_actor = (vxgi_scene_actor_id < 0)
+			? is_last_dvr                             // legacy core: previous behaviour
+			: (actor->actorId == vxgi_scene_actor_id);
+		const bool vxgi_build = vxgi_on && vxgi_is_scene_vxgi_actor && !is_xray_mode && !isSlicer;
 		if (vxgi_build)
 		{
+			// SCENE-level resolution. VXGI is ONE field per scene (rev.15/16), so its grid has ONE
+			// resolution. `_int_VxgiResolution` is now sourced from SceneParameters (SetVxgiBake), NOT the
+			// per-camera EnableVoxelGI (verification round-3 Major 1 + user directive): core forwards the
+			// SAME value for every view of the scene, so all views request the same grid size and no view
+			// resizes (release+recreate) another's grid. The destructive pre-lease churn a per-camera
+			// resolution used to cause (128 view vs 256 view of one scene) is gone at the source.
 			const uint32_t vxgi_R = (uint32_t)(vxgi_resolution > 0 ? vxgi_resolution : 128);
 			GpuRes gres_vxgi_mat, gres_vxgi_ping, gres_vxgi_direct, gres_vxgi_surf;
-			// Grids keyed on the VOLUME (vobj), not the view (iobj): the field is physically one thing per
-			// volume and must be findable by a slicer view rendering to a DIFFERENT iobj (§2-D2). For a single
-			// 3D view this is behavior-neutral — one iobj maps to one vobj, so the resource identity is the same.
-			grd_helper::UpdateVoxelGrid(gres_vxgi_mat, vobj, "VXGI_GRID_MAT", vxgi_R, DXGI_FORMAT_R16G16B16A16_FLOAT, true); // mips: inject's light march LODs through it
-			grd_helper::UpdateVoxelGrid(gres_vxgi, vobj, "VXGI_VOXEL_GRID", vxgi_R, DXGI_FORMAT_R16G16B16A16_FLOAT, true); // mip chain
-			grd_helper::UpdateVoxelGrid(gres_vxgi_ping, vobj, "VXGI_GRID_PING", vxgi_R, DXGI_FORMAT_R16G16B16A16_FLOAT);
-			grd_helper::UpdateVoxelGrid(gres_vxgi_direct, vobj, "VXGI_GRID_DIRECT", vxgi_R, DXGI_FORMAT_R16G16B16A16_FLOAT); // stable diffusion source
-			grd_helper::UpdateVoxelGrid(gres_vxgi_surf, vobj, "VXGI_GRID_SURF", vxgi_R, DXGI_FORMAT_R16G16B16A16_FLOAT); // Part C surface cone term
+			// (rev.16) Grids keyed on the SCENE (vxgi_grid_src = scene_id), not the vobj: a vobj is a
+			// resource shared across scenes, so a vobj key cross-contaminated them. A slicer consumer of the
+			// same scene finds them by the same scene id (its iobj differs, the scene id does not). The
+			// per-scene single-VXGI-volume spec (rev.15) means one scene = one grid set. The mat stamp below
+			// still folds actor->actorId, so if the scene's VXGI target actor changes (min-id actor removed)
+			// the fresh target re-bakes.
+			// ATOMIC recreate/failure detection (verification round-1 Major 1): any (re)generated grid has
+			// UNDEFINED contents, so the published bake meta no longer describes what t8/t9 would bind --
+			// FieldReady must drop RIGHT HERE, before the D11 gate / preflight / any consume path runs.
+			// Otherwise: recreate -> preflight failure -> LoadVxgiConsumerCb (whose content key carries no
+			// actor id / grid resolution) can succeed -> the consumer binds the fresh, never-baked grids as
+			// "the previous bake" -- exactly what rev.9/V10 forbid. All 5 creations are checked; a failed
+			// generation additionally blocks the owner body below (preflight reason 3).
+			bool vxgi_grid_recreated = false;
+			bool vxgi_grids_ok = true;
+			{
+				bool vxgi_rec = false;
+				vxgi_grids_ok &= grd_helper::UpdateVoxelGrid(gres_vxgi_mat, vxgi_grid_src, "VXGI_GRID_MAT", vxgi_R, DXGI_FORMAT_R16G16B16A16_FLOAT, true, &vxgi_rec); vxgi_grid_recreated |= vxgi_rec; // mips: inject's light march LODs through it
+				vxgi_grids_ok &= grd_helper::UpdateVoxelGrid(gres_vxgi, vxgi_grid_src, "VXGI_VOXEL_GRID", vxgi_R, DXGI_FORMAT_R16G16B16A16_FLOAT, true, &vxgi_rec); vxgi_grid_recreated |= vxgi_rec; // mip chain
+				vxgi_grids_ok &= grd_helper::UpdateVoxelGrid(gres_vxgi_ping, vxgi_grid_src, "VXGI_GRID_PING", vxgi_R, DXGI_FORMAT_R16G16B16A16_FLOAT, false, &vxgi_rec); vxgi_grid_recreated |= vxgi_rec;
+				vxgi_grids_ok &= grd_helper::UpdateVoxelGrid(gres_vxgi_direct, vxgi_grid_src, "VXGI_GRID_DIRECT", vxgi_R, DXGI_FORMAT_R16G16B16A16_FLOAT, false, &vxgi_rec); vxgi_grid_recreated |= vxgi_rec; // stable diffusion source
+				vxgi_grids_ok &= grd_helper::UpdateVoxelGrid(gres_vxgi_surf, vxgi_grid_src, "VXGI_GRID_SURF", vxgi_R, DXGI_FORMAT_R16G16B16A16_FLOAT, false, &vxgi_rec); vxgi_grid_recreated |= vxgi_rec; // Part C surface cone term
+			}
+			if (vxgi_grid_recreated || !vxgi_grids_ok)
+			{
+				// Retract the published bake NOW. Idempotent for a true first build (nothing published yet);
+				// for an actor/resolution swap the same triggers also move the MAT stamp, so a successful
+				// preflight re-bakes the fresh set this very frame and republishes FieldReady=true.
+				vxgi_anchor->SetObjParam("_bool_VxgiFieldReady", false);
+			}
 			vxgi_mat_srv_dbg = (ID3D11ShaderResourceView*)gres_vxgi_mat.alloc_res_ptrs[DTYPE_SRV];
 			vxgi_surf_srv_dbg = (ID3D11ShaderResourceView*)gres_vxgi_surf.alloc_res_ptrs[DTYPE_SRV];
 			vxgi_ready = true;
@@ -1412,54 +1465,216 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			// CONTENT stamp: volume voxels + OTF (transfer function) + the RESOLVED light state (post headlight
 			// resolution, so a camera-locked light correctly retriggers, while pure camera moves do not).
 			auto f2u64 = [](float f) { return (uint64_t)(*(uint32_t*)&f); };
-			// D11 — TYPE-AWARE LIGHT DEADBAND (replaces the bit-exact light hash). InjectLight consumes only
-			// the light TYPE (env_flag bit0) plus ONE component: position for a point light, direction for a
-			// directional light. Comparing to the last LATCHED bake state (not a raw hash) makes the deadband
-			// center "what was actually baked", so: (1) a directional PAN (position-only, e.g. a headlight
-			// camera pan) no longer re-bakes; (2) sub-epsilon mantissa noise from the per-frame direction
-			// normalize is ignored; (3) SSAO/debug bits packed elsewhere in env_flag (which the bake never
-			// reads) stop dragging the field. The content stamp carries a LIGHT EPOCH that ticks 1:1 with real
-			// re-injects, so the split-stamp light-only (preserve-AO) path is unchanged. The latch happens on
-			// THIS inject frame, not at convergence, so a still-converging light-only rebuild cannot re-fire
-			// the same change every frame (residual is always <= eps). Only bit0 of env_flag is bake-relevant.
-			const float* lposf = (const float*)&cbEnvState.pos_light_ws;
-			const float* ldirf = (const float*)&cbEnvState.dir_light_ws;
-			const uint32_t vxgi_cur_ltype = cbEnvState.env_flag & 0x1u;                 // 1 = point, 0 = directional
-			const vmfloat3 vxgi_cur_ldir(ldirf[0], ldirf[1], ldirf[2]);                 // normalized upstream
-			const vmfloat3 vxgi_cur_lpos(lposf[0], lposf[1], lposf[2]);
-			const float VXGI_LIGHT_DIR_EPS_COS = 1.f - cosf(0.1f * 3.14159265f / 180.f); // 0.1deg angle deadband
-			const float VXGI_LIGHT_POS_EPS = vmmath::fLengthVector(&cbVxgi.grid_axis_ws) * 1e-3f; // relative to dataset extent
-			const uint64_t vxgi_prev_light_epoch = vobj->GetObjParam<uint64_t>("_uint64_VxgiLightEpoch", (uint64_t)0);
-			bool vxgi_light_changed;
+
+			// ================= Multi-Light ML-D5 — CANDIDATE light set (this view's resolve) =================
+			// (rev.14) The set = THIS VIEW's LIGHT actors out of sceneActors -- core already applied the
+			// per-view hidden_actors and scene-level visible filters, exactly as for a geometry actor
+			// (Q3's scene-global membership is retired: a light hidden in this view is out of this view's
+			// GI). CollectViewLights sorts by actorId (sceneActors is unordered -> the cap and the
+			// snapshot compare would otherwise be nondeterministic, V13), then R10" caps at
+			// VXGI_MAX_LIGHTS: min-id top 8 contribute, the rest contribute nothing (dominant or not).
+			//
+			// POSE (ML-D9, rev.14 split): core resolved the VIEW-INDEPENDENT half (STATIONARY pos/dir from
+			// matOS2WS, written on the actor). Here we apply the VIEW-DEPENDENT half: CAMERA_ATTACHED is
+			// honoured ONLY for this view's dominant; any other light carrying it is interpreted as
+			// STATIONARY (W-L4 below) -- its stored type is never touched (demotion is interpretation only).
+			// dir gets a CPU normalize with a (0,0,-1) fallback on zero (V11).
+			vmfloat3 vxgi_cam_pos, vxgi_cam_dir;
+			vxgi_cam_pos = cam_obj->pos_cam; vxgi_cam_dir = cam_obj->view_cam;
+			std::vector<VmLight*> vxgi_view_lights;
+			CollectViewLights(_fncontainer, vxgi_view_lights);
+			const int vxgi_dominant_id = _fncontainer->fnParams.GetParam("_int_DominantLightId", (int)0);
+			const int vxgi_view_light_count = (int)vxgi_view_lights.size(); // pre-cap (W-L1 reports this)
+			VxgiLightStateVec vxgi_cur_lights;
+			std::vector<int> vxgi_wl4_demoted_ids; // non-dominant CAMERA_ATTACHED -> demoted (W-L4)
 			{
-				const uint32_t* baked_type_p = vobj->GetObjParamPtr<uint32_t>("_uint_VxgiBakedLightType");
-				if (baked_type_p == NULL)
-					vxgi_light_changed = true; // first bake: nothing latched yet (self-evident)
-				else
+				const int vxgi_n_lights = min(vxgi_view_light_count, (int)VXGI_MAX_LIGHTS);
+				vxgi_cur_lights.reserve(vxgi_n_lights);
+				for (int li = 0; li < vxgi_n_lights; li++)
 				{
-					const vmfloat3 baked_dir = vobj->GetObjParam<vmfloat3>("_vmfloat3_VxgiBakedLightDir", vmfloat3(0.f, 0.f, 1.f));
-					const vmfloat3 baked_pos = vobj->GetObjParam<vmfloat3>("_vmfloat3_VxgiBakedLightPos", vmfloat3(0.f, 0.f, 0.f));
-					const bool type_changed = (*baked_type_p != vxgi_cur_ltype);
-					bool geo_changed;
-					if (vxgi_cur_ltype != 0u) // point: position only, direction ignored
+					const VmLight* vl = vxgi_view_lights[li];
+					VxgiLightState st;
+					st.light_id = vl->actorId;
+					const bool is_dominant = (vl->actorId == vxgi_dominant_id);
+					// EFFECTIVE type (§9.0a): AUTO_ATTACH_3DCAM stays a camera-following headlight ONLY for the
+					// view's dominant; any other light carrying it is interpreted as DIRECTIONAL STATIONARY
+					// (+ W-L4 below). The stored vl->type is NEVER mutated -- demotion is interpretation only.
+					LightType eff = vl->type;
+					if (vl->type == LightType::AUTO_ATTACH_3DCAM && !is_dominant)
+						eff = LightType::DIRECTIONAL;
+					st.eff_type = (uint32_t)eff;
+					const bool honour_camera = (eff == LightType::AUTO_ATTACH_3DCAM); // == old (is_on_camera && is_dominant)
+					if (honour_camera) { st.pos = vxgi_cam_pos; st.dir = vxgi_cam_dir; }
+					else               { st.pos = vl->pos;      st.dir = vl->dir; } // core-resolved STATIONARY (SPOT: both used)
+					// FINAL NaN GUARD: a non-finite pos/dir would make the cone march produce NaN, and one
+					// NaN light term turns light_sum (hence the whole DIRECT grid) into NaN -> black volume.
+					// Core already guards the degenerate look-at, but never trust an unbounded input here.
+					if (!std::isfinite(st.pos.x) || !std::isfinite(st.pos.y) || !std::isfinite(st.pos.z)) st.pos = vmfloat3(0.f);
+					const float dlen = vmmath::fLengthVector(&st.dir);
+					st.dir = (dlen < 1e-6f || !std::isfinite(dlen)) ? vmfloat3(0.f, 0.f, -1.f) : st.dir / dlen;
+					// SPOT angle -> cos, converted ONCE (shared by the compare gate and the CB fill). Clamp
+					// inner<=outer<89.9deg so the HLSL smoothstep(cos_outer,cos_inner,..) can never invert (R16).
+					// Non-SPOT keeps cos_inner=cos_outer=1 (cone factor == 1, harmless).
+					if (eff == LightType::SPOT)
 					{
-						const float dx = vxgi_cur_lpos.x - baked_pos.x, dy = vxgi_cur_lpos.y - baked_pos.y, dz = vxgi_cur_lpos.z - baked_pos.z;
-						geo_changed = (dx * dx + dy * dy + dz * dz) > (VXGI_LIGHT_POS_EPS * VXGI_LIGHT_POS_EPS);
+						// (verification Major 2) Guarantee 0 <= inner <= outer <= 89.9 (=> cos_inner >= cos_outer)
+						// for EVERY float input. Order matters: substitute non-finite with a finite default,
+						// clamp OUTER to [0,89.9] FIRST, THEN inner to [0,outer]. (The old code clamped inner
+						// to [0,outer] using an unnormalised outer, so outer=-10 gave both negative and
+						// inner=100/outer=95 left inner>outer -> inverted/NaN cone.)
+						const float DEG2RAD = 3.14159265f / 180.f;
+						float inner = std::isfinite(vl->spot_inner_deg) ? vl->spot_inner_deg : 30.f;
+						float outer = std::isfinite(vl->spot_outer_deg) ? vl->spot_outer_deg : 45.f;
+						outer = std::min(std::max(outer, 0.f), 89.9f);   // outer -> [0, 89.9] FIRST
+						inner = std::min(std::max(inner, 0.f), outer);   // inner -> [0, outer]
+						st.cos_inner = cosf(inner * DEG2RAD);            // cos decreasing on [0,90] => cos_inner >= cos_outer
+						st.cos_outer = cosf(outer * DEG2RAD);
 					}
-					else                      // directional: direction only, position ignored
-					{
-						const float dotv = vxgi_cur_ldir.x * baked_dir.x + vxgi_cur_ldir.y * baked_dir.y + vxgi_cur_ldir.z * baked_dir.z;
-						geo_changed = (1.f - dotv) > VXGI_LIGHT_DIR_EPS_COS;
-					}
-					vxgi_light_changed = type_changed || geo_changed;
+					st.color = vl->light_color;
+					st.intensity = vl->intensity;
+					vxgi_cur_lights.push_back(st);
+					if (vl->type == LightType::AUTO_ATTACH_3DCAM && !is_dominant)
+						vxgi_wl4_demoted_ids.push_back(vl->actorId); // interpretation-only demotion
 				}
 			}
-			// Tentative epoch for the content stamp. The LATCH (writing baked light + epoch onto the vobj) is
-			// deferred to the owner path past the D10 gate: a blocked non-owner computes the SAME epoch here for
-			// its own stamp compare, but must NOT commit it — that would move the OWNER's deadband center.
+
+			// ================= D10 owner PRE-JUDGMENT — moved BEFORE the light gate (rev.8 B1) =================
+			// SINGLE computation order: (1) ledger + bounce/target read, (2) liveness probe + forfeit
+			// judgment, (3) that result selects the D11 comparison MODE, (4) light epoch / stamps / rebuild,
+			// (5) the D10 acquisition decision REUSES these very values -- no re-probe, no second clock read
+			// (two judgments disagreeing about the same owner is a state we refuse to be able to reach).
+			// The field is vobj-owned (D2); the right to RUN the rebuild process is leased to ONE iobj at a
+			// time ("in progress" is DERIVED as bounce < published target -- no separate flag). A single 3D
+			// view acquires on frame 0 and stays owner forever, reducing all of this to the old behavior.
+			int vxgi_bounce = vxgi_anchor->GetObjParam<int>("_int_VxgiBounce", (int)0); // grid state -> vobj (mirrored to iobj below for CheckRenderConvergence)
+			const uint64_t vxgi_owner_gen = vxgi_anchor->GetObjParam<uint64_t>("_uint64_VxgiOwnerGen", (uint64_t)0);
+			const int vxgi_owner_iobj = vxgi_anchor->GetObjParam<int>("_int_VxgiOwnerIobjId", (int)-1);
+			const uint64_t vxgi_owner_seq = vxgi_anchor->GetObjParam<uint64_t>("_uint64_VxgiRebuildSeq", (uint64_t)0);
+			const uint64_t vxgi_owner_ms = vxgi_anchor->GetObjParam<uint64_t>("_uint64_VxgiOwnerLastMs", (uint64_t)0);
+			const int vxgi_shared_target = vxgi_anchor->GetObjParam<int>("_int_VxgiSharedTarget", (int)0);
+			const bool vxgi_i_am_owner = (vxgi_owner_gen != 0 && vxgi_owner_gen == vxgi_own_gen);
+			const bool vxgi_no_owner = (vxgi_owner_gen == 0);
+			const bool vxgi_in_progress = (vxgi_owner_gen != 0) && (vxgi_bounce < vxgi_shared_target);
+			// Owner LIVENESS — GpuRes existence probe (D10, 1st line of defense: deterministic + immediate).
+			// Every rendered view leaves an iobj-keyed GpuRes and core frees them all on object delete, so "no
+			// GpuRes for that id" == the owner is gone. Skipped when the owner is me (trivially alive, cost 0).
+			bool vxgi_owner_alive = true;
+			if (!vxgi_no_owner && !vxgi_i_am_owner)
+			{
+				std::vector<GpuRes> vxgi_owner_probe;
+				vxgi_owner_alive = (gpu_manager->UpdateGpuResourcesBySrcID(vxgi_owner_iobj, vxgi_owner_probe) > 0);
+			}
+			// Owner TIMEOUT - 2nd line of defense (5s wall clock, user-set). Catches what the probe cannot: a
+			// live-but-dormant owner (pane hidden, process still "in progress") or an id-reuse false-positive.
+			// Wall clock (GetTickCount64, monotonic ms since boot), NOT the frame counter - the frame counter
+			// advances on OTHER views' renders too, so a frame threshold mis-judges by render cadence. Evaluated
+			// only while a foreign owner is in progress.
+			const uint64_t VXGI_OWNER_TIMEOUT_MS = 5000ull;
+			const uint64_t vxgi_now_ms = (uint64_t)GetTickCount64();
+			const bool vxgi_owner_timed_out = (!vxgi_no_owner && !vxgi_i_am_owner && vxgi_owner_alive
+				&& vxgi_in_progress && (vxgi_now_ms - vxgi_owner_ms) > VXGI_OWNER_TIMEOUT_MS);
+			// D11 comparison MODE (rev.7 non-owner rule): while a LIVE foreign owner holds the lease, the
+			// baked headlight geometry is THE OWNER's camera resolve -- this view re-resolving it differently
+			// is a VIEW difference, not a scene change, so the geometry term (4) is excluded for
+			// camera-attached lights. Membership/type/mode/color terms always compare (any view can see a
+			// real scene change). Lease free / dead / timed out -> full comparison (takeover semantics: the
+			// next owner's first inject legitimately re-resolves the headlight with its own camera).
+			const bool vxgi_foreign_live_lease = (!vxgi_no_owner && !vxgi_i_am_owner && vxgi_owner_alive && !vxgi_owner_timed_out);
+
+			// ================= D11 — UNIFIED SNAPSHOT light gate (replaces the scalar type/dir/pos keys) =================
+			// Compare the candidate set against "_vector_VxgiLastInjectedLightState" (what the last successful
+			// InjectLightML Dispatch actually consumed). Terms, in order:
+			//   (1) id sequence (membership/order -- both sides are min-id ascending)
+			//   (2)+(3) per-pair EFFECTIVE eff_type flip -- UNCONDITIONAL, no deadband (a MEANING change;
+			//       one LightType value absorbs the old is_pointlight + is_on_camera pair; a W-L4-demoted
+			//       headlight arrives already resolved as DIRECTIONAL STATIONARY)
+			//   (4) type-keyed geometry deadband (POINT pos eps; SPOT pos eps AND axis 0.1 deg; DIRECTIONAL /
+			//       AUTO_ATTACH_3DCAM dir 0.1 deg)
+			//   (5) color/intensity EXACT compare + SPOT cone cos_inner/cos_outer EXACT (discrete -- no eps)
+			// The deadband center stays "what was actually baked": a still-converging light-only rebuild
+			// cannot re-fire the same change every frame (residual <= eps), sub-eps normalize noise is
+			// ignored, and a directional PAN still costs nothing.
+			//
+			// (rev.14) WHO evaluates this: ONLY the owner, or a view facing a free/dead/timed-out lease.
+			// While a live foreign owner holds the lease, THE OWNER'S VIEW IS THE CANONICAL LIGHT STATE of
+			// the shared field, so a non-owner does not compare at all. rev.7 applied that principle to
+			// camera-attached GEOMETRY only; with Q3 retired, membership is per-view too, so leaving the
+			// membership/type terms enabled for non-owners would turn a per-view hidden difference straight
+			// back into the cycle alternation Q3 existed to prevent. Real content changes are always seen
+			// BY THE OWNER, and a vanished owner returns everyone to full comparison (forfeit rules below),
+			// so nothing is missed.
+			const float VXGI_LIGHT_DIR_EPS_COS = 1.f - cosf(0.1f * 3.14159265f / 180.f); // 0.1deg angle deadband
+			const float VXGI_LIGHT_POS_EPS = vmmath::fLengthVector(&cbVxgi.grid_axis_ws) * 1e-3f; // relative to dataset extent
+			const uint64_t vxgi_prev_light_epoch = vxgi_anchor->GetObjParam<uint64_t>("_uint64_VxgiLightEpoch", (uint64_t)0);
+			// SCENE-GLOBAL light generation (core, view-independent). This is what lets a non-owner
+			// tell a REAL scene change from its own view's interpretation. Absent (old core) -> 0.
+			const uint64_t vxgi_scene_light_gen = (uint64_t)_fncontainer->fnParams.GetParam("_uint64_SceneLightGen", (uint64_t)0);
+			const uint64_t vxgi_baked_light_gen = vxgi_anchor->GetObjParam<uint64_t>("_uint64_VxgiBakedSceneLightGen", (uint64_t)0);
+			bool vxgi_light_changed;
+			if (vxgi_foreign_live_lease)
+			{
+				// NON-OWNER under a live lease (rev.14 + round-2 Major 4 fix).
+				// It must NOT compare the resolved per-light state: its hidden set and its camera give a
+				// legitimately different answer than the owner's, and turning that into a rebuild want is
+				// exactly the cycle alternation the lease exists to prevent.
+				// But it must NOT go blind either. rev.14 first suppressed the comparison ENTIRELY, which
+				// regressed a case rev.13 handled: when the owner's pane stops rendering (converged, so
+				// core's skip gate never re-enters it -- or the app simply stopped drawing that view) its
+				// GpuRes stays alive, so the lease is never forfeited (dead-probe needs a dead iobj;
+				// timeout only applies to an IN-PROGRESS owner). Light edits then reached nobody: the
+				// non-owner ignored them, the owner never ran -> the shared GI stayed stale forever
+				// (V4/V19 broken).
+				// The scene-global generation restores the "completed-handover" path (D10 :1711-1717
+				// acquires from a COMPLETE owner) for real changes ONLY: it is folded by core over EVERY
+				// light actor of the scene regardless of any view's hidden set, so it moves for
+				// add/delete/visible/colour/intensity/pose and stays put for pure view differences.
+				vxgi_light_changed = (vxgi_scene_light_gen != vxgi_baked_light_gen);
+			}
+			else
+			{
+				const VxgiLightStateVec* vxgi_baked_lights = vxgi_anchor->GetObjParamPtr<VxgiLightStateVec>("_vector_VxgiLastInjectedLightState");
+				if (vxgi_baked_lights == NULL)
+					vxgi_light_changed = true; // first bake: nothing latched yet (self-evident)
+				else if (vxgi_baked_lights->size() != vxgi_cur_lights.size())
+					vxgi_light_changed = true; // (1) membership count
+				else
+				{
+					bool changed = false;
+					for (size_t li = 0; li < vxgi_cur_lights.size() && !changed; li++)
+					{
+						const VxgiLightState& c = vxgi_cur_lights[li];
+						const VxgiLightState& b = (*vxgi_baked_lights)[li];
+						if (c.light_id != b.light_id) { changed = true; break; }           // (1) membership/order
+						if (c.eff_type != b.eff_type) { changed = true; break; } // (2)+(3) unified type/pose-preset flip
+						if (c.color.x != b.color.x || c.color.y != b.color.y || c.color.z != b.color.z
+							|| c.intensity != b.intensity) { changed = true; break; }      // (5) exact
+						if (c.eff_type == (uint32_t)LightType::SPOT)                        // (5) SPOT cone angles -- exact
+							if (c.cos_inner != b.cos_inner || c.cos_outer != b.cos_outer) { changed = true; break; }
+						// (4) type-keyed geometry deadband: POINT -> pos; SPOT -> pos AND axis; DIRECTIONAL /
+						// AUTO_ATTACH_3DCAM -> dir. (Same eps as before; only the SPOT branch is new.)
+						const bool c_positional = (c.eff_type == (uint32_t)LightType::POINT) || (c.eff_type == (uint32_t)LightType::SPOT);
+						const bool c_spot       = (c.eff_type == (uint32_t)LightType::SPOT);
+						if (c_positional) // point/spot: position matters (cone apex)
+						{
+							const float dx = c.pos.x - b.pos.x, dy = c.pos.y - b.pos.y, dz = c.pos.z - b.pos.z;
+							if ((dx * dx + dy * dy + dz * dz) > (VXGI_LIGHT_POS_EPS * VXGI_LIGHT_POS_EPS)) changed = true;
+						}
+						if (!c_positional || c_spot) // directional/headlight OR spot: axis matters
+						{
+							const float dotv = c.dir.x * b.dir.x + c.dir.y * b.dir.y + c.dir.z * b.dir.z;
+							if ((1.f - dotv) > VXGI_LIGHT_DIR_EPS_COS) changed = true;
+						}
+					}
+					vxgi_light_changed = changed;
+				}
+			}
+			// Tentative epoch for the content stamp. The COMMIT (LastInjectedLightState + epoch onto the vobj)
+			// happens immediately AFTER the InjectLightML Dispatch (ML-D5 commit rule): a blocked non-owner or
+			// a preflight-failed view computes the SAME epoch here for its own stamp compare, but must NOT
+			// commit it — that would move the OWNER's deadband center / fake a Dispatch that never happened.
 			uint64_t vxgi_light_epoch = vxgi_prev_light_epoch;
 			if (vxgi_light_changed)
-				vxgi_light_epoch = vxgi_prev_light_epoch + 1; // ticks 1:1 with real re-injects (committed by the owner)
+				vxgi_light_epoch = vxgi_prev_light_epoch + 1; // ticks 1:1 with light-triggered InjectLight Dispatches
 			// _int_VxgiRestart: app-driven counter (debug UI) folded into the stamp so a button press restarts
 			// the diffusion from bounce 0 without touching the actual content.
 			// An HLSL hot-reload rides the SAME channel (high bits, so it cannot collide with the app's 32-bit
@@ -1538,7 +1753,11 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			//  signal reaches content_stamp through mat_stamp; vxgi_restart carries it for the re-seed compare.)
 			const uint64_t vxgi_mat_stamp = vobj->GetContentUpdateTime()
 				^ (tobj_otf->GetContentUpdateTime() << 1) ^ ((uint64_t)vxgi_R << 48) ^ vxgi_medium_stamp
-				^ (vxgi_hlsl_reload_gen << 24);
+				^ (vxgi_hlsl_reload_gen << 24)
+				// (Multi-Light ML-D11 invariant) the bake-target ACTOR is part of the grid identity: an actor
+				// swap on a shared vobj re-created the set in UpdateVoxelGrid above (fresh, empty grids), and
+				// this term makes the same swap move the MAT stamp so the fresh set is re-baked this frame.
+				^ ((uint64_t)(uint32_t)actor->actorId * 0x9E3779B97F4A7C15ull);
 			const uint64_t vxgi_content_stamp = vxgi_mat_stamp ^ (vxgi_light_epoch << 2) ^ (vxgi_restart << 40)
 				^ (f2u64(vxgi_scatter_gain) << 6) // gain change re-converges the diffusion (light-side)
 				// Part C knobs fold in too (stale-prevention, plan §4.5): once converged, propagate skips —
@@ -1560,7 +1779,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			const int vxgi_bounce_derived = max(1, min(64, (int)ceil(log(VXGI_CONV_RESIDUAL) / log(vxgi_gain_clamped))));
 			const int vxgi_bounce_test = _fncontainer->fnParams.GetParam("_int_VxgiBounceTarget", (int)0);
 			const int VXGI_BOUNCE_TARGET = (vxgi_bounce_test > 0) ? max(1, min(64, vxgi_bounce_test)) : vxgi_bounce_derived;
-			int vxgi_bounce = vobj->GetObjParam<int>("_int_VxgiBounce", (int)0); // grid state -> vobj (mirrored to iobj below for CheckRenderConvergence)
+			// (vxgi_bounce is read in the D10 pre-judgment block ABOVE the light gate now -- rev.8 B1 order.)
 			const uint32_t vxgi_groups = (uint32_t)ceil(vxgi_R / 8.f);
 			ID3D11ShaderResourceView* vxgi_grid_srv = (ID3D11ShaderResourceView*)gres_vxgi.alloc_res_ptrs[DTYPE_SRV];
 			ID3D11ShaderResourceView* vxgi_mat_srv = (ID3D11ShaderResourceView*)gres_vxgi_mat.alloc_res_ptrs[DTYPE_SRV];
@@ -1618,8 +1837,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				SET_SHADER_RES(9, 1, dx11SRVs_NULL);
 			};
 
-			const uint64_t vxgi_prev_stamp = vobj->GetObjParam<uint64_t>("_uint64_VxgiStamp", (uint64_t)~0ull);
-			const uint64_t vxgi_prev_mat_stamp = vobj->GetObjParam<uint64_t>("_uint64_VxgiMatStamp", (uint64_t)~0ull);
+			const uint64_t vxgi_prev_stamp = vxgi_anchor->GetObjParam<uint64_t>("_uint64_VxgiStamp", (uint64_t)~0ull);
+			const uint64_t vxgi_prev_mat_stamp = vxgi_anchor->GetObjParam<uint64_t>("_uint64_VxgiMatStamp", (uint64_t)~0ull);
 			const bool vxgi_mat_changed = (vxgi_prev_mat_stamp != vxgi_mat_stamp);
 			// A RETRACTED bake must be re-baked even when the content stamp still matches: stamp equality only
 			// says "the inputs did not change", NOT "a valid bake is published". The D3 vxgi-off invalidation
@@ -1631,7 +1850,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			// and re-converges via the normal crossfade. FieldReady=true is republished in the same rebuild
 			// pass, so this cannot self-retrigger.
 			const bool vxgi_rebuild = (vxgi_prev_stamp != vxgi_content_stamp)
-				|| !vobj->GetObjParam<bool>("_bool_VxgiFieldReady", false);
+				|| !vxgi_anchor->GetObjParam<bool>("_bool_VxgiFieldReady", false);
 			// SUSTAINED-EDIT detection, for the surface-gather throttle in the rebuild branch below.
 			// grid_surf is stale the moment ANY rebuild lands (a MAT change moves the surface band itself;
 			// a light change moves the radiance the cones integrated). Propagate composites it (t11) on every
@@ -1659,44 +1878,16 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			// is a real frame index — a 0 default would alias "rebuilt on frame 0" with "never rebuilt" and
 			// mis-read the second frame of a drag that began on frame 0 as a fresh edit (a harmless extra
 			// gather, but the sentinel should not be ambiguous).
-			const uint64_t vxgi_prev_rebuild_frame = vobj->GetObjParam<uint64_t>("_uint64_VxgiRebuildFrame", (uint64_t)~0ull);
+			const uint64_t vxgi_prev_rebuild_frame = vxgi_anchor->GetObjParam<uint64_t>("_uint64_VxgiRebuildFrame", (uint64_t)~0ull);
 			const bool vxgi_edit_sustained = (vxgi_prev_rebuild_frame != (uint64_t)~0ull)
 				&& (temporal_render_count >= vxgi_prev_rebuild_frame)
 				&& (temporal_render_count - vxgi_prev_rebuild_frame) <= 1;
-			// ================= D10 — rebuild PROCESS ownership lease =================
-			// The field is vobj-owned (D2), but the right to RUN the rebuild process (re-bake -> converge) is
-			// held by ONE iobj at a time, so two 3D views with different resolved light cannot flip the shared
-			// field's stamp every frame (ping-pong). "Process" = from a re-bake start until bounce reaches the
-			// target; "in progress" is DERIVED as bounce < the published target — no separate flag, because a
-			// flag that could disagree with bounce is a state we refuse to be able to reach. A single 3D view
-			// acquires on frame 0 and stays owner forever, so all of this reduces to today's behavior exactly.
-			// Ownership state lives on the vobj (same lifetime as the field, D9.2).
-			const uint64_t vxgi_owner_gen = vobj->GetObjParam<uint64_t>("_uint64_VxgiOwnerGen", (uint64_t)0);
-			const int vxgi_owner_iobj = vobj->GetObjParam<int>("_int_VxgiOwnerIobjId", (int)-1);
-			const uint64_t vxgi_owner_seq = vobj->GetObjParam<uint64_t>("_uint64_VxgiRebuildSeq", (uint64_t)0);
-			const uint64_t vxgi_owner_ms = vobj->GetObjParam<uint64_t>("_uint64_VxgiOwnerLastMs", (uint64_t)0);
-			const int vxgi_shared_target = vobj->GetObjParam<int>("_int_VxgiSharedTarget", (int)0);
-			const bool vxgi_i_am_owner = (vxgi_owner_gen != 0 && vxgi_owner_gen == vxgi_own_gen);
-			const bool vxgi_no_owner = (vxgi_owner_gen == 0);
-			const bool vxgi_in_progress = (vxgi_owner_gen != 0) && (vxgi_bounce < vxgi_shared_target);
-			// Owner LIVENESS — GpuRes existence probe (D10, 1st line of defense: deterministic + immediate).
-			// Every rendered view leaves an iobj-keyed GpuRes and core frees them all on object delete, so "no
-			// GpuRes for that id" == the owner is gone. Skipped when the owner is me (trivially alive, cost 0).
-			bool vxgi_owner_alive = true;
-			if (!vxgi_no_owner && !vxgi_i_am_owner)
-			{
-				std::vector<GpuRes> vxgi_owner_probe;
-				vxgi_owner_alive = (gpu_manager->UpdateGpuResourcesBySrcID(vxgi_owner_iobj, vxgi_owner_probe) > 0);
-			}
-			// Owner TIMEOUT - 2nd line of defense (5s wall clock, user-set). Catches what the probe cannot: a
-			// live-but-dormant owner (pane hidden, process still "in progress") or an id-reuse false-positive.
-			// Wall clock (GetTickCount64, monotonic ms since boot), NOT the frame counter - the frame counter
-			// advances on OTHER views' renders too, so a frame threshold mis-judges by render cadence. Evaluated
-			// only while a foreign owner is in progress.
-			const uint64_t VXGI_OWNER_TIMEOUT_MS = 5000ull;
-			const uint64_t vxgi_now_ms = (uint64_t)GetTickCount64();
-			const bool vxgi_owner_timed_out = (!vxgi_no_owner && !vxgi_i_am_owner && vxgi_owner_alive
-				&& vxgi_in_progress && (vxgi_now_ms - vxgi_owner_ms) > VXGI_OWNER_TIMEOUT_MS);
+			// ================= D10 — rebuild PROCESS ownership lease: DECISION =================
+			// The ledger read, liveness probe and timeout judgment were computed ONCE, ABOVE the light gate
+			// (rev.8 B1 single-order rule) -- this decision REUSES those values verbatim; re-probing or
+			// re-reading the clock here could make the two judgments disagree about the same owner.
+			// Ownership state lives on the vobj (same lifetime as the field, D9.2); a single 3D view acquires
+			// on frame 0 and stays owner forever, so all of this reduces to the old behavior exactly.
 			// DECISION. rebuild_needed == vxgi_rebuild (my content stamp != the field's stored stamp). Acquire
 			// ONLY when a rebuild is actually needed AND the lease is free/forfeit; a non-owner that needs no
 			// rebuild is a pure consumer of the shared field (no contention).
@@ -1718,14 +1909,137 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				vxgi_i_own_build = vxgi_acquire;
 			}
 			// else: non-owner, no rebuild needed -> pure consumer (vxgi_i_own_build stays false)
+
+			// ================= ML-D5 PREFLIGHT — lease commit DEFERRED past preflight success (rev.9) =================
+			// Only a view about to run a REBUILD body this frame Maps the light CB (propagate-only frames
+			// read no light CB -- that is what makes this the complete preflight condition). Failure policy:
+			//   * prospective acquirer: commits NO lease state at all (OwnerGen/IobjId/Seq/LastMs untouched)
+			//     -> Seq never increments, owner churn is structurally impossible; any view may retry and the
+			//     FIRST one whose preflight succeeds commits the lease (same semantics as completed-handover).
+			//   * existing owner: keeps its lease untouched (already its own); ONLY an in-progress failure
+			//     refreshes OwnerLastMs so a live, retrying owner cannot be timeout-forfeited mid-process.
+			//   * either way: body skipped, this frame consumes the previous bake (FieldReady path below) or
+			//     the disabled CB -- never a fresh grid bind, never a stamp/epoch/state write.
+			ID3D11Buffer* cbuf_vxgi_lights = NULL;
+			int vxgi_wl3_reason = 0; // 0 = ok, 1 = CB unregistered (creation failed at init), 2 = Map failed, 3 = grid generation failed
+			// Minor fix (verification round-1): re-arm/erase decisions below may only follow an ACTUAL
+			// preflight attempt -- a frame that never tried (non-owner, no rebuild) says nothing about
+			// whether the failure cause is gone, so it must leave the suppression entry untouched.
+			const bool vxgi_preflight_attempted = (vxgi_i_own_build && vxgi_rebuild);
+			if (vxgi_preflight_attempted)
+			{
+				if (!vxgi_grids_ok)
+				{
+					// Major-1 companion: a failed grid generation means the owner body would dispatch into
+					// missing UAVs -- treat as a preflight failure (body skipped; FieldReady already dropped
+					// at the creation site, so this frame's consumption is DISABLED, never a fresh bind).
+					vxgi_wl3_reason = 3;
+				}
+				else
+				{
+				cbuf_vxgi_lights = psoManager->try_get_cbuf("CB_VxgiLights");
+				if (cbuf_vxgi_lights == NULL)
+				{
+					vxgi_wl3_reason = 1;
+				}
+				else
+				{
+					CB_VxgiLights cbVxgiLights; // ZERO_SET
+					cbVxgiLights.light_count = (uint32_t)vxgi_cur_lights.size(); // <= VXGI_MAX_LIGHTS by construction
+					for (size_t li = 0; li < vxgi_cur_lights.size(); li++)
+					{
+						const VxgiLightState& c = vxgi_cur_lights[li];
+						VxgiLight& gl = cbVxgiLights.lights[li];
+						gl.pos_ws = c.pos;
+						// flags (§9.1): POINT->0x1, SPOT->0x3 (0x1|0x2), DIRECTIONAL/AUTO_ATTACH_3DCAM->0x0.
+						// eff_type != SPOT never sets bit1, so non-spot lights stay bit-identical to the pre-spot path (V29).
+						const bool positional = (c.eff_type == (uint32_t)LightType::POINT) || (c.eff_type == (uint32_t)LightType::SPOT);
+						gl.flags = (positional ? 0x1u : 0u) | ((c.eff_type == (uint32_t)LightType::SPOT) ? 0x2u : 0u);
+						gl.dir_ws = c.dir;
+						gl.intensity = c.intensity;
+						gl.color = c.color;
+						gl.cos_inner = c.cos_inner; // SPOT only (bit1); 1 for others -- HLSL ignores unless bit1 set
+						gl.cos_outer = c.cos_outer;
+						// spot_rsv0/1/2 stay 0 (ZERO_SET on cbVxgiLights)
+					}
+					D3D11_MAPPED_SUBRESOURCE mappedResVxgiLights;
+					HRESULT hrVxgiLights = dx11DeviceImmContext->Map(cbuf_vxgi_lights, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResVxgiLights);
+					if (hrVxgiLights != S_OK)
+					{
+						vxgi_wl3_reason = 2;
+					}
+					else
+					{
+						memcpy(mappedResVxgiLights.pData, &cbVxgiLights, sizeof(CB_VxgiLights));
+						dx11DeviceImmContext->Unmap(cbuf_vxgi_lights, 0);
+					}
+				}
+				}
+			}
+			// W-L3 bookkeeping on the ATTEMPTER's iobj (rev.9 subject spec): (vobj gen -> failure reason),
+			// warn once per reason (re-warn on reason change), REMOVED on a successful preflight (re-arm).
+			// Cap 64 entries, insertion-order eviction -- bounded by view count in practice.
+			// GATED on vxgi_preflight_attempted (verification round-1 Minor): a frame that never tried says
+			// nothing about whether the failure cause is gone -- erasing (re-arming) on it would re-warn the
+			// SAME unresolved failure after every blocked/consumer frame. Only a real attempt may erase.
+			if (vxgi_preflight_attempted)
+			{
+				typedef std::vector<std::pair<uint64_t, int>> VxgiWL3Map;
+				const uint64_t vxgi_vobj_gen_wl3 = vxgi_issue_gen(vxgi_anchor);
+				VxgiWL3Map* wl3 = iobj->GetObjParamPtr<VxgiWL3Map>("_VxgiWL3Suppress");
+				if (wl3 == NULL) { iobj->SetObjParam("_VxgiWL3Suppress", VxgiWL3Map()); wl3 = iobj->GetObjParamPtr<VxgiWL3Map>("_VxgiWL3Suppress"); }
+				bool wl3_warn = false, wl3_found = false;
+				for (auto it = wl3->begin(); it != wl3->end(); ++it)
+				{
+					if (it->first == vxgi_vobj_gen_wl3)
+					{
+						wl3_found = true;
+						if (vxgi_wl3_reason == 0) { wl3->erase(it); }                                  // success -> re-arm
+						else if (it->second != vxgi_wl3_reason) { it->second = vxgi_wl3_reason; wl3_warn = true; } // reason change
+						break;
+					}
+				}
+				if (!wl3_found && vxgi_wl3_reason != 0)
+				{
+					if (wl3->size() >= 64) wl3->erase(wl3->begin());
+					wl3->push_back(std::make_pair(vxgi_vobj_gen_wl3, vxgi_wl3_reason));
+					wl3_warn = true;
+				}
+				if (wl3_warn)
+				{
+					// braces required around vzlog_warning (it expands to a {...} block -- see the C2181 note below)
+					if (vxgi_wl3_reason == 1)
+					{
+						vzlog_warning("[VXGI] multi-light preflight failed: CB_VxgiLights is not registered (creation failed at init) - rebuild skipped, previous bake consumed (W-L3)");
+					}
+					else if (vxgi_wl3_reason == 2)
+					{
+						vzlog_warning("[VXGI] multi-light preflight failed: CB_VxgiLights Map failed - rebuild skipped, previous bake consumed (W-L3)");
+					}
+					else
+					{
+						vzlog_warning("[VXGI] preflight failed: voxel grid generation failed (device-level) - rebuild skipped, consumption DISABLED this frame (W-L3 reason 3)");
+					}
+				}
+			}
+			if (vxgi_wl3_reason != 0)
+			{
+				if (vxgi_i_am_owner && vxgi_in_progress)
+					vxgi_anchor->SetObjParam("_uint64_VxgiOwnerLastMs", vxgi_now_ms); // live-owner heartbeat: the ONLY commit a failure makes
+				vxgi_i_own_build = false;
+				vxgi_acquire = false;
+				vxgi_blocked = false; // not W2: nobody blocked us, our own preflight failed
+			}
+
 			if (vxgi_acquire)
 			{
-				// Take the lease. OwnerLastMs = NOW so a stale predecessor timestamp cannot instantly time the
-				// new owner out; Seq++ opens a fresh block cycle (the W2 suppression key).
-				vobj->SetObjParam("_uint64_VxgiOwnerGen", vxgi_own_gen);
-				vobj->SetObjParam("_int_VxgiOwnerIobjId", iobj->GetObjectID());
-				vobj->SetObjParam("_uint64_VxgiRebuildSeq", vxgi_owner_seq + 1);
-				vobj->SetObjParam("_uint64_VxgiOwnerLastMs", vxgi_now_ms);
+				// Take the lease -- ONLY reachable after a successful preflight now (rev.9). OwnerLastMs = NOW
+				// so a stale predecessor timestamp cannot instantly time the new owner out; Seq++ opens a
+				// fresh block cycle (the W2 suppression key).
+				vxgi_anchor->SetObjParam("_uint64_VxgiOwnerGen", vxgi_own_gen);
+				vxgi_anchor->SetObjParam("_int_VxgiOwnerIobjId", iobj->GetObjectID());
+				vxgi_anchor->SetObjParam("_uint64_VxgiRebuildSeq", vxgi_owner_seq + 1);
+				vxgi_anchor->SetObjParam("_uint64_VxgiOwnerLastMs", vxgi_now_ms);
 				// NOTE braces are REQUIRED here: vzlog_warning expands to a "{...}" block (Backlog.h), so an
 				// unbraced "if (c) vzlog_warning(x); else ..." becomes "if (c) {...}; else ..." — the stray ';'
 				// closes the if and orphans the else (C2181). Brace every if/else arm that logs.
@@ -1743,15 +2057,68 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			{
 			// ---- OWNER / ACQUIRER: run the rebuild process (bake + propagate + publish). Body indentation is
 			//      left as-is to keep this a behavior-preserving wrap of the pre-D10 build block. ----
-			// D11 latch (owner-only, inject-frame): now that we hold the lease, commit the baked light state we
-			// compared against. Deferred here from the D11 block so a blocked non-owner cannot move the owner's
-			// deadband center or bump the epoch it does not own.
-			if (vxgi_light_changed)
+			// (The old D11 scalar latch that lived here is GONE: LastInjectedLightState/epoch now commit
+			//  IMMEDIATELY AFTER the InjectLightML Dispatch below -- the ML-D5 commit rule: state follows
+			//  every successful Dispatch, epoch only a light-triggered one.)
+			// ---- W-L1 / W-L2 (ML-D7, owner iobj; every owner frame, suppressed by (vobj gen -> id set)) ----
 			{
-				vobj->SetObjParam("_uint_VxgiBakedLightType", vxgi_cur_ltype);
-				vobj->SetObjParam("_vmfloat3_VxgiBakedLightDir", vxgi_cur_ldir);
-				vobj->SetObjParam("_vmfloat3_VxgiBakedLightPos", vxgi_cur_lpos);
-				vobj->SetObjParam("_uint64_VxgiLightEpoch", vxgi_light_epoch);
+				typedef std::vector<std::pair<uint64_t, std::vector<int>>> VxgiWLIdMap;
+				const uint64_t vxgi_vobj_gen_wl = vxgi_issue_gen(vxgi_anchor);
+				auto wl_should_warn = [&](const char* map_key, const std::vector<int>& ids, const bool active) -> bool
+				{
+					VxgiWLIdMap* wlm = iobj->GetObjParamPtr<VxgiWLIdMap>(map_key);
+					if (wlm == NULL) { iobj->SetObjParam(map_key, VxgiWLIdMap()); wlm = iobj->GetObjParamPtr<VxgiWLIdMap>(map_key); }
+					for (auto it = wlm->begin(); it != wlm->end(); ++it)
+					{
+						if (it->first == vxgi_vobj_gen_wl)
+						{
+							if (!active) { wlm->erase(it); return false; }              // condition cleared -> re-arm
+							if (it->second == ids) return false;                        // unchanged -> suppressed
+							it->second = ids; return true;                              // set changed -> re-warn
+						}
+					}
+					if (!active) return false;
+					if (wlm->size() >= 64) wlm->erase(wlm->begin());
+					wlm->push_back(std::make_pair(vxgi_vobj_gen_wl, ids));
+					return true;
+				};
+				auto wl_join_ids = [](const std::vector<int>& ids) {
+					std::string s;
+					for (int id : ids) s += (s.empty() ? "" : ",") + std::to_string(id);
+					return s;
+				};
+				// W-L1 (rev.14): more VIEW-EFFECTIVE lights than the cap -- the min-id top VXGI_MAX_LIGHTS
+				// are in, the rest contribute NOTHING to GI (R10": dominant or not, symmetric).
+				std::vector<int> vxgi_wl1_ids; // selected first (ascending), then dropped -- the set signature
+				for (const VmLight* vl : vxgi_view_lights) vxgi_wl1_ids.push_back(vl->actorId);
+				if (wl_should_warn("_VxgiWL1Suppress", vxgi_wl1_ids, vxgi_view_light_count > VXGI_MAX_LIGHTS))
+				{
+					std::vector<int> sel(vxgi_wl1_ids.begin(), vxgi_wl1_ids.begin() + VXGI_MAX_LIGHTS);
+					std::vector<int> drop(vxgi_wl1_ids.begin() + VXGI_MAX_LIGHTS, vxgi_wl1_ids.end());
+					vzlog_warning("[VXGI] %d effective lights exceed the GI cap %d: selected id [%s], DROPPED id [%s] contribute no GI (W-L1)",
+						vxgi_view_light_count, VXGI_MAX_LIGHTS, wl_join_ids(sel).c_str(), wl_join_ids(drop).c_str());
+				}
+				// W-L2 (rev.7 semantics): a VIEW-DEPENDENCE notice, not an alternation warning -- with a
+				// camera-attached light in a multi-light set, the shared field is lit from the LEASE OWNER's
+				// view. Single headlight (the default scene) stays silent.
+				std::vector<int> vxgi_wl2_ids;
+				for (const VxgiLightState& c : vxgi_cur_lights)
+					if (c.eff_type == (uint32_t)LightType::AUTO_ATTACH_3DCAM) vxgi_wl2_ids.push_back(c.light_id);
+				if (wl_should_warn("_VxgiWL2Suppress", vxgi_wl2_ids, !vxgi_wl2_ids.empty() && vxgi_cur_lights.size() >= 2))
+				{
+					vzlog_warning("[VXGI] camera-attached light(s) [%s] in a multi-light set: the shared GI field is lit from the rebuild owner's view (view-dependent notice, W-L2)",
+						wl_join_ids(vxgi_wl2_ids).c_str());
+				}
+				// W-L4 (ML-D9, rev.14 — MOVED here from core): a NON-dominant light carrying
+				// CAMERA_ATTACHED is interpreted as STATIONARY. Core no longer resolves poses, so the
+				// warning belongs where the interpretation happens. The iobj key IS the per-view key that
+				// rev.13 8R Major 2 asked for -- one iobj per view -- so two views with different
+				// dominants each warn once instead of erasing each other every frame.
+				if (wl_should_warn("_VxgiWL4Suppress", vxgi_wl4_demoted_ids, !vxgi_wl4_demoted_ids.empty()))
+				{
+					vzlog_warning("[VXGI] non-dominant light(s) [%s] set to CAMERA_ATTACHED - interpreted as STATIONARY (CAMERA_ATTACHED is dominant-only; stored parameters untouched, W-L4)",
+						wl_join_ids(vxgi_wl4_demoted_ids).c_str());
+				}
 			}
 			if (vxgi_rebuild && !vxgi_mat_changed)
 				cbVxgi.vxgi_flag |= 0x40u; // bit6: LIGHT-ONLY inject — re-emit the baked DIRECT alpha (t11)
@@ -1812,12 +2179,33 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 					SET_SHADER_RES(11, 1, &vxgi_ping_srv_a);
 				}
 				SET_SHADER_RES(9, 1, &vxgi_mat_srv);
+				// b11 = the multi-light set uploaded by THIS frame's preflight (non-null here by construction:
+				// the rebuild body only runs when the preflight succeeded). Bound/unbound locally -- b11 is
+				// InjectLightML-local (see the CommonShader slot-ledger comment), nothing else may see it.
+				SET_CBUFFERS(11, 1, &cbuf_vxgi_lights);
 				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, &vxgi_uav_direct, (UINT*)(&vxgi_uav_direct));
-				SET_SHADER(GETCS(VXGI_InjectLight_cs_5_0), NULL, 0);
+				SET_SHADER(GETCS(VXGI_InjectLightMLspot_cs_5_0), NULL, 0);
 				dx11DeviceImmContext->Dispatch(vxgi_groups, vxgi_groups, vxgi_groups);
 				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 				SET_SHADER_RES(9, 1, dx11SRVs_NULL);
 				SET_SHADER_RES(11, 1, dx11SRVs_NULL);
+				{
+					ID3D11Buffer* cbuf_null_b11 = NULL;
+					SET_CBUFFERS(11, 1, &cbuf_null_b11); // defensive unbind (mirror of the SRV nulling above)
+				}
+				// ML-D5 COMMIT RULE (rev.8 Major 2, the one sentence): "right after a Dispatch is issued, the
+				// same input state (LastInjectedLightState) is ALWAYS stored; the light epoch is bumped only
+				// when light_changed caused that Dispatch. Preflight failure / propagate-only / non-owner
+				// consumption store and bump NOTHING." A material-triggered inject re-bakes the current
+				// lights too, so the state must follow it -- but its epoch must not move, or the split-stamp
+				// light-only (preserve-AO) path would misfire.
+				vxgi_anchor->SetObjParam("_vector_VxgiLastInjectedLightState", vxgi_cur_lights);
+				// Same rule for the scene-global generation: it is part of "what this Dispatch consumed".
+				// Without committing it, a non-owner would see gen != baked_gen forever and re-acquire
+				// every frame (round-2 Major 4 fix).
+				vxgi_anchor->SetObjParam("_uint64_VxgiBakedSceneLightGen", vxgi_scene_light_gen);
+				if (vxgi_light_changed)
+					vxgi_anchor->SetObjParam("_uint64_VxgiLightEpoch", vxgi_light_epoch);
 
 				// (The former "2.5) post-bake obscurance blur" — BlurObscuranceX/Y/Z on the baked DIRECT
 				// alpha, _bool_VxgiAoBlur — was REMOVED: the MAT blur in step 1.5 smooths the same band
@@ -1833,13 +2221,13 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				// One source-term step per frame (r' = direct_new + gain*gather(prev field)) IS the temporal
 				// crossfade (Wicked-style grid blend adapted to our content-gated pipeline): the field follows
 				// the drag smoothly and keeps converging from wherever it was — no hard reset, no freeze.
-				const int vxgi_prev_res = vobj->GetObjParam<int>("_int_VxgiGridRes", (int)0);
+				const int vxgi_prev_res = vxgi_anchor->GetObjParam<int>("_int_VxgiGridRes", (int)0);
 				// HARD RESTART (debug "Restart GI bounces" button): the source-term diffusion converges to
 				// a FIXED POINT, so once converged, extra propagate iterations change nothing visibly —
 				// re-running from bounce 0 without resetting the field shows nothing (that is exactly the
 				// crossfade design for light/OTF edits). The restart button's purpose is to OBSERVE the
 				// progressive spread, so it must hard-seed the grid back to DIRECT.
-				const uint64_t vxgi_prev_restart = vobj->GetObjParam<uint64_t>("_uint64_VxgiRestartApplied", (uint64_t)0);
+				const uint64_t vxgi_prev_restart = vxgi_anchor->GetObjParam<uint64_t>("_uint64_VxgiRestartApplied", (uint64_t)0);
 				const bool vxgi_first_build = (vxgi_prev_stamp == (uint64_t)~0ull) || (vxgi_prev_res != (int)vxgi_R)
 					|| (vxgi_restart != vxgi_prev_restart);
 				if (vxgi_first_build)
@@ -1879,24 +2267,24 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 					if (vxgi_surface_checkpoints > 0 && (!vxgi_edit_sustained || (temporal_render_count % 8) == 0))
 						vxgi_surface_gather();
 				}
-				vobj->SetObjParam("_uint64_VxgiStamp", vxgi_content_stamp);
-				vobj->SetObjParam("_uint64_VxgiMatStamp", vxgi_mat_stamp);
-				vobj->SetObjParam("_uint64_VxgiRestartApplied", vxgi_restart);
-				vobj->SetObjParam("_int_VxgiGridRes", (int)vxgi_R);
+				vxgi_anchor->SetObjParam("_uint64_VxgiStamp", vxgi_content_stamp);
+				vxgi_anchor->SetObjParam("_uint64_VxgiMatStamp", vxgi_mat_stamp);
+				vxgi_anchor->SetObjParam("_uint64_VxgiRestartApplied", vxgi_restart);
+				vxgi_anchor->SetObjParam("_int_VxgiGridRes", (int)vxgi_R);
 				// Frame of THIS rebuild — the next one compares against it to tell a sustained drag (rebuilt
 				// on the previous frame too) from the first frame of an edit, which must gather immediately.
-				vobj->SetObjParam("_uint64_VxgiRebuildFrame", temporal_render_count);
+				vxgi_anchor->SetObjParam("_uint64_VxgiRebuildFrame", temporal_render_count);
 
 				// D3 / D9.1 / D9.3 — publish bake meta on the VOLUME so slicer and non-owner 3D views can
 				// consume THIS field (Phase 2+). FieldReady gates all consumption; it is set only after a real
 				// bake (here), never on a bare grid allocation. The content key lets a consumer self-detect a
 				// stale bake (volume/OTF/transform changed under a dead builder). OwnerGen records the builder
 				// identity by GEN (not the recycled object id) for D3 invalidation and the D10 machine (Phase 1b).
-				vobj->SetObjParam("_bool_VxgiFieldReady", true);
-				vobj->SetObjParam("_VXGI_BakeCb", cbVxgiBake);
-				vobj->SetObjParam("_uint64_VxgiBakeContentKey",
+				vxgi_anchor->SetObjParam("_bool_VxgiFieldReady", true);
+				vxgi_anchor->SetObjParam("_VXGI_BakeCb", cbVxgiBake);
+				vxgi_anchor->SetObjParam("_uint64_VxgiBakeContentKey",
 					grd_helper::VxgiBakeContentKey(vobj, tobj_otf, TRANSPOSE(cbVolumeObj.mat_ws2ts)));
-				vobj->SetObjParam("_uint64_VxgiOwnerGen", vxgi_own_gen);
+				vxgi_anchor->SetObjParam("_uint64_VxgiOwnerGen", vxgi_own_gen);
 			}
 			else if (vxgi_bounce < VXGI_BOUNCE_TARGET
 				// Slow-motion is an explicit app toggle (SetRenderTestParam "_bool_VxgiSlowMotion"), no longer
@@ -1920,11 +2308,11 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 			// Convergence readback: core's skip-gate / CheckRenderConvergence keep the re-render loop alive
 			// until both TAA samples AND VXGI bounces are done (renderer owns the algorithm, core only reads).
-			vobj->SetObjParam("_int_VxgiBounce", vxgi_bounce);   // canonical grid state (D2)
+			vxgi_anchor->SetObjParam("_int_VxgiBounce", vxgi_bounce);   // canonical grid state (D2)
 			iobj->SetObjParam("_int_VxgiBounce", vxgi_bounce);   // mirror: core's CheckRenderConvergence polls the iobj (view)
 			iobj->SetObjParam("_int_VxgiBounceTarget", (int)VXGI_BOUNCE_TARGET); // target stays iobj-canonical (convergence key)
-			vobj->SetObjParam("_int_VxgiSharedTarget", (int)VXGI_BOUNCE_TARGET); // D10: non-owners derive in-progress from this
-			vobj->SetObjParam("_uint64_VxgiOwnerLastMs", vxgi_now_ms);           // D10: owner heartbeat (the 5s-timeout basis)
+			vxgi_anchor->SetObjParam("_int_VxgiSharedTarget", (int)VXGI_BOUNCE_TARGET); // D10: non-owners derive in-progress from this
+			vxgi_anchor->SetObjParam("_uint64_VxgiOwnerLastMs", vxgi_now_ms);           // D10: owner heartbeat (the 5s-timeout basis)
 
 			// Bind the radiance grid (t8) + MAT grid (t9) for the RayCasting march below (nulled after the
 			// dispatch). The grids' alpha is PREMULTIPLIED (obscurance * coverage); the DVR un-premultiplies
@@ -1948,7 +2336,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 					// recycled, D9.3), bounded at 64 with insertion-order eviction (long-session finite). A new
 					// block cycle (Seq++ on the next acquisition) re-arms the warning for that vobj.
 					typedef std::vector<std::pair<uint64_t, uint64_t>> VxgiW2Map;
-					const uint64_t vxgi_vobj_gen = vxgi_issue_gen(vobj);
+					const uint64_t vxgi_vobj_gen = vxgi_issue_gen(vxgi_anchor);
 					VxgiW2Map* w2 = iobj->GetObjParamPtr<VxgiW2Map>("_VxgiW2Suppress");
 					if (w2 == NULL) { iobj->SetObjParam("_VxgiW2Suppress", VxgiW2Map()); w2 = iobj->GetObjParamPtr<VxgiW2Map>("_VxgiW2Suppress"); }
 					bool warn = true, found = false;
@@ -1969,8 +2357,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				// non-owner with no usable bake, e.g. the owner vanished this very frame). r3 == the SRV probe below.
 				CB_VXGI cbVxgiConsume; // ZERO_SET => disabled by default
 				int vxgi_consume_w1 = 0;
-				const bool vxgi_consume_ok = grd_helper::LoadVxgiConsumerCb(cbVxgiConsume, vxgi_consume_w1,
-					vobj, tobj_otf, TRANSPOSE(cbVolumeObj.mat_ws2ts), vxgi_gi_intensity, vxgi_ao_intensity);
+				const bool vxgi_consume_ok = grd_helper::LoadVxgiConsumerCb(cbVxgiConsume, vxgi_consume_w1, vxgi_anchor, vobj, tobj_otf, TRANSPOSE(cbVolumeObj.mat_ws2ts), vxgi_gi_intensity, vxgi_ao_intensity);
 				D3D11_MAPPED_SUBRESOURCE mappedResVxgiC;
 				dx11DeviceImmContext->Map(cbuf_vxgi, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResVxgiC);
 				memcpy(mappedResVxgiC.pData, &cbVxgiConsume, sizeof(CB_VXGI));
@@ -2003,10 +2390,10 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			if (is_last_dvr && !is_xray_mode && !isSlicer && !vxgi_on)
 			{
 				const uint64_t my_gen = vxgi_issue_gen(iobj);
-				if (vobj->GetObjParam<uint64_t>("_uint64_VxgiOwnerGen", (uint64_t)0) == my_gen)
+				if (vxgi_anchor->GetObjParam<uint64_t>("_uint64_VxgiOwnerGen", (uint64_t)0) == my_gen)
 				{
-					vobj->SetObjParam("_bool_VxgiFieldReady", false);
-					vobj->SetObjParam("_uint64_VxgiOwnerGen", (uint64_t)0);
+					vxgi_anchor->SetObjParam("_bool_VxgiFieldReady", false);
+					vxgi_anchor->SetObjParam("_uint64_VxgiOwnerGen", (uint64_t)0);
 				}
 			}
 
@@ -2018,7 +2405,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			bool vxgi_consumed = false;
 			if (isSlicer && vxgi_on && !is_xray_mode)
 			{
-				const uint64_t vxgi_vobj_gen = vxgi_issue_gen(vobj);
+				const uint64_t vxgi_vobj_gen = vxgi_issue_gen(vxgi_anchor);
 				// W1 suppression bookkeeping lives in grd_helper (SHARED with the curved consumer — one logic,
 				// no fork): warn once per (vobj gen, reason bit r1/r2/r3), re-armed by a successful consume.
 				auto vxgi_w1 = [&](int reason) {
@@ -2034,15 +2421,15 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 				CB_VXGI cbVxgiC;
 				int vxgi_w1_reason = 0;
-				if (grd_helper::LoadVxgiConsumerCb(cbVxgiC, vxgi_w1_reason, vobj, tobj_otf,
+				if (grd_helper::LoadVxgiConsumerCb(cbVxgiC, vxgi_w1_reason, vxgi_anchor, vobj, tobj_otf,
 					TRANSPOSE(cbVolumeObj.mat_ws2ts), vxgi_gi_intensity, vxgi_ao_intensity))
 				{
 					// D4 probe: find the vobj-keyed grid WITHOUT creating it (UpdateVoxelGrid is a CREATOR; a
 					// consumer that called it would fabricate an empty grid when the builder is gone). Same
 					// probe idiom as the x-ray filter mask below.
 					GpuRes gres_c_grid, gres_c_mat;
-					gres_c_grid.vm_src_id = vobj->GetObjectID(); gres_c_grid.res_name = "VXGI_VOXEL_GRID";
-					gres_c_mat.vm_src_id = vobj->GetObjectID();  gres_c_mat.res_name = "VXGI_GRID_MAT";
+					gres_c_grid.vm_src_id = vxgi_grid_src; gres_c_grid.res_name = "VXGI_VOXEL_GRID";
+					gres_c_mat.vm_src_id = vxgi_grid_src;  gres_c_mat.res_name = "VXGI_GRID_MAT";
 					if (gpu_manager->UpdateGpuResource(gres_c_grid) && gpu_manager->UpdateGpuResource(gres_c_mat))
 					{
 						ID3D11ShaderResourceView* c_grid_srv = (ID3D11ShaderResourceView*)gres_c_grid.alloc_res_ptrs[DTYPE_SRV];
@@ -2056,8 +2443,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 						SET_SHADER_RES(8, 1, &c_grid_srv);
 						SET_SHADER_RES(9, 1, &c_mat_srv);
 						// Mirror the shared field's progress so this slicer's CheckRenderConvergence tracks it.
-						iobj->SetObjParam("_int_VxgiBounce", vobj->GetObjParam<int>("_int_VxgiBounce", (int)0));
-						iobj->SetObjParam("_int_VxgiBounceTarget", vobj->GetObjParam<int>("_int_VxgiSharedTarget", (int)0));
+						iobj->SetObjParam("_int_VxgiBounce", vxgi_anchor->GetObjParam<int>("_int_VxgiBounce", (int)0));
+						iobj->SetObjParam("_int_VxgiBounceTarget", vxgi_anchor->GetObjParam<int>("_int_VxgiSharedTarget", (int)0));
 						vxgi_consumed = true;
 						vxgi_w1_clear();
 					}
@@ -2257,6 +2644,11 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			}
 			break;
 		}
+
+		if (isSlicer && planeThickness == 0 && !is_xray_mode)
+		{
+			vzlog_warning("This Slicer may NOT visualize the input volume!!");
+		}
  
 		// When the x-ray post-filter is active on the last DVR pass (vobj_flag bit 2 set),
 		// DvrCS writes volume-ONLY x-ray color into u2. Redirect u2 to the dedicated
@@ -2303,30 +2695,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 #ifdef DX10_0
 #else
-		if (cbEnvState.r_kernel_ao > 0)
-		{
-			is_performed_ssao = true;
-			//dx11DeviceImmContext->Flush();
-			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-			ComputeSSAO(dx11DeviceImmContext, psoManager, iobj, num_grid_x, num_grid_y,
-				gres_fb_counter, gres_fb_k_buffer, gres_fb_rgba, blur_SSAO,
-				gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex, true, apply_fragmerge);
-
-			dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs, (UINT*)(&dx11UAVs));
-
-			if (blur_SSAO)
-			{
-				SET_SHADER_RES(10, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_blf_texs[0].alloc_res_ptrs[DTYPE_SRV]);
-				SET_SHADER_RES(11, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_blf_texs[1].alloc_res_ptrs[DTYPE_SRV]);
-				SET_SHADER_RES(20, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_vr_blf_tex.alloc_res_ptrs[DTYPE_SRV]);
-			}
-			else
-			{
-				SET_SHADER_RES(10, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_texs[0].alloc_res_ptrs[DTYPE_SRV]);
-				SET_SHADER_RES(11, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_texs[1].alloc_res_ptrs[DTYPE_SRV]);
-				SET_SHADER_RES(20, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_vr_tex.alloc_res_ptrs[DTYPE_SRV]);
-			}
-		}
+		// (v76) the pre-RayCasting SSAO dispatch (ComputeSSAO + t10/t11/t20 AO binds) lived here --
+		// SSAO retired (user directive). Its AO frame buffers were already dead (`if (0)` creation).
 #endif
 
 #ifdef DX10_0
@@ -2498,36 +2868,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 #ifdef DX10_0
 #else
-	if (cbEnvState.r_kernel_ao > 0 && !is_performed_ssao)
-	{
-		ID3D11UnorderedAccessView* dx11UAVs[4] = {
-				  (ID3D11UnorderedAccessView*)gres_fb_counter.alloc_res_ptrs[DTYPE_UAV]
-				, (ID3D11UnorderedAccessView*)gres_fb_k_buffer.alloc_res_ptrs[DTYPE_UAV]
-				, (ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV]
-				, (ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV]
-		};
-		is_performed_ssao = true;
-		//dx11DeviceImmContext->Flush();
-		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-		ComputeSSAO(dx11DeviceImmContext, psoManager, iobj, num_grid_x, num_grid_y,
-			gres_fb_counter, gres_fb_k_buffer, gres_fb_rgba, blur_SSAO,
-			gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex, true, apply_fragmerge);
-
-		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs, (UINT*)(&dx11UAVs));
-
-		if (blur_SSAO)
-		{
-			SET_SHADER_RES(10, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_blf_texs[0].alloc_res_ptrs[DTYPE_SRV]);
-			SET_SHADER_RES(11, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_blf_texs[1].alloc_res_ptrs[DTYPE_SRV]);
-			SET_SHADER_RES(20, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_vr_blf_tex.alloc_res_ptrs[DTYPE_SRV]);
-		}
-		else
-		{
-			SET_SHADER_RES(10, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_texs[0].alloc_res_ptrs[DTYPE_SRV]);
-			SET_SHADER_RES(11, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_texs[1].alloc_res_ptrs[DTYPE_SRV]);
-			SET_SHADER_RES(20, 1, (ID3D11ShaderResourceView**)&gres_fb_ao_vr_tex.alloc_res_ptrs[DTYPE_SRV]);
-		}
-	}
+	// (v76) the post-pass SSAO fallback dispatch (ComputeSSAO for the no-DVR path) lived here --
+	// SSAO retired (user directive).
 #endif
 
 #ifdef DX10_0
@@ -2540,8 +2882,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	// obscurance at LOD, SURF indirect/cone-AO/state/normal) all ray-march the grids in Gather.hlsl.
 	if (vxgi_on && vxgi_ready && (vxgi_debug & 0xFF) != 0)
 	{
-		// The trailing SSAO path can leave gres_fb_rgba bound at UAV u2; release the DVR UAV slots first so
-		// binding it at u1 below does not alias (a resource may occupy only one UAV slot at a time).
+		// Release the DVR UAV slots first so binding gres_fb_rgba at u1 below does not alias (a resource
+		// may occupy only one UAV slot at a time). (The historical culprit here -- the trailing SSAO pass,
+		// v76-retired -- is gone, but earlier DVR dispatches still leave u0..u4 bound.)
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 5, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 
 		ID3D11ShaderResourceView* vxgi_grid_srv = (ID3D11ShaderResourceView*)gres_vxgi.alloc_res_ptrs[DTYPE_SRV];
@@ -2550,8 +2893,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		SET_SHADER_RES(3, 1, &vxgi_mat_srv_dbg); // MAT grid: true coverage — radiance grid alpha is OBSCURANCE
 		SET_SHADER_RES(4, 1, &vxgi_surf_srv_dbg); // SURF grid (Part C): DEBUG-ONLY bind — voxel modes 3..6; the normal render path never binds t4
 
-		// Re-bind the CBs the debug shader reads (b0=camera, b13=VXGI); the trailing SSAO pass may have
-		// rebound these slots. (b4=volume rebind removed with the screen-space modes — the voxel-march
+		// Re-bind the CBs the debug shader reads (b0=camera, b13=VXGI) defensively -- earlier passes may
+		// have rebound these slots. (b4=volume rebind removed with the screen-space modes — the voxel-march
 		// views never touch g_cbVobj.) The buffers still hold the correct last-camera / VXGI data.
 		ID3D11Buffer* cbuf_cam_g = psoManager->get_cbuf("CB_CameraState");
 		ID3D11Buffer* cbuf_vxgi_g = psoManager->get_cbuf("CB_VXGI");

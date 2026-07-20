@@ -10,7 +10,7 @@ RWTexture2D<float4> rw_fragment_blendout : register(u10);
 
 Buffer<uint> global_z_minmax_buffer : register(t15);
 Texture2DArray<float2> z_minmax_textures : register(t16);
-Texture2DArray<unorm float> ao_textures : register(t17);
+// (v76) ao_textures (t17) REMOVED -- SSAO retired; the AO darkening in GetUintVisAt is gone with it.
 
 RWBuffer<uint> rw_global_z_minmax_buffer : register(u15);
 RWTexture2DArray<float2> rw_z_minmax_textures : register(u16);
@@ -236,8 +236,8 @@ float4 GetUintVisAt(int addr_base, int k, int2 xy)
 #endif
 
 	float4 f_vis = ConvertUIntToFloat4(i_vis);
-	//if(g_cbCamState.iSrCamDummy__1 >> 16)
-	f_vis.rgb *= 1.f - ao_textures[int3(xy, k)];
+	// (v76) the SSAO darkening `f_vis.rgb *= 1.f - ao_textures[...]` lived here -- retired. (The AO
+	// texture stack was only ever populated by the removed KB_SSAO pass; unbound it read 0 = no-op.)
 
 	return f_vis;
 }

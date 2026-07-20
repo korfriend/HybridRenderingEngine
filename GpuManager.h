@@ -2,24 +2,23 @@
 
 #include "VimCommon.h"
 
-//#include <unordered_map>
 /**
  * @file GpuManager.h
- * @brief module에서 사용될 GPU resource를 공통으로 관리하기 위한 interface를 모은 헤더 파일
- * @section Include & Link 정보
+ * @brief Header collecting the interfaces for the shared management of GPU resources used by modules
+ * @section Include & Link Information
  *		- Include : GpuManager.h, VimCommon.h
  *		- Library : GpuManager.lib, VimCommon.lib
- *		- Linking Binary : GpuManager.dll, 그 외 동적 dll 연동을 위한 resource manager dll files (각각의 SDK 용), VimCommon.dll
+ *		- Linking Binary : GpuManager.dll, the resource-manager dll files for dynamic dll integration (one per SDK), VimCommon.dll
  */
 
  /**
   * @package vmgpuinterface
-  * @brief GPU resource 관리를 위한 enumeration, helpers 그리고 manager class를 모은 namespace
+  * @brief Namespace collecting the enumerations, helpers, and manager class for GPU resource management
   */
 
-/*! Framework에 등록된 GPU SDK 종류*/
+/*! Kinds of GPU SDKs registered with the framework */
 enum EvmGpuSdkType {
-	GpuSdkTypeUNDEFINED = 0,/*!< 정의되지 않음 */
+	GpuSdkTypeUNDEFINED = 0,/*!< Undefined */
 	GpuSdkTypeDX11,/*!< DirectX 11 */
 	GpuSdkTypeDX12,/*!< DirectX 12 */
 	GpuSdkTypeCUDA,/*!< CUDA */
@@ -36,7 +35,7 @@ namespace vmgpuinterface
 	//============================
 
 	enum GpuResType {
-		RTYPE_UNDEFINED = 0,/*!< 정의되지 않음 */
+		RTYPE_UNDEFINED = 0,/*!< Undefined */
 		RTYPE_BUFFER,
 		RTYPE_TEXTURE1D,
 		RTYPE_TEXTURE2D,
@@ -44,7 +43,7 @@ namespace vmgpuinterface
 	};
 
 	enum DesType {
-		DTYPE_UNDEFINED = 0,/*!< 정의되지 않음 */
+		DTYPE_UNDEFINED = 0,/*!< Undefined */
 		DTYPE_RES,
 		DTYPE_RTV,
 		DTYPE_DSV,
@@ -70,53 +69,72 @@ namespace vmgpuinterface
 		~VmGpuManager();
 
 		/*!
-		 * @brief VmGpuManager 의 GPU SDK 확인
+		 * @brief Returns the GPU SDK of the VmGpuManager
 		 */
 		EvmGpuSdkType GetGpuManagerSDK();
 		/*!
-		 * @brief VmGpuManager에 등록된 SDK의 device 및 이와 관련된 정보를 얻는 함수
-		 * @param dev_info_ptr [out] \n void \n device information이 저장될 void 포인터
-		 * @param dev_specifier [in] \n string \n 얻어올 device information의 식별을 위한 string
-		 * @return bool \n 유효한 device 정보에 대한 pointer를 얻으면 true, 그렇지 않으면 false 반환
+		 * @brief Retrieves the device registered with the VmGpuManager's SDK and its related information
+		 * @param dev_info_ptr [out] \n void \n void pointer to receive the device information
+		 * @param dev_specifier [in] \n string \n string identifying which device information to retrieve
+		 * @return bool \n Returns true if a pointer to valid device information is obtained, false otherwise
 		 * @remarks
-		 * GpuInterfaces 를 구현한 개발자가 정의한 dev_specifier 와 해당 void pointer가 가리키는 자료구조를 사전에 알고 있어야 함
+		 * The caller must know in advance the dev_specifier and the structure pointed to by the void pointer, as defined by the developer who implemented GpuInterfaces
 		 */
 		bool GetDeviceInformation(void* dev_info_ptr, const string& dev_specifier);
 		/*!
-		 * @brief GPU memory state를 얻는 함수
-		 * @param dedicated_gpu_mem_bytes [out] \n uint64_t \n GPU 전용 memory 크기(bytes)를 저장할 unit의 포인터
-		 * @param free_gpu_mem [out] \n uint64_t \n 현재 사용 가능한 GPU memory 크기(bytes)를 저장할 unit의 포인터
-		 * @return bool \n 메모리를 얻는 것이 성공하면 true, 그렇지 않으면 false 반환
+		 * @brief Retrieves the GPU memory state
+		 * @param dedicated_gpu_mem_bytes [out] \n uint64_t \n pointer to a unit that receives the dedicated GPU memory size (bytes)
+		 * @param free_gpu_mem [out] \n uint64_t \n pointer to a unit that receives the currently available GPU memory size (bytes)
+		 * @return bool \n Returns true if the memory query succeeds, false otherwise
 		 */
 		bool GetGpuCurrentMemoryBytes(uint64_t* dedicated_gpu_mem_bytes/*out*/, uint64_t* free_gpu_mem/*out*/);
 		/*!
-		 * @brief 현재 Framework에서 사용하고 있는 resource 중 GPU resource로 등록된 크기를 얻음
-		 * @return uint32_t \n Framework에서 사용하고 있는 resource 중 GPU resource로 등록된 크기(bytes) 반환
-		 * @remarks 모든 GPU SDK에 대하여 동작
+		 * @brief Returns the total size of the framework's in-use resources that are registered as GPU resources
+		 * @return uint32_t \n Returns the size (bytes) of the framework's in-use resources that are registered as GPU resources
+		 * @remarks Works for all GPU SDKs
 		 */
 		uint64_t GetUsedGpuMemorySizeBytes();
+		// NOTE (API v75): the reported bytes now include texture array slices and full mip chains
+		// (previously only mip 0 of slice 0 was counted). Totals therefore grow versus older builds --
+		// that is the accounting becoming accurate, not an allocation regression. Do not hard-code
+		// thresholds against pre-v75 figures.
 		/*!
-		 * @brief GPU resource로 등록된 자료구조를 얻음
-		 * @param GpuRes [in/out] \n gres \n 내부의 res_name 및 vm_src_id 으로 정의되어 있는 resouece 를 저장
-		 * @return uint32_t \n GPU resource로 등록된 자료구조를 성공적으로 얻으면 true, 그렇지 않으면 false 반환
-		 * @remarks 모든 GPU SDK에 대하여 동작
+		 * @brief Profiling breakdown of every LIVE GPU resource the renderer holds; returns the grand total in bytes.
+		 * @param bytes_by_type [in-out](optional) accumulated bytes keyed by D3D dimension ("BUFFER"/"TEXTURE1D"/"TEXTURE2D"/"TEXTURE3D")
+		 * @param bytes_by_category [in-out](optional) accumulated bytes keyed by engine-semantic category
+		 *        ("VOLUME","OTF","MESH_GEOMETRY","MATERIAL_TEXTURE","RENDER_TARGET","STAGING_READBACK","BVH","VXGI","PARTICLE","ETC")
+		 * @param count_by_type / count_by_category [in-out](optional) resource counts per key
+		 * @return uint64_t total bytes of live GPU resources; 0 when the renderer DLL does not expose the profiler
+		 * @remarks The maps are ACCUMULATED into (never cleared here) so several VmGpuManager instances can be
+		 *          merged into one report -- the caller owns the clearing. The export is optional: an older
+		 *          renderer DLL without __ProfileGpuResources still loads, and this method then returns 0.
+		 */
+		uint64_t ProfileGpuResources(std::map<std::string, uint64_t>* bytes_by_type = NULL,
+			std::map<std::string, uint64_t>* bytes_by_category = NULL,
+			std::map<std::string, int>* count_by_type = NULL,
+			std::map<std::string, int>* count_by_category = NULL);
+		/*!
+		 * @brief Retrieves the structure registered as a GPU resource
+		 * @param GpuRes [in/out] \n gres \n stores the resource identified by its res_name and vm_src_id
+		 * @return uint32_t \n Returns true if the GPU-resource structure is retrieved successfully, false otherwise
+		 * @remarks Works for all GPU SDKs
 		 */
 		bool UpdateGpuResource(GpuRes& gres/*in-out*/);
 		/*!
-		 * @brief 해당 VmObject 와 관련된 모든 GPU resource를 얻음
-		 * @param src_id [in] \n int \n VmObject의 ID
-		 * @param gres_list [out] \n vector<GPUResourceArchive*> \n 해당 VXObject 와 관련된 모든 GPU resource가 vector list로 저장
-		 * @return uint32_t \n GPU resource로 등록된 자료구조의 개수
-		 * @remarks 모든 GPU SDK에 대하여 동작
+		 * @brief Retrieves all GPU resources associated with the given VmObject
+		 * @param src_id [in] \n int \n ID of the VmObject
+		 * @param gres_list [out] \n vector<GPUResourceArchive*> \n receives all GPU resources associated with the given VObject as a vector list
+		 * @return uint32_t \n Number of structures registered as GPU resources
+		 * @remarks Works for all GPU SDKs
 		 */
 		int UpdateGpuResourcesBySrcID(const int src_id, vector<GpuRes>& gres_list/*out*/);
 		
 		/*!
-		 * @brief 윈도우 핸들로부터 DXGI 리소스 설정 (Swapchain). 윈도우 리사이즈 시에도 호출.
-		 * @param ppBackBuffer [out] \n void \n Swapchain 에 연결된 Backbuffer (Texture2D) 를 가리키는 Pointer
-		 * @param ppRTView [out] \n void \n *ppBackBuffer 로부터 만들어진 Rendertarget View Pointer
-		 * @return bool \n GPU resource로 등록된 자료구조를 성공적으로 얻으면 true, 그렇지 않으면 false 반환
-		 * @remarks DX11 GPU SDK에 대하여 동작
+		 * @brief Sets up DXGI resources (swapchain) from a window handle. Also called on window resize.
+		 * @param ppBackBuffer [out] \n void \n pointer to the backbuffer (Texture2D) connected to the swapchain
+		 * @param ppRTView [out] \n void \n render-target view pointer created from *ppBackBuffer
+		 * @return bool \n Returns true if the GPU-resource structure is obtained successfully, false otherwise
+		 * @remarks Works for the DX11 GPU SDK
 		 */
 		bool UpdateDXGI(void** ppBackBuffer, void** ppRTView, const HWND hwnd, const int w, const int h);
 		bool PresentBackBuffer(const HWND hwnd);
@@ -124,57 +142,57 @@ namespace vmgpuinterface
 		bool ReleaseAllDXGIs();
 
 		/*!
-		 * @brief GPU resource를 생성 및 등록하는 함수
-		 * @param gres [in/out] \n GpuRes \n 내부의 res_name 및 vm_src_id 으로 정의되어 있는 resouece 를 저장
+		 * @brief Creates and registers a GPU resource
+		 * @param gres [in/out] \n GpuRes \n stores the resource identified by its res_name and vm_src_id
 		 * @param progress [out](optional) \n LocalProgress \n
-		 * 함수가 진행되는 progress 정보를 포함하는 LocalProgress 의 포인터 \n
-		 * 기본값은 NULL이며, NULL이면 사용 안 함.
-		 * @return bool \n GPU resource 가 생성 및 등록 완료되면 true, 그렇지 않으면 false 반환
-		 * @remarks 모든 GPU SDK에 대하여 동작 \n
-		 * 해당 GPU SDK의 resource 관리 module 정책에 따라 GPU resource가 생성됨.
+		 * Pointer to a LocalProgress carrying the function's progress information \n
+		 * The default is NULL; if NULL, it is not used.
+		 * @return bool \n Returns true once the GPU resource is created and registered, false otherwise
+		 * @remarks Works for all GPU SDKs \n
+		 * The GPU resource is created according to the resource-management module policy of the given GPU SDK.
 		 */
 		bool GenerateGpuResource(GpuRes& gres/*in-out*/, LocalProgress* progress = NULL);
 
 		/*!
-		 * @brief GPU resource에 대한 description이 가리키는 GPU resource를 해제하는 함수
-		 * @param gres [in] \n GpuRes \n GPU resource 의 descriptor
-		 * @param call_clearstate [in] \n bool \n resource 해제 후 ClearState 호출 여부
-		 * @return bool \n GPU resource 의 해제가 성공하면 true, 그렇지 않으면 false 반환
-		 * @remarks 모든 GPU SDK에 대하여 동작
+		 * @brief Releases the GPU resource pointed to by the given GPU-resource description
+		 * @param gres [in] \n GpuRes \n Descriptor of the GPU resource
+		 * @param call_clearstate [in] \n bool \n Whether to call ClearState after releasing the resource
+		 * @return bool \n Returns true if the GPU resource is released successfully, false otherwise
+		 * @remarks Works for all GPU SDKs
 		 */
 		bool ReleaseGpuResource(GpuRes& gres, const bool call_clearstate = true);
 		/*!
-		 * @brief 해당 VmObject와 관련된 모든 GPU resource를 해제하는 함수
-		 * @param src_id [in] \n int \n VmObject의 ID
-		 * @param call_clearstate [in] \n bool \n resource 해제 후 ClearState 호출 여부
-		 * @return bool \n GPU resource 의 해제가 성공하면 true, 그렇지 않으면 false 반환
-		 * @remarks 모든 GPU SDK에 대하여 동작
+		 * @brief Releases all GPU resources associated with the given VmObject
+		 * @param src_id [in] \n int \n ID of the VmObject
+		 * @param call_clearstate [in] \n bool \n Whether to call ClearState after releasing the resource
+		 * @return bool \n Returns true if the GPU resource is released successfully, false otherwise
+		 * @remarks Works for all GPU SDKs
 		 */
 		bool ReleaseGpuResourcesBySrcID(const int src_id, const bool call_clearstate = true);
 		/*!
-		 * @brief 현재 등록된 모든 GPU resource를 해제하는 함수
-		 * @return bool \n GPU resource 의 해제가 성공하면 true, 그렇지 않으면 false 반환
-		 * @remarks 모든 GPU SDK에 대하여 동작
+		 * @brief Releases all currently registered GPU resources
+		 * @return bool \n Returns true if the GPU resource is released successfully, false otherwise
+		 * @remarks Works for all GPU SDKs
 		 */
 		bool ReleaseAllGpuResources();
 
 		/*!
-		* @brief GPU Manager 에 특정 파라미터(함수)를 넘기는 일반 함수
-		* @param param_name [in] \n string \n 파라미터 이름
+		* @brief General function for passing a specific parameter (function) to the GPU Manager
+		* @param param_name [in] \n string \n Parameter name
 		* @param dtype [in] \n data_type \n data type
-		* @param v_ptr [in] \n void \n 파라미터 값을 담고 있는 void 의 포인터
-		 * @return bool \n GPU Manager 에서 정의된 파라미터 이름으로 넘기면 true, 그렇지 않으면 false
-		 * @remarks 모든 GPU SDK에 대하여 동작
+		* @param v_ptr [in] \n void \n void pointer holding the parameter value
+		 * @return bool \n Returns true if passed with a parameter name defined in the GPU Manager, false otherwise
+		 * @remarks Works for all GPU SDKs
 		 */
 		bool SetGpuManagerParameters(const string& param_name, const data_type& dtype, const void* v_ptr, const int num_elements);
 
 		/*!
-		* @brief GPU Manager 에 특정 파라미터(함수)를 넘기는 일반 함수
-		* @param v_ptr [out] \n void \n 파라미터 값을 담고 있을 void 의 포인터
-		* @param param_name [in] \n string \n 파라미터 이름
-		* @param dtype [in] \n data_type \n 파라미터data type
-		* @return bool \n GPU Manager 에서 정의된 파라미터 이름으로 넘기면 true, 그렇지 않으면 false
-		* @remarks 모든 GPU SDK에 대하여 동작
+		* @brief General function for passing a specific parameter (function) to the GPU Manager
+		* @param v_ptr [out] \n void \n void pointer that will hold the parameter value
+		* @param param_name [in] \n string \n Parameter name
+		* @param dtype [in] \n data_type \n Parameter data type
+		* @return bool \n Returns true if passed with a parameter name defined in the GPU Manager, false otherwise
+		* @remarks Works for all GPU SDKs
 		*/
 		bool GetGpuManagerParameters(const string& param_name, const data_type& dtype, void* v_pt, int* num_elements = NULL);
 	};

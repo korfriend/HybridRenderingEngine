@@ -371,6 +371,26 @@ int grd_helper::Initialize(VmGpuManager* pCGpuManager, PSOManager* gpu_params)
 		CREATE_AND_SET(CB_SortConstants);
 		CREATE_AND_SET(CB_VXGI);
 		//CREATE_AND_SET(BVHPushConstants);
+
+		// Multi-Light ML-D3: CB_VxgiLights (b11, InjectLight-local) gets an EXPLICIT creation block, not
+		// CREATE_AND_SET -- the macro leaves the pointer uninitialized on failure and only ORs the HRESULT
+		// into a batch. This CB is the PREFLIGHT subject (ML-D5): on failure it must stay UNREGISTERED so
+		// try_get_cbuf returns NULL and the preflight fails fast (W-L3), instead of a garbage pointer
+		// reaching Map/bind. Deliberately NOT folded into the shared `hr` accumulator.
+		{
+			ID3D11Buffer* cbufVxgiLights = NULL;
+			descCB.ByteWidth = sizeof(CB_VxgiLights);
+			descCB.StructureByteStride = sizeof(CB_VxgiLights);
+			HRESULT hrVxgiLights = g_psoManager->dx11Device->CreateBuffer(&descCB, NULL, &cbufVxgiLights);
+			if (hrVxgiLights == S_OK && cbufVxgiLights != NULL)
+			{
+				g_psoManager->safe_set_cbuf(string("CB_VxgiLights"), cbufVxgiLights);
+			}
+			else
+			{
+				vzlog_error("CB_VxgiLights creation failed (hr=0x%08X) - VXGI multi-light preflight will fail (W-L3)", (uint32_t)hrVxgiLights);
+			}
+		}
 	}
 
 	{
@@ -786,12 +806,11 @@ int grd_helper::Initialize(VmGpuManager* pCGpuManager, PSOManager* gpu_params)
 			}
 
 
-			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA21100), "KB_SSAO_FM_cs_5_0", "cs_5_0"), KB_SSAO_FM_cs_5_0);
-			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA21101), "KB_SSAO_BLUR_FM_cs_5_0", "cs_5_0"), KB_SSAO_BLUR_FM_cs_5_0);
+			// (v76) KB_SSAO / KB_SSAO_BLUR (+_FM) registrations REMOVED -- SSAO feature retired (user
+			// directive); hlsl/ssao/SSAO.hlsl, the embedded CSOs (IDR_RCDATA21100/21101/21110/21111) and
+			// every dispatch site are gone with them.
 			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA21102), "KB_TO_TEXTURE_FM_cs_5_0", "cs_5_0"), KB_TO_TEXTURE_FM_cs_5_0);
 
-			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA21110), "KB_SSAO_cs_5_0", "cs_5_0"), KB_SSAO_cs_5_0);
-			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA21111), "KB_SSAO_BLUR_cs_5_0", "cs_5_0"), KB_SSAO_BLUR_cs_5_0);
 			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA21112), "KB_TO_TEXTURE_cs_5_0", "cs_5_0"), KB_TO_TEXTURE_cs_5_0);
 
 			VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA21105), "KB_MINMAXTEXTURE_FM_cs_5_0", "cs_5_0"), KB_MINMAXTEXTURE_cs_5_0);
@@ -890,7 +909,12 @@ int grd_helper::Initialize(VmGpuManager* pCGpuManager, PSOManager* gpu_params)
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA72002), "CS_Tonemap_cs_5_0", "cs_5_0"), CS_Tonemap_cs_5_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52000), "VXGI_VoxelizeVolume_cs_5_0", "cs_5_0"), VXGI_VoxelizeVolume_cs_5_0);
-		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52001), "VXGI_InjectLight_cs_5_0", "cs_5_0"), VXGI_InjectLight_cs_5_0);
+		// Multi-Light §3.5 C++/CSO atomicity (option 1 -- contract-versioned name): the multi-light
+		// InjectLight ships under a NEW registered name + NEW resource id. If fxc has not produced the new
+		// CSO file, the .rc fails to compile (missing file) -> the DLL build FAILS = fail-fast; a
+		// new-C++/stale-CSO DLL cannot exist. (The reverse -- new CSO on disk, DLL not rebuilt -- is not a
+		// mixed state at all: the old DLL keeps consuming its own embedded, matching old blob.)
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52010), "VXGI_InjectLightMLspot_cs_5_0", "cs_5_0"), VXGI_InjectLightMLspot_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52002), "VXGI_Gather_cs_5_0", "cs_5_0"), VXGI_Gather_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52003), "VXGI_Propagate_cs_5_0", "cs_5_0"), VXGI_Propagate_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52007), "VXGI_SurfaceGather_cs_5_0", "cs_5_0"), VXGI_SurfaceGather_cs_5_0);
@@ -2343,13 +2367,16 @@ bool grd_helper::UpdateFrameBuffer(GpuRes& gres,
 	return true;
 }
 
-bool grd_helper::UpdateVoxelGrid(GpuRes& gres, VmObject* srcObj, const string& res_name, const uint32_t resolution, const uint32_t dx_format, const bool with_mips)
+bool grd_helper::UpdateVoxelGrid(GpuRes& gres, const int src_id, const string& res_name, const uint32_t resolution, const uint32_t dx_format, const bool with_mips, bool* out_recreated)
 {
+	if (out_recreated) *out_recreated = false;
 	// GPU-writable cubic 3D grid for VXGI (voxel radiance/opacity). USAGE_DEFAULT + UAV|SRV so compute passes
-	// write it and shading trilinear-samples it. Keyed on srcObj + res_name -> persists across frames.
+	// write it and shading trilinear-samples it. Keyed on (src_id, res_name) -> persists across frames.
 	// with_mips: full auto-gen mip chain for cone-trace LOD — the UAV stays on mip 0; write mip 0 then call
 	// GenerateMips on the SRV (needs the RENDER_TARGET bind).
-	gres.vm_src_id = srcObj->GetObjectID();
+	// (rev.16) src_id is the SCENE id, not a vobj id: VXGI is a scene-level field (a vobj can live in
+	// several scenes, so a vobj key cross-contaminated them). The actor tag is gone (single owner = scene).
+	gres.vm_src_id = src_id;
 	gres.res_name = res_name;
 
 	if (g_pCGpuManager->UpdateGpuResource(gres))
@@ -2366,6 +2393,8 @@ bool grd_helper::UpdateVoxelGrid(GpuRes& gres, VmObject* srcObj, const string& r
 		g_pCGpuManager->ReleaseGpuResource(gres, false);
 	}
 
+	// Everything below (re)GENERATES: report it -- the texture is UNINITIALIZED until the caller bakes it.
+	if (out_recreated) *out_recreated = true;
 	gres.rtype = RTYPE_TEXTURE3D;
 	gres.options["USAGE"] = D3D11_USAGE_DEFAULT;
 	gres.options["CPU_ACCESS_FLAG"] = NULL;
@@ -2502,7 +2531,30 @@ bool grd_helper::UpdateCustomTexture3D(GpuRes& gres, VmObject* srcObj, const str
 	return true;
 }
 
-bool grd_helper::UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, VmCObject* camObj, const vmfloat2& paint_pos2d_ss, const BrushParams& brushParams)
+// (1.70) module-LOCAL image-plane rect helper (VmLens dropped; camera matrices are fields on fncontainer::VmCamera,
+// computed by the CommonApi layer before DoModule). WS corners = mat_ps2cs * mat_cs2ws applied to the PS unit rect.
+static void CamImagePlaneRectPointsf_local(const fncontainer::VmCamera& c, const EvmCoordSpace coord_space,
+	vmfloat3* pos_tl, vmfloat3* pos_tr, vmfloat3* pos_bl, vmfloat3* pos_br)
+{
+	vmdouble3 pos_tl_ps(-1., 1., 0), pos_tr_ps(1., 1., 0), pos_bl_ps(-1., -1., 0), pos_br_ps(1., -1., 0);
+	vmmat44 mat_ps2dsts = vmmat44(1.0);
+	switch (coord_space)
+	{
+	case CoordSpaceWORLD:      mat_ps2dsts = c.mat_ps2cs * c.mat_cs2ws; break;
+	case CoordSpaceCAMERA:     mat_ps2dsts = c.mat_ps2cs; break;
+	case CoordSpacePROJECTION: break;
+	case CoordSpaceSCREEN:     mat_ps2dsts = c.mat_ps2ss; break;
+	default: return;
+	}
+	vmdouble3 tl, tr, bl, br;
+	vmmath::TransformPoint(&tl, &pos_tl_ps, &mat_ps2dsts);
+	vmmath::TransformPoint(&tr, &pos_tr_ps, &mat_ps2dsts);
+	vmmath::TransformPoint(&bl, &pos_bl_ps, &mat_ps2dsts);
+	vmmath::TransformPoint(&br, &pos_br_ps, &mat_ps2dsts);
+	if (pos_tl) *pos_tl = tl; if (pos_tr) *pos_tr = tr; if (pos_bl) *pos_bl = bl; if (pos_br) *pos_br = br;
+}
+
+bool grd_helper::UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, fncontainer::VmCamera* camObj, const vmfloat2& paint_pos2d_ss, const BrushParams& brushParams)
 {
 	static PaintResourceManager* manager = meshPainter->getPaintResourceManager();
 
@@ -2603,11 +2655,11 @@ bool grd_helper::UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, Vm
 	const geometrics::BVH& bvh = pobj->GetBVH();
 
 	vmfloat3 ray_origin, ray_dir;
-	camObj->GetCameraExtStatef(&ray_origin, &ray_dir, NULL);
+	ray_origin = camObj->pos_cam; ray_dir = camObj->view_cam;
 	vmfloat3 paint_pos_ws, paint_pos_ss(paint_pos2d_ss.x, paint_pos2d_ss.y, 0);
 	vmmath::fTransformPoint(&paint_pos_ws, &paint_pos_ss, &matSS2WS);
 
-	if (camObj->IsPerspective()) {
+	if (camObj->is_perspective) {
 		ray_dir = paint_pos_ws - ray_origin;
 		vmmath::fNormalizeVector(&ray_dir, &ray_dir);
 	}
@@ -2671,7 +2723,7 @@ bool grd_helper::UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, Vm
 	return true;
 }
 
-void grd_helper::SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, const vmmat44f& matSS2WS, const vmmat44f& matWS2CS, const vmmat44f& matWS2PS, VmCObject* ccobj, const vmint2& fb_size, const int k_value, const float vz_thickness, const vmfloat2& taa_jitter_px)
+void grd_helper::SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, const vmmat44f& matSS2WS, const vmmat44f& matWS2CS, const vmmat44f& matWS2PS, fncontainer::VmCamera* ccobj, const vmint2& fb_size, const int k_value, const float vz_thickness, const vmfloat2& taa_jitter_px)
 {
 	// TAA sub-pixel jitter: shift the virtual image plane by taa_jitter_px pixels (default 0 => no-op).
 	// These matrices use row-vector semantics over column-stored glm (output[j] = v . column_j, exactly the
@@ -2716,10 +2768,10 @@ void grd_helper::SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, 
 	cb_cam.mat_ws2ps_revZ = TRANSPOSE(matWS2PS_revZ);
 
 	vmfloat3 pos_cam, dir_cam;
-	ccobj->GetCameraExtStatef(&pos_cam, &dir_cam, NULL);
+	pos_cam = ccobj->pos_cam; dir_cam = ccobj->view_cam;
 
 	cb_cam.cam_flag = 0;
-	if (ccobj->IsPerspective())
+	if (ccobj->is_perspective)
 		cb_cam.cam_flag |= 0x1;
 	// bit12 — TAA ACTIVE this frame. A non-zero sub-pixel jitter is applied iff TAA is on (jitter is exactly
 	// (0,0) when off; when on, the Halton base-3 y term is never exactly 0.5, so y is never exactly 0). Shaders
@@ -2738,10 +2790,7 @@ void grd_helper::SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, 
 	cb_cam.cam_vz_thickness = vz_thickness;
 
 	double np, fp;
-	if (ccobj->IsArIntrinsics())
-		ccobj->GetCameraIntStateAR(NULL, NULL, NULL, NULL, NULL, &np, &fp);
-	else
-		ccobj->GetCameraIntState(NULL, &np, &fp, NULL);
+	np = ccobj->near_p; fp = ccobj->far_p; // (1.70) AR & default both expose near/far directly on VmCamera
 
 	cb_cam.near_plane = (float)np;
 	cb_cam.far_plane = (float)fp;
@@ -2835,18 +2884,22 @@ uint64_t grd_helper::VxgiBakeContentKey(VmObject* vobj, VmObject* tobj_otf, cons
 	return vk ^ (ok << 1) ^ xform;
 }
 
-bool grd_helper::LoadVxgiConsumerCb(CB_VXGI& cb_out, int& w1_reason, VmObject* vobj, VmObject* tobj_otf,
+// (rev.16) state_anchor = the SCENE state object where the builder published FieldReady / BakeCb /
+// content key (VXGI is scene-level now). vobj is kept SEPARATELY, only to recompute the content key
+// from the CURRENT volume/OTF/transform -- that is a CONTENT identity, genuinely the vobj's property.
+// state_anchor == vobj reproduces the pre-rev.16 behaviour (old-core fallback path).
+bool grd_helper::LoadVxgiConsumerCb(CB_VXGI& cb_out, int& w1_reason, VmObject* state_anchor, VmObject* vobj, VmObject* tobj_otf,
 	const vmmat44f& mat_ws2ts, const float gi_intensity, const float ao_intensity)
 {
 	w1_reason = 0;
 	// r1 — no usable bake: FieldReady not set (old self-build users land here) or, defensively, the flag
 	// is set but the CB blob is missing.
-	if (vobj == NULL || !vobj->GetObjParam<bool>("_bool_VxgiFieldReady", false)) { w1_reason = 1; return false; }
+	if (state_anchor == NULL || !state_anchor->GetObjParam<bool>("_bool_VxgiFieldReady", false)) { w1_reason = 1; return false; }
 	// r2 — stale bake: the volume / OTF / transform moved since the builder last published (or the builder
 	// is gone and can no longer re-bake). The consumer detects this itself via the shared content key.
 	const uint64_t want_key = VxgiBakeContentKey(vobj, tobj_otf, mat_ws2ts);
-	if (want_key != vobj->GetObjParam<uint64_t>("_uint64_VxgiBakeContentKey", (uint64_t)0)) { w1_reason = 2; return false; }
-	CB_VXGI* bake = vobj->GetObjParamPtr<CB_VXGI>("_VXGI_BakeCb");
+	if (want_key != state_anchor->GetObjParam<uint64_t>("_uint64_VxgiBakeContentKey", (uint64_t)0)) { w1_reason = 2; return false; }
+	CB_VXGI* bake = state_anchor->GetObjParamPtr<CB_VXGI>("_VXGI_BakeCb");
 	if (bake == NULL) { w1_reason = 1; return false; } // ready without a blob — treat as r1 (defensive)
 
 	cb_out = *bake; // bake mapping / medium bits / scatter_gain verbatim (D3: builder is the bake authority)
@@ -2897,12 +2950,12 @@ void grd_helper::VxgiW1Clear(VmObject* consumer_iobj, const uint64_t vobj_gen)
 		if (it->first == vobj_gen) { m->erase(it); break; }
 }
 
-void grd_helper::SetCb_Env(CB_EnvState& cb_env, VmCObject* ccobj, const LightSource& light_src, const GlobalLighting& global_lighting, const LensEffect& lens_effect)
+void grd_helper::SetCb_Env(CB_EnvState& cb_env, fncontainer::VmCamera* ccobj, const LightSource& light_src, const LensEffect& lens_effect)
 {
 	vmfloat3 pos_cam, dir_cam;
-	ccobj->GetCameraExtStatef(&pos_cam, &dir_cam, NULL);
+	pos_cam = ccobj->pos_cam; dir_cam = ccobj->view_cam;
 
-	if (light_src.is_on_camera) 
+	if (light_src.type == fncontainer::LightType::AUTO_ATTACH_3DCAM) // headlight
 	{
 		cb_env.dir_light_ws = dir_cam;
 		cb_env.pos_light_ws = pos_cam;
@@ -2915,19 +2968,12 @@ void grd_helper::SetCb_Env(CB_EnvState& cb_env, VmCObject* ccobj, const LightSou
 	}
 	fNormalizeVector(&cb_env.dir_light_ws, &cb_env.dir_light_ws);
 
-	if (light_src.is_pointlight)
+	// direct shading treats SPOT as POINT (Q7): positional = POINT || SPOT sets the env point-light flag.
+	if (light_src.type == fncontainer::LightType::POINT || light_src.type == fncontainer::LightType::SPOT)
 		cb_env.env_flag |= 0x1;
 
-	cb_env.r_kernel_ao = 0;
-	if (global_lighting.apply_ssao)
-	{
-		cb_env.r_kernel_ao = global_lighting.ssao_r_kernel;
-		cb_env.num_dirs = global_lighting.ssao_num_dirs;
-		cb_env.num_steps = global_lighting.ssao_num_steps;
-		cb_env.tangent_bias = global_lighting.ssao_tangent_bias;
-		cb_env.ao_intensity = global_lighting.ssao_intensity;
-		cb_env.env_flag |= (global_lighting.ssao_debug & 0xF) << 9;
-	}
+	// (v76) SSAO RETIRED (user directive): the env_reserved_ssao_* pads stay 0 (ZERO_SET) and the
+	// env_flag SSAO bits (bit1 volume-G-buffer, bits 9..12 debug output) are never set anymore.
 
 	cb_env.dof_lens_r = 0;
 	if (lens_effect.apply_ssdof)
@@ -3241,7 +3287,7 @@ void grd_helper::SetCb_RenderingEffect(CB_Material& cb_reffect, VmActor* actor)
 		cb_reffect.brdf_expw_u = actor->GetParam("_float_PhongExpWeightU", 50.f);
 		cb_reffect.brdf_expw_v = actor->GetParam("_float_PhongExpWeightV", 50.f);
 	}
-	cb_reffect.ao_intensity = actor->GetParam("_float_SSAOIntensity", 0.5f);
+	cb_reffect.ao_intensity = 0.f; // (v76) "_float_SSAOIntensity" channel retired with SSAO (no shader reads this field anymore)
 
 	// Curvature
 	// to do
@@ -3359,16 +3405,16 @@ void grd_helper::SetCb_CurvedSlicer(CB_CurvedSlicer& cb_curvedSlicer, VmFnContai
 	vector<vmfloat3>& vtrCurveTangentVectors = *_fncontainer->fnParams.GetParamPtr<vector<vmfloat3>>("_vlist_FLOAT3_CurveTangentVectors");
 	int num_interpolation = (int)vtrCurveInterpolations.size();
 
-	VmCObject* cobj = iobj->GetCameraObject();
+	fncontainer::VmCamera* cobj = iobj->GetCameraObject();
 	vmmat44 matSS2PS, matPS2CS, matCS2WS;
-	cobj->GetMatrixSStoWS(&matSS2PS, &matPS2CS, &matCS2WS);
+	matSS2PS = cobj->mat_ss2ps; matPS2CS = cobj->mat_ps2cs; matCS2WS = cobj->mat_cs2ws;
 	vmmat44f matSS2WS = matSS2PS * matPS2CS * matCS2WS;
 
 	vmint2 i2SizeBuffer;
 	iobj->GetFrameBufferInfo(&i2SizeBuffer);
 
 	vmfloat3 f3PosTopLeftCWS, f3PosTopRightCWS, f3PosBottomLeftCWS, f3PosBottomRightCWS;
-	cobj->GetImagePlaneRectPointsf(CoordSpaceWORLD,
+	CamImagePlaneRectPointsf_local(*cobj, CoordSpaceWORLD,
 		&f3PosTopLeftCWS,
 		&f3PosTopRightCWS,
 		&f3PosBottomLeftCWS,

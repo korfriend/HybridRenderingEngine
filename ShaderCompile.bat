@@ -152,7 +152,7 @@ fxc /E TaaResolve /T cs_5_0 ./hlsl/TaaResolve.hlsl /Fo ./shader_compiled_objs/CS
 fxc /E Tonemap /T cs_5_0 ./hlsl/Tonemap.hlsl /Fo ./shader_compiled_objs/CS_Tonemap_cs_5_0
 
 fxc /E VXGI_VoxelizeVolume /T cs_5_0 ./hlsl/vxgi/Voxelize.hlsl /Fo ./shader_compiled_objs/VXGI_VoxelizeVolume_cs_5_0
-fxc /E VXGI_InjectLight /T cs_5_0 ./hlsl/vxgi/InjectLight.hlsl /Fo ./shader_compiled_objs/VXGI_InjectLight_cs_5_0
+fxc /E VXGI_InjectLight /T cs_5_0 ./hlsl/vxgi/InjectLight.hlsl /Fo ./shader_compiled_objs/VXGI_InjectLightMLspot_cs_5_0
 fxc /E VXGI_Gather /T cs_5_0 ./hlsl/vxgi/Gather.hlsl /Fo ./shader_compiled_objs/VXGI_Gather_cs_5_0
 fxc /E VXGI_Propagate /T cs_5_0 ./hlsl/vxgi/Propagate.hlsl /Fo ./shader_compiled_objs/VXGI_Propagate_cs_5_0
 fxc /E VXGI_SurfaceGather /T cs_5_0 ./hlsl/vxgi/SurfaceGather.hlsl /Fo ./shader_compiled_objs/VXGI_SurfaceGather_cs_5_0

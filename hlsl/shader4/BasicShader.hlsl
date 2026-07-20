@@ -91,6 +91,7 @@ bool rayTriangleIntersect(
     const float3 v0, const float3 v1, const float3 v2,
     out float t)
 {
+    t = 0; // every path must write the out param; the early "parallel"/"behind" returns below do not (X4000)
     // compute the plane's normal
     float3 v0v1 = v1 - v0;
     float3 v0v2 = v2 - v0;

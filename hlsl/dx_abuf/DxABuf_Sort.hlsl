@@ -181,6 +181,10 @@ void SortAndRenderCS(uint3 nGid : SV_GroupID, uint3 nDTid : SV_DispatchThreadID,
 
 	const uint NUM_K = g_cbCamState.k_value; // K_BUF
 
+	// The resource declarations above follow the command-line /D DX_11_STYLE (compiled both =0 and =1),
+	// but this sort/render BODY is always the DX11-UAV (==0) path. #undef first so re-forcing it to 0
+	// is not a redefinition of the command-line macro (silences X1519).
+#undef DX_11_STYLE
 #define DX_11_STYLE 0
 #if DX_11_STYLE==0
 	// note the offset is computed considering fragment's merging structure (3 bytes per a layer)

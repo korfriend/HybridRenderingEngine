@@ -8,16 +8,12 @@
 //   USE_SCULPT_BITS_TEX3D_TILED == 1 : Texture3D<uint> with 4x4x2 = 32-voxel 3D tiles per texel.
 //   USE_SCULPT_BITS_TEX3D       == 1 : Texture3D<uint> with 32 voxels (X-only) per texel.
 //   both == 0 (default)             : Buffer<uint> packed in row-major (x,y,z).
-#pragma region macro default guard: USE_SCULPT_BITS_TEX3D
-#ifndef USE_SCULPT_BITS_TEX3D
+#ifndef USE_SCULPT_BITS_TEX3D // macro default guard: USE_SCULPT_BITS_TEX3D
 #define USE_SCULPT_BITS_TEX3D 1
-#endif
-#pragma endregion // macro default guard: USE_SCULPT_BITS_TEX3D
-#pragma region macro default guard: USE_SCULPT_BITS_TEX3D_TILED
-#ifndef USE_SCULPT_BITS_TEX3D_TILED
+#endif // macro default guard: USE_SCULPT_BITS_TEX3D
+#ifndef USE_SCULPT_BITS_TEX3D_TILED // macro default guard: USE_SCULPT_BITS_TEX3D_TILED
 #define USE_SCULPT_BITS_TEX3D_TILED 0
-#endif
-#pragma endregion // macro default guard: USE_SCULPT_BITS_TEX3D_TILED
+#endif // macro default guard: USE_SCULPT_BITS_TEX3D_TILED
 
 Texture3D tex3D_volume : register(t0);
 Texture3D tex3D_volblk : register(t1);
@@ -29,18 +25,15 @@ Buffer<float4> buf_preintotf : register(t13); // unorm
 Buffer<float4> buf_windowing : register(t4); // not used here.
 Buffer<int> buf_ids : register(t5); // Mask OTFs // not used here.
 Texture2D<float> vr_fragment_1sthit_read : register(t6);
-//#pragma region sculpt-bits source: tiled Tex3D (4x4x2 per texel)
-#if USE_SCULPT_BITS_TEX3D_TILED == 1
+#if USE_SCULPT_BITS_TEX3D_TILED == 1 // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
 Texture3D<uint> sculpt_bits_tex : register(t7);
 #elif USE_SCULPT_BITS_TEX3D == 1
 Texture3D<uint> sculpt_bits_tex : register(t7);
 #else
 Buffer<uint> sculpt_bits : register(t7);
-#endif
-//#pragma endregion // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
+#endif // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
 
-#pragma region DX10.0 path (pixel-shader fallback, SRV inputs)
-#if DX10_0 == 1
+#if DX10_0 == 1 // DX10.0 path (pixel-shader fallback, SRV inputs)
 Texture2D prev_fragment_vis : register(t20); 
 Texture2D<float> prev_fragment_zdepth : register(t21);
 Texture2D<uint> vrHitEnc : register(t22);
@@ -70,13 +63,12 @@ RWTexture2D<float4> fragment_vis : register(u2);
 RWTexture2D<float> fragment_zdepth : register(u3);
 RWTexture2D<float> vr_fragment_1sthit_write : register(u4);	// use this as a z-thickness in Single layer mode!
 RWTexture2D<float> fragment_zthick : register(u5);
-#endif
-#pragma endregion // DX10.0 path (pixel-shader fallback, SRV inputs)
+#endif // DX10.0 path (pixel-shader fallback, SRV inputs)
 
 #define AO_MAX_LAYERS 8 
 
-Texture2DArray<unorm float> ao_textures : register(t10);
-Texture2D<unorm float> ao_vr_texture : register(t20);
+// (v76) ao_textures (t10) / ao_vr_texture (t20) REMOVED -- SSAO retired (user directive); the loads,
+// the per-layer aos[] and the ao_vr composite multiply are gone with the feature.
 
 Buffer<float3> buf_curvePoints : register(t30);
 Buffer<float3> buf_curveTangents : register(t31);
@@ -129,16 +121,13 @@ Buffer<uint> sr_offsettable_buf : register(t50);// gres_fb_ref_pidx
 // redirects fragment_vis (u2) to a scratch RT (vobj_flag bit 2). In that case u2 no longer holds the
 // MDVR accumulation, so the prologue reads vis_prev from here instead. (Mirrors the DX10 prev_fragment_vis.)
 // DX10 does not support the post-filter, so this resource is non-DX10 only.
-#pragma region DX11+ only (resource/feature absent on DX10.0)
-#ifndef DX10_0
+#ifndef DX10_0 // DX11+ only (resource/feature absent on DX10.0)
 Texture2D<float4> xray_prev_accum : register(t40);
-#endif
-#pragma endregion // DX11+ only (resource/feature absent on DX10.0)
+#endif // DX11+ only (resource/feature absent on DX10.0)
 
 #define VR_MAX_LAYERS 10 // SKBTZ, +1 for DVR 
 
-#pragma region moment-based OIT (MBT) support
-#if MBT == 1
+#if MBT == 1 // moment-based OIT (MBT) support
 #include "MomentMath.hlsli"
 ByteAddressBuffer moment_container_buf : register(t30); // later for shadow?!
 #define LOAD4_MMBUF(F_ADDR, K) moment_container_buf.Load4((F_ADDR + K) * 4)
@@ -171,21 +160,16 @@ void resolveMoments(out float transmittance_at_depth, out float total_transmitta
 
 	transmittance_at_depth = computeTransmittanceAtDepthFrom8PowerMoments(b_0, b_even, b_odd, depth, moment_bias, overestimation, bias_vector);
 }
-#endif
-#pragma endregion // moment-based OIT (MBT) support
+#endif // moment-based OIT (MBT) support
 
 // case 1 : dvr to deep layers (intra layers are mixed with deep layers)
 // case 2 : mixnig dvr (deep layers and on-the-fly samples)
 
-#pragma region sculpt-mask path
-#if SCULPT_MASK==1
-#pragma region multi-OTF (per-mask transfer function) path
-#if OTF_MASK==1
+#if SCULPT_MASK==1 // sculpt-mask path
+#if OTF_MASK==1 // multi-OTF (per-mask transfer function) path
 INVALID CASE IN THIS VERSION
-#endif
-#pragma endregion // multi-OTF (per-mask transfer function) path
-#endif
-#pragma endregion // sculpt-mask path
+#endif // multi-OTF (per-mask transfer function) path
+#endif // sculpt-mask path
 
 //int Sample_Volume(const in float3 pos_sample_ts)
 //{
@@ -193,8 +177,7 @@ INVALID CASE IN THIS VERSION
 //}
 
 // min_valid_v is g_cbTmap.first_nonzeroalpha_index
-#pragma region VR_MODE 3: mask-bit visualization
-#if VR_MODE == 3
+#if VR_MODE == 3 // VR_MODE 3: mask-bit visualization
 bool Sample_Volume_And_Check(inout float sample_v, const float3 pos_sample_ts, const int min_valid_v)
 {
 	sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
@@ -242,8 +225,7 @@ bool Sample_Volume_And_Check(inout float sample_v, const float3 pos_sample_ts, c
 {
 	sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
     //sample_v = (int) (fsample * g_cbVobj.value_range + 0.5f);
-#pragma region multi-OTF (per-mask transfer function) path
-#if OTF_MASK==1
+#if OTF_MASK==1 // multi-OTF (per-mask transfer function) path
 	int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint_clamp, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
 	
 	return (sample_v * g_cbTmap.tmap_size_x) >= min_valid_v;
@@ -253,10 +235,8 @@ bool Sample_Volume_And_Check(inout float sample_v, const float3 pos_sample_ts, c
 	int sculpt_value = (int)(g_cbVobj.vobj_flag >> 24);
 	return (sample_v * g_cbTmap.tmap_size_x) >= min_valid_v && (mask_vint == 0 || mask_vint > sculpt_value);
 #else
-#pragma region sculpt-bits visibility test
-#if SCULPT_BITS == 1
-#pragma region sculpt-bits source: tiled Tex3D (4x4x2 per texel)
-#if USE_SCULPT_BITS_TEX3D_TILED == 1
+#if SCULPT_BITS == 1 // sculpt-bits visibility test
+#if USE_SCULPT_BITS_TEX3D_TILED == 1 // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
 	int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
 	uint3 tex_id = uint3((uint)voxel_id.x >> 2, (uint)voxel_id.y >> 2, (uint)voxel_id.z >> 1);
 	uint sub = ((uint)voxel_id.x & 3u) | (((uint)voxel_id.y & 3u) << 2) | (((uint)voxel_id.z & 1u) << 4);
@@ -272,22 +252,18 @@ bool Sample_Volume_And_Check(inout float sample_v, const float3 pos_sample_ts, c
 	uint bit_id = voxel_id.x + voxel_id.y * g_cbVobj.vol_original_size.x + voxel_id.z * wwh;
 	uint mod = bit_id % 32;
 	bool visible = !(bool)(sculpt_bits[bit_id / 32] & (0x1u << mod));
-#endif
-#pragma endregion // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
+#endif // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
 	return (sample_v * g_cbTmap.tmap_size_x) >= min_valid_v && visible;
 #else
 	return (sample_v * g_cbTmap.tmap_size_x) >= min_valid_v;
-#endif
-#pragma endregion // sculpt-bits visibility test
-#endif
-#pragma endregion // multi-OTF (per-mask transfer function) path
+#endif // sculpt-bits visibility test
+#endif // multi-OTF (per-mask transfer function) path
 }
 
 bool Vis_Volume_And_Check(inout float4 vis_otf, inout float sample_v, const float3 pos_sample_ts)
 {
 	sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
-#pragma region multi-OTF (per-mask transfer function) path
-#if OTF_MASK==1
+#if OTF_MASK==1 // multi-OTF (per-mask transfer function) path
 	int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint_clamp, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
 	
 	vis_otf = LoadOtfBufId(sample_v * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
@@ -301,10 +277,8 @@ bool Vis_Volume_And_Check(inout float4 vis_otf, inout float sample_v, const floa
 #else 
 
 	vis_otf = LoadOtfBuf(sample_v * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
-#pragma region sculpt-bits visibility test
-#if SCULPT_BITS == 1
-#pragma region sculpt-bits source: tiled Tex3D (4x4x2 per texel)
-#if USE_SCULPT_BITS_TEX3D_TILED == 1
+#if SCULPT_BITS == 1 // sculpt-bits visibility test
+#if USE_SCULPT_BITS_TEX3D_TILED == 1 // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
 	int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
 	uint3 tex_id = uint3((uint)voxel_id.x >> 2, (uint)voxel_id.y >> 2, (uint)voxel_id.z >> 1);
 	uint sub = ((uint)voxel_id.x & 3u) | (((uint)voxel_id.y & 3u) << 2) | (((uint)voxel_id.z & 1u) << 4);
@@ -320,24 +294,20 @@ bool Vis_Volume_And_Check(inout float4 vis_otf, inout float sample_v, const floa
 	uint bit_id = voxel_id.x + voxel_id.y * g_cbVobj.vol_original_size.x + voxel_id.z * wwh;
 	uint mod = bit_id % 32;
 	bool visible = !(bool)(sculpt_bits[bit_id / 32] & (0x1u << mod));
-#endif
-#pragma endregion // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
+#endif // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
 	return ((uint)(vis_otf.a * 255.f) > 0) && visible;
 #else
     return vis_otf.a >= FLT_OPACITY_MIN__;
-#endif
-#pragma endregion // sculpt-bits visibility test
+#endif // sculpt-bits visibility test
 
-#endif
-#pragma endregion // multi-OTF (per-mask transfer function) path
+#endif // multi-OTF (per-mask transfer function) path
 }
 
 bool Vis_Volume_And_Check_Slab(inout float4 vis_otf, inout float sample_v, float sample_prev, const float3 pos_sample_ts)
 {
 	sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
 
-#pragma region multi-OTF (per-mask transfer function) path
-#if OTF_MASK==1
+#if OTF_MASK==1 // multi-OTF (per-mask transfer function) path
 	int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint_clamp, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
 	
 	vis_otf = LoadSlabOtfBufId_PreInt(sample_v * g_cbTmap.tmap_size_x, sample_prev * g_cbTmap.tmap_size_x, buf_preintotf, OPACITY_CORR, mask_vint);
@@ -355,10 +325,8 @@ bool Vis_Volume_And_Check_Slab(inout float4 vis_otf, inout float sample_v, float
 #else
 
 	vis_otf = LoadSlabOtfBuf_PreInt(sample_v * g_cbTmap.tmap_size_x, sample_prev * g_cbTmap.tmap_size_x, buf_preintotf, OPACITY_CORR);
-#pragma region sculpt-bits visibility test
-#if SCULPT_BITS == 1
-#pragma region sculpt-bits source: tiled Tex3D (4x4x2 per texel)
-#if USE_SCULPT_BITS_TEX3D_TILED == 1
+#if SCULPT_BITS == 1 // sculpt-bits visibility test
+#if USE_SCULPT_BITS_TEX3D_TILED == 1 // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
 	int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
 	uint3 tex_id = uint3((uint)voxel_id.x >> 2, (uint)voxel_id.y >> 2, (uint)voxel_id.z >> 1);
 	uint sub = ((uint)voxel_id.x & 3u) | (((uint)voxel_id.y & 3u) << 2) | (((uint)voxel_id.z & 1u) << 4);
@@ -374,19 +342,15 @@ bool Vis_Volume_And_Check_Slab(inout float4 vis_otf, inout float sample_v, float
 	uint bit_id = voxel_id.x + voxel_id.y * g_cbVobj.vol_original_size.x + voxel_id.z * wwh;
 	uint mod = bit_id % 32;
 	bool visible = !(bool)(sculpt_bits[bit_id / 32] & (0x1u << mod));
-#endif
-#pragma endregion // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
+#endif // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
 	return ((uint)(vis_otf.a * 255.f) > 0) && visible;
 #else
 	return vis_otf.a >= FLT_OPACITY_MIN__;
-#endif
-#pragma endregion // sculpt-bits visibility test
+#endif // sculpt-bits visibility test
 
-#endif
-#pragma endregion // multi-OTF (per-mask transfer function) path
+#endif // multi-OTF (per-mask transfer function) path
 }
-#endif
-#pragma endregion // VR_MODE 3: mask-bit visualization
+#endif // VR_MODE 3: mask-bit visualization
 
 #define ITERATION_REFINESURFACE 5
 void Find1stSampleHit(inout int step, const float3 pos_ray_start_ws, const float3 dir_sample_ws, const int num_ray_samples)
@@ -504,15 +468,13 @@ void FindNearestInsideSurface(inout float3 pos_refined_ws, const float3 pos_samp
 }
 
 
-#pragma region VR_MODE != 3: intensity / DVR modes
-#if VR_MODE != 3
+#if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
 #define GRAD_VOL2(Vc, Vp, P, VV, VU, VR, UVV, UVU, UVR) GradientVolume(P, g_cbVobj.vec_grad_x, g_cbVobj.vec_grad_y, g_cbVobj.vec_grad_z, tex3D_volume)
 #define GRAD_VOL3(Vc, Vp, P, VV, VU, VR, UVV, UVU, UVR) GradientVolume2(Vc, P, g_cbVobj.vec_grad_x, g_cbVobj.vec_grad_y, g_cbVobj.vec_grad_z, tex3D_volume)
 #define GRAD_VOL(Vc, Vp, P, VV, VU, VR, UVV, UVU, UVR) GradientVolume3(Vc, Vp, P, VV, VU, VR, UVV, UVU, UVR, tex3D_volume)
 #else
 #define GRAD_VOL(Vc, Vp, P, VV, VU, VR, UVV, UVU, UVR) GradientBinVolume(P, 2*g_cbVobj.vec_grad_x, 2*g_cbVobj.vec_grad_y, 2*g_cbVobj.vec_grad_z, tex3D_volume)
-#endif
-#pragma endregion // VR_MODE != 3: intensity / DVR modes
+#endif // VR_MODE != 3: intensity / DVR modes
 
 float3 GradientClippedVolume(const float sampleV, 
 	const float3 pos_sample_ws, const float3 pos_sample_ts,
@@ -645,12 +607,10 @@ float3 GradientClippedVolume2(const float3 pos_sample_ws, const float3 pos_sampl
 
 float PhongBlinnVr(const float3 cam_view, const in float4 shading_factors, const in float3 light_dirinv, in float3 normal, const in bool is_max_shading)
 {
-#pragma region VR_MODE != 3: intensity / DVR modes
-#if VR_MODE != 3
+#if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
 	if (dot(cam_view, normal) >= 0)
 		normal *= -1.f;
-#endif
-#pragma endregion // VR_MODE != 3: intensity / DVR modes
+#endif // VR_MODE != 3: intensity / DVR modes
     float diff = dot(light_dirinv, normal);
     if (is_max_shading)
         diff = max(diff, 0);
@@ -660,8 +620,7 @@ float PhongBlinnVr(const float3 cam_view, const in float4 shading_factors, const
 	return shading_factors.x + shading_factors.y * diff + shading_factors.z * reft;
 }
 
-#pragma region Z-thickness fragment merging
-#if FRAG_MERGING == 1
+#if FRAG_MERGING == 1 // Z-thickness fragment merging
 // these following two functions are the same as in Sr_KBuf.hlsl
 int Fragment_OrderIndependentMerge(inout Fragment f_buf, const in Fragment f_in)
 {
@@ -684,8 +643,7 @@ bool OverlapTest(const in Fragment f_1, const in Fragment f_2)
 	float diff_z2 = (f_1.z - f_1.zthick) - f_2.z;
 	return diff_z1 * diff_z2 < 0;
 }
-#endif
-#pragma endregion // Z-thickness fragment merging
+#endif // Z-thickness fragment merging
 
 // ---- VXGI volumetric GI consumption — the SINGLE body shared by RayCasting and CurvedSlicer (plan §D5) ----
 // Runtime-gated by g_cbVxgi.vxgi_flag (VXGI_IS_ENABLED): no shader variant, .bat files unchanged. Extracted
@@ -732,16 +690,14 @@ void VXGI_ApplyVolumetricGI(inout float4 vis_sample, const float3 pos_sample_ts,
 	vis_sample.rgb += sc.rgb * ((1.0f - VXGI_SCATTER_GAIN) * VXGI_GI_INTENSITY * vis_otf_a); // volumetric in-scatter
 }
 
-#pragma region DX10.0 path (pixel-shader fallback, SRV inputs)
-#if DX10_0 == 1
+#if DX10_0 == 1 // DX10.0 path (pixel-shader fallback, SRV inputs)
 #define __EXIT_VR_RayCasting return output
 PS_FILL_OUTPUT RayCasting(VS_OUTPUT input)
 #else
 #define __EXIT_VR_RayCasting return
 [numthreads(GRIDSIZE_VR, GRIDSIZE_VR, 1)]
 void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
-#endif
-#pragma endregion // DX10.0 path (pixel-shader fallback, SRV inputs)
+#endif // DX10.0 path (pixel-shader fallback, SRV inputs)
 {
 #define __VRHIT_ON_CLIPPLANE 2
 #define __VRHIT_OUTSIDE_CLIPPLANE 1
@@ -750,8 +706,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
     float4 vis_out = (float4) 0;
 	float depth_out = FLT_MAX;
 
-#pragma region DX10.0 path (pixel-shader fallback, SRV inputs)
-#if DX10_0 == 1
+#if DX10_0 == 1 // DX10.0 path (pixel-shader fallback, SRV inputs)
 	PS_FILL_OUTPUT output;
 	output.depthcs = FLT_MAX;
 	output.color = (float4)0;
@@ -791,23 +746,14 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
         return;
 
     // consider the deep-layers are sored in order
-#pragma region single-layer path (no K-buffer)
-#if ONLY_SINGLE_LAYER == 1
+#if ONLY_SINGLE_LAYER == 1 // single-layer path (no K-buffer)
 #else
 	Fragment fs[VR_MAX_LAYERS];
-#endif
-#pragma endregion // single-layer path (no K-buffer)
+#endif // single-layer path (no K-buffer)
 
-	float aos[AO_MAX_LAYERS] = {0, 0, 0, 0, 0, 0, 0, 0};
-	float ao_vr = 0;
-	if (g_cbEnv.r_kernel_ao > 0)
-	{
-		for (int k = 0; k < AO_MAX_LAYERS; k++) aos[k] = ao_textures[int3(DTid.xy, k)];
-		ao_vr = ao_vr_texture[DTid.xy];
-	}
+	// (v76) SSAO retired: the aos[]/ao_vr loads that lived here are gone (their composite sites too).
 
-#pragma region single-layer path (no K-buffer)
-#if ONLY_SINGLE_LAYER == 1
+#if ONLY_SINGLE_LAYER == 1 // single-layer path (no K-buffer)
 	uint vr_hit_enc = fragment_counter[DTid.xy] >> VR_ENC_BIT_SHIFT;
 #else
 	uint num_frags = fragment_counter[DTid.xy];
@@ -818,16 +764,13 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 	uint vr_hit_enc = num_frags >> VR_ENC_BIT_SHIFT;
 	num_frags = num_frags & 0xFFF;
-#endif
-#pragma endregion // single-layer path (no K-buffer)
+#endif // single-layer path (no K-buffer)
 
 	bool isDither = BitCheck(g_cbCamState.cam_flag, 7);
 	if (isDither) {
-#pragma region RAYMODE 0: DVR
-#if RAYMODE == 0
+#if RAYMODE == 0 // RAYMODE 0: DVR
 		if (vr_hit_enc != __VRHIT_OUTSIDE_VOLUME)
-#endif
-#pragma endregion // RAYMODE 0: DVR
+#endif // RAYMODE 0: DVR
 		{
 			if (tex2d_xy.x % 2 != 0 || tex2d_xy.y % 2 != 0) {
 				fragment_zdepth[tex2d_xy] = -777.0;
@@ -861,15 +804,13 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 #define MDVR_TEST
 
-#pragma region single-layer path (no K-buffer)
-#if ONLY_SINGLE_LAYER == 1
+#if ONLY_SINGLE_LAYER == 1 // single-layer path (no K-buffer)
 	int i = 0;
 	float dvr_layer_thickness = 0;
 	//fragment_zthick[tex2d_xy] = 0;
 #else
 
-#pragma region RAYMODE 0: DVR
-#if RAYMODE == 0
+#if RAYMODE == 0 // RAYMODE 0: DVR
 	// Function-scoped loop index for the DVR path. Previously the prologue mesh-accumulation
 	// for-loop init leaked `i` to function scope (legacy fxc behavior) and the later DVR sample
 	// loop (for (i = start_idx; ...)) plus the RAYMODE==0 VR-outline INTERMIX reused it; now that
@@ -878,11 +819,9 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	// `int i` (the RAYMODE!=0 sample loop declares its own at function scope). The prologue loop's
 	// inner `int i` simply shadows this one inside its block.
 	int i = 0;
-#endif
-#pragma endregion // RAYMODE 0: DVR
+#endif // RAYMODE 0: DVR
 
-#pragma region ifdef MDVR_TEST
-#ifdef MDVR_TEST
+#ifdef MDVR_TEST // ifdef MDVR_TEST
 	// If the post-filter redirected u2 to a scratch RT (bit 2), fragment_vis no longer holds the
 	// accumulated earlier-volume color — read it from the real accumulation RT (xray_prev_accum =
 	// gres_fb_rgba) instead. depth/thick still come from their (non-redirected) UAVs (u3/u5).
@@ -895,29 +834,24 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	{
 		f_dvr.i_vis = ConvertFloat4ToUInt(vis_prev);
 		f_dvr.z = depth_prev;
-#pragma region Z-thickness fragment merging
-#if FRAG_MERGING == 1
+#if FRAG_MERGING == 1 // Z-thickness fragment merging
 		f_dvr.zthick = thick_prev;//g_cbVobj.sample_dist;
 		f_dvr.opacity_sum = vis_prev.a;
-#endif
-#pragma endregion // Z-thickness fragment merging
+#endif // Z-thickness fragment merging
 	}
-#endif
-#pragma endregion // ifdef MDVR_TEST
+#endif // ifdef MDVR_TEST
 	// Post-filter (volume-only) path: the fused XrayFilterComposite pass composites the mesh K-buffer
 	// separately, so skip the K-buffer mesh fragments here entirely and keep only the accumulated
 	// earlier-volume color (vis_prev). fs[] is not needed. DVR (RAYMODE==0) and non-bit2 x-ray are
 	// unchanged. (DX10 never sets bit 2, so this is non-DX10 in practice.)
-#pragma region RAYMODE != 0: MIP / MinIP / RaySum
-#if RAYMODE != 0
+#if RAYMODE != 0 // RAYMODE != 0: MIP / MinIP / RaySum
 	if (BitCheck(g_cbVobj.vobj_flag, 2))
 	{
 		vis_out = vis_prev;   // premultiplied earlier-volume composite; a==0 when there is no earlier volume
 		num_frags = 0;
 	}
 	else
-#endif
-#pragma endregion // RAYMODE != 0: MIP / MinIP / RaySum
+#endif // RAYMODE != 0: MIP / MinIP / RaySum
 	{
 	int layer_count = 0;
 
@@ -933,8 +867,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		//	vis_in.rgb *= 1.f - aos[layer_count];
 		//	f.i_vis = ConvertFloat4ToUInt(vis_in);
 		//}
-#pragma region ifdef MDVR_TEST
-#ifdef MDVR_TEST
+#ifdef MDVR_TEST // ifdef MDVR_TEST
 		if (depth_prev < f.z && vis_prev.a > 0)
 		{
 			vis_out += vis_prev * (1.f - vis_out.a);
@@ -942,8 +875,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 			layer_count++;
 			f_dvr.z = FLT_MAX;
 		}
-#endif
-#pragma endregion // ifdef MDVR_TEST
+#endif // ifdef MDVR_TEST
 		fs[layer_count] = f;
 		layer_count++;
 		vis_out += vis_in * (1.f - vis_out.a);
@@ -960,8 +892,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	//	return;
 	//}
 
-#pragma region ifdef MDVR_TEST
-#ifdef MDVR_TEST
+#ifdef MDVR_TEST // ifdef MDVR_TEST
 	if (vis_prev.a > 0)
 	{
 		if (f_dvr.z < FLT_MAX)
@@ -969,8 +900,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 			vis_out += vis_prev * (1.f - vis_out.a);
 			fs[num_frags++] = f_dvr;
 		}
-#pragma region Z-thickness fragment merging
-#if FRAG_MERGING == 1
+#if FRAG_MERGING == 1 // Z-thickness fragment merging
 		else
 		{
 			// other fragments exist
@@ -1009,11 +939,9 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 				}
 			}
 		}
-#endif
-#pragma endregion // Z-thickness fragment merging
+#endif // Z-thickness fragment merging
 	}
-#endif
-#pragma endregion // ifdef MDVR_TEST
+#endif // ifdef MDVR_TEST
 	} // close: (RAYMODE!=0 && bit2) volume-only  vs.  normal mesh-accumulation path
 	//if (fs[0].i_vis != 0)
 	//	fragment_vis[tex2d_xy] = float4(1, 1, 0, 1);
@@ -1043,18 +971,14 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 	fs[num_frags] = (Fragment)0;
 	fs[num_frags].z = FLT_MAX;
-#endif // ONLY_SINGLE_LAYER == 1
-#pragma endregion // single-layer path (no K-buffer)
+#endif // ONLY_SINGLE_LAYER == 1 // single-layer path (no K-buffer)
     fragment_vis[tex2d_xy] = vis_out;
 	
-#pragma region RAYMODE != 0: MIP / MinIP / RaySum
-#if RAYMODE != 0
+#if RAYMODE != 0 // RAYMODE != 0: MIP / MinIP / RaySum
     fragment_zdepth[tex2d_xy] = depth_out = fs[0].z;
-#endif 
-#pragma endregion // RAYMODE != 0: MIP / MinIP / RaySum
+#endif // RAYMODE != 0: MIP / MinIP / RaySum
 
-#endif // DX10_0
-#pragma endregion // DX10.0 path (pixel-shader fallback, SRV inputs)
+#endif // DX10_0 // DX10.0 path (pixel-shader fallback, SRV inputs)
 
     // Image Plane's Position and Camera State //
     float3 pos_ip_ss = float3(tex2d_xy, 0.0f);
@@ -1076,19 +1000,16 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	v_u = TransformVector(uv_u * g_cbVobj.sample_dist, g_cbVobj.mat_ws2ts); // v_u
 	float3 v_r = TransformVector(uv_r * g_cbVobj.sample_dist, g_cbVobj.mat_ws2ts); // v_r
 
-#pragma region VR_MODE != 2: opacity-corrected sample scaling
-#if VR_MODE != 2
+#if VR_MODE != 2 // VR_MODE != 2: opacity-corrected sample scaling
 	v_r /= g_cbVobj.opacity_correction;
 	v_u /= g_cbVobj.opacity_correction;
 	v_v /= g_cbVobj.opacity_correction;
-#endif
-#pragma endregion // VR_MODE != 2: opacity-corrected sample scaling
+#endif // VR_MODE != 2: opacity-corrected sample scaling
     
 	const float merging_beta = 1.0;
 
 	float3 vbos_hit_start_pos = pos_ip_ws;
-#pragma region RAYMODE 0: DVR
-#if RAYMODE == 0 // DVR
+#if RAYMODE == 0 // DVR // RAYMODE 0: DVR
 	//depth_out = fragment_zdepth[DTid.xy];
 	// use the result from VR_SURFACE
 	depth_out = vr_fragment_1sthit_read[tex2d_xy];
@@ -1104,58 +1025,46 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		uint idx_dlayer = 0;
 		int num_ray_samples = VR_MAX_LAYERS;
 		vis_out = (float4)0;
-#pragma region single-layer path (no K-buffer)
-#if ONLY_SINGLE_LAYER == 1
+#if ONLY_SINGLE_LAYER == 1 // single-layer path (no K-buffer)
 		vis_out += v_rgba * (1.f - vis_out.a);
 #else
-#pragma region Z-thickness fragment merging
-#if FRAG_MERGING == 1
+#if FRAG_MERGING == 1 // Z-thickness fragment merging
 		Fragment f_dly = fs[0]; // if no frag, the z-depth is infinite
 		INTERMIX(vis_out, idx_dlayer, num_frags, v_rgba, depth_out, g_cbVobj.sample_dist, fs, merging_beta);
 #else
 		INTERMIX_V1(vis_out, idx_dlayer, num_frags, v_rgba, depth_out, fs);
-#endif
-#pragma endregion // Z-thickness fragment merging
+#endif // Z-thickness fragment merging
 		REMAINING_MIX(vis_out, idx_dlayer, num_frags, fs);
-#endif
-#pragma endregion // single-layer path (no K-buffer)
+#endif // single-layer path (no K-buffer)
 
-#pragma region DX10.0 path (pixel-shader fallback, SRV inputs)
-#if DX10_0 == 1
+#if DX10_0 == 1 // DX10.0 path (pixel-shader fallback, SRV inputs)
 		output.color = vis_out;
 		output.depthcs = min(depth_out, fs[0].z);
 #else
 		fragment_vis[tex2d_xy] = vis_out;
 
-#pragma region single-layer path (no K-buffer)
-#if ONLY_SINGLE_LAYER == 1
+#if ONLY_SINGLE_LAYER == 1 // single-layer path (no K-buffer)
 		fragment_zdepth[tex2d_xy] = depth_out;
 		dvr_layer_thickness += g_cbVobj.sample_dist;
 		fragment_zthick[tex2d_xy] = dvr_layer_thickness;
 #else
 		fragment_zdepth[tex2d_xy] = min(depth_out, fs[0].z);
-#endif
-#pragma endregion // single-layer path (no K-buffer)
-#endif
-#pragma endregion // DX10.0 path (pixel-shader fallback, SRV inputs)
+#endif // single-layer path (no K-buffer)
+#endif // DX10.0 path (pixel-shader fallback, SRV inputs)
 		__EXIT_VR_RayCasting;
 	}
 	
 	vbos_hit_start_pos = pos_ip_ws + dir_sample_unit_ws * depth_out;
-#pragma region DX10.0 path (pixel-shader fallback, SRV inputs)
-#if DX10_0 == 1
+#if DX10_0 == 1 // DX10.0 path (pixel-shader fallback, SRV inputs)
 	output.depthcs = fs[0].z;
 #else
-#pragma region single-layer path (no K-buffer)
-#if ONLY_SINGLE_LAYER == 1
+#if ONLY_SINGLE_LAYER == 1 // single-layer path (no K-buffer)
 	fragment_zdepth[tex2d_xy] = depth_out;
 	fragment_zthick[tex2d_xy] = dvr_layer_thickness;
 #else
 	fragment_zdepth[tex2d_xy] = fs[0].z;
-#endif
-#pragma endregion // single-layer path (no K-buffer)
-#endif
-#pragma endregion // DX10.0 path (pixel-shader fallback, SRV inputs)
+#endif // single-layer path (no K-buffer)
+#endif // DX10.0 path (pixel-shader fallback, SRV inputs)
 	//bool is_dynamic_transparency = false;// BitCheck(g_cbPobj.pobj_flag, 19);
 	//bool is_mask_transparency = true;// BitCheck(g_cbPobj.pobj_flag, 20);
 	//float mask_weight = 1.f;
@@ -1182,8 +1091,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		__EXIT_VR_RayCasting;
 	}
 	
-#endif
-#pragma endregion // RAYMODE 0: DVR
+#endif // RAYMODE 0: DVR
 	// Ray Intersection for Clipping Box //
     float2 hits_t = ComputeVBoxHits(vbos_hit_start_pos, dir_sample_unit_ws, g_cbVobj.mat_alignedvbox_tr_ws2bs, g_cbClipInfo);
 	// 1st Exit in the case that there is no ray-intersecting boundary in the volume box
@@ -1201,8 +1109,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	depth_out = FLT_MAX;
 	
 	// DVR ray-casting core part
-#pragma region RAYMODE 0: DVR
-#if RAYMODE == 0 // DVR
+#if RAYMODE == 0 // DVR // RAYMODE 0: DVR
 	
 	float depth_hit = depth_out = length(pos_ray_start_ws - pos_ip_ws);
 	float sample_dist = g_cbVobj.sample_dist;
@@ -1241,40 +1148,31 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	//return;
 
 	float sampleThickness = sample_dist;
-#pragma region single-layer path (no K-buffer)
-#if ONLY_SINGLE_LAYER == 1
+#if ONLY_SINGLE_LAYER == 1 // single-layer path (no K-buffer)
 #else
-#pragma region Z-thickness fragment merging
-#if FRAG_MERGING == 1
+#if FRAG_MERGING == 1 // Z-thickness fragment merging
 	Fragment f_dly = fs[0]; // if no frag, the z-depth is infinite
 	sampleThickness = max(sample_dist, g_cbCamState.cam_vz_thickness);
-#endif
-#pragma endregion // Z-thickness fragment merging
-#endif
-#pragma endregion // single-layer path (no K-buffer)
+#endif // Z-thickness fragment merging
+#endif // single-layer path (no K-buffer)
 
 	int start_idx = 0;
 	float sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_ray_start_ts, 0).r;
 
-#pragma region VR_MODE != 3: intensity / DVR modes
-#if VR_MODE != 3
+#if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
 	// note that raycasters except vismask mode (or x-ray) use SLAB sample
 	float sample_prev = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_ray_start_ts - dir_sample_ts, 0).r;
-#endif
-#pragma endregion // VR_MODE != 3: intensity / DVR modes
+#endif // VR_MODE != 3: intensity / DVR modes
 	
-#pragma region VR_MODE 1: opaque surface
-#if VR_MODE == 1
+#if VR_MODE == 1 // VR_MODE 1: opaque surface
 	// opauqe vr
 	float depth_sample = depth_hit;
 	float4 vis_otf = (float4) 0; // note the otf result is the pre-multiplied color
-#pragma region multi-OTF (per-mask transfer function) path
-#if OTF_MASK == 1
+#if OTF_MASK == 1 // multi-OTF (per-mask transfer function) path
 	if (Vis_Volume_And_Check(vis_otf, sample_v, pos_ray_start_ts)) // WHY NOT Vis_Volume_And_Check_Slab???????
 #else
 	if (Vis_Volume_And_Check_Slab(vis_otf, sample_v, sample_prev, pos_ray_start_ts))
-#endif
-#pragma endregion // multi-OTF (per-mask transfer function) path
+#endif // multi-OTF (per-mask transfer function) path
 	{
 		
 		float3 grad = GRAD_VOL(sample_v, sample_prev, pos_ray_start_ts, -v_v, v_u, v_r, -uv_v, uv_u, uv_r);
@@ -1289,20 +1187,16 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		float4 vis_sample = float4(shade * vis_otf.rgb, 1.f);
 		vis_sample.rgb = saturate(vis_sample.rgb);
 
-#pragma region single-layer path (no K-buffer)
-#if ONLY_SINGLE_LAYER == 1
+#if ONLY_SINGLE_LAYER == 1 // single-layer path (no K-buffer)
 		vis_out += vis_sample * (1.f - vis_out.a);
 		dvr_layer_thickness += sample_dist;
 #else
-#pragma region Z-thickness fragment merging
-#if FRAG_MERGING == 1
+#if FRAG_MERGING == 1 // Z-thickness fragment merging
 		INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, sampleThickness, fs, merging_beta);
 #else
 		INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, fs);
-#endif
-#pragma endregion // Z-thickness fragment merging
-#endif	// ONLY_SINGLE_LAYER == 1
-#pragma endregion // single-layer path (no K-buffer)
+#endif // Z-thickness fragment merging
+#endif	// ONLY_SINGLE_LAYER == 1 // single-layer path (no K-buffer)
 	}
 #else
 	if (vr_hit_enc == __VRHIT_ON_CLIPPLANE) // on the clip plane
@@ -1310,36 +1204,29 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		float4 vis_otf = (float4) 0;
 		start_idx++;
 
-#pragma region VR_MODE != 3: intensity / DVR modes
-#if VR_MODE != 3
+#if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
 		//float3 grad = GRAD_VOL(sample_v, sample_prev, pos_ray_start_ts, v_v, v_u, v_r, uv_v, uv_u, uv_r);
 		//float3 grad = GradientClippedVolume2(pos_ray_start_ws, pos_ray_start_ts, tex3D_volume);
-#pragma region VR_MODE != 2: opacity-corrected sample scaling
-#if VR_MODE != 2
+#if VR_MODE != 2 // VR_MODE != 2: opacity-corrected sample scaling
 		//float3 nrl;
 		//GetClipPlaneNormal(pos_ray_start_ws, nrl);
 #else
 		float3 grad = GradientClippedVolume2(pos_ray_start_ws, pos_ray_start_ts, tex3D_volume);
-#endif
-#pragma endregion // VR_MODE != 2: opacity-corrected sample scaling
+#endif // VR_MODE != 2: opacity-corrected sample scaling
 
 		if (Vis_Volume_And_Check_Slab(vis_otf, sample_v, sample_prev, pos_ray_start_ts))
 		//if (Vis_Volume_And_Check(vis_otf, sample_v, pos_ray_start_ts))
 #else
 		if (Vis_Volume_And_Check(vis_otf, pos_ray_start_ts))
-#endif
-#pragma endregion // VR_MODE != 3: intensity / DVR modes
+#endif // VR_MODE != 3: intensity / DVR modes
 		{
 			float depth_sample = depth_hit;
-#pragma region VR_MODE != 3: intensity / DVR modes
-#if VR_MODE != 3
+#if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
 			// note that depth_hit is the front boundary of slab
 			depth_sample += sample_dist; // slab's back boundary
-#endif
-#pragma endregion // VR_MODE != 3: intensity / DVR modes
+#endif // VR_MODE != 3: intensity / DVR modes
 
-#pragma region VR_MODE 2: context-aware
-#if VR_MODE == 2
+#if VR_MODE == 2 // VR_MODE 2: context-aware
 			// The epsilon belongs to the NORMALIZATION only. It used to be folded into grad_len itself,
 			// which then went to MODULATE as GRAD_LENGTH — giving homogeneous regions a non-zero
 			// modulator floor of eps*2*value_range*grad_scale/grad_max (dataset-dependent, not small),
@@ -1349,42 +1236,33 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 			// screen/grid parity the context-aware VXGI path relies on needs the raw value here too.
 			float grad_len = length(grad);
 			float3 nrl = grad / max(grad_len, 1e-3f);
-#endif
-#pragma endregion // VR_MODE 2: context-aware
+#endif // VR_MODE 2: context-aware
 			//float4 vis_sample = vis_otf;
 			float shade = 1.f;
 			//shade = saturate(PhongBlinnVr(view_dir, g_cbVobj.pb_shading_factor, light_dirinv, nrl, true));
 			float4 vis_sample = float4(shade * vis_otf.rgb, vis_otf.a);
 			//vis_sample.rgb = (nrl)/2;
 
-#pragma region VR_MODE 2: context-aware
-#if VR_MODE == 2
+#if VR_MODE == 2 // VR_MODE 2: context-aware
 			//float modulator = pow(min(grad_len * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(g_cbVobj.kappa_i, g_cbVobj.kappa_s));
 			//float modulator = min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
 			//vis_sample *= modulator; // https://github.com/korfriend/OsstemCoreAPIs/discussions/199#discussion-5114460
 			MODULATE(0, grad_len);
-#endif
-#pragma endregion // VR_MODE 2: context-aware
+#endif // VR_MODE 2: context-aware
 			//vis_sample *= mask_weight;
-#pragma region single-layer path (no K-buffer)
-#if ONLY_SINGLE_LAYER == 1
+#if ONLY_SINGLE_LAYER == 1 // single-layer path (no K-buffer)
 			vis_out += vis_sample * (1.f - vis_out.a);
 #else
-#pragma region Z-thickness fragment merging
-#if FRAG_MERGING == 1
+#if FRAG_MERGING == 1 // Z-thickness fragment merging
 			INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, sampleThickness, fs, merging_beta);
 #else
 			INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, fs);
-#endif
-#pragma endregion // Z-thickness fragment merging
-#endif	// ONLY_SINGLE_LAYER == 1
-#pragma endregion // single-layer path (no K-buffer)
+#endif // Z-thickness fragment merging
+#endif	// ONLY_SINGLE_LAYER == 1 // single-layer path (no K-buffer)
 		}
-#pragma region VR_MODE != 3: intensity / DVR modes
-#if VR_MODE != 3
+#if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
 		sample_prev = sample_v;
-#endif
-#pragma endregion // VR_MODE != 3: intensity / DVR modes
+#endif // VR_MODE != 3: intensity / DVR modes
 	}
 	
 	int sample_count = 0;
@@ -1417,8 +1295,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 				float3 pos_sample_blk_ts = pos_ray_start_ts + dir_sample_ts * (float)(i + j);
 
 				float4 vis_otf = (float4) 0;
-#pragma region VR_MODE != 3: intensity / DVR modes
-#if VR_MODE != 3
+#if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
 				if (sample_prev < 0) {
 					sample_prev = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_blk_ts - dir_sample_ts, 0).r;
 				}
@@ -1426,8 +1303,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 				//if (Vis_Volume_And_Check(vis_otf, sample_v, pos_sample_blk_ts))
 #else
 				if (Vis_Volume_And_Check(vis_otf, pos_sample_blk_ts))
-#endif
-#pragma endregion // VR_MODE != 3: intensity / DVR modes
+#endif // VR_MODE != 3: intensity / DVR modes
 				{
 					float3 grad = GRAD_VOL(sample_v, sample_prev, pos_sample_blk_ts, v_v, v_u, v_r, uv_v, uv_u, uv_r);
 					float grad_len = length(grad);
@@ -1448,8 +1324,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 					// inherit the modulator exactly once.
 					VXGI_ApplyVolumetricGI(vis_sample, pos_sample_blk_ts, vis_otf.a);
 					depth_sample = depth_hit + (float)(i + j) * sample_dist;
-#pragma region VR_MODE 2: context-aware
-#if VR_MODE == 2
+#if VR_MODE == 2 // VR_MODE 2: context-aware
 					//g_cbVobj.kappa_i
 					//float modulator = pow(min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(g_cbVobj.kappa_i * max(__s, 0.1f), g_cbVobj.kappa_s));
 					//float modulator = min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
@@ -1458,22 +1333,17 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 					float dist_sq = 1.f - (float)(i + j) / (float)num_ray_samples;
 					dist_sq *= dist_sq;
 					MODULATE(dist_sq, grad_len);
-#endif
-#pragma endregion // VR_MODE 2: context-aware
+#endif // VR_MODE 2: context-aware
 					//vis_sample *= mask_weight;
-#pragma region single-layer path (no K-buffer)
-#if ONLY_SINGLE_LAYER == 1
+#if ONLY_SINGLE_LAYER == 1 // single-layer path (no K-buffer)
 					vis_out += vis_sample * (1.f - vis_out.a);
 #else
-#pragma region Z-thickness fragment merging
-#if FRAG_MERGING == 1
+#if FRAG_MERGING == 1 // Z-thickness fragment merging
 					INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, sampleThickness, fs, merging_beta);
 #else
 					INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, fs);
-#endif
-#pragma endregion // Z-thickness fragment merging
-#endif	// ONLY_SINGLE_LAYER == 1
-#pragma endregion // single-layer path (no K-buffer)
+#endif // Z-thickness fragment merging
+#endif	// ONLY_SINGLE_LAYER == 1 // single-layer path (no K-buffer)
 					if (vis_out.a >= ERT_ALPHA)
 					{
 						i = num_ray_samples;
@@ -1482,40 +1352,31 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 						break;
 					}
 				} // if(sample valid check)
-#pragma region VR_MODE != 3: intensity / DVR modes
-#if VR_MODE != 3
+#if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
 				sample_prev = sample_v;
-#endif
-#pragma endregion // VR_MODE != 3: intensity / DVR modes
+#endif // VR_MODE != 3: intensity / DVR modes
 			} // for (int j = 0; j < blkSkip.num_skip_steps; j++, i++)
 		}
 		else
 		{
 			sample_count++;
-#pragma region VR_MODE != 3: intensity / DVR modes
-#if VR_MODE != 3
+#if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
 			sample_prev = -1;
-#endif
-#pragma endregion // VR_MODE != 3: intensity / DVR modes
+#endif // VR_MODE != 3: intensity / DVR modes
 		}
 		i += blkSkip.num_skip_steps;
 		// this is for outer loop's i++
 		//i -= 1;
 	}
 
-#endif
-#pragma endregion // VR_MODE 1: opaque surface
-#pragma region DX11+ path (compute shader, UAV inputs)
-#if DX10_0 != 1
-	vis_out.rgb *= (1.f - ao_vr);
-#endif
-#pragma endregion // DX11+ path (compute shader, UAV inputs)
-#pragma region single-layer path (no K-buffer)
-#if ONLY_SINGLE_LAYER == 1
+#endif // VR_MODE 1: opaque surface
+#if DX10_0 != 1 // DX11+ path (compute shader, UAV inputs)
+	// (v76) the SSAO vr-layer darkening `vis_out.rgb *= (1.f - ao_vr)` lived here -- retired.
+#endif // DX11+ path (compute shader, UAV inputs)
+#if ONLY_SINGLE_LAYER == 1 // single-layer path (no K-buffer)
 #else
 	REMAINING_MIX(vis_out, idx_dlayer, num_frags, fs);
-#endif
-#pragma endregion // single-layer path (no K-buffer)
+#endif // single-layer path (no K-buffer)
 
 
 #else // RAYMODE != 0
@@ -1523,32 +1384,26 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	float3 pos_ray_start_ts = TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts);
 	float depth_begin = depth_out = length(pos_ray_start_ws - pos_ip_ws);
 	float3 dir_sample_ts = v_v;// TransformVector(dir_sample_ws, g_cbVobj.mat_ws2ts);
-#pragma region RAYMODE 1/2: MIP or MinIP
-#if RAYMODE==1 || RAYMODE==2
+#if RAYMODE==1 || RAYMODE==2 // RAYMODE 1/2: MIP or MinIP
 	int luckyStep = (int)((float)(Random(pos_ray_start_ws.xy) + 1) * (float)num_ray_samples * 0.5f);
 	float depth_sample = depth_begin + g_cbVobj.sample_dist * (float)(luckyStep);
 	float3 pos_lucky_sample_ws = pos_ray_start_ws + dir_sample_ws * (float)luckyStep;
 	float3 pos_lucky_sample_ts = TransformPoint(pos_lucky_sample_ws, g_cbVobj.mat_ws2ts);
-#pragma region RAYMODE==2
-#if RAYMODE==2
+#if RAYMODE==2 // RAYMODE==2
 	float sample_v_prev = 1.f;// g_cbVobj.value_range;
 #else
 	float sample_v_prev = 0;/// tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_lucky_sample_ts, 0).r* g_cbVobj.value_range;
-#endif
-#pragma endregion // RAYMODE==2
+#endif // RAYMODE==2
 
-#pragma region sculpt-mask path
-#if SCULPT_MASK == 1
+#if SCULPT_MASK == 1 // sculpt-mask path
 	int sculpt_value = (int)(g_cbVobj.vobj_flag >> 24);
-#endif
-#pragma endregion // sculpt-mask path
+#endif // sculpt-mask path
 
 #else // ~(RAYMODE==1 || RAYMODE==2) ... RAYMODE==3
 	float depth_sample = depth_begin + g_cbVobj.sample_dist * (float)(num_ray_samples);
 	float sampleSum = 0;  // F13 + air-exclusion: opacity-weighted numerator  Sum(HU * OTFalpha)
 	float weightSum = 0;  // Sum(OTFalpha) — air (alpha~=0) drops out; the mean is over material only
-#endif
-#pragma endregion // RAYMODE 1/2: MIP or MinIP
+#endif // RAYMODE 1/2: MIP or MinIP
 	
 	//fragment_vis[tex2d_xy] = float4(num_ray_samples > 1 ? 1 : 0, 1, 0, 1);
 	//return;
@@ -1559,33 +1414,27 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	{
 		float3 pos_sample_ts = pos_ray_start_ts + dir_sample_ts * (float)i;
 
-#pragma region RAYMODE 1/2: MIP or MinIP
-#if RAYMODE == 1 || RAYMODE == 2
+#if RAYMODE == 1 || RAYMODE == 2 // RAYMODE 1/2: MIP or MinIP
 		LOAD_BLOCK_INFO(blkSkip, pos_sample_ts, dir_sample_ts, num_ray_samples, i);
-#pragma region RAYMODE 1: MIP (max intensity)
-#if RAYMODE == 1
+#if RAYMODE == 1 // RAYMODE 1: MIP (max intensity)
 		if (blkSkip.blk_value > sample_v_prev)
 #elif RAYMODE == 2
 		if (blkSkip.blk_value < sample_v_prev)
-#endif
-#pragma endregion // RAYMODE 1: MIP (max intensity)
+#endif // RAYMODE 1: MIP (max intensity)
 		{
 			count++;
 			for (int k = 0; k <= blkSkip.num_skip_steps; k++)
 			{
 				float3 pos_sample_in_blk_ts = pos_ray_start_ts + dir_sample_ts * (float)(i + k);
-#pragma region sculpt-mask path
-#if SCULPT_MASK == 1
+#if SCULPT_MASK == 1 // sculpt-mask path
 				int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint_clamp, pos_sample_in_blk_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
 				float sample_v = 0;
 				if (mask_vint == 0 || mask_vint > sculpt_value)
 					sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_in_blk_ts, 0).r;
 #else
 
-#pragma region sculpt-bits visibility test
-#if SCULPT_BITS == 1
-#pragma region sculpt-bits source: tiled Tex3D (4x4x2 per texel)
-#if USE_SCULPT_BITS_TEX3D_TILED == 1
+#if SCULPT_BITS == 1 // sculpt-bits visibility test
+#if USE_SCULPT_BITS_TEX3D_TILED == 1 // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
 				int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
 				uint3 tex_id = uint3((uint)voxel_id.x >> 2, (uint)voxel_id.y >> 2, (uint)voxel_id.z >> 1);
 				uint sub = ((uint)voxel_id.x & 3u) | (((uint)voxel_id.y & 3u) << 2) | (((uint)voxel_id.z & 1u) << 4);
@@ -1601,25 +1450,20 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 				uint bit_id = voxel_id.x + voxel_id.y * g_cbVobj.vol_original_size.x + voxel_id.z * wwh;
 				uint mod = bit_id % 32;
 				bool visible = !(bool)(sculpt_bits[bit_id / 32] & (0x1u << mod));
-#endif
-#pragma endregion // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
+#endif // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
 				float sample_v = 0;
 				if (visible)
 					sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_in_blk_ts, 0).r;
 #else
 				float sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_in_blk_ts, 0).r;
-#endif
-#pragma endregion // sculpt-bits visibility test
+#endif // sculpt-bits visibility test
 
-#endif
-#pragma endregion // sculpt-mask path
-#pragma region RAYMODE 1: MIP (max intensity)
-#if RAYMODE == 1
+#endif // sculpt-mask path
+#if RAYMODE == 1 // RAYMODE 1: MIP (max intensity)
 				if (sample_v > sample_v_prev)
 #else	// ~RM_RAYMAX
 				if (sample_v < sample_v_prev)
-#endif
-#pragma endregion // RAYMODE 1: MIP (max intensity)
+#endif // RAYMODE 1: MIP (max intensity)
 				{
 					sample_v_prev = sample_v;
 					depth_sample = depth_begin + g_cbVobj.sample_dist * (float)i;
@@ -1638,12 +1482,10 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		float w = LoadOtfBuf(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, 1).a;
 		sampleSum += sample_v_norm * w;
 		weightSum += w;
-#endif
-#pragma endregion // RAYMODE 1/2: MIP or MinIP
+#endif // RAYMODE 1/2: MIP or MinIP
 	}
 	
-#pragma region RAYMODE 3: RaySum / AvgIP
-#if RAYMODE == 3
+#if RAYMODE == 3 // RAYMODE 3: RaySum / AvgIP
 	// F13 + air-exclusion: classify the opacity-weighted mean density once. When the whole slab is
 	// OTF-transparent (all air) weightSum -> 0, so output empty — the same near-transparent result the
 	// unweighted mean gave for an all-air slab, so there is no visible seam at the fallback.
@@ -1655,14 +1497,11 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	// MIP / MinIP: classify the winning sample. OTF_MASK is DVR-only (no MIP/MinIP x OTF_MASK
 	// variant is built), so no per-mask branch here.
 	float4 vis_otf = LoadOtfBuf(sample_v_prev * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
-#endif
-#pragma endregion // RAYMODE 3: RaySum / AvgIP
+#endif // RAYMODE 3: RaySum / AvgIP
 	uint idx_dlayer = 0;
-#pragma region single-layer path (no K-buffer)
-#if ONLY_SINGLE_LAYER == 1
+#if ONLY_SINGLE_LAYER == 1 // single-layer path (no K-buffer)
 #else
-#pragma region Z-thickness fragment merging
-#if FRAG_MERGING == 1
+#if FRAG_MERGING == 1 // Z-thickness fragment merging
 	float vthick = (hits_t.y - hits_t.x) * 1.f;
 	if (vis_out.a > 0 && hits_t.x < fs[0].z && !isSlicer)
 	{
@@ -1677,8 +1516,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 	// DX10 does not support the post-filter, so the bit-2 volume-only path is non-DX10 only;
 	// DX10 always takes the normal in-DVR intermix path below.
-#pragma region DX11+ only (resource/feature absent on DX10.0)
-#ifndef DX10_0
+#ifndef DX10_0 // DX11+ only (resource/feature absent on DX10.0)
 	if (BitCheck(g_cbVobj.vobj_flag, 2))
 	{
 		// post-filter path: write the volume-only x-ray color; the mesh intermix
@@ -1686,38 +1524,31 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		vis_out += vis_otf * (1.f - vis_out.a);
 	}
 	else
-#endif
-#pragma endregion // DX11+ only (resource/feature absent on DX10.0)
+#endif // DX11+ only (resource/feature absent on DX10.0)
 	{
 		INTERMIX(vis_out, idx_dlayer, num_frags, vis_otf, depth_sample, vthick, fs, merging_beta);
 		REMAINING_MIX(vis_out, idx_dlayer, num_frags, fs);
 	}
 #else
-#pragma region DX11+ only (resource/feature absent on DX10.0)
-#ifndef DX10_0
+#ifndef DX10_0 // DX11+ only (resource/feature absent on DX10.0)
 	if (BitCheck(g_cbVobj.vobj_flag, 2))
 	{
 		// post-filter path: volume-only x-ray color, mesh intermix deferred to post-filter.
 		vis_out += vis_otf * (1.f - vis_out.a);
 	}
 	else
-#endif
-#pragma endregion // DX11+ only (resource/feature absent on DX10.0)
+#endif // DX11+ only (resource/feature absent on DX10.0)
 	{
 		INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_otf, depth_sample, fs);
 		REMAINING_MIX(vis_out, idx_dlayer, num_frags, fs);
 	}
-#endif
-#pragma endregion // Z-thickness fragment merging
+#endif // Z-thickness fragment merging
 			
-#endif // ONLY_SINGLE_LAYER == 1
-#pragma endregion // single-layer path (no K-buffer)
-#endif // // RAYMODE == 0
-#pragma endregion // RAYMODE 0: DVR
+#endif // ONLY_SINGLE_LAYER == 1 // single-layer path (no K-buffer)
+#endif // // RAYMODE == 0 // RAYMODE 0: DVR
 
 
-#pragma region DX10.0 only
-#ifdef DX10_0
+#ifdef DX10_0 // DX10.0 only
 	output.color = vis_out;
 	output.depthcs = min(depth_out, fs[0].z);		// DX10: post-filter unsupported, no bit-2 special case
 	return output;
@@ -1730,15 +1561,13 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 			// Clamping here would strip the highlight before the tonemapper ever sees it.
 			vis_out = StoreRadiance(vis_out);
 			fragment_vis[tex2d_xy] = vis_out;
-#pragma region single-layer path (no K-buffer)
-#if ONLY_SINGLE_LAYER == 1
+#if ONLY_SINGLE_LAYER == 1 // single-layer path (no K-buffer)
 	// to do : compute thickness...
 	fragment_zdepth[tex2d_xy] = depth_out;
 	fragment_zthick[tex2d_xy] = max(depth_sample - depth_out, sample_dist);
 #else
 			
-#pragma region RAYMODE != 0: MIP / MinIP / RaySum
-#if RAYMODE != 0
+#if RAYMODE != 0 // RAYMODE != 0: MIP / MinIP / RaySum
 	// The bit-2 post-filter path (clean volume depth + slab thickness for XrayFilterComposite) is an
 	// x-ray-only feature: `vthick` and the slice-plane `depth_sample` only exist in the RAYMODE!=0
 	// branch above, and the post-filter is never engaged for DVR. Guarding by RAYMODE!=0 keeps the
@@ -1750,19 +1579,16 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		fragment_zthick[tex2d_xy] = vthick;		// volume slab thickness, consumed as INTERMIX thick_sample in the post-filter pass
 	}
 	else
-#endif
-#pragma endregion // RAYMODE != 0: MIP / MinIP / RaySum
+#endif // RAYMODE != 0: MIP / MinIP / RaySum
 	{
 		fragment_zdepth[tex2d_xy] = min(depth_out, fs[0].z);
 	}
 	//fragment_counter[DTid.xy] = num_frags + 1;
-#endif
-#pragma endregion // single-layer path (no K-buffer)
+#endif // single-layer path (no K-buffer)
 
 	//float tt = sample_count / 30.f;
 	//fragment_vis[tex2d_xy] = float4((float3)tt, 1);// float4((pos_ray_start_ts + float3(1, 1, 1)) / 2, 1);
-#endif
-#pragma endregion // DX10.0 only
+#endif // DX10.0 only
 		}
 /**/
 /*
@@ -1815,8 +1641,7 @@ void FillDither(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 }
 */
 
-#pragma region DX10.0 path (pixel-shader fallback, SRV inputs)
-#if DX10_0 == 1
+#if DX10_0 == 1 // DX10.0 path (pixel-shader fallback, SRV inputs)
 #define __EXIT_VR_SURFACE return output
 PS_FILL_OUTPUT_SURF VR_SURFACE(VS_OUTPUT input)
 #else
@@ -1828,11 +1653,9 @@ PS_FILL_OUTPUT_SURF VR_SURFACE(VS_OUTPUT input)
 		(
 
 		uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
-#endif
-#pragma endregion // DX10.0 path (pixel-shader fallback, SRV inputs)
+#endif // DX10.0 path (pixel-shader fallback, SRV inputs)
 {
-#pragma region DX10.0 path (pixel-shader fallback, SRV inputs)
-#if DX10_0 == 1
+#if DX10_0 == 1 // DX10.0 path (pixel-shader fallback, SRV inputs)
 	PS_FILL_OUTPUT_SURF output;
 	output.depthcs = FLT_MAX;
 	output.enc = 0;
@@ -1848,8 +1671,7 @@ PS_FILL_OUTPUT_SURF VR_SURFACE(VS_OUTPUT input)
 	// 1 : outside the clip plane
 	// 0 : outside the volume
 			fragment_counter[DTid.xy] &= 0x3FFFFFFF;
-#endif
-#pragma endregion // DX10.0 path (pixel-shader fallback, SRV inputs)
+#endif // DX10.0 path (pixel-shader fallback, SRV inputs)
 
 	// Image Plane's Position and Camera State //
 			float3 pos_ip_ss = float3(tex2d_xy, 0.0f);
@@ -1878,11 +1700,9 @@ PS_FILL_OUTPUT_SURF VR_SURFACE(VS_OUTPUT input)
 			if (hit_step > 0)
 			{
 				FindNearestInsideSurface(pos_hit_ws, pos_hit_ws, dir_sample_ws, ITERATION_REFINESURFACE);
-#pragma region VR_MODE != 3: intensity / DVR modes
-#if VR_MODE != 3
+#if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
 				pos_hit_ws -= dir_sample_ws;
-#endif
-#pragma endregion // VR_MODE != 3: intensity / DVR modes
+#endif // VR_MODE != 3: intensity / DVR modes
 				if (dot(pos_hit_ws - pos_start_ws, dir_sample_ws) <= 0)
 					pos_hit_ws = pos_start_ws;
 			}
@@ -1909,8 +1729,7 @@ PS_FILL_OUTPUT_SURF VR_SURFACE(VS_OUTPUT input)
 			}
 
 			uint dvr_hit_enc = length(pos_hit_ws - pos_start_ws) < g_cbVobj.sample_dist ? 2 : 1;
-#pragma region DX10.0 path (pixel-shader fallback, SRV inputs)
-#if DX10_0 == 1
+#if DX10_0 == 1 // DX10.0 path (pixel-shader fallback, SRV inputs)
 	output.depthcs = depth_hit;
 	output.enc = dvr_hit_enc;
 	return output;
@@ -1925,12 +1744,10 @@ PS_FILL_OUTPUT_SURF VR_SURFACE(VS_OUTPUT input)
 	// 1 : outside the clip plane
 	// 0 : outside the volume
 			fragment_counter[DTid.xy] = fcnt | (dvr_hit_enc << VR_ENC_BIT_SHIFT);
-#endif
-#pragma endregion // DX10.0 path (pixel-shader fallback, SRV inputs)
+#endif // DX10.0 path (pixel-shader fallback, SRV inputs)
 		}
 
-#pragma region DX10.0 path (pixel-shader fallback, SRV inputs)
-#if DX10_0 == 1
+#if DX10_0 == 1 // DX10.0 path (pixel-shader fallback, SRV inputs)
 #define __EXIT_PanoVR return output
 //[earlydepthstencil]
 PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
@@ -1943,14 +1760,12 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 		(
 
 		uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex)
-#endif
-#pragma endregion // DX10.0 path (pixel-shader fallback, SRV inputs)
+#endif // DX10.0 path (pixel-shader fallback, SRV inputs)
 {
             float4 vis_out = (float4) 0;
 			float depth_out = 0;
 
-#pragma region DX10.0 path (pixel-shader fallback, SRV inputs)
-#if DX10_0 == 1
+#if DX10_0 == 1 // DX10.0 path (pixel-shader fallback, SRV inputs)
 	PS_FILL_OUTPUT output;
 	output.depthcs = FLT_MAX;
 	output.color = (float4)0;
@@ -1967,12 +1782,10 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 		Fragment f; 
 		f.i_vis = ConvertFloat4ToUInt(prev_vis);
 		f.z = prev_depthcs;
-#pragma region Z-thickness fragment merging
-#if FRAG_MERGING == 1
+#if FRAG_MERGING == 1 // Z-thickness fragment merging
 		f.zthick = g_cbVobj.sample_dist;
 		f.opacity_sum = prev_vis.a;
-#endif
-#pragma endregion // Z-thickness fragment merging
+#endif // Z-thickness fragment merging
 		fs[0] = f;
 	}
 	fs[num_frags] = (Fragment)0;
@@ -2060,15 +1873,13 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 	// K-buffer separately, so skip the mesh fragments here entirely. The curved slicer is
 	// single-volume (no MDVR vis_prev accumulation), so this just leaves vis_out at 0 and
 	// num_frags at 0. DX10 never sets bit 2, so this is non-DX10 in practice.
-#pragma region DX11+ only (resource/feature absent on DX10.0)
-#ifndef DX10_0
+#ifndef DX10_0 // DX11+ only (resource/feature absent on DX10.0)
 	if (BitCheck(g_cbVobj.vobj_flag, 2))
 	{
 		num_frags = 0;
 	}
 	else
-#endif
-#pragma endregion // DX11+ only (resource/feature absent on DX10.0)
+#endif // DX11+ only (resource/feature absent on DX10.0)
 	{
 	[loop]
 	for (i = 0; i < (int) num_frags; i++)
@@ -2077,8 +1888,8 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 		Fragment f;
 		GET_FRAG(f, addr_base, i); // from K-buffer
 		float4 vis_in = ConvertUIntToFloat4(f.i_vis);
-		if (g_cbEnv.r_kernel_ao > 0)
-			f.i_vis = ConvertFloat4ToUInt(vis_in);
+		// (v76) the SSAO re-encode `if (r_kernel_ao > 0) f.i_vis = ...` lived here -- retired (it was a
+		// value-identity round-trip once the per-layer AO multiply was disabled anyway).
 		if (vis_in.a > 0)
 			vis_out += vis_in * (1.f - vis_out.a);
 		fs[i] = f;
@@ -2090,8 +1901,7 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 			fragment_vis[cip_xy] = vis_out;
             vis_out = (float4) 0;
             depth_out = FLT_MAX;
-#endif
-#pragma endregion // DX10.0 path (pixel-shader fallback, SRV inputs)
+#endif // DX10.0 path (pixel-shader fallback, SRV inputs)
 
 
 	// Image Plane's Position and Camera State //
@@ -2183,13 +1993,11 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 			float3 v_u = TransformVector(uv_u * g_cbVobj.sample_dist, g_cbVobj.mat_ws2ts); // v_u
 			float3 v_r = TransformVector(uv_r * g_cbVobj.sample_dist, g_cbVobj.mat_ws2ts); // v_r
 
-#pragma region VR_MODE != 2: opacity-corrected sample scaling
-#if VR_MODE != 2
+#if VR_MODE != 2 // VR_MODE != 2: opacity-corrected sample scaling
 			v_r /= g_cbVobj.opacity_correction;
 			v_u /= g_cbVobj.opacity_correction;
 			v_v /= g_cbVobj.opacity_correction;
-#endif
-#pragma endregion // VR_MODE != 2: opacity-corrected sample scaling
+#endif // VR_MODE != 2: opacity-corrected sample scaling
 
 			
 			float2 hits_t = ComputeVBoxHits(pos_ray_start_ws, f3VecSampleViewWS, g_cbVobj.mat_alignedvbox_tr_ws2bs, g_cbClipInfo);
@@ -2224,8 +2032,7 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 			pos_ray_start_ws = pos_ray_start_ws + f3VecSampleViewWS * max(hits_t.x, 0);
 			
 	// DVR ray-casting core part
-#pragma region RAYMODE 0: DVR
-#if RAYMODE == 0 // DVR
+#if RAYMODE == 0 // DVR // RAYMODE 0: DVR
 	// note that the gradient normal direction faces to the inside
 	float3 view_dir = normalize(dir_sample_ws);
 	float3 light_dirinv = -g_cbEnv.dir_light_ws;
@@ -2244,11 +2051,9 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 	//vis_out = float4(TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts), 1);
 	//return;
 
-#pragma region Z-thickness fragment merging
-#if FRAG_MERGING == 1
+#if FRAG_MERGING == 1 // Z-thickness fragment merging
 	Fragment f_dly = fs[0]; // if no frag, the z-depth is infinite
-#endif
-#pragma endregion // Z-thickness fragment merging
+#endif // Z-thickness fragment merging
 
 	int hit_step = -1;
 	Find1stSampleHit(hit_step, pos_ray_start_ws, dir_sample_ws, num_ray_samples);
@@ -2261,11 +2066,9 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 	if (hit_step > 0) 
 	{
 		//FindNearestInsideSurface(pos_hit_ws, pos_hit_ws, dir_sample_ws, ITERATION_REFINESURFACE);
-#pragma region VR_MODE != 3: intensity / DVR modes
-#if VR_MODE != 3
+#if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
 		pos_hit_ws -= dir_sample_ws;
-#endif
-#pragma endregion // VR_MODE != 3: intensity / DVR modes
+#endif // VR_MODE != 3: intensity / DVR modes
 		if (dot(pos_hit_ws - pos_ray_start_ws, dir_sample_ws) <= 0)
 			pos_hit_ws = pos_ray_start_ws;
 	}
@@ -2305,74 +2108,60 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 	float sample_v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_ray_hit_ts, 0).r;
 	int start_idx = 0;
 
-#pragma region VR_MODE != 3: intensity / DVR modes
-#if VR_MODE != 3
+#if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
 	// note that raycasters except vismask mode (or x-ray) use SLAB sample
 	start_idx = 0;
 	float sample_prev = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_ray_hit_ts - v_v, 0).r;
-#endif
-#pragma endregion // VR_MODE != 3: intensity / DVR modes
+#endif // VR_MODE != 3: intensity / DVR modes
 
-#pragma region VR_MODE != 2: opacity-corrected sample scaling
-#if VR_MODE != 2
+#if VR_MODE != 2 // VR_MODE != 2: opacity-corrected sample scaling
 	if (isOnPlane)//
 	{
 		float4 vis_otf = (float4) 0;
 		start_idx++;
 
-#pragma region VR_MODE != 3: intensity / DVR modes
-#if VR_MODE != 3
+#if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
 		float3 grad = GRAD_VOL(sample_v, sample_prev, pos_ray_hit_ts, v_v, v_u, v_r, uv_v, uv_u, uv_r);
 		if (Vis_Volume_And_Check_Slab(vis_otf, sample_v, sample_prev, pos_ray_hit_ts))
 		//if (Vis_Volume_And_Check(vis_otf, sample_v, pos_ray_hit_ts))
 #else
 		if (Vis_Volume_And_Check(vis_otf, pos_ray_hit_ts))
-#endif
-#pragma endregion // VR_MODE != 3: intensity / DVR modes
+#endif // VR_MODE != 3: intensity / DVR modes
 		{
-#pragma region VR_MODE != 3: intensity / DVR modes
-#if VR_MODE != 3
+#if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
 			// note that depth_hit is the front boundary of slab
 			//depth_sample += sample_dist; // slab's back boundary
-#endif
-#pragma endregion // VR_MODE != 3: intensity / DVR modes
+#endif // VR_MODE != 3: intensity / DVR modes
 
 			float4 vis_sample = vis_otf;
-#pragma region VR_MODE 2: context-aware
-#if VR_MODE == 2
+#if VR_MODE == 2 // VR_MODE 2: context-aware
 			float grad_len = length(grad);
 			//float3 nrl = grad / (grad_len + 0.0001f);
 			//float modulator = pow(min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(kappa_i * max(__s, 0.1f), kappa_s));
 			//float modulator = pow(min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(kappa_i * max(__s, 0.1f), kappa_s));
 
 			MODULATE(0, grad_len);
-#endif
-#pragma endregion // VR_MODE 2: context-aware
+#endif // VR_MODE 2: context-aware
 			//vis_sample *= mask_weight;
 			
 			//vis_out += vis_sample * (1.f - vis_out.a);
 
 			float depth_sample = depthHit;
-#pragma region Z-thickness fragment merging
-#if FRAG_MERGING == 1
+#if FRAG_MERGING == 1 // Z-thickness fragment merging
 			INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, sample_dist, fs, merging_beta);
 #else
 			INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, fs);
-#endif
-#pragma endregion // Z-thickness fragment merging
+#endif // Z-thickness fragment merging
 			//fragment_vis[cip_xy] = float4(1, 0, 0, 1);
 			//return;
 		}
 		//fragment_vis[cip_xy] = float4(1, 0, 0, 1);
 		//return;
-#pragma region VR_MODE != 3: intensity / DVR modes
-#if VR_MODE != 3
+#if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
 		sample_prev = sample_v;
-#endif
-#pragma endregion // VR_MODE != 3: intensity / DVR modes
+#endif // VR_MODE != 3: intensity / DVR modes
 	}
-#endif
-#pragma endregion // VR_MODE != 2: opacity-corrected sample scaling
+#endif // VR_MODE != 2: opacity-corrected sample scaling
 	//fragment_vis[cip_xy] = vis_out;
 	//return;
 
@@ -2398,8 +2187,7 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 				float3 pos_sample_blk_ts = pos_ray_hit_ts + dir_sample_ts * (float) (i + j);
 
 				float4 vis_otf = (float4) 0;
-#pragma region VR_MODE != 3: intensity / DVR modes
-#if VR_MODE != 3
+#if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
 				if (sample_prev < 0) {
 					sample_prev = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_blk_ts - v_v, 0).r;
 				}
@@ -2407,20 +2195,17 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 				//if (Vis_Volume_And_Check(vis_otf, sample_v, pos_sample_blk_ts))
 #else
 				if (Vis_Volume_And_Check(vis_otf, pos_sample_blk_ts))
-#endif
-#pragma endregion // VR_MODE != 3: intensity / DVR modes
+#endif // VR_MODE != 3: intensity / DVR modes
 				{
 					float3 grad = GRAD_VOL(sample_v, 0, pos_sample_blk_ts, v_v, v_u, v_r, uv_v, uv_u, uv_r);
 					float grad_len = length(grad);
 					float3 nrl = grad / (grad_len + 0.0001f);
 
 					float shade = 1.f;
-#pragma region VR_MODE != 2: opacity-corrected sample scaling
-#if VR_MODE != 2
+#if VR_MODE != 2 // VR_MODE != 2: opacity-corrected sample scaling
 					if (grad_len > 0)
 						shade = saturate(PhongBlinnVr(view_dir, g_cbVobj.pb_shading_factor, light_dirinv, nrl, true));
-#endif
-#pragma endregion // VR_MODE != 2: opacity-corrected sample scaling
+#endif // VR_MODE != 2: opacity-corrected sample scaling
 					
 					float4 vis_sample = float4(shade * vis_otf.rgb, vis_otf.a);
 					// VXGI consumption (plan §D5): the SAME shared body the 3D DVR march calls, so the curved
@@ -2432,24 +2217,20 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 					// never reach here (this is the RAYMODE==0 region).
 					VXGI_ApplyVolumetricGI(vis_sample, pos_sample_blk_ts, vis_otf.a);
 					float depth_sample = depthHit + (float)(i + j) * sample_dist;
-#pragma region VR_MODE 2: context-aware
-#if VR_MODE == 2
+#if VR_MODE == 2 // VR_MODE 2: context-aware
 					float dist_sq = 1.f - (float)(i + j) / (float)num_new_ray_samples;
 					dist_sq *= dist_sq;
 
 					MODULATE(dist_sq, grad_len);
-#endif
-#pragma endregion // VR_MODE 2: context-aware
+#endif // VR_MODE 2: context-aware
 
 //					vis_out += vis_sample * (1.f - vis_out.a);
 
-#pragma region Z-thickness fragment merging
-#if FRAG_MERGING == 1
+#if FRAG_MERGING == 1 // Z-thickness fragment merging
 					INTERMIX(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, sample_dist, fs, merging_beta);
 #else
 					INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_sample, depth_sample, fs);
-#endif
-#pragma endregion // Z-thickness fragment merging
+#endif // Z-thickness fragment merging
 
 
 
@@ -2461,22 +2242,18 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 						break;
 					}
 				} // if(sample valid check)
-#pragma region VR_MODE != 3: intensity / DVR modes
-#if VR_MODE != 3
+#if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
 				sample_prev = sample_v;
-#endif
-#pragma endregion // VR_MODE != 3: intensity / DVR modes
+#endif // VR_MODE != 3: intensity / DVR modes
 			} // for (int j = 0; j < blkSkip.num_skip_steps; j++, i++)
 			//i += blkSkip.num_skip_steps;
 		} // if (blkSkip.blk_value > 0)
 		else
 		{
 			//i += blkSkip.num_skip_steps;// max(blkSkip.num_skip_steps - 1, 0);
-#pragma region VR_MODE != 3: intensity / DVR modes
-#if VR_MODE != 3
+#if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
 			sample_prev = -1;
-#endif
-#pragma endregion // VR_MODE != 3: intensity / DVR modes
+#endif // VR_MODE != 3: intensity / DVR modes
 		}
 		i += blkSkip.num_skip_steps;
 		// this is for outer loop's i++
@@ -2488,27 +2265,23 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 #else // RAYMODE != 0
 	float depth_begin = 0;
 			
-#pragma region RAYMODE 1/2: MIP or MinIP
-#if RAYMODE==1 || RAYMODE==2
+#if RAYMODE==1 || RAYMODE==2 // RAYMODE 1/2: MIP or MinIP
 	int luckyStep = (int)((float)(Random(pos_ray_start_ws.xy) + 1) * (float)num_ray_samples * 0.5f);
 	float depth_sample = depth_begin + g_cbVobj.sample_dist * (float)(luckyStep);
 	float3 pos_lucky_sample_ws = pos_ray_start_ws + dir_sample_ws * (float)luckyStep;
 	float3 pos_lucky_sample_ts = TransformPoint(pos_lucky_sample_ws, g_cbVobj.mat_ws2ts);
-#pragma region RAYMODE==2
-#if RAYMODE==2
+#if RAYMODE==2 // RAYMODE==2
 	float sample_v_prev = 1.f;
 #else
 	float sample_v_prev = 0;/// tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_lucky_sample_ts, 0).r* g_cbVobj.value_range;
-#endif
-#pragma endregion // RAYMODE==2
+#endif // RAYMODE==2
 
 
 #else // ~(RAYMODE==1 || RAYMODE==2)
 			float depth_sample = depth_begin + g_cbVobj.sample_dist * (float) (num_ray_samples);
 			float sampleSum = 0;  // F13 + air-exclusion: opacity-weighted  Sum(HU * OTFalpha)
 			float weightSum = 0;  // Sum(OTFalpha)
-#endif
-#pragma endregion // RAYMODE 1/2: MIP or MinIP
+#endif // RAYMODE 1/2: MIP or MinIP
 			float3 pos_ray_start_ts = TransformPoint(pos_ray_start_ws, g_cbVobj.mat_ws2ts);
 			float3 dir_sample_ts = TransformVector(dir_sample_ws, g_cbVobj.mat_ws2ts);
 
@@ -2518,29 +2291,24 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 	{
 		float3 pos_sample_ts = pos_ray_start_ts + dir_sample_ts * (float) i;
 					
-#pragma region RAYMODE 1/2: MIP or MinIP
-#if RAYMODE == 1 || RAYMODE == 2
+#if RAYMODE == 1 || RAYMODE == 2 // RAYMODE 1/2: MIP or MinIP
 		LOAD_BLOCK_INFO(blkSkip, pos_sample_ts, dir_sample_ts, num_ray_samples, i);
-#pragma region RAYMODE 1: MIP (max intensity)
-#if RAYMODE == 1
+#if RAYMODE == 1 // RAYMODE 1: MIP (max intensity)
 		if (blkSkip.blk_value > sample_v_prev)
 #elif RAYMODE == 2
 		if (blkSkip.blk_value < sample_v_prev)
-#endif
-#pragma endregion // RAYMODE 1: MIP (max intensity)
+#endif // RAYMODE 1: MIP (max intensity)
 		{
 			count++;
 			for (int k = 0; k <= blkSkip.num_skip_steps; k++)
 			{
 				float3 pos_sample_in_blk_ts = pos_ray_start_ts + dir_sample_ts * (float)(i + k);
 				float sample_v = tex3D_volume.SampleLevel(g_samplerLinear, pos_sample_in_blk_ts, 0).r;// *g_cbVobj.value_range;
-#pragma region RAYMODE 1: MIP (max intensity)
-#if RAYMODE == 1
+#if RAYMODE == 1 // RAYMODE 1: MIP (max intensity)
 				if (sample_v > sample_v_prev)
 #else	// ~RM_RAYMAX
 				if (sample_v < sample_v_prev)
-#endif
-#pragma endregion // RAYMODE 1: MIP (max intensity)
+#endif // RAYMODE 1: MIP (max intensity)
 				{
 					sample_v_prev = sample_v;
 					depth_sample = depth_begin + g_cbVobj.sample_dist * (float)i;
@@ -2557,12 +2325,10 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 		float w = LoadOtfBuf(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, 1).a;
 		sampleSum += sample_v_norm * w;
 		weightSum += w;
-#endif
-#pragma endregion // RAYMODE 1/2: MIP or MinIP
+#endif // RAYMODE 1/2: MIP or MinIP
 	}
 			
-#pragma region RAYMODE 3: RaySum / AvgIP
-#if RAYMODE == 3
+#if RAYMODE == 3 // RAYMODE 3: RaySum / AvgIP
 	// F13 + air-exclusion: classify the opacity-weighted mean density once; all-air slab (weightSum->0)
 	// outputs empty, matching the old all-air result (no seam).
 	float4 vis_otf = (weightSum > 1e-5f)
@@ -2572,16 +2338,14 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 
 	// MIP / MinIP: OTF_MASK is DVR-only, so no per-mask branch here.
 	float4 vis_otf = LoadOtfBuf(sample_v_prev * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
-#endif
-#pragma endregion // RAYMODE 3: RaySum / AvgIP
+#endif // RAYMODE 3: RaySum / AvgIP
 
 			uint idx_dlayer = 0;
 			Fragment f_dly = fs[0]; // if no frag, the z-depth is infinite
 			
 	// DX10 does not support the post-filter, so the bit-2 volume-only path is non-DX10 only;
 	// DX10 always takes the normal in-DVR intermix path below.
-#pragma region DX11+ only (resource/feature absent on DX10.0)
-#ifndef DX10_0
+#ifndef DX10_0 // DX11+ only (resource/feature absent on DX10.0)
 	if (BitCheck(g_cbVobj.vobj_flag, 2))
 	{
 		// post-filter path: write the volume-only x-ray color; the mesh intermix
@@ -2589,44 +2353,34 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 		vis_out += vis_otf * (1.f - vis_out.a);
 	}
 	else
-#endif
-#pragma endregion // DX11+ only (resource/feature absent on DX10.0)
+#endif // DX11+ only (resource/feature absent on DX10.0)
 	{
-#pragma region Z-thickness fragment merging
-#if FRAG_MERGING == 1
+#if FRAG_MERGING == 1 // Z-thickness fragment merging
 	INTERMIX(vis_out, idx_dlayer, num_frags, vis_otf, depth_sample, max(fPlaneThickness, sample_dist), fs, merging_beta);
 #else
 	INTERMIX_V1(vis_out, idx_dlayer, num_frags, vis_otf, depth_sample, fs);
-#endif
-#pragma endregion // Z-thickness fragment merging
+#endif // Z-thickness fragment merging
 	REMAINING_MIX(vis_out, idx_dlayer, num_frags, fs);
 	}
-#endif
-#pragma endregion // RAYMODE 0: DVR
+#endif // RAYMODE 0: DVR
 
-#pragma region DX10.0 only
-#ifdef DX10_0
+#ifdef DX10_0 // DX10.0 only
 	output.color = vis_out;
 	output.depthcs = depth_sample;
 	return output;
 #else
                     fragment_vis[cip_xy] = StoreRadiance(vis_out); // FP16 linear: keep HDR (see StoreRadiance)
-#pragma region RAYMODE != 0: MIP / MinIP / RaySum
-#if RAYMODE != 0
-#pragma region DX11+ only (resource/feature absent on DX10.0)
-#ifndef DX10_0
+#if RAYMODE != 0 // RAYMODE != 0: MIP / MinIP / RaySum
+#ifndef DX10_0 // DX11+ only (resource/feature absent on DX10.0)
 	if (BitCheck(g_cbVobj.vobj_flag, 2))
 	{
         fragment_zdepth[cip_xy] = depth_sample; // clean volume (slice plane) depth for post-filter
 		fragment_zthick[cip_xy] = max(fPlaneThickness, sample_dist);		// curved slab thickness, consumed as INTERMIX thick_sample in the post-filter pass
 	}
 	else
-#endif
-#pragma endregion // DX11+ only (resource/feature absent on DX10.0)
-#endif
-#pragma endregion // RAYMODE != 0: MIP / MinIP / RaySum
+#endif // DX11+ only (resource/feature absent on DX10.0)
+#endif // RAYMODE != 0: MIP / MinIP / RaySum
         fragment_zdepth[cip_xy] = depth_sample;
-#endif
-#pragma endregion // DX10.0 only
+#endif // DX10.0 only
 }
 /**/

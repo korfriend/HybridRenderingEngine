@@ -182,6 +182,7 @@ VS_OUTPUT VS_FullscreenQuad(uint vertexID : SV_VertexID)
     output.position = float4(uv * 2.0 - 1.0, 0.0, 1.0);
     output.position.y = -output.position.y; // Flip Y for DX coordinate system
     output.texcoord = uv;
+    output.worldPos = 0; // fullscreen quad has no world position; init so VS_OUTPUT is fully written (X3578)
 
     return output;
 }

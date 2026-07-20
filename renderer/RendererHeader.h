@@ -15,8 +15,62 @@
 #include <fstream>
 #include <iostream>
 #include <windows.h>
+#include <algorithm> // std::sort -- CollectViewLights (Multi-Light rev.14)
+#include <vector>
 
 using namespace Concurrency;	// for PPL
+
+// ---- Multi-Light rev.14 (plan: secret_recipies/MULTI_LIGHT_PLAN.md, ML-D2) ----
+// Lights are ACTORS: they ride VmFnContainer::sceneActors by pointer, already filtered by this
+// view's hidden_actors + scene-level visible. There is no light payload channel any more (the old
+// "_VmLight_LightSource" value copy and "_vector<VmSceneLight>*_SceneLights" are retired); core
+// forwards only "_int_DominantLightId".
+//
+// DOMINANT = the single direct-shading light AND the only light allowed to honour CAMERA_ATTACHED
+// (ML-D9). 0 / absent / not-found -> NULL, which every renderer already treats as "no light"
+// (the legacy default path). An OLD core sets neither channel, so NULL is also the graceful
+// degrade for a new renderer against an old core [user directive: accepted].
+// The -1 default distinguishes "core did not send the channel at all" (an OLD core: every light would
+// be silently dropped, which on a medical viewer is the quiet version of a crash) from the perfectly
+// legal "new core, this view has no dominant" (0). A version mismatch cannot corrupt anything here --
+// the light travels as a pointer in an id-keyed map and both sides re-check GetActorType() -- but it
+// must not fail SILENTLY, so the old-core case logs once per process (api-stability review, rev.14).
+inline fncontainer::VmLight* GetDominantLight(fncontainer::VmFnContainer* fnc)
+{
+	const int dominant_id = fnc->fnParams.GetParam("_int_DominantLightId", (int)-1);
+	if (dominant_id < 0)
+	{
+		static bool warned_old_core = false;
+		if (!warned_old_core)
+		{
+			warned_old_core = true;
+			vzlog_error("[Multi-Light] core did not provide \"_int_DominantLightId\" - this renderer needs API v76+ (VmLight-as-actor). ALL LIGHTING IS DISABLED; rebuild/redeploy CommonApi + GpuManager + the renderer DLLs as one set.");
+		}
+		return NULL;
+	}
+	if (dominant_id == 0) return NULL; // new core, no dominant in this view (all hidden / none) -- legal, silent
+	fncontainer::VmActor* actor = fnc->sceneActors.GetParam(dominant_id, (fncontainer::VmActor*)NULL);
+	if (actor == NULL || actor->GetActorType() != "LIGHT") return NULL; // defensive: id/type must agree
+	return (fncontainer::VmLight*)actor;
+}
+
+// The view's light set for VXGI (ML-D6 rev.14): every LIGHT actor in sceneActors -- i.e. THIS view's
+// hidden/visible filter already applied (Q3's scene-global membership is retired; a light hidden in
+// this view is out of this view's GI) -- sorted by actorId ASCENDING. The sort is the renderer's job:
+// sceneActors is a VmMap (unordered_map), so its iteration order is not deterministic and the
+// min-id cap / snapshot comparison would otherwise be nondeterministic (V13).
+inline void CollectViewLights(fncontainer::VmFnContainer* fnc, std::vector<fncontainer::VmLight*>& lights_out)
+{
+	lights_out.clear();
+	for (auto& actorPair : fnc->sceneActors)
+	{
+		fncontainer::VmActor* actor = std::get<1>(actorPair);
+		if (actor == NULL || actor->GetActorType() != "LIGHT") continue;
+		lights_out.push_back((fncontainer::VmLight*)actor);
+	}
+	std::sort(lights_out.begin(), lights_out.end(),
+		[](const fncontainer::VmLight* a, const fncontainer::VmLight* b) { return a->actorId < b->actorId; });
+}
 
 using namespace std;
 using namespace vmmath;
@@ -63,12 +117,9 @@ bool RenderVrDLS2(VmFnContainer* _fncontainer,
 	LocalProgress* progress,
 	double* run_time_ptr);
 
-void ComputeSSAO(__ID3D11DeviceContext* dx11DeviceImmContext,
-	grd_helper::PSOManager* psoManager, VmIObject* iobj,
-	int num_grid_x, int num_grid_y,
-	GpuRes& gres_fb_counter, GpuRes& gres_fb_deep_k_buffer, GpuRes& gres_fb_rgba, bool blur_SSAO,
-	GpuRes& gres_fb_vr_depth, GpuRes& gres_fb_vr_ao, GpuRes& gres_fb_vr_ao_blf, bool involve_vr, bool apply_fragmerge);
-
+// (v76) ComputeSSAO REMOVED -- SSAO feature retired (user directive). ComputeDOF keeps its signature;
+// its apply_SSAO / is_blurred_SSAO arguments are now hard false at the only call site, so the AO GpuRes
+// reference args are never dereferenced.
 void ComputeDOF(__ID3D11DeviceContext* dx11DeviceImmContext,
 	grd_helper::PSOManager* psoManager, VmIObject* iobj,
 	int num_grid_x, int num_grid_y,

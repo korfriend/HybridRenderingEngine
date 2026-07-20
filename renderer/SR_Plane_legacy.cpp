@@ -372,9 +372,9 @@ bool RenderSrOnPlane(VmFnContainer* _fncontainer,
 	uint uiNumGridY = (uint)ceil(i2SizeScreenCurrent.y / (float)__BLOCKSIZE);
 
 	// CONSIDER THAT THIS RENDERER HANDLES ONLY <ORTHOGONAL> PROJECTION!!
-	VmCObject* pCCObject = pCOutputIObject->GetCameraObject();
+	fncontainer::VmCamera* pCCObject = pCOutputIObject->GetCameraObject();
 	vmfloat3 f3PosEyeWS, f3VecViewWS, f3PosLightWS, f3VecLightWS;
-	pCCObject->GetCameraExtStatef(&f3PosEyeWS, &f3VecViewWS, NULL);
+	f3PosEyeWS = pCCObject->pos_cam; f3VecViewWS = pCCObject->view_cam;
 
 	CB_VrCameraState cbVrCamState;
 	grd_helper_legacy::SetCbVrCamera(&cbVrCamState, pCCObject, i2SizeScreenCurrent, &_fncontainer->vmparams);
@@ -383,8 +383,8 @@ bool RenderSrOnPlane(VmFnContainer* _fncontainer,
 
 	vmmat44 dmatWS2CS, dmatCS2PS, dmatPS2SS;
 	vmmat44 dmatSS2PS, dmatPS2CS, dmatCS2WS;
-	pCCObject->GetMatrixWStoSS(&dmatWS2CS, &dmatCS2PS, &dmatPS2SS);
-	pCCObject->GetMatrixSStoWS(&dmatSS2PS, &dmatPS2CS, &dmatCS2WS);
+	dmatWS2CS = pCCObject->mat_ws2cs; dmatCS2PS = pCCObject->mat_cs2ps; dmatPS2SS = pCCObject->mat_ps2ss;
+	dmatSS2PS = pCCObject->mat_ss2ps; dmatPS2CS = pCCObject->mat_ps2cs; dmatCS2WS = pCCObject->mat_cs2ws;
 	vmmat44f matWS2SS = (dmatWS2CS * dmatCS2PS) * dmatPS2SS;
 	vmmat44f matSS2WS = (dmatSS2PS * dmatPS2CS) * dmatCS2WS;
 	vmmat44f matWS2CS = dmatWS2CS;

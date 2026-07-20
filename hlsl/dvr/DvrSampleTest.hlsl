@@ -21,8 +21,8 @@ cbuffer cbGlobalParams : register(b8)
 Texture3D tex3D_volume : register(t0);
 Texture3D tex3D_volblk : register(t1);
 Texture3D tex3D_volmask : register(t2);
-Buffer<float4> buf_otf : register(t3); // unorm À¸·Î º¯°æÇÏ±â
-Buffer<float4> buf_preintotf : register(t13); // unorm À¸·Î º¯°æÇÏ±â
+Buffer<float4> buf_otf : register(t3); // unorm ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ï±ï¿½
+Buffer<float4> buf_preintotf : register(t13); // unorm ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ï±ï¿½
 Buffer<float4> buf_windowing : register(t4); // not used here.
 Buffer<int> buf_ids : register(t5); // Mask OTFs // not used here.
 Texture2D<float> vr_fragment_1sthit_read : register(t6);
@@ -36,8 +36,7 @@ RWTexture2D<float> vr_fragment_1sthit_write : register(u4);
 
 #define AO_MAX_LAYERS 8 
 
-Texture2DArray<unorm float> ao_textures : register(t10);
-Texture2D<unorm float> ao_vr_texture : register(t20);
+// (v76) ao_textures (t10) / ao_vr_texture (t20) REMOVED -- SSAO retired (user directive).
 
 Buffer<float3> buf_curvePoints : register(t30);
 Buffer<float3> buf_curveTangents : register(t31);
@@ -142,10 +141,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		Fragment f;
 		GET_FRAG(f, addr_base, i); // from K-buffer
 		float4 vis_in = ConvertUIntToFloat4(f.i_vis);
-		if (g_cbEnv.r_kernel_ao > 0)
-		{
-			f.i_vis = ConvertFloat4ToUInt(vis_in);
-		}
+		// (v76) SSAO re-encode retired (was a value-identity round-trip).
 		if (vis_in.a > 0)
 		{
 			vis_out += vis_in * (1.f - vis_out.a);

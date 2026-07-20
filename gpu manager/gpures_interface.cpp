@@ -19,6 +19,7 @@ ID3D11Debug *debugDev;
 #endif
 
 #include <iostream>
+#include <cstring> // strlen in the profiler's category classifier
 
 #ifndef VMSAFE_RELEASE
 #define VMSAFE_RELEASE(p)			{ if(p) { (p)->Release(); (p)=NULL; } }
@@ -96,6 +97,21 @@ void RegisterPerSrcIdReleaseHook(std::function<void(int)> hook)
 void ClearPerSrcIdReleaseHooks()
 {
 	g_perSrcIdReleaseHooks.clear();
+}
+
+const char* __GetVimCommonVersion()
+{
+	// __VERSION is baked in from VimCommon.h at COMPILE time, so this reports the layout contract this
+	// binary actually holds -- not what it claims to support. A string literal: its lifetime is the DLL's.
+	return __VERSION;
+}
+
+unsigned int __GetVimCommonLayoutSig()
+{
+	// Companion to __GetVimCommonVersion: the sizeof-based VimCommon layout fingerprint (VimCommon.h) so
+	// GpuManager can reject a stale core/renderer pair that shares the SAME __VERSION but a drifted struct
+	// layout (e.g. VmCamera's 1.61 tonemap/temporal tail). Computed from this DLL's own header copy.
+	return fncontainer::VimCommonLayoutSig();
 }
 
 bool __InitializeDevice()
@@ -527,18 +543,76 @@ bool __GetDeviceInformation(void* devInfo, const string& devSpecification)
 	return true;
 }
 
+// Map a live resource to an engine-semantic profiling category. The renderer names its resources by
+// fixed conventions (see the grd_helper::Update* creation helpers) -- this table is the ONE place that
+// binds those naming conventions to categories, so a new res_name family only needs a row added here.
+static const char* __CategorizeGpuRes(const GpuRes& gres)
+{
+	const std::string& n = gres.res_name;
+	auto starts_with = [&n](const char* prefix) {
+		return n.compare(0, strlen(prefix), prefix) == 0;
+	};
+	// staging/readback copies first: their names may also carry a producer prefix (e.g. PARTICLE_*_SYSOUT),
+	// but what they cost is a CPU-readable staging allocation, so that class wins.
+	if (starts_with("SYSTEM_OUT_") || starts_with("SYS_OUT_") || n == "SYSTEM_COUNTER"
+		|| n.find("SYSOUT") != std::string::npos)
+		return "STAGING_READBACK";
+	if (starts_with("VXGI_")) return "VXGI";
+	if (starts_with("GPUBVH::")) return "BVH";
+	if (n == "OTF_BUFFER" || n == "PREINT_OTF_BUFFER") return "OTF";
+	if (starts_with("VOLUME_MODEL_") || starts_with("VBLOCKS_") || starts_with("SculptPackedBits")) return "VOLUME";
+	if (starts_with("PARTICLE_") || starts_with("gres_particle_")) return "PARTICLE";
+	// "PRIMITIVE_MODEL_IDX" is the index buffer; every other "PRIMITIVE_MODEL_*" is a material texture.
+	if (starts_with("VTX_") || n == "PRIMITIVE_MODEL_IDX" || n == "PROXY_QUAD") return "MESH_GEOMETRY";
+	if (starts_with("TEXTURE_") || starts_with("PRIMITIVE_MODEL_")) return "MATERIAL_TEXTURE";
+	if (starts_with("RENDER_OUT_") || starts_with("RENDER_MOMENT_") || starts_with("RW_")
+		|| starts_with("BUFFER_RW_") || starts_with("TEX_ARRAY_") || starts_with("SHARED_PRESENT_")
+		|| n == "DEPTH_STENCIL" || n == "SHADOW_MAP" || starts_with("UNDERCUT_")
+		|| n == "TAA_HISTORY_RGBA" || starts_with("DEEP_LAYER_")) // per-camera TAA history / legacy deep layers
+		return "RENDER_TARGET";
+	return "ETC";
+}
+
+static const char* __GpuResTypeName(const GpuResType rtype)
+{
+	switch (rtype) {
+	case RTYPE_BUFFER: return "BUFFER";
+	case RTYPE_TEXTURE1D: return "TEXTURE1D";
+	case RTYPE_TEXTURE2D: return "TEXTURE2D";
+	case RTYPE_TEXTURE3D: return "TEXTURE3D";
+	default: return "UNDEFINED";
+	}
+}
+
+uint64_t __ProfileGpuResources(std::map<std::string, uint64_t>* bytes_by_type,
+	std::map<std::string, uint64_t>* bytes_by_category,
+	std::map<std::string, int>* count_by_type,
+	std::map<std::string, int>* count_by_category)
+{
+	// Accumulates into the maps without clearing them -- the caller merges multiple renderer
+	// instances (DX11.3 / 11.0 / 10.0) into one report, so clearing is the caller's job.
+	uint64_t total_bytes = 0;
+	for (auto& itrRes : g_mapVmResources)
+	{
+		GpuRes& gres = itrRes.second;
+		auto itPtr = gres.alloc_res_ptrs.find(DTYPE_RES);
+		if (itPtr == gres.alloc_res_ptrs.end() || itPtr->second == NULL)
+			continue; // registered but not an alive allocation
+		const uint64_t bytes = gres.res_values.GetParam("RES_SIZE_BYTES", (uint64_t)0);
+		total_bytes += bytes;
+		if (bytes_by_type) (*bytes_by_type)[__GpuResTypeName(gres.rtype)] += bytes;
+		if (count_by_type) (*count_by_type)[__GpuResTypeName(gres.rtype)] += 1;
+		if (bytes_by_category) (*bytes_by_category)[__CategorizeGpuRes(gres)] += bytes;
+		if (count_by_category) (*count_by_category)[__CategorizeGpuRes(gres)] += 1;
+	}
+	return total_bytes;
+}
+
 uint64_t __GetUsedGpuMemorySizeBytes()
 {
-	uint64_t ullSizeBytes = 0;
-	auto itrResDX11 = g_mapVmResources.begin();
-	for (; itrResDX11 != g_mapVmResources.end(); itrResDX11++)
-	{
-		if (itrResDX11->second.alloc_res_ptrs[DTYPE_RES] != NULL)
-		{
-			ullSizeBytes += itrResDX11->second.res_values.GetParam("RES_SIZE_BYTES", (uint64_t)0);
-		}
-	}
-	return (uint64_t)(ullSizeBytes);
+	// Kept as a compatibility export (GpuManager's loader treats it as required);
+	// the profiler above is the single source of truth for "used bytes".
+	return __ProfileGpuResources(NULL, NULL, NULL, NULL);
 }
 
 bool __UpdateDXGI(void** ppBackBuffer, void** ppRTView, const HWND hwnd, const int w, const int h)
@@ -704,7 +778,18 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 
 	//vzlog("__GenerateGpuResource (%s)", gres.res_name.c_str())
 
+	// Release any resource already registered under this gres's own key (src_id + res_name).
 	__ReleaseGpuResource(gres, false);
+
+	// __ReleaseGpuResource only touches handles it found in g_mapVmResources under gres's key, and
+	// early-returns (clearing nothing) when the key is absent. A gres copy-constructed from another
+	// GpuRes (a common convenience: `dst = src; dst.res_name = ...;`) still carries the SOURCE's
+	// D3D handles as NON-OWNING aliases under a different key. This function then allocates fresh
+	// resources for every slot the requested BIND flags cover, but leaves any slot it does NOT
+	// touch holding the aliased handle -> that handle gets Release()d twice at teardown (once by
+	// the real owner, once by this alias) -> access violation. Every slot below is (re)created from
+	// scratch, so clearing here is always safe and makes copy-then-generate aliasing impossible.
+	gres.alloc_res_ptrs.clear();
 
 	auto GetSizeFormat = [&](DXGI_FORMAT format) -> uint32_t
 	{
@@ -814,7 +899,19 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 			vmlog::LogErr("CreateTexture2D ==> ERROR!!");
 
 		gres.alloc_res_ptrs[DTYPE_RES] = (void*)pdx11TX2D;
-		gres.res_values.SetParam("RES_SIZE_BYTES", (uint64_t)(descTex2D.Width* descTex2D.Height* GetSizeFormat(descTex2D.Format)));
+		{
+			// RES_SIZE_BYTES feeds the memory profiler: account every array slice and (when
+			// MipLevels==0 => full auto chain) every mip level, not just mip 0 of slice 0.
+			uint64_t texels = 0;
+			uint32_t w = descTex2D.Width, h = descTex2D.Height;
+			do {
+				texels += (uint64_t)w * h;
+				if (descTex2D.MipLevels == 1 || (w == 1 && h == 1)) break;
+				w = w > 1 ? w >> 1 : 1; h = h > 1 ? h >> 1 : 1;
+			} while (true);
+			gres.res_values.SetParam("RES_SIZE_BYTES",
+				(uint64_t)(texels * descTex2D.ArraySize * GetSizeFormat(descTex2D.Format)));
+		}
 		break;
 	}
 	case RTYPE_TEXTURE3D:
@@ -844,7 +941,19 @@ bool __GenerateGpuResource(GpuRes& gres, LocalProgress* progress)
 		}
 
 		gres.alloc_res_ptrs[DTYPE_RES] = (void*)pdx11TX3D;
-		gres.res_values.SetParam("RES_SIZE_BYTES", (uint64_t)(descTex3D.Width* descTex3D.Height* descTex3D.Depth* GetSizeFormat(descTex3D.Format)));
+		{
+			// RES_SIZE_BYTES feeds the memory profiler: when MipLevels==0 (full auto chain, e.g.
+			// the VXGI cone-trace grid) sum the whole chain (~+14% for 3D), not just mip 0.
+			uint64_t texels = 0;
+			uint32_t w = descTex3D.Width, h = descTex3D.Height, d = descTex3D.Depth;
+			do {
+				texels += (uint64_t)w * h * d;
+				if (descTex3D.MipLevels == 1 || (w == 1 && h == 1 && d == 1)) break;
+				w = w > 1 ? w >> 1 : 1; h = h > 1 ? h >> 1 : 1; d = d > 1 ? d >> 1 : 1;
+			} while (true);
+			gres.res_values.SetParam("RES_SIZE_BYTES",
+				(uint64_t)(texels * GetSizeFormat(descTex3D.Format)));
+		}
 		break;
 	}
 	default: break;

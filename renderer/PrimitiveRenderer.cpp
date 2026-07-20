@@ -587,7 +587,8 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 	//((std::mutex*)HDx11GetMutexGpuCriticalPath())->lock();
 
 #pragma region // Parameter Setting //
-	VmIObject* iobj = _fncontainer->fnParams.GetParam("_VmIObject*_RenderOut", (VmIObject*)NULL);
+	fncontainer::VmCamera* _rcam = _fncontainer->fnParams.GetParam("_VmCamera*_RenderCamera", (fncontainer::VmCamera*)NULL);
+	VmIObject* iobj = _rcam ? _rcam->iobj : NULL; // (increment 3) iobj derived from the render-from VmCamera
 	iobj->SetObjParam("NUM_SECOND_LAYER_OBJECTS", (int)0);
 
 	int k_value_old = iobj->GetObjParam("_int_NumK", (int)K_NUM_3D);
@@ -604,7 +605,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 
 	//double v_discont_depth = _fncontainer->fnParams.GetParam("_float_DiscontDepth", -1.0);
 	float merging_beta = _fncontainer->fnParams.GetParam("_float_MergingBeta", 0.5f);
-	bool blur_SSAO = _fncontainer->fnParams.GetParam("_bool_BlurSSAO", true);
+	// (v76) "_bool_BlurSSAO" channel retired with SSAO (user directive).
 
 	bool apply_fragmerge = _fncontainer->fnParams.GetParam("_bool_ApplyFragMerge", true);
 	MFR_MODE mode_OIT = (MFR_MODE)_fncontainer->fnParams.GetParam("_int_OitMode", (int)MFR_MODE::DYNAMIC_FB);
@@ -684,36 +685,27 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 
 	int forcedMaterialColorMode = (int)_fncontainer->fnParams.GetParam("_int_ForcedMaterialColorMode", (int)0);
 
-	VmLight* light = _fncontainer->fnParams.GetParamPtr<VmLight>("_VmLight_LightSource");
-	VmLens* lens = _fncontainer->fnParams.GetParam("_VmLens*_CamLens", (VmLens*)NULL);
+	// (Multi-Light rev.14) dominant light out of sceneActors via "_int_DominantLightId";
+	// NULL = no light = legacy default path (also the graceful degrade against an old core).
+	VmLight* light = GetDominantLight(_fncontainer);
 	LightSource light_src;
-	GlobalLighting global_lighting;
 	LensEffect lens_effect;
 	if (light) {
-		light_src.is_on_camera = light->is_on_camera;
-		light_src.is_pointlight = light->is_pointlight;
+		light_src.type = light->type; // (rev.18) direct shading renders SPOT as POINT (Q7); cone is VXGI-only
 		light_src.light_pos = light->pos;
 		light_src.light_dir = light->dir;
-		light_src.light_ambient_color = vmfloat3(1.f);
-		light_src.light_diffuse_color = vmfloat3(1.f);
-		light_src.light_specular_color = vmfloat3(1.f);
+		// ML-D10 (rev.12 7R Major 2): light color/intensity on all three channels (was fixed white);
+		// defaults (white, 1.0) are numerically identical to the old constants.
+		const vmfloat3 light_tint = light->light_color * light->intensity;
+		light_src.light_ambient_color = light_tint;
+		light_src.light_diffuse_color = light_tint;
+		light_src.light_specular_color = light_tint;
 
-		global_lighting.apply_ssao = light->effect_ssao.is_on_ssao;
-		global_lighting.ssao_r_kernel = light->effect_ssao.kernel_r;
-		global_lighting.ssao_num_steps = light->effect_ssao.num_steps;
-		global_lighting.ssao_num_dirs = light->effect_ssao.num_dirs;
-		global_lighting.ssao_tangent_bias = light->effect_ssao.tangent_bias;
-		global_lighting.ssao_blur = light->effect_ssao.smooth_filter;
-		global_lighting.ssao_intensity = light->effect_ssao.ao_power;
-		global_lighting.ssao_debug = _fncontainer->fnParams.GetParam("_int_SSAOOutput", (int)0);
+		// (v76) per-light SSAO parameters RETIRED (user directive): GlobalLighting defaults keep SSAO off;
+		// CB_EnvState layout and SSAO.hlsl stay dormant (no shader recompile from this retirement).
 	}
-	if (lens) {
-		lens_effect.apply_ssdof = lens->apply_ssdof;
-		lens_effect.dof_focus_z = lens->dof_focus_z;
-		lens_effect.dof_lens_F = lens->dof_lens_F;
-		lens_effect.dof_lens_r = lens->dof_lens_r;
-		lens_effect.dof_ray_num_samples = lens->dof_ray_num_samples;
-	}
+	// (2026-07-19) SSDOF existing version DEPRECATED (user directive): VmLens dropped its DOF fields;
+	// lens_effect keeps defaults (apply_ssdof=false) so DOF stays off. SSDOF shader/CB left dormant (SSAO pattern).
 #pragma endregion
 
 #pragma region // Shader Setting
@@ -771,7 +763,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 #define VS_NUM 11
 #define GS_NUM 4
 #define PS_NUM 86
-#define CS_NUM 38
+#define CS_NUM 34 // (v76) 38 -> 34: the 4 KB_SSAO reload entries left with the retired SSAO feature
 #endif
 
 #ifdef DX10_0
@@ -1087,11 +1079,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			  ,"PCE_ParticleSimulationSort_cs_5_0"
 			  ,"PCE_ParticleUpdateFinish_cs_5_0"
 			  ,"CS_Blend2ndLayer_cs_5_0"
-			  ,"KB_SSAO_cs_5_0"
-			  ,"KB_SSAO_BLUR_cs_5_0"
-			  ,"KB_TO_TEXTURE_cs_5_0"
-			  ,"KB_SSAO_FM_cs_5_0"
-			  ,"KB_SSAO_BLUR_FM_cs_5_0"
+			  ,"KB_TO_TEXTURE_cs_5_0" // (v76) the 4 KB_SSAO(+BLUR)(_FM) entries are gone -- SSAO retired
 			  ,"KB_TO_TEXTURE_FM_cs_5_0"
 			  ,"KB_MINMAXTEXTURE_cs_5_0"
 			  ,"KB_MINMAX_NBUF_cs_5_0"
@@ -1382,12 +1370,12 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 	//float fv_copthickness = v_copthickness_abs <= 0 ? (float)(len_diagonal_max * v_copthickness) : (float)v_copthickness_abs;
 	//float fv_thickness = v_thickness_abs <= 0 ? v_copthickness_abs <= 0 ? (float)(len_diagonal_max * v_thickness) : fv_copthickness * v_thickness / v_copthickness : (float)v_thickness_abs;
 
-	VmCObject* cam_obj = iobj->GetCameraObject();
+	fncontainer::VmCamera* cam_obj = _rcam; // (1.70) VmLens dropped; render VmCamera IS the camera // (increment: lens absorption) cached lens, == the old iobj->GetCameraObject(); set by MakeCameraRes on the render VmCamera
 
 	vmmat44 dmatWS2CS, dmatCS2PS, dmatPS2SS;
 	vmmat44 dmatSS2PS, dmatPS2CS, dmatCS2WS;
-	cam_obj->GetMatrixWStoSS(&dmatWS2CS, &dmatCS2PS, &dmatPS2SS);
-	cam_obj->GetMatrixSStoWS(&dmatSS2PS, &dmatPS2CS, &dmatCS2WS);
+	dmatWS2CS = cam_obj->mat_ws2cs; dmatCS2PS = cam_obj->mat_cs2ps; dmatPS2SS = cam_obj->mat_ps2ss;
+	dmatSS2PS = cam_obj->mat_ss2ps; dmatPS2CS = cam_obj->mat_ps2cs; dmatCS2WS = cam_obj->mat_cs2ws;
 	vmmat44 dmatWS2PS = dmatWS2CS * dmatCS2PS;
 	vmmat44f matWS2CS = dmatWS2CS; // view
 	vmmat44f matWS2PS = dmatWS2PS;
@@ -1396,11 +1384,11 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 
 	vmfloat3 picking_ray_origin, picking_ray_dir;
 	if (is_picking_routine) {
-		cam_obj->GetCameraExtStatef(&picking_ray_origin, &picking_ray_dir, NULL);
+		picking_ray_origin = cam_obj->pos_cam; picking_ray_dir = cam_obj->view_cam;
 		vmfloat3 pos_picking_ws, pos_picking_ss(picking_pos_ss.x, picking_pos_ss.y, 0);
 		vmmath::fTransformPoint(&pos_picking_ws, &pos_picking_ss, &matSS2WS);
 
-		if (cam_obj->IsPerspective()) {
+		if (cam_obj->is_perspective) {
 			picking_ray_dir = pos_picking_ws - picking_ray_origin;
 			vmmath::fNormalizeVector(&picking_ray_dir, &picking_ray_dir);
 		}
@@ -1411,7 +1399,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 
 
 	CB_EnvState cbEnvState = {};
-	grd_helper::SetCb_Env(cbEnvState, cam_obj, light_src, global_lighting, lens_effect);
+	grd_helper::SetCb_Env(cbEnvState, cam_obj, light_src, lens_effect); // (v76) GlobalLighting arg removed (SSAO retired)
 	cbEnvState.num_safe_loopexit = num_safe_loopexit;
 	cbEnvState.env_dummy_2 = i_test_shader;
 	D3D11_MAPPED_SUBRESOURCE mappedResEnvState;
@@ -1443,10 +1431,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 		cb_moment.overestimation = 0.25f;
 		cb_moment.moment_bias = 0.0025f;
 		double np, fp;
-		if (cam_obj->IsArIntrinsics())
-			cam_obj->GetCameraIntStateAR(NULL, NULL, NULL, NULL, NULL, &np, &fp);
-		else
-			cam_obj->GetCameraIntState(NULL, &np, &fp, NULL);
+		np = cam_obj->near_p; fp = cam_obj->far_p; // (1.70) AR & default both expose near/far directly on VmCamera
 		mot_nf = _fncontainer->fnParams.GetParam("_float2_MotNearFar", vmdouble2(np, fp));
 		cb_moment.warp_nf = mot_nf;
 		switch (num_moments)
@@ -3938,9 +3923,10 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			|| particle_layer_objs.size() > 0;
 
 		cbCamState.cam_flag |= ((int)additionalKLayerForMFB << 8);
+		// (v76) the `cbEnvState.r_kernel_ao > 0` term left this condition -- SSAO retired, so it no
+		// longer forces the K-buffer to be preserved for a post pass (DOF still does).
 		int storeKBuf = (int)(!is_final_renderer || check_pixel_transmittance
-			|| cbEnvState.r_kernel_ao > 0
-			|| (cbEnvState.dof_lens_r > 0 && cam_obj->IsPerspective()));
+			|| (cbEnvState.dof_lens_r > 0 && cam_obj->is_perspective));
 		// which means the k-buffer will be used for the following renderer
 		// stores the fragments into the k-buffer and do not store the rendering result into RT
 		cbCamState.cam_flag |= (storeKBuf << 3);
@@ -4208,19 +4194,14 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 
 		if (is_final_renderer) {
 			// Note that these post-processing will be performed in volume rendering stage when there is volume rendering requirement
-			if (cbEnvState.r_kernel_ao > 0) {
-				psoManager->GpuProfile("SSAO");
-				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs_2ND, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
-				ComputeSSAO(dx11DeviceImmContext, psoManager, iobj, num_grid_x, num_grid_y,
-					gres_fb_counter, gres_fb_dynK_buffer, gres_fb_rgba, blur_SSAO,
-					gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex, false, apply_fragmerge);
-				psoManager->GpuProfile("SSAO", true);
-			}
-			if ((cbEnvState.dof_lens_r > 0 && cam_obj->IsPerspective())) {
+			// (v76) the SSAO post-pass (ComputeSSAO) lived here -- SSAO retired (user directive).
+			if ((cbEnvState.dof_lens_r > 0 && cam_obj->is_perspective)) {
 				psoManager->GpuProfile("SSDOF");
 				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs_2ND, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+				// (v76) apply_SSAO / is_blurred_SSAO are hard false (feature retired); the AO GpuRes args are
+				// never touched on that path (and involve_vr=false skips the vr AO binds too).
 				ComputeDOF(dx11DeviceImmContext, psoManager, iobj, num_grid_x, num_grid_y,
-					gres_fb_counter, gres_fb_dynK_buffer, gres_fb_rgba, cbEnvState.r_kernel_ao > 0, blur_SSAO, apply_fragmerge,
+					gres_fb_counter, gres_fb_dynK_buffer, gres_fb_rgba, false, false, apply_fragmerge,
 					gres_fb_depthcs, gres_fb_ao_vr_tex, gres_fb_ao_vr_blf_tex,
 					cbCamState, cbuf_cam_state, __BLOCKSIZE, false);
 				psoManager->GpuProfile("SSDOF", true);

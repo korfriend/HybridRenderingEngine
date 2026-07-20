@@ -97,9 +97,28 @@ auto checkRefCount = [](IUnknown* obj, const char* name) {
 	};
 
 static CRITICAL_SECTION cs;
+static bool g_vimHandshakeArmed = false;
+static bool g_moduleInitialized = false; // (idempotent DeInit) teardown-ownership marker: set once the first resource DeInit frees is acquired -> DeInit no-ops before that (pre-init), tears down owned stages after (partial/full)
+bool __ArmVimCommonHandshake(const char* core_version, unsigned int core_sig)
+{
+	// (mutual handshake) core calls this with PRIMITIVE args before InitModule to prove a shared VimCommon
+	// size; InitModule refuses un-armed, so an OLD core that never arms leaves this NEW DLL self-disabled.
+	// LIFETIME (verification 17:29 Major 1): this is a DLL-LOAD-LIFETIME attestation, NOT per-Init. arm is called
+	// once by ModuleArbiter::RegisterModule when it LOADS this DLL; the DLL then stays loaded across ClearModule
+	// (DeInit, no FreeLibrary) / ExecuteModule (re-Init calls lpdllInit directly, no re-arm) cycles. That is
+	// correct: the loaded DLL's VimCommon layout is immutable while loaded and the single core (one CommonApi/
+	// ModuleArbiter per process) does not change, so g_vimHandshakeArmed==true always means "this loaded DLL
+	// matched the core AT LOAD" and stays valid for the whole load. armed is intentionally NOT reset in DeInit.
+	g_vimHandshakeArmed = (core_version != NULL && std::string(core_version) == __VERSION
+		&& core_sig == fncontainer::VimCommonLayoutSig());
+	return g_vimHandshakeArmed;
+}
+
 bool InitModule(fncontainer::VmFnContainer& _fncontainer)
 {
+	if (!g_vimHandshakeArmed) { vmlog::LogErr("GPU Renderer InitModule refused: VimCommon handshake not armed (stale/absent core)."); return false; }
 	InitializeCriticalSection(&cs);
+	g_moduleInitialized = true; // (idempotent DeInit guard) body is running past this point
 
 	// Drop any hooks left from a prior Init/Deinit cycle, then register this
 	// module's per-iobj caches (g_d2dResMap) for cleanup whenever
@@ -236,13 +255,14 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	g_LocalProgress.range = 100;
 	g_LocalProgress.progress_ptr = &g_dProgress;
 
-	VmIObject* iobj = _fncontainer.fnParams.GetParam("_VmIObject*_RenderOut", (VmIObject*)NULL);
+	fncontainer::VmCamera* _rcam = _fncontainer.fnParams.GetParam("_VmCamera*_RenderCamera", (fncontainer::VmCamera*)NULL);
+	VmIObject* iobj = _rcam ? _rcam->iobj : NULL; // (increment 3) iobj derived from the render-from VmCamera
 	if(iobj == NULL)
 	{
 		VMERRORMESSAGE("VisMotive Renderer needs at least one IObject as output!");
 		return false;
 	}
-	if(iobj->GetCameraObject() == NULL)
+	if(_rcam == NULL) // (increment: lens absorption) cached lens == iobj->GetCameraObject()
 	{
 		VMERRORMESSAGE("VisMotive Renderer needs Camera Initializeation!");
 		return false;
@@ -408,7 +428,7 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		if (is_last_renderer || planeThickness <= 0.f) is_final_render_out = true;
 	}
 
-	auto RenderOut = [&iobj, &is_last_renderer, &planeThickness, &_fncontainer, &is_vr]() {
+	auto RenderOut = [&iobj, &is_last_renderer, &planeThickness, &_fncontainer, &is_vr, &_rcam]() {
 
 		g_psoManager.GpuProfile("Copyback");
 
@@ -594,11 +614,11 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 #if __TONEMAP_ENABLED
 		if (!vxgi_debug_view)
 		{
-		tmParams.tm_operator = (uint32_t)max(0, _fncontainer.fnParams.GetParam("_int_TonemapOperator", (int)0));
-		tmParams.encode = (uint32_t)max(0, _fncontainer.fnParams.GetParam("_int_TonemapEncode", (int)0));
-		tmParams.exposure = max(0.f, _fncontainer.fnParams.GetParam("_float_TonemapExposure", 1.f));
-		tmParams.knee = std::clamp(_fncontainer.fnParams.GetParam("_float_TonemapKnee", 1.f), 0.f, 1.f);
-		tmParams.white_point = max(1e-3f, _fncontainer.fnParams.GetParam("_float_TonemapWhitePoint", 4.f));
+		tmParams.tm_operator = (uint32_t)max(0, _rcam ? _rcam->GetParam("TONEMAP_OPERATOR", (int)0) : 0); // (1.70) tonemap from VmActor::_vmparams
+		tmParams.encode = (uint32_t)max(0, _rcam ? _rcam->GetParam("TONEMAP_ENCODE", (int)0) : 0);
+		tmParams.exposure = max(0.f, _rcam ? _rcam->GetParam("TONEMAP_EXPOSURE", 1.f) : 1.f);
+		tmParams.knee = std::clamp(_rcam ? _rcam->GetParam("TONEMAP_KNEE", 1.f) : 1.f, 0.f, 1.f);
+		tmParams.white_point = max(1e-3f, _rcam ? _rcam->GetParam("TONEMAP_WHITE_POINT", 4.f) : 4.f);
 		}
 #else
 		// DX11.0: the tonemapper is a DX11.3 feature, so the knobs are ignored and the pass is pinned to its
@@ -1161,6 +1181,12 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 
 void DeInitModule(fncontainer::VmFnContainer& _fncontainer)
 {
+	// (verification 16:55 Major 2 / 17:29 Minor 1) The loader always calls DeInit on an Init that returned false.
+	// The flag is set once teardown ownership begins (right after cs), so a PRE-init module (arm-refuse returns
+	// before cs -> nothing acquired) is a safe no-op, while a partial/full init tears down the stages it owns.
+	// Deleting an uninitialized CRITICAL_SECTION is UB, which the no-op prevents.
+	if (!g_moduleInitialized) return;
+	g_moduleInitialized = false;
 	DeleteCriticalSection(&cs);
 
 	// Drop the release hook before tearing down the maps it references.
@@ -1425,12 +1451,12 @@ bool BrushMeshActor(
 		return false;
 	}
 
-	VmCObject* cam_obj = iobj->GetCameraObject();
+	fncontainer::VmCamera* cam_obj = iobj->GetCameraObject();
 
 	vmmat44 dmatWS2CS, dmatCS2PS, dmatPS2SS;
 	vmmat44 dmatSS2PS, dmatPS2CS, dmatCS2WS;
-	cam_obj->GetMatrixWStoSS(&dmatWS2CS, &dmatCS2PS, &dmatPS2SS);
-	cam_obj->GetMatrixSStoWS(&dmatSS2PS, &dmatPS2CS, &dmatCS2WS);
+	dmatWS2CS = cam_obj->mat_ws2cs; dmatCS2PS = cam_obj->mat_cs2ps; dmatPS2SS = cam_obj->mat_ps2ss;
+	dmatSS2PS = cam_obj->mat_ss2ps; dmatPS2CS = cam_obj->mat_ps2cs; dmatCS2WS = cam_obj->mat_cs2ws;
 	vmmat44 dmatWS2PS = dmatWS2CS * dmatCS2PS;
 	vmmat44f matWS2CS = dmatWS2CS; // view
 	vmmat44f matWS2PS = dmatWS2PS;
@@ -1476,7 +1502,7 @@ bool SelectPrimitives(
 		return false;
 	}
 
-	VmCObject* cam_obj = iobj->GetCameraObject();
+	fncontainer::VmCamera* cam_obj = iobj->GetCameraObject();
 
 	// image mask corresponding to the rendering buffer
 	// the mask size must be same to the rendering buffer size
@@ -1548,8 +1574,8 @@ bool SelectPrimitives(
 		// Camera matrices
 		vmmat44 dmatWS2CS, dmatCS2PS, dmatPS2SS;
 		vmmat44 dmatSS2PS, dmatPS2CS, dmatCS2WS;
-		cam_obj->GetMatrixWStoSS(&dmatWS2CS, &dmatCS2PS, &dmatPS2SS);
-		cam_obj->GetMatrixSStoWS(&dmatSS2PS, &dmatPS2CS, &dmatCS2WS);
+		dmatWS2CS = cam_obj->mat_ws2cs; dmatCS2PS = cam_obj->mat_cs2ps; dmatPS2SS = cam_obj->mat_ps2ss;
+		dmatSS2PS = cam_obj->mat_ss2ps; dmatPS2CS = cam_obj->mat_ps2cs; dmatCS2WS = cam_obj->mat_cs2ws;
 		vmmat44 dmatWS2PS = dmatWS2CS * dmatCS2PS;
 		vmmat44f matWS2CS = dmatWS2CS;
 		vmmat44f matWS2PS = dmatWS2PS;
@@ -1709,7 +1735,7 @@ bool SelectPrimitives(
 	vmmat44f matRS2WS = matPivot * meshActor->matOS2WS;
 
 	vmmat44 dmatWS2CS, dmatCS2PS, dmatPS2SS;
-	cam_obj->GetMatrixWStoSS(&dmatWS2CS, &dmatCS2PS, &dmatPS2SS);
+	dmatWS2CS = cam_obj->mat_ws2cs; dmatCS2PS = cam_obj->mat_cs2ps; dmatPS2SS = cam_obj->mat_ps2ss;
 	vmmat44 dmatWS2PS = dmatWS2CS * dmatCS2PS;
 	vmmat44f matWS2CS = dmatWS2CS; // view
 	vmmat44f matWS2PS = dmatWS2PS;
@@ -1719,7 +1745,7 @@ bool SelectPrimitives(
 	vmmat44f matSS2WS;
 	{
 		vmmat44 dmatSS2PS, dmatPS2CS, dmatCS2WS;
-		cam_obj->GetMatrixSStoWS(&dmatSS2PS, &dmatPS2CS, &dmatCS2WS);
+		dmatSS2PS = cam_obj->mat_ss2ps; dmatPS2CS = cam_obj->mat_ps2cs; dmatCS2WS = cam_obj->mat_cs2ws;
 		matSS2WS = (dmatSS2PS * dmatPS2CS) * dmatCS2WS;
 	}
 

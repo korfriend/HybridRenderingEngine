@@ -16,7 +16,8 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	//((std::mutex*)HDx11GetMutexGpuCriticalPath())->lock();
 
 #pragma region // Parameter Setting //
-	VmIObject* iobj = _fncontainer->fnParams.GetParam("_VmIObject*_RenderOut", (VmIObject*)NULL);
+	fncontainer::VmCamera* _rcam = _fncontainer->fnParams.GetParam("_VmCamera*_RenderCamera", (fncontainer::VmCamera*)NULL);
+	VmIObject* iobj = _rcam ? _rcam->iobj : NULL; // (increment 3) iobj derived from the render-from VmCamera
 
 	int k_value_old = iobj->GetObjParam("_int_NumK", (int)K_NUM_SLICER);
 	int k_value = _fncontainer->fnParams.GetParam("_int_NumK", k_value_old);
@@ -28,7 +29,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	bool is_final_renderer = _fncontainer->fnParams.GetParam("_bool_IsFinalRenderer", true);
 	//double v_discont_depth = _fncontainer->fnParams.GetParam("_float_DiscontDepth", -1.0);
 	float merging_beta = _fncontainer->fnParams.GetParam("_float_MergingBeta", 0.5f);
-	bool blur_SSAO = _fncontainer->fnParams.GetParam("_bool_BlurSSAO", true);
+	// (v76) "_bool_BlurSSAO" channel retired with SSAO (user directive).
 
 
 	int camClipMode = _fncontainer->fnParams.GetParam("_int_ClippingMode", (int)0);
@@ -87,36 +88,27 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 
 	int i_test_shader = (int)_fncontainer->fnParams.GetParam("_int_ShaderTest", (int)0);
 
-	VmLight* light = _fncontainer->fnParams.GetParamPtr<VmLight>("_VmLight_LightSource");
-	VmLens* lens = _fncontainer->fnParams.GetParam("_VmLens*_CamLens", (VmLens*)NULL);
+	// (Multi-Light rev.14) dominant light out of sceneActors via "_int_DominantLightId";
+	// NULL = no light = legacy default path (also the graceful degrade against an old core).
+	VmLight* light = GetDominantLight(_fncontainer);
 	LightSource light_src;
-	GlobalLighting global_lighting;
 	LensEffect lens_effect;
 	if (light) {
-		light_src.is_on_camera = light->is_on_camera;
-		light_src.is_pointlight = light->is_pointlight;
+		light_src.type = light->type; // (rev.18) direct shading renders SPOT as POINT (Q7); cone is VXGI-only
 		light_src.light_pos = light->pos;
 		light_src.light_dir = light->dir;
-		light_src.light_ambient_color = vmfloat3(1.f);
-		light_src.light_diffuse_color = vmfloat3(1.f);
-		light_src.light_specular_color = vmfloat3(1.f);
+		// ML-D10 (rev.12 7R Major 2): light color/intensity on all three channels (was fixed white);
+		// defaults (white, 1.0) are numerically identical to the old constants.
+		const vmfloat3 light_tint = light->light_color * light->intensity;
+		light_src.light_ambient_color = light_tint;
+		light_src.light_diffuse_color = light_tint;
+		light_src.light_specular_color = light_tint;
 
-		global_lighting.apply_ssao = light->effect_ssao.is_on_ssao;
-		global_lighting.ssao_r_kernel = light->effect_ssao.kernel_r;
-		global_lighting.ssao_num_steps = light->effect_ssao.num_steps;
-		global_lighting.ssao_num_dirs = light->effect_ssao.num_dirs;
-		global_lighting.ssao_tangent_bias = light->effect_ssao.tangent_bias;
-		global_lighting.ssao_blur = light->effect_ssao.smooth_filter;
-		global_lighting.ssao_intensity = light->effect_ssao.ao_power;
-		global_lighting.ssao_debug = _fncontainer->fnParams.GetParam("_int_SSAOOutput", (int)0);
+		// (v76) per-light SSAO parameters RETIRED (user directive): GlobalLighting defaults keep SSAO off;
+		// CB_EnvState layout and SSAO.hlsl stay dormant (no shader recompile from this retirement).
 	}
-	if (lens) {
-		lens_effect.apply_ssdof = lens->apply_ssdof;
-		lens_effect.dof_focus_z = lens->dof_focus_z;
-		lens_effect.dof_lens_F = lens->dof_lens_F;
-		lens_effect.dof_lens_r = lens->dof_lens_r;
-		lens_effect.dof_ray_num_samples = lens->dof_ray_num_samples;
-	}
+	// (2026-07-19) SSDOF existing version DEPRECATED (user directive): VmLens dropped its DOF fields;
+	// lens_effect keeps defaults (apply_ssdof=false) so DOF stays off. SSDOF shader/CB left dormant (SSAO pattern).
 #pragma endregion
 
 #pragma region // Shader Setting
@@ -451,12 +443,12 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	float camForcedOutlinePixelThickness = _fncontainer->fnParams.GetParam("_float_OutlinePixThickness", -1.f);
 	
 #pragma region // Camera & Light Setting
-	VmCObject* cam_obj = iobj->GetCameraObject();
+	fncontainer::VmCamera* cam_obj = _rcam; // (1.70) VmLens dropped; render VmCamera IS the camera // (increment: lens absorption) cached lens, == the old iobj->GetCameraObject(); set by MakeCameraRes on the render VmCamera
 
 	vmmat44 dmatWS2CS, dmatCS2PS, dmatPS2SS;
 	vmmat44 dmatSS2PS, dmatPS2CS, dmatCS2WS;
-	cam_obj->GetMatrixWStoSS(&dmatWS2CS, &dmatCS2PS, &dmatPS2SS);
-	cam_obj->GetMatrixSStoWS(&dmatSS2PS, &dmatPS2CS, &dmatCS2WS);
+	dmatWS2CS = cam_obj->mat_ws2cs; dmatCS2PS = cam_obj->mat_cs2ps; dmatPS2SS = cam_obj->mat_ps2ss;
+	dmatSS2PS = cam_obj->mat_ss2ps; dmatPS2CS = cam_obj->mat_ps2cs; dmatCS2WS = cam_obj->mat_cs2ws;
 	vmmat44 dmatWS2PS = dmatWS2CS * dmatCS2PS;
 	vmmat44f matWS2CS = dmatWS2CS;
 	vmmat44f matWS2PS = dmatWS2PS;
@@ -478,9 +470,9 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			num_curve_width_pts = (int)curve_pos_pts.size();
 
 			vmfloat3 cam_pos_cws, cam_dir_cws, cam_up_cws;
-			cam_obj->GetCameraExtStatef(&cam_pos_cws, &cam_dir_cws, &cam_up_cws);
+			cam_pos_cws = cam_obj->pos_cam; cam_dir_cws = cam_obj->view_cam; cam_up_cws = cam_obj->up_cam;
 			vmdouble2 ipSize;
-			cam_obj->GetCameraIntState(&ipSize, NULL, NULL, NULL);
+			ipSize = cam_obj->ip_size;
 			vmfloat2 fIpSize = ipSize;
 
 			vmfloat3 cam_right_cws = normalize(cross(cam_dir_cws, cam_up_cws));
@@ -558,11 +550,11 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 				return true;
 		}
 		else {
-			cam_obj->GetCameraExtStatef(&picking_ray_origin, &picking_ray_dir, NULL);
+			picking_ray_origin = cam_obj->pos_cam; picking_ray_dir = cam_obj->view_cam;
 			vmfloat3 pos_picking_ws, pos_picking_ss(picking_pos_ss.x, picking_pos_ss.y, 0);
 			vmmath::fTransformPoint(&pos_picking_ws, &pos_picking_ss, &matSS2WS);
 
-			if (cam_obj->IsPerspective()) {
+			if (cam_obj->is_perspective) {
 				picking_ray_dir = pos_picking_ws - picking_ray_origin;
 				vmmath::fNormalizeVector(&picking_ray_dir, &picking_ray_dir);
 			}
@@ -573,7 +565,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	}
 
 	CB_EnvState cbEnvState;
-	grd_helper::SetCb_Env(cbEnvState, cam_obj, light_src, global_lighting, lens_effect);
+	grd_helper::SetCb_Env(cbEnvState, cam_obj, light_src, lens_effect); // (v76) GlobalLighting arg removed (SSAO retired)
 	cbEnvState.num_safe_loopexit = num_safe_loopexit;
 	cbEnvState.env_dummy_2 = i_test_shader;
 	D3D11_MAPPED_SUBRESOURCE mappedResEnvState;
