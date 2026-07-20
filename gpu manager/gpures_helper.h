@@ -660,8 +660,12 @@ namespace grd_helper
 
 		float tm_white_point;
 		float tm_radiance_ceiling;
-		float tm_pad__0;
-		float tm_pad__1;
+		// TAA sub-pixel jitter in PIXELS (mirrors the tail of HxCB_CameraState). Only ray generators that do
+		// not go through the camera matrices need this -- the curved slicer builds its sample position from
+		// the thread id and buf_curvePoints, so folding the jitter into mat_ws2ss (as SetCb_Camera does for
+		// every other path) never reaches it. Written by SetCb_Camera; zero means "no jitter".
+		float taa_jitter_px_x;
+		float taa_jitter_px_y;
 
 		ZERO_SET(CB_CameraState)
 	};
@@ -748,11 +752,24 @@ namespace grd_helper
 
 	// ---- Multi-Light (plan: secret_recipies/MULTI_LIGHT_PLAN.md, ML-D3) ----
 	// VXGI light-set CB, bound at register b11 which is declared LOCALLY in hlsl/vxgi/InjectLight.hlsl
-	// (CommonShader.hlsl declares nothing at b11 -- see its b-slot ledger comment). TOTAL cap,
-	// VIEW-INDEPENDENT: the scene-global visible lights with the smallest actorIds. 8 is PROVISIONAL
-	// (Q2): the final cap is a user decision from the V12 GPU-timing table (R=128/256 x 1/2/5/8 lights).
-	// Layout must match InjectLight.hlsl's cbVxgiLights byte-for-byte (static_asserts below).
-#define VXGI_MAX_LIGHTS 8
+	// (CommonShader.hlsl declares nothing at b11 -- see its b-slot ledger comment). Cap = the view's
+	// visible lights with the smallest actorIds; the rest are dropped with a W-L1 warning.
+	//
+	// Why 64 costs nothing to carry: InjectLight's light loop is [loop] over light_count, NOT over the
+	// array size, so a scene with 2 lights marches 2 cones no matter how large this array is. The cap
+	// only sets the CB footprint (16 + N*64 B), and the per-light cone march -- up to 64 3D-texture
+	// samples EACH -- dominates the cost by orders of magnitude. Raising the cap is therefore free;
+	// what is not free is actually lighting a scene with many lights.
+	//
+	// Stays a constant buffer on purpose: the loop index is wave-uniform (every thread reads the same
+	// light per iteration), which is the case CBs are built for -- scalar/broadcast path, and no
+	// contention with the L1/L2 traffic the cone march's grid sampling already saturates. A
+	// StructuredBuffer would route the same uniform read through the vector memory path for no gain.
+	// Revisit only past ~1000 lights, where 16 + N*64 breaks the 64 KB CB limit and forces an SRV.
+	//
+	// Layout must match InjectLight.hlsl's cbVxgiLights byte-for-byte (static_asserts below); the two
+	// VXGI_MAX_LIGHTS defines must move together or the CB layout silently diverges.
+#define VXGI_MAX_LIGHTS 64
 	struct VxgiLight // 64 B = 4 HLSL float4 rows (rev.18: expanded from 48B/3 rows for the SPOT cone params)
 	{
 		vmfloat3 pos_ws;   uint32_t flags;      // bit0 = positional (point/spot), bit1 = spot (cone attenuation)
@@ -763,7 +780,7 @@ namespace grd_helper
 
 		ZERO_SET(VxgiLight)
 	};
-	struct CB_VxgiLights // 16 + 8*64 = 528 B
+	struct CB_VxgiLights // 16 + 64*64 = 4112 B
 	{
 		uint32_t light_count;                  // lights actually in the CB (<= VXGI_MAX_LIGHTS); 0 = no light (dark field, V17)
 		uint32_t vxgil_pad1, vxgil_pad2, vxgil_pad3;
@@ -773,7 +790,7 @@ namespace grd_helper
 	};
 	static_assert(sizeof(VxgiLight) == 64, "VxgiLight must stay 4 float4 rows (HLSL cbuffer packing)");
 	static_assert(offsetof(CB_VxgiLights, lights) == 16, "CB_VxgiLights header must stay one float4 row");
-	static_assert(sizeof(CB_VxgiLights) == 16 + 8 * 64, "CB_VxgiLights must match InjectLight.hlsl's cbVxgiLights (528)");
+	static_assert(sizeof(CB_VxgiLights) == 16 + 64 * 64, "CB_VxgiLights must match InjectLight.hlsl's cbVxgiLights (4112)");
 
 	// Tonemap post-pass config. Plain CPU-side POD, NOT a GPU constant buffer: the values are copied into the
 	// tail of CB_CameraState (see TonemapParams::ApplyTo). Shader model 5.0 has exactly 14 cbuffer slots

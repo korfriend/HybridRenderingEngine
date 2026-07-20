@@ -1238,8 +1238,11 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	dx11DeviceImmContext->GSSetConstantBuffers(0, 1, &cbuf_cam_state);
 	dx11DeviceImmContext->PSSetConstantBuffers(0, 1, &cbuf_cam_state);
 	dx11DeviceImmContext->CSSetConstantBuffers(0, 1, &cbuf_cam_state);
+	// TAA sub-pixel jitter (renderer-owned; computed once per frame on the iobj, zero when TAA is off). The
+	// planar slicer is a TAA target too, so its source samples must be jittered like the volume path.
+	vmfloat2 taa_jitter = iobj->GetObjParam<vmfloat2>("_float2_TaaJitterPx", vmfloat2(0.f, 0.f));
 	CB_CameraState cbCamState;
-	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, matWS2CS, matWS2PS, cam_obj, fb_size_cur, k_value, gi_v_thickness);
+	grd_helper::SetCb_Camera(cbCamState, matWS2SS, matSS2WS, matWS2CS, matWS2PS, cam_obj, fb_size_cur, k_value, gi_v_thickness, taa_jitter);
 //#ifdef DX10_0
 //	cbCamState.far_plane = planeThickness_original;
 //#else

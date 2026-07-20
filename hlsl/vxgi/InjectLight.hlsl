@@ -23,7 +23,10 @@ RWTexture3D<float4> grid_direct : register(u0); // rgb = arriving direct light, 
 // must match gpures_helper.h's CB_VxgiLights byte-for-byte (static_asserts on the C++ side).
 // g_cbEnv's single light (env_flag bit0 / pos_light_ws / dir_light_ws / ltint_diffuse) is NO LONGER read
 // here -- the direct (Phong) shading path keeps using it untouched.
-#define VXGI_MAX_LIGHTS 8
+// MUST equal gpures_helper.h's VXGI_MAX_LIGHTS: the two defines size the same b11 buffer from opposite
+// sides, and a mismatch misaligns every light past the first. The C++ static_assert only guards the C++
+// side, so editing one without the other is caught at RUNTIME (garbage lights), not at build time.
+#define VXGI_MAX_LIGHTS 64
 struct VxgiLight // 64 B = 4 float4 rows -- MUST match gpures_helper.h VxgiLight byte-for-byte (static_asserts C++ side)
 {
     float3 pos_ws;   uint  flags;      // bit0 = positional (point/spot), bit1 = spot (cone attenuation)

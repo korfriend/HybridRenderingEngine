@@ -90,8 +90,15 @@ struct HxCB_CameraState // Hlsl dX Contant Buffer
 
 	float tm_white_point;
 	float tm_radiance_ceiling;
-	float tm_pad__0;
-	float tm_pad__1;
+	// ---- TAA sub-pixel jitter, in PIXELS, for ray generators that do NOT go through the camera matrices ----
+	// Every other path gets its jitter for free: SetCb_Camera folds it into mat_ws2ss / mat_ws2ps_revZ, so the
+	// 3D DVR and the planar slicer (both of which build the ray via TransformPoint(pos_ip_ss, mat_ss2ws)) are
+	// already jittered. The CURVED slicer is not -- it derives its sample position from the integer thread id
+	// interpolated across buf_curvePoints, and never touches a camera matrix, so the jitter has to arrive as
+	// an explicit offset it can add to that coordinate. Zero when TAA is off (which is also the "no jitter"
+	// value), so readers need no separate enable flag.
+	float taa_jitter_px_x;
+	float taa_jitter_px_y;
 };
 
 struct HxCB_EnvState

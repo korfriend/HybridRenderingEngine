@@ -2780,6 +2780,13 @@ void grd_helper::SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, 
 	if (taa_jitter_px.x != 0.f || taa_jitter_px.y != 0.f)
 		cb_cam.cam_flag |= (1u << 12);
 
+	// Also publish the jitter UNFOLDED, in pixels. Folding it into the matrices above covers every ray
+	// generator that projects through them, but the curved slicer derives its sample position from the
+	// dispatch thread id and the curve buffers -- it never reads a camera matrix, so it can only be jittered
+	// by adding this offset to that coordinate itself.
+	cb_cam.taa_jitter_px_x = taa_jitter_px.x;
+	cb_cam.taa_jitter_px_y = taa_jitter_px.y;
+
 	cb_cam.pos_cam_ws = pos_cam;
 	cb_cam.dir_view_ws = dir_cam;
 

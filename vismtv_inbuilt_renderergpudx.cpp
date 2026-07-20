@@ -320,6 +320,19 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	// DoModule is invoked once per render source (MESH then VOLUME are separate calls sharing this iobj), so
 	// the jitter and accumulation index live on the iobj: the FIRST source of the RENDER CALL computes them,
 	// every source reads the same jitter (in grd_helper::SetCb_Camera), and the last source resolves + advances.
+	//
+	// WHY THE IOBJ AND NOT THE VmCamera (they are 1:1 — iobj->GetCameraObject() reaches the camera from here):
+	//   * These values are produced AND consumed entirely inside this DLL; the core never reads them. VmCamera's
+	//     temporal_render_count/global_render_count are the opposite — the core WRITES them and renderers only
+	//     read. VmCamera is the core's forwarded-config surface, so a renderer-private accumulator does not
+	//     belong in it.
+	//   * VmCamera's layout is the cross-DLL ABI contract (3 byte-identical VimCommon.h mirrors + a sizeof
+	//     fingerprint + a version bump). Paying that to carry state the core never touches is the wrong trade;
+	//     SetObjParam is a string-keyed side table and costs no ABI.
+	//   * _int_TaaAccum describes the RENDER TARGET's contents ("how many samples are already in the history"),
+	//     not the camera's pose. If the RT is resized the history is gone and the count is meaningless — which
+	//     is exactly why the framebuffer size is folded into the sig below. Storing it beside the buffer it
+	//     describes keeps that invariant local.
 	// NOTE is_first_renderer means "first DoModule within ONE vzm::RenderScene call" — NOT "first of a presented
 	// frame". An app frame may issue several RenderScene calls for the same camera (e.g. an event callback that
 	// re-renders it); each call is one full TAA step (sig check + jitter here, resolve + accum++ at the end).

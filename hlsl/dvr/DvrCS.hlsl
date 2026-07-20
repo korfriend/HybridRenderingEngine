@@ -1933,9 +1933,18 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 			const float fThicknessPosition = 0;
 			const float merging_beta = 1.0;
 
+	// TAA sub-pixel jitter. cip_xy must stay INTEGER -- it addresses the fragment buffers and the output pixel
+	// -- so the offset is applied ONLY to the geometric sample coordinate below. This is the curved slicer's
+	// whole jitter path: it never projects through mat_ss2ws, so the jitter folded into the camera matrices
+	// (which is what anti-aliases the 3D DVR and the planar slicer) never reaches here. Clamped to the buffer
+	// extent so the +-0.5px offset cannot push an edge pixel outside the curve's interpolation domain.
+			float2 f2SampleXY = clamp(
+				float2(cip_xy) + float2(g_cbCamState.taa_jitter_px_x, g_cbCamState.taa_jitter_px_y),
+				float2(0, 0), float2(i2SizeBuffer.x - 1, i2SizeBuffer.y - 1));
+
 	// i ==> cip_xy.x
-			float fRatio0 = (float) ((i2SizeBuffer.x - 1) - cip_xy.x) / (float) (i2SizeBuffer.x - 1);
-			float fRatio1 = (float) (cip_xy.x) / (float) (i2SizeBuffer.x - 1);
+			float fRatio0 = ((float) (i2SizeBuffer.x - 1) - f2SampleXY.x) / (float) (i2SizeBuffer.x - 1);
+			float fRatio1 = f2SampleXY.x / (float) (i2SizeBuffer.x - 1);
 
 			float2 f2PosInterTopCOS, f2PosInterBottomCOS, f2PosSampleCOS;
 			f2PosInterTopCOS.x = fRatio0 * f3PosTopLeftCOS.x + fRatio1 * f3PosTopRightCOS.x;
@@ -1968,9 +1977,9 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 			f2PosInterBottomCOS.x = fRatio0 * f3PosBottomLeftCOS.x + fRatio1 * f3PosBottomRightCOS.x;
 			f2PosInterBottomCOS.y = fRatio0 * f3PosBottomLeftCOS.y + fRatio1 * f3PosBottomRightCOS.y;
 
-	// j ==> cip_xy.y
-			float fRatio0Y = (float) ((i2SizeBuffer.y - 1) - cip_xy.y) / (float) (i2SizeBuffer.y - 1);
-			float fRatio1Y = (float) (cip_xy.y) / (float) (i2SizeBuffer.y - 1);
+	// j ==> cip_xy.y  (jittered via f2SampleXY.y, same reasoning as the x ratios above)
+			float fRatio0Y = ((float) (i2SizeBuffer.y - 1) - f2SampleXY.y) / (float) (i2SizeBuffer.y - 1);
+			float fRatio1Y = f2SampleXY.y / (float) (i2SizeBuffer.y - 1);
 
 			f2PosSampleCOS.x = fRatio0Y * f2PosInterTopCOS.x + fRatio1Y * f2PosInterBottomCOS.x;
 			f2PosSampleCOS.y = fRatio0Y * f2PosInterTopCOS.y + fRatio1Y * f2PosInterBottomCOS.y;

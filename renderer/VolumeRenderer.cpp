@@ -1472,7 +1472,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			// (Q3's scene-global membership is retired: a light hidden in this view is out of this view's
 			// GI). CollectViewLights sorts by actorId (sceneActors is unordered -> the cap and the
 			// snapshot compare would otherwise be nondeterministic, V13), then R10" caps at
-			// VXGI_MAX_LIGHTS: min-id top 8 contribute, the rest contribute nothing (dominant or not).
+			// VXGI_MAX_LIGHTS: the min-id top VXGI_MAX_LIGHTS contribute, the rest contribute nothing
+			// (dominant or not).
 			//
 			// POSE (ML-D9, rev.14 split): core resolved the VIEW-INDEPENDENT half (STATIONARY pos/dir from
 			// matOS2WS, written on the actor). Here we apply the VIEW-DEPENDENT half: CAMERA_ATTACHED is
