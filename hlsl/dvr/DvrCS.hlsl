@@ -1103,7 +1103,45 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	}
 	// note hits_t.x >= 0
     float3 pos_ray_start_ws = vbos_hit_start_pos + dir_sample_unit_ws * hits_t.x;
-    // recompute the vis result  
+
+	// ---- Ray-start dither: THE single place the sampling phase is randomised for this entry point ----
+	// The march samples at fixed sample_dist offsets from its start, so neighbouring pixels step in lockstep
+	// and the quantisation of the ray integral shows up as slice / wood-grain banding. Randomising the START
+	// PHASE per pixel per frame turns that coherent stair into noise, and the TAA running mean integrates the
+	// noise away: stratified jittered sampling, unbiased in the interior.
+	//
+	// ONE RULE, NO MODE SPLIT -- deliberately unconditional on RAYMODE and on bit10, and this matters:
+	// VR_SURFACE used to dither its first-hit depth, which RAYMODE 0 then inherited through
+	// "vbos_hit_start_pos = pos_ip_ws + dir_sample_unit_ws * depth_out" above. That made the dither exist in
+	// two places under two different gates, and left x-ray with none at all (VolumeRenderer.cpp skips the
+	// whole VR_SURFACE dispatch under "if (!is_xray_mode)"). It was consolidated HERE, so:
+	//   * VR_SURFACE no longer dithers -- do not re-add it there, or every RAYMODE 0 ray gets a SECOND
+	//     independent offset, summing to a triangular distribution up to 2*sample_dist (over-blurred along
+	//     the ray, not better anti-aliased).
+	//   * this block must NOT be narrowed by RAYMODE or by bit10 again: pos_ray_start_ws is the common march
+	//     start for every mode and both camera kinds, so narrowing it silently removes the dither from
+	//     whichever case falls outside -- 3D DVR included, since it no longer has VR_SURFACE to fall back on.
+	// The one thing the move gives up: the outline test above (VrOutlineTest) now reads an UNDITHERED depth.
+	// That is the intent -- TaaResolve averages RGBA only, so noise in a depth-derived test never converges.
+	//
+	// Gated on cam_flag bit12 (TAA ACTIVE) because on a single non-accumulated frame the dither would only
+	// trade banding for noise.
+	// num_ray_samples > 1: a single-sample slab is a plane; phase-shifting it would move the sample OFF that
+	// plane rather than dither it.
+	// The 4th seed channel is the frame's jitter, not a pixel index: a pixel-index seed is jitter-INVARIANT,
+	// so TAA would average the SAME noise pattern every frame and it would never smooth out. The jitter is
+	// guaranteed to change across accumulated frames even where the ray origin barely moves.
+	// DIRECTION IS BACKWARD (-), and that is not interchangeable with (+): _random returns [0,1), never
+	// negative, so the sign here IS the direction. For RAYMODE 0 this start is derived from the VR_SURFACE
+	// first-hit depth, which is quantised to a step boundary -- the true surface lies in [hit - d, hit], so
+	// retreating covers exactly that uncertainty interval. Advancing would march INTO the surface instead and
+	// make it recede by up to one step. This is why the original VR_SURFACE dither used "depth_hit -= ...".
+	if (BitCheck(g_cbCamState.cam_flag, 12) && num_ray_samples > 1)
+	{
+		float rand = _random(float4(pos_ray_start_ws, g_cbCamState.taa_jitter_px_x - g_cbCamState.taa_jitter_px_y));
+		pos_ray_start_ws -= dir_sample_unit_ws * (rand * g_cbVobj.sample_dist);
+	}
+    // recompute the vis result
 	
     vis_out = (float4) 0;
 	depth_out = FLT_MAX;
@@ -1434,18 +1472,23 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #else
 
 #if SCULPT_BITS == 1 // sculpt-bits visibility test
+// The sculpt test MUST read the SAME position the volume is sampled at below
+// (pos_sample_in_blk_ts, i.e. i+k), NOT the block-start pos_sample_ts (i only): this loop
+// unrolls num_skip_steps sub-samples per block, so for every k>0 the two diverged and the
+// carve was tested one block-step away from where the density was read -- the sculpt looked
+// like it did nothing. The SCULPT_MASK path above already uses pos_sample_in_blk_ts.
 #if USE_SCULPT_BITS_TEX3D_TILED == 1 // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
-				int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
+				int3 voxel_id = (int3)(pos_sample_in_blk_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
 				uint3 tex_id = uint3((uint)voxel_id.x >> 2, (uint)voxel_id.y >> 2, (uint)voxel_id.z >> 1);
 				uint sub = ((uint)voxel_id.x & 3u) | (((uint)voxel_id.y & 3u) << 2) | (((uint)voxel_id.z & 1u) << 4);
 				uint word = sculpt_bits_tex.Load(int4((int3)tex_id, 0));
 				bool visible = !(bool)(word & (1u << sub));
 #elif USE_SCULPT_BITS_TEX3D == 1
-				int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
+				int3 voxel_id = (int3)(pos_sample_in_blk_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
 				uint word = sculpt_bits_tex.Load(int4(voxel_id.x >> 5, voxel_id.y, voxel_id.z, 0));
 				bool visible = !(bool)(word & (1u << ((uint)voxel_id.x & 31u)));
 #else
-				int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
+				int3 voxel_id = (int3)(pos_sample_in_blk_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
 				int wwh = g_cbVobj.vol_original_size.x * g_cbVobj.vol_original_size.y;
 				uint bit_id = voxel_id.x + voxel_id.y * g_cbVobj.vol_original_size.x + voxel_id.z * wwh;
 				uint mod = bit_id % 32;
@@ -1473,13 +1516,47 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		i += blkSkip.num_skip_steps;
 		// this is for outer loop's i++
 		//i -= 1;
-#else	// ~(RAYMODE == 1 || RAYMODE == 2) , which means RAYSUM 
+#else	// ~(RAYMODE == 1 || RAYMODE == 2) , which means RAYSUM
 		float sample_v_norm = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
 		// AvgIP = opacity-weighted mean density, classified once below (F13 + air-exclusion).
 		// Weight each sample by its OTF opacity so air (alpha~=0) is smoothly excluded from the mean
 		// instead of washing it out. A continuous weight avoids the aliasing a hard HU/alpha gate
 		// caused (the old `if (vis_otf.a > 0)` note). opacity_correction=1 -> raw OTF alpha.
 		float w = LoadOtfBuf(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, 1).a;
+		// Sculpt gate: a carved-away sample must be EXCLUDED from the mean, not dimmed. Zeroing its weight
+		// drops it exactly like an air sample (w=0), so the average is over surviving material only --
+		// setting sample_v to 0 instead would pull the mean toward 0 HU and be wrong. RAYSUM has no
+		// block-skip, so pos_sample_ts IS this sample's position. Without this gate the RAYSUM path
+		// accumulated every voxel and AVERAGE_INTENSITY_SCULPT_MASK rendered identically to the non-sculpt
+		// AVERAGE_INTENSITY (MIP/MinIP gate the sample above; RAYSUM gates the weight because it always samples).
+#if SCULPT_MASK == 1
+		{
+			int sculpt_value = (int)(g_cbVobj.vobj_flag >> 24);
+			int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint_clamp, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
+			if (!(mask_vint == 0 || mask_vint > sculpt_value)) w = 0;
+		}
+#elif SCULPT_BITS == 1
+		{
+#if USE_SCULPT_BITS_TEX3D_TILED == 1 // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
+			int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
+			uint3 tex_id = uint3((uint)voxel_id.x >> 2, (uint)voxel_id.y >> 2, (uint)voxel_id.z >> 1);
+			uint sub = ((uint)voxel_id.x & 3u) | (((uint)voxel_id.y & 3u) << 2) | (((uint)voxel_id.z & 1u) << 4);
+			uint word = sculpt_bits_tex.Load(int4((int3)tex_id, 0));
+			bool visible = !(bool)(word & (1u << sub));
+#elif USE_SCULPT_BITS_TEX3D == 1
+			int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
+			uint word = sculpt_bits_tex.Load(int4(voxel_id.x >> 5, voxel_id.y, voxel_id.z, 0));
+			bool visible = !(bool)(word & (1u << ((uint)voxel_id.x & 31u)));
+#else
+			int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
+			int wwh = g_cbVobj.vol_original_size.x * g_cbVobj.vol_original_size.y;
+			uint bit_id = voxel_id.x + voxel_id.y * g_cbVobj.vol_original_size.x + voxel_id.z * wwh;
+			uint mod = bit_id % 32;
+			bool visible = !(bool)(sculpt_bits[bit_id / 32] & (0x1u << mod));
+#endif // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
+			if (!visible) w = 0;
+		}
+#endif // sculpt gate (RAYSUM)
 		sampleSum += sample_v_norm * w;
 		weightSum += w;
 #endif // RAYMODE 1/2: MIP or MinIP
@@ -1709,24 +1786,14 @@ PS_FILL_OUTPUT_SURF VR_SURFACE(VS_OUTPUT input)
 
 			float depth_hit = length(pos_hit_ws - pos_ip_ws);
 
-			// Ray-start dither: offset the first-hit depth by a per-pixel random fraction of a sample step to
-			// break up wood-grain/slice banding. Gated on TAA being ACTIVE (camera cam_flag bit12) — the dither
-			// is only clean when it is averaged over the accumulated jittered frames; on a single non-TAA frame
-			// it would just add noise. (Replaces the retired per-volume _bool_JitteringSample / CB_VolumeMaterial
-			// flag bit0.)
-			if (BitCheck(g_cbCamState.cam_flag, 12))
-			{
-		// additional feature : https://koreascience.kr/article/JAKO201324947256830.pdf
-				// SEED MUST CHANGE ACROSS THE ACCUMULATED FRAMES, or TAA averages the SAME noise 32 times and
-				// the dither never smooths out. The old seed (pixel index, depth_hit) is jitter-INVARIANT on a
-				// slicer: the sub-pixel jitter shifts the ray laterally, and a planar slab viewed head-on keeps
-				// depth_hit identical — a static pattern (the 3D view only decorrelated by luck, via depth
-				// variation on non-planar surfaces; an orthogonal view of a flat face had the same flaw).
-				// pos_ip_ws is the JITTERED ray origin: unique per pixel (replaces the pixel-index term) and
-				// moved every accumulated frame by the jitter, so _random's bit-hash fully decorrelates it.
-				float rand = _random(float4(pos_ip_ws, depth_hit));
-				depth_hit -= rand * g_cbVobj.sample_dist;
-			}
+			// NO ray-start dither here -- intentionally. This pass used to jitter depth_hit by a fraction of a
+			// sample step to break up wood-grain/slice banding, and RAYMODE 0 inherited that jitter because its
+			// march starts from this depth. It has been consolidated into the ONE place that owns the sampling
+			// phase: the pos_ray_start_ws dither in RayCasting (see the block there for the full reasoning).
+			// Re-adding it here would double up on RAYMODE 0 -- two independent offsets summing to a triangular
+			// distribution up to 2*sample_dist, which over-blurs along the ray instead of anti-aliasing.
+			// Keeping this depth clean also keeps it out of VrOutlineTest and the early-exit depth writes,
+			// where noise would never converge (TaaResolve averages RGBA only, not depth).
 
 			uint dvr_hit_enc = length(pos_hit_ws - pos_start_ws) < g_cbVobj.sample_dist ? 2 : 1;
 #if DX10_0 == 1 // DX10.0 path (pixel-shader fallback, SRV inputs)
@@ -2039,7 +2106,28 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 					__EXIT_VR_RayCasting;
             }
 			pos_ray_start_ws = pos_ray_start_ws + f3VecSampleViewWS * max(hits_t.x, 0);
-			
+
+	// Ray-start dither along the view direction -- same contract as the planar slicer's (see RayCasting).
+	// The curved slicer is a slab too: every pixel steps from its own curve point in lockstep, so the ray
+	// integral quantises into banding that only a per-pixel, per-frame start phase breaks up. Gated on TAA
+	// (bit12) because the dither is only clean once averaged. num_ray_samples > 1 skips the zero-thickness
+	// case set just above, where the "slab" is a single-sample plane and shifting the phase would move the
+	// sample off it.
+	//
+	// Same gate as the RayCasting block by design -- bit12 && num_ray_samples > 1, unconditional on RAYMODE.
+	// The two entry points are the two march starts in this file, and the rule is meant to read identically
+	// at both: "when TAA is accumulating, the start phase is dithered." CurvedSlicerVR additionally runs NO
+	// VR_SURFACE pass at all (see the gres_fb_vrdepthcs resource comment in CurvedSlicerVR.cpp), so there was
+	// never an inherited dither here to consolidate away -- this has always been the only site for this path.
+			// Backward (-) for the same reason as the RayCasting site: _random is [0,1) so the sign is the
+			// direction, and retreating covers the step-quantisation interval instead of eating into the slab's
+			// front face. Kept identical to that site on purpose -- one rule, one direction, both march starts.
+			if (BitCheck(g_cbCamState.cam_flag, 12) && num_ray_samples > 1)
+			{
+				float rand = _random(float4(pos_ray_start_ws, g_cbCamState.taa_jitter_px_x - g_cbCamState.taa_jitter_px_y));
+				pos_ray_start_ws -= f3VecSampleViewWS * (rand * sample_dist);
+			}
+
 	// DVR ray-casting core part
 #if RAYMODE == 0 // DVR // RAYMODE 0: DVR
 	// note that the gradient normal direction faces to the inside
