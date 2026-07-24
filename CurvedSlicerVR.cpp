@@ -327,7 +327,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 		}
 		dvr_volumes.push_back(actor);
 		VmVObjectVolume* volobj = (VmVObjectVolume*)geo_obj;
-		VolumeData* vol_data = volobj->GetVolumeData();
+		const VolumeData* vol_data = volobj->GetVolumeData();
 
 		min_pitch = (float)std::min(std::min(
 			std::min(vol_data->vox_pitch.x, vol_data->vox_pitch.y),
@@ -575,7 +575,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	for (VmActor* actor : dvr_volumes)
 	{
 		VmVObjectVolume* vobj = (VmVObjectVolume*)actor->GetGeometryRes();
-		VolumeData* vol_data = vobj->GetVolumeData();
+		const VolumeData* vol_data = vobj->GetVolumeData();
 
 		// (rev.16) VXGI is scene-level: state on the scene state object, grids keyed on scene_id. The
 		// curved slicer is a pure CONSUMER, so it only reads. Fallback to vobj for an old core (moot under
@@ -744,7 +744,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 			cbVolumeObj.vobj_flag |= (int)1 << 2;
 #endif
 		if (mask_vol_obj) {
-			VolumeData* mask_vol_data = mask_vol_obj->GetVolumeData();
+			const VolumeData* mask_vol_data = mask_vol_obj->GetVolumeData();
 			if (mask_vol_data->store_dtype.type_bytes == data_type::dtype<uint8_t>().type_bytes) // char
 				cbVolumeObj.mask_value_range = 255.f;
 			else if (mask_vol_data->store_dtype.type_bytes == data_type::dtype<uint16_t>().type_bytes) // short

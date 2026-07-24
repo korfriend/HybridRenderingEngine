@@ -7,7 +7,7 @@ namespace bvh {
 
 	bool UpdateGeometryGPUBVH(VmGpuManager* gpuManager, grd_helper::PSOManager* psoManager, VmVObjectPrimitive* pobj)
 	{
-		PrimitiveData* primitive = pobj->GetPrimitiveData();
+		const PrimitiveData* primitive = pobj->GetPrimitiveData();
 		assert(primitive);
 
 		if (primitive->num_prims == 0 || primitive->ptype != EvmPrimitiveType::PrimitiveTypeTRIANGLE)

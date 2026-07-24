@@ -1233,7 +1233,7 @@ int __UpdateBlocks(GpuRes& gres, const VmVObjectVolume* vobj, const string& vmod
 	gres.options["CPU_ACCESS_FLAG"] = D3D11_CPU_ACCESS_WRITE;
 	gres.options["BIND_FLAG"] = D3D11_BIND_SHADER_RESOURCE;
 
-	VolumeData* vol_data = ((VmVObjectVolume*)vobj)->GetVolumeData();
+	const VolumeData* vol_data = ((VmVObjectVolume*)vobj)->GetVolumeData();
 	const int blk_level = __BLKLEVEL;	// 0 : High Resolution, 1 : Low Resolution
 	VolumeBlocks* volblk = ((VmVObjectVolume*)vobj)->GetVolumeBlock(blk_level);
 
@@ -1270,7 +1270,7 @@ bool grd_helper::UpdateOtfBlocks(GpuRes& gres, VmVObjectVolume* main_vobj, VmVOb
 	MapTable* tmap_data = tobj->GetObjParamPtr<MapTable>("_TableMap_OTF");
 
 
-	VolumeData* vol_data = main_vobj->GetVolumeData();
+	const VolumeData* vol_data = main_vobj->GetVolumeData();
 	float value_range = 65536.f;
 	if (vol_data->store_dtype.type_bytes == data_type::dtype<uint8_t>().type_bytes) 
 		value_range = 256.f;
@@ -1663,12 +1663,12 @@ RETRY:
 	{
 	case DXGI_FORMAT_R8_UNORM:
 		subRes.pSysMem = new byte[vol_size_x * vol_size_y * vol_size_z];
-		__FillVolumeValues((byte*)subRes.pSysMem, (const byte**)vol_data->vol_slices, is_downscaled, is_nearest_max_vol, 0,
+		__FillVolumeValues((byte*)subRes.pSysMem, (const byte**)vol_data->GetVolSlices(), is_downscaled, is_nearest_max_vol, 0,
 			vol_data->vol_size, vmint3(vol_size_x, vol_size_y, vol_size_z), vol_data->bnd_size, vmint2(subRes.SysMemPitch, subRes.SysMemSlicePitch), progress);
 		break;
 	case DXGI_FORMAT_R16_UNORM:
 		subRes.pSysMem = new uint16_t[vol_size_x * vol_size_y * vol_size_z];
-		__FillVolumeValues((uint16_t*)subRes.pSysMem, (const uint16_t**)vol_data->vol_slices, is_downscaled, is_nearest_max_vol, 0,
+		__FillVolumeValues((uint16_t*)subRes.pSysMem, (const uint16_t**)vol_data->GetVolSlices(), is_downscaled, is_nearest_max_vol, 0,
 			vol_data->vol_size, vmint3(vol_size_x, vol_size_y, vol_size_z), vol_data->bnd_size, vmint2(subRes.SysMemPitch, subRes.SysMemSlicePitch), progress);
 		subRes.SysMemPitch *= 2;
 		subRes.SysMemSlicePitch *= 2;
@@ -1707,12 +1707,12 @@ RETRY:
 	switch (gres.options["FORMAT"])
 	{
 	case DXGI_FORMAT_R8_UNORM:
-		__FillVolumeValues((byte*)d11MappedRes.pData, (const byte**)vol_data->vol_slices, is_downscaled, is_nearest_max_vol, 0,
+		__FillVolumeValues((byte*)d11MappedRes.pData, (const byte**)vol_data->GetVolSlices(), is_downscaled, is_nearest_max_vol, 0,
 			vol_data->vol_size, vmint3(vol_size_x, vol_size_y, vol_size_z), vol_data->bnd_size, gpu_row_depth_pitch, progress);
 		break;
 	case DXGI_FORMAT_R16_UNORM:
 		gpu_row_depth_pitch /= 2;
-		__FillVolumeValues((uint16_t*)d11MappedRes.pData, (const uint16_t**)vol_data->vol_slices, is_downscaled, is_nearest_max_vol, 0,
+		__FillVolumeValues((uint16_t*)d11MappedRes.pData, (const uint16_t**)vol_data->GetVolSlices(), is_downscaled, is_nearest_max_vol, 0,
 			vol_data->vol_size, vmint3(vol_size_x, vol_size_y, vol_size_z), vol_data->bnd_size, gpu_row_depth_pitch, progress);
 		break;
 	default:
@@ -1812,7 +1812,7 @@ bool grd_helper::UpdateTMapBuffer(GpuRes& gres, VmObject* tobj, const bool isPre
 
 bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes& gres_idx, map<string, GpuRes>& map_gres_texs, VmVObjectPrimitive* pobj, VmObject* imgObj, bool* hasTextureMap, LocalProgress* progress)
 {
-	PrimitiveData* prim_data = ((VmVObjectPrimitive*)pobj)->GetPrimitiveData();
+	const PrimitiveData* prim_data = ((VmVObjectPrimitive*)pobj)->GetPrimitiveData();
 
 	bool update_data = pobj->GetObjParam("_bool_UpdateData", false);
 	// always
@@ -1954,7 +1954,7 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 		pobj->SetObjParam("_bool_UpdateData", false);
 	}
 
-	if (prim_data->vidx_buffer && prim_data->num_vidx > 0)
+	if (prim_data->GetIndexBuffer() && prim_data->num_vidx > 0)
 	{
 		bool update_data_attriute = update_data;
 
@@ -1992,7 +1992,7 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 				subres.pSysMem = new uint32_t[prim_data->num_vidx];
 				subres.SysMemPitch = prim_data->num_vidx * sizeof(uint32_t);
 				subres.SysMemSlicePitch = 0; // only for 3D resource
-				memcpy((void*)subres.pSysMem, prim_data->vidx_buffer, prim_data->num_vidx * sizeof(uint32_t));
+				memcpy((void*)subres.pSysMem, prim_data->GetIndexBuffer(), prim_data->num_vidx * sizeof(uint32_t));
 				g_psoManager->dx11DeviceImmContext->UpdateSubresource(pdx11bufidx, 0, NULL, subres.pSysMem, subres.SysMemPitch, 0);
 				VMSAFE_DELETEARRAY_VOID(subres.pSysMem);
 			}
@@ -2561,7 +2561,7 @@ bool grd_helper::UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, fn
 	if (!actor || !meshPainter)
 		return false;
 	VmVObjectPrimitive* pobj = (VmVObjectPrimitive*)actor->GetGeometryRes();
-	PrimitiveData* prim_data = pobj->GetPrimitiveData();
+	const PrimitiveData* prim_data = pobj->GetPrimitiveData();
 	if (!prim_data) 
 		return false;
 	if (prim_data->idx_stride != 3) 
@@ -2607,7 +2607,7 @@ bool grd_helper::UpdatePaintTexture(VmActor* actor, const vmmat44f& matSS2WS, fn
 
 	// Check if mesh is indexed
 	// Indexed mesh: num_vtx < num_prims * 3 (vertices are shared between triangles)
-	bool is_indexed = (prim_data->vidx_buffer != nullptr) && (prim_data->num_vtx != prim_data->num_prims * 3);
+	bool is_indexed = (prim_data->GetIndexBuffer() != nullptr) && (prim_data->num_vtx != prim_data->num_prims * 3);
 
 	bool is_regen_res = true;
 	if (paintRes)
@@ -3010,7 +3010,7 @@ void grd_helper::SetCb_Env(CB_EnvState& cb_env, fncontainer::VmCamera* ccobj, co
 
 void grd_helper::SetCb_VolumeObj(CB_VolumeObject& cb_volume, VmVObjectVolume* vobj, const vmmat44f& matWS2OS, GpuRes& gresVol, const int iso_value, const float volblk_valuerange, const float sample_precision, const bool is_xraymode, const int sculpt_index)
 {
-	VolumeData* vol_data = vobj->GetVolumeData();
+	const VolumeData* vol_data = vobj->GetVolumeData();
 
 	//bool invert_normal = false;
 	//vobj->GetCustomParameter("_bool_IsInvertPlaneDirection", data_type::dtype<bool>(), &invert_normal);
@@ -3143,7 +3143,7 @@ void grd_helper::SetCb_PolygonObj(CB_PolygonObject& cb_polygon, VmVObjectPrimiti
 	const vmmat44f& matWS2SS, const vmmat44f& matWS2PS, 
 	const bool is_annotation_obj, const bool use_vertex_color)
 {
-	PrimitiveData* pobj_data = pobj->GetPrimitiveData();
+	const PrimitiveData* pobj_data = pobj->GetPrimitiveData();
 
 	vmmat44f matPivot = (actor->GetParam("_matrix44f_Pivot", vmmat44f(1)));
 	vmmat44f matPivotInv = (actor->GetParam("_matrix44f_PivotInv", vmmat44f(1)));

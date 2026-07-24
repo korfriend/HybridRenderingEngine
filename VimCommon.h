@@ -43,7 +43,8 @@
 //#define __VERSION "1.60" // released at 26.07.17
 //#define __VERSION "1.61" // released at 26.07.18
 //#define __VERSION "1.70" // released at 26.07.19 : VmObject family -> virtual interface + _Detail (cobj->VmLens pilot)
-#define __VERSION "1.71" // released at 26.07.24 : PrimitiveData::GetNumCustomDefinitions() added (GenerateCopiedObject FACECOLOR deep-copy fix)
+//#define __VERSION "1.71" // released at 26.07.24 : PrimitiveData::GetNumCustomDefinitions() added (GenerateCopiedObject FACECOLOR deep-copy fix)
+#define __VERSION "1.72" // released at 26.07.25 : (§4.2a) resource incarnation token — VmObject birth/mutation/poison + owner-only destructive mutators + const GetPrimitiveData/GetVolumeData + encapsulated vidx_buffer/vol_slices
 
 #define _HAS_STD_BYTE 0
 
@@ -559,7 +560,19 @@ namespace vmobjects
 		 * >> int iSamplePosZ = 150 + i3SizeExtraBoundary.z; \n
 		 * >> uint16_t usValue = ((uint16_t**)ppvVolumeSlices)[iSamplePosZ][iSamplePosX + iSamplePosY*(i3VolumeSize.x + i3SizeExtraBoundary.x*2)];
 		 */
+	private:
+		// (1.72, §4.2a) encapsulated raw field. Reassigning/freeing the slice array is a buffer-
+		// destroying act that must go through the owner (VmVObjectVolume::ReplaceSlices/ReleaseSlices/
+		// DeleteData), which bumps the incarnation first. Content is still mutable via GetVolSlices().
 		void** vol_slices;
+	public:
+		// (1.72) Slice-content accessor. Returns the raw 2D slice array. The pointer stays valid until
+		// an owner-only mutator replaces it, so this is content-mutable (the token contract is pointer
+		// VALIDITY, not content immutability) and callable on an owner-const handle.
+		void** GetVolSlices() const { return vol_slices; }
+		// (1.72) Builder-only setter: non-const, so it does NOT compile on an owner-const handle taken
+		// from GetVolumeData(). Local builder VolumeData (filled then handed to RegisterVolumeData) uses it.
+		void SetVolSlices(void** slices) { vol_slices = slices; }
 		/**
 		 * @brief One-side thickness of the extra boundary region in system memory, used to avoid CPU memory access violations
 		 * @details bnd_size = (one-side size along x, one-side size along y, one-side size along z)
@@ -614,16 +627,22 @@ namespace vmobjects
 		/**
 		 * @brief Returns the histogram array size, uint32_t(store_Mm_values.y - store_Mm_values.x + 1.5)
 		 */
-		uint32_t GetHistogramSize() { return (uint32_t)((double)__max(store_Mm_values.y - store_Mm_values.x + 1.5, 1.0)); }
+		uint32_t GetHistogramSize() const { return (uint32_t)((double)__max(store_Mm_values.y - store_Mm_values.x + 1.5, 1.0)); }
 		/**
 		 * @brief Returns the ppvVolumeSlices array size, including the extra boundary
 		 */
-		vmint3 GetSampleSize() { return vmint3(vol_size.x + bnd_size.x * 2, vol_size.y + bnd_size.y * 2, vol_size.z + bnd_size.z * 2); }
+		vmint3 GetSampleSize() const { return vmint3(vol_size.x + bnd_size.x * 2, vol_size.y + bnd_size.y * 2, vol_size.z + bnd_size.z * 2); }
 
 		// Frees the memory allocated for the ppvVolumeSlices and pullHistogram pointers
 		void Delete() {
 			VMSAFE_DELETE2DARRAY_VOID(vol_slices, vol_size.z + bnd_size.z * 2);
 			VMSAFE_DELETEARRAY(histo_values);
+		}
+		// (1.72) Frees ONLY the slice array (not the histogram) and nulls the field. Used by the
+		// owner-only VmVObjectVolume::ReleaseSlices/ReplaceSlices mutators (they have no access to
+		// the now-private vol_slices field).
+		void DeleteSlices() {
+			VMSAFE_DELETE2DARRAY_VOID(vol_slices, vol_size.z + bnd_size.z * 2);
 		}
 	};
 
@@ -675,10 +694,21 @@ namespace vmobjects
 		 * >>    num_vidx = num_prims * idx_stride;
 		 */
 		uint32_t num_vidx;
-		/**
-		 * @brief Array holding the index buffer that defines polygons by vertex index
-		 */
+	private:
+		// (1.72, §4.2a) encapsulated raw field. Reassigning/freeing the index buffer is a buffer-
+		// destroying act that must go through the owner (VmVObjectPrimitive::ReplaceIndexBuffer/
+		// ReleaseIndexBuffer/DeleteData), which bumps the incarnation first. Content stays mutable
+		// via GetIndexBuffer().
 		uint32_t* vidx_buffer;
+	public:
+		// (1.72) Index-buffer accessor. Returns the raw index array; the pointer stays valid until an
+		// owner-only mutator replaces it (token contract = pointer VALIDITY), so it is content-mutable
+		// and callable on an owner-const handle.
+		uint32_t* GetIndexBuffer() const { return vidx_buffer; }
+		// (1.72) Builder-only setter: non-const, so it does NOT compile on an owner-const handle taken
+		// from GetPrimitiveData(). Local builder PrimitiveData (filled then handed to RegisterPrimitiveData)
+		// uses it; object-owned data must use VmVObjectPrimitive::ReplaceIndexBuffer instead.
+		void SetIndexBuffer(uint32_t* index_buffer) { vidx_buffer = index_buffer; }
 		/**
 		 * @brief Number of vertices in the primitive-based object
 		 */
@@ -693,7 +723,7 @@ namespace vmobjects
 		 */
 		std::map<std::string, std::tuple<int, int, int, uint8_t*>> texture_res_info;
 
-		bool GetTexureInfo(const std::string& desc, int& w, int& h, int& bytes_stride, uint8_t** res_ptr)
+		bool GetTexureInfo(const std::string& desc, int& w, int& h, int& bytes_stride, uint8_t** res_ptr) const
 		{
 			auto it = texture_res_info.find(desc);
 			if (it == texture_res_info.end()) return false;
@@ -745,15 +775,18 @@ namespace vmobjects
 		 * keys : POSITION, NORMAL, TEXCOORD[n], ...
 		 * @return vmfloat3 \n Pointer to the vertex buffer; returns NULL if not found
 		 */
+		// (1.72) const-qualified so it is callable on an owner-const PrimitiveData taken from
+		// GetPrimitiveData(). Returns a content-mutable pointer (token contract = pointer VALIDITY,
+		// not content immutability); only reallocation/free is gated (ReplaceOrAdd*/Delete stay non-const).
 		template<class T>
-		T* GetVerticeDefinition(const std::string& vtype) {
-			std::map<std::string, uint8_t*>::iterator itrVtxDef = defined_vtxbuffers.find(vtype);
+		T* GetVerticeDefinition(const std::string& vtype) const {
+			std::map<std::string, uint8_t*>::const_iterator itrVtxDef = defined_vtxbuffers.find(vtype);
 			if (itrVtxDef == defined_vtxbuffers.end())
 				return NULL;
 			return (T*)itrVtxDef->second;
 		}
-		uint8_t* GetCustomDefinition(const std::string& vtype) {
-			std::map<std::string, uint8_t*>::iterator itrVtxDef = defined_custombuffers.find(vtype);
+		uint8_t* GetCustomDefinition(const std::string& vtype) const {
+			std::map<std::string, uint8_t*>::const_iterator itrVtxDef = defined_custombuffers.find(vtype);
 			if (itrVtxDef == defined_custombuffers.end())
 				return NULL;
 			return (uint8_t*)itrVtxDef->second;
@@ -1294,6 +1327,30 @@ namespace vmobjects
 
 		void SetContentUpdateTime();
 
+		// ------------------------------------------------------------------
+		// (1.72, §4.2a) Resource incarnation / generation token.
+		// The ONLY contract the token expresses: "same token => a pointer previously
+		// returned by GetPrimitiveData()/GetVolumeData() is still valid".
+		//   token = (uint64_t(birth) << 32) | mutation
+		// * birth   : a PROCESS-LIFETIME monotonic id issued by the SINGLE CommonApi
+		//             ResourceManager at RegisterObject (never reused, never reset).
+		//             Stored here so GetResObjGeneration can read it back.
+		// * mutation: an owner-local counter bumped exactly once BEFORE every buffer-
+		//             destroying operation (Register*Data / owner-only mutators).
+		// * poison  : latched when mutation would saturate; a poisoned incarnation
+		//             never yields a token again (fail-closed).
+		// ------------------------------------------------------------------
+		// Set once by the ResourceManager at registration. 0 means "not yet issued".
+		void SetResBirth(const uint32_t birth);
+		uint32_t GetResBirth() const;
+		// Composes token from (birth, mutation). Returns false if birth==0 (unissued)
+		// or the incarnation is poisoned.
+		bool GetResGenerationToken(uint64_t& token) const;
+		// Monotonic bump of the owner-local mutation counter, performed BEFORE the
+		// destructive act. On saturation the incarnation is latched to poison.
+		void BumpResMutation();
+		bool IsResIncarnationPoisoned() const;
+
 		void SetDestoryer(const std::string& name, void(*fn)(VmObject* obj));
 		bool ContainsDestroyer(const std::string& name);
 
@@ -1427,9 +1484,24 @@ namespace vmobjects
 		virtual bool RegisterVolumeData(const VolumeData& vol_data, vmint3 blk_size2[2]/* 0 : Large, 1: Small */, const int ref_obj_id = 0, LocalProgress* progress = NULL) = 0;
 		/*!
 		 * @brief Returns the volume information defined in the VmVObjectVolume.
-		 * @return VolumeData \n Pointer to the VolumeData holding the volume information
+		 * @return const VolumeData* \n Pointer to the VolumeData holding the volume information
+		 * @remarks (1.72, §4.2a) The general return type is now const: an object-owned VolumeData
+		 * handle cannot be reallocated/freed (VolumeData::Delete and SetVolSlices are non-const,
+		 * so they do not compile on this handle). Slice CONTENT is still mutable via GetVolSlices().
+		 * Buffer-destroying changes must go through the owner-only mutators below (each bumps the
+		 * incarnation token first).
 		 */
-		virtual VolumeData* GetVolumeData() = 0;
+		virtual const VolumeData* GetVolumeData() = 0;
+
+		// (1.72, §4.2a) owner-only destructive mutators. Each bumps the object's incarnation
+		// (BumpResMutation) BEFORE the destructive act, so a stale copy=false View is invalidated
+		// before the pointer it holds can dangle. Order invariant: change the token FIRST, then free.
+		// Frees the current slice array (and metadata) and clears the volume definition.
+		virtual void DeleteData() = 0;
+		// Frees only the current slice array (histogram/metadata retained by the caller's discipline).
+		virtual void ReleaseSlices() = 0;
+		// Frees the current slice array and adopts a new one (ownership transferred to the object).
+		virtual void ReplaceSlices(void** new_slices) = 0;
 
 		// Optional //
 		/*!
@@ -1661,9 +1733,27 @@ namespace vmobjects
 		virtual bool RemovePrimitiveData() = 0;
 		/*!
 		 * @brief Returns the primitive-defined object information stored in the VmVObjectPrimitive.
-		 * @return PrimitiveData \n Pointer to the PrimitiveData holding the primitive-defined object information
+		 * @return const PrimitiveData* \n Pointer to the PrimitiveData holding the primitive-defined object information
+		 * @remarks (1.72, §4.2a) The general return type is now const: an object-owned PrimitiveData
+		 * handle cannot be reallocated/freed (PrimitiveData::Delete, ReplaceOrAdd*Definition and
+		 * SetIndexBuffer are non-const, so they do not compile on this handle). Buffer CONTENT is still
+		 * mutable via GetVerticeDefinition/GetCustomDefinition/GetIndexBuffer. Buffer-destroying changes
+		 * must go through the owner-only mutators below (each bumps the incarnation token first).
 		 */
-		virtual PrimitiveData* GetPrimitiveData() = 0;
+		virtual const PrimitiveData* GetPrimitiveData() = 0;
+
+		// (1.72, §4.2a) owner-only destructive mutators. Each bumps the object's incarnation
+		// (BumpResMutation) BEFORE the destructive act. Order invariant: change the token FIRST, then free.
+		// Frees all vertex/custom/index/texture buffers and clears the primitive definition.
+		virtual void DeleteData() = 0;
+		// Frees the current index buffer and adopts a new one (num_vidx updated; ownership transferred).
+		virtual void ReplaceIndexBuffer(uint32_t* new_index_buffer, const uint32_t num_vidx) = 0;
+		// Frees the current index buffer and clears num_vidx.
+		virtual void ReleaseIndexBuffer() = 0;
+		// Frees the current buffer registered under vtype (if any) and adopts vtx_buffer.
+		virtual void ReplaceVertexDefinition(const std::string& vtype, void* vtx_buffer) = 0;
+		// Frees the current custom buffer registered under vtype (if any) and adopts buffer.
+		virtual void ReplaceCustomDefinition(const std::string& vtype, void* buffer) = 0;
 
 		virtual bool HasKDTree(int* num_updated = NULL) = 0;
 		virtual void UpdateKDTree() = 0; // just for point cloud

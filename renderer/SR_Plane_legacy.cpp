@@ -275,7 +275,7 @@ bool RenderSrOnPlane(VmFnContainer* _fncontainer,
 		if (!prim_obj->IsDefined())
 			continue;
 
-		PrimitiveData* prim_data = prim_obj->GetPrimitiveData();
+		const PrimitiveData* prim_data = prim_obj->GetPrimitiveData();
 
 		const vmmat44f matOS2WS = prim_obj->GetMatrixOS2WSf();
 		vmfloat3 f3PosAaBbMinWS, f3PosAaBbMaxWS;
@@ -514,7 +514,7 @@ RENDERER_LOOP :
 	{
 		RenderingObject stRenderingObj = pvtrValidPrimitives->at(iIndexMeshObj);
 		VmVObjectPrimitive* pCPrimitiveObject = stRenderingObj.pCMesh;
-		PrimitiveData* pstPrimitiveArchive = (PrimitiveData*)pCPrimitiveObject->GetPrimitiveData();
+		const PrimitiveData* pstPrimitiveArchive = (PrimitiveData*)pCPrimitiveObject->GetPrimitiveData();
 		if (pstPrimitiveArchive->GetVerticeDefinition("POSITION") == NULL)
 			continue;
 
@@ -798,7 +798,7 @@ RENDERER_LOOP :
 		ID3D11Buffer* pdx11IndiceTargetMesh = NULL;
 		uiStrideSizeInput = sizeof(vmfloat3)*(uint)pstPrimitiveArchive->GetNumVertexDefinitions();
 		pdx11DeviceImmContext->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&pdx11BufferTargetMesh, &uiStrideSizeInput, &uiOffset);
-		if (pstPrimitiveArchive->vidx_buffer != NULL)
+		if (pstPrimitiveArchive->GetIndexBuffer() != NULL)
 		{
 			auto itrMapBufferIdx = mapGpuRes_Idx.find(iMeshObjID);
 			pdx11IndiceTargetMesh = (ID3D11Buffer*)itrMapBufferIdx->second.alloc_res_ptrs[DTYPE_RES];

@@ -1540,7 +1540,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			continue;
 
 		VmVObjectPrimitive* pobj = (VmVObjectPrimitive*)geo_obj;
-		PrimitiveData* prim_data = pobj->GetPrimitiveData();
+		const PrimitiveData* prim_data = pobj->GetPrimitiveData();
 		if (prim_data->GetVerticeDefinition<float>("POSITION") == NULL)
 			continue;
 
@@ -1825,7 +1825,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 #endif
 
 			VmVObjectPrimitive* pobj = (VmVObjectPrimitive*)actor->GetGeometryRes();
-			PrimitiveData* prim_data = pobj->GetPrimitiveData();
+			const PrimitiveData* prim_data = pobj->GetPrimitiveData();
 			// note that the actor is visible (already checked)
 
 			vmfloat3* vtx_normal = prim_data->GetVerticeDefinition<vmfloat3>("NORMAL");
@@ -2061,7 +2061,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			}
 
 			if (distanceMapMode == 1 && vobj && !is_picking_routine) {
-				VolumeData* volData = vobj->GetVolumeData();
+				const VolumeData* volData = vobj->GetVolumeData();
 				float vtypemax = 1.f;
 				if (volData->store_dtype == data_type::dtype<uint8_t>()) vtypemax = 255.f;
 				else if (volData->store_dtype == data_type::dtype<uint16_t>()) vtypemax = 65535.f;
@@ -2470,7 +2470,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			assert(D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT > VERTEX_SLOTS);
 			dx11DeviceImmContext->IASetVertexBuffers(0, VERTEX_SLOTS, dx11buffers, strides, offsets);
 
-			if (prim_data->vidx_buffer != NULL && prim_data->ptype != EvmPrimitiveType::PrimitiveTypePOINT)
+			if (prim_data->GetIndexBuffer() != NULL && prim_data->ptype != EvmPrimitiveType::PrimitiveTypePOINT)
 			{
 				dx11IndiceTargetPrim = (ID3D11Buffer*)gres_idx.alloc_res_ptrs[DTYPE_RES];
 				dx11DeviceImmContext->IASetIndexBuffer(dx11IndiceTargetPrim, DXGI_FORMAT_R32_UINT, 0);
@@ -2712,7 +2712,7 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 							std::vector<vmfloat3> aabb_pts;
 							{
 								// 1. compute aabb_ws from prim_data->aabb_os, mat_os2ws
-								AaBbMinMax& aabb_os = prim_data->aabb_os;
+								const AaBbMinMax& aabb_os = prim_data->aabb_os;
 								aabb_pts = {
 									vmfloat3(aabb_os.pos_max),
 									vmfloat3(aabb_os.pos_min.x, aabb_os.pos_max.y, aabb_os.pos_max.z),

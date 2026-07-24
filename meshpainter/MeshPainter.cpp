@@ -217,13 +217,13 @@ void MeshPainter::paintOnActor(
 	paintManager->markDirty(actorId);
 }
 
-bool MeshPainter::computeUVFromHit(vmobjects::PrimitiveData* primData,
+bool MeshPainter::computeUVFromHit(const vmobjects::PrimitiveData* primData,
 	int triangleIndex, float baryU, float baryV, float outUV[2]) {
 	if (!primData)
 		return false;
 
 	// Get triangle indices
-	uint32_t* indices = (uint32_t*)primData->vidx_buffer;
+	uint32_t* indices = (uint32_t*)primData->GetIndexBuffer();
 	int idx0, idx1, idx2;
 
 	if (indices) {
@@ -253,7 +253,7 @@ bool MeshPainter::computeUVFromHit(vmobjects::PrimitiveData* primData,
 	return true;
 }
 
-RayHitResult MeshPainter::raycastMesh(vmobjects::PrimitiveData* primData,
+RayHitResult MeshPainter::raycastMesh(const vmobjects::PrimitiveData* primData,
 	const vmmat44f& matOS2WS,
 	const vmfloat3& rayOrigin,
 	const vmfloat3& rayDir,
@@ -276,7 +276,7 @@ RayHitResult MeshPainter::raycastMesh(vmobjects::PrimitiveData* primData,
 	vmmath::fTransformVector(&rayDirOS, &rayDir, &matWS2OS);
 	vmmath::fNormalizeVector(&rayDirOS, &rayDirOS);
 
-	uint32_t* indices = (uint32_t*)primData->vidx_buffer;
+	uint32_t* indices = (uint32_t*)primData->GetIndexBuffer();
 	int numTriangles = primData->num_prims;
 
 	float closestT = FLT_MAX;

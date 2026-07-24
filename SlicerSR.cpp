@@ -666,7 +666,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			continue;
 
 		VmVObjectPrimitive* pobj = (VmVObjectPrimitive*)geo_obj;
-		PrimitiveData* prim_data = pobj->GetPrimitiveData();
+		const PrimitiveData* prim_data = pobj->GetPrimitiveData();
 		if (prim_data->GetVerticeDefinition<float>("POSITION") == NULL || 
 #ifdef DX10_0
 			pobj->GetBVHTree() == NULL ||
@@ -804,7 +804,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		{
 			VmVObjectPrimitive* pobj = (VmVObjectPrimitive*)actor->GetGeometryRes();
 
-			PrimitiveData* prim_data = pobj->GetPrimitiveData();
+			const PrimitiveData* prim_data = pobj->GetPrimitiveData();
 
 			// note that the actor is visible (already checked)
 #pragma region Actor Parameters
@@ -1201,7 +1201,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 //				ID3D11Buffer* dx11IndiceTargetPrim = NULL;
 //				uint32_t stride_inputlayer = sizeof(vmfloat3) * (uint32_t)prim_data->GetNumVertexDefinitions();
 //				dx11DeviceImmContext->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&dx11BufferTargetPrim, &stride_inputlayer, &offset);
-//				if (prim_data->vidx_buffer != NULL)
+//				if (prim_data->GetIndexBuffer() != NULL)
 //				{
 //					dx11IndiceTargetPrim = (ID3D11Buffer*)gres_idx.GetResource(DTYPE_RES];
 //					dx11DeviceImmContext->IASetIndexBuffer(dx11IndiceTargetPrim, DXGI_FORMAT_R32_UINT, 0);
@@ -1222,7 +1222,7 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 //
 //				dx11DeviceImmContext->SOSetTargets(1, (ID3D11Buffer**)&gres_cutlines_buffer.GetResource(DTYPE_RES], &offset);
 //
-//				if (prim_data->is_stripe || prim_data->vidx_buffer == NULL)
+//				if (prim_data->is_stripe || prim_data->GetIndexBuffer() == NULL)
 //					dx11DeviceImmContext->Draw(prim_data->num_vtx, 0);
 //				else
 //					dx11DeviceImmContext->DrawIndexed(prim_data->num_vidx, 0, 0);

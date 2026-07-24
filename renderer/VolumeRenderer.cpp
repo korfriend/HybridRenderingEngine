@@ -525,7 +525,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 
 		dvr_volumes.push_back(actor);
 		VmVObjectVolume* volobj = (VmVObjectVolume*)geo_obj;
-		VolumeData* vol_data = volobj->GetVolumeData();
+		const VolumeData* vol_data = volobj->GetVolumeData();
 
 		min_pitch = (float)std::min(std::min(
 			std::min(vol_data->vox_pitch.x, vol_data->vox_pitch.y),
@@ -809,7 +809,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	{
 		bool is_last_dvr = vr_render_count == dvr_volumes.size() - 1;
 		VmVObjectVolume* vobj = (VmVObjectVolume*)actor->GetGeometryRes();
-		VolumeData* vol_data = vobj->GetVolumeData();
+		const VolumeData* vol_data = vobj->GetVolumeData();
 
 		// (rev.16, user directive) VXGI is a SCENE-level field. Its STATE (the ~17 ObjParam keys) hangs on
 		// the scene state object, and its GRIDS key on scene_id -- NOT on vobj, because a vobj is a
@@ -966,7 +966,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				// 3D-tiled sculpt bits: each R32_UINT texel holds a 4x4x2 = 32-voxel block.
 				// sub-index within the texel: sub = (x&3) | ((y&3)<<2) | ((z&1)<<4).
 				// Source is the canonical 1D bit stream (bit_id = x + y*W + z*W*H, LSB-first within uint32).
-				VolumeData* vol_data_for_bits = vobj->GetVolumeData();
+				const VolumeData* vol_data_for_bits = vobj->GetVolumeData();
 				const int W = (int)vol_data_for_bits->vol_size.x;
 				const int H = (int)vol_data_for_bits->vol_size.y;
 				const int D = (int)vol_data_for_bits->vol_size.z;
@@ -1018,7 +1018,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				// the source row boundaries do not align to 32-bit word boundaries. We handle both the aligned
 				// fast path (zero-copy when sizes match, or simple word copy) and the unaligned path
 				// (per-row word shuffle).
-				VolumeData* vol_data_for_bits = vobj->GetVolumeData();
+				const VolumeData* vol_data_for_bits = vobj->GetVolumeData();
 				const int W = (int)vol_data_for_bits->vol_size.x;
 				const int H = (int)vol_data_for_bits->vol_size.y;
 				const int D = (int)vol_data_for_bits->vol_size.z;
@@ -1202,7 +1202,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			cbVolumeObj.mask_vol_size = vmfloat3(gres_mask_vol.res_values.GetParam("WIDTH", (uint32_t)1),
 				gres_mask_vol.res_values.GetParam("HEIGHT", (uint32_t)1),
 				gres_mask_vol.res_values.GetParam("DEPTH", (uint32_t)1));
-			VolumeData* mask_vol_data = mask_vol_obj->GetVolumeData();
+			const VolumeData* mask_vol_data = mask_vol_obj->GetVolumeData();
 			if (mask_vol_data->store_dtype.type_bytes == data_type::dtype<uint8_t>().type_bytes) // char
 				cbVolumeObj.mask_value_range = 255.f;
 			else if (mask_vol_data->store_dtype.type_bytes == data_type::dtype<uint16_t>().type_bytes) // short

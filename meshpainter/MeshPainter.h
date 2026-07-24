@@ -42,7 +42,7 @@ struct MeshParams {
 	ID3D11Buffer* vbPos;
 	ID3D11Buffer* vbUV;
 	ID3D11Buffer* indexBuffer;
-	vmobjects::PrimitiveData* primData;
+	const vmobjects::PrimitiveData* primData;
 };
 
 class MeshPainter {
@@ -68,7 +68,7 @@ public:
 	// Returns true if valid UV was computed
 	// If painterUVs is provided, uses painter UVs; otherwise falls back to TEXCOORD0
 	static bool computeUVFromHit(
-		vmobjects::PrimitiveData* primData,
+		const vmobjects::PrimitiveData* primData,
 		int triangleIndex,
 		float baryU, float baryV,
 		float outUV[2]
@@ -78,7 +78,7 @@ public:
 	// Returns hit result with barycentric coordinates
 	// If actorId >= 0, uses painter UVs for UV calculation
 	RayHitResult raycastMesh(
-		vmobjects::PrimitiveData* primData,
+		const vmobjects::PrimitiveData* primData,
 		const vmmat44f& matOS2WS,
 		const vmfloat3& rayOrigin,
 		const vmfloat3& rayDir,

@@ -1541,7 +1541,7 @@ bool SelectPrimitives(
 		return false;
 	}
 
-	PrimitiveData* prim_data = pobj->GetPrimitiveData();
+	const PrimitiveData* prim_data = pobj->GetPrimitiveData();
 	if (prim_data == nullptr)
 	{
 		vzlog_error("Invalid PrimitiveData");
@@ -1687,7 +1687,7 @@ bool SelectPrimitives(
 		}
 		dx11DeviceImmContext->IASetPrimitiveTopology(pobj_topology_type);
 
-		if (prim_data->vidx_buffer != NULL && prim_data->ptype != PrimitiveTypePOINT) {
+		if (prim_data->GetIndexBuffer() != NULL && prim_data->ptype != PrimitiveTypePOINT) {
 			ID3D11Buffer* dx11IndiceTargetPrim = (ID3D11Buffer*)gres_idx.alloc_res_ptrs[DTYPE_RES];
 			dx11DeviceImmContext->IASetIndexBuffer(dx11IndiceTargetPrim, DXGI_FORMAT_R32_UINT, 0);
 		}
@@ -1806,7 +1806,7 @@ bool SelectPrimitives(
 	if (ptr_listPolygons)
 	{
 		ptr_listPolygons->clear();
-		if (prim_data->vidx_buffer && prim_data->num_prims > 0 && !prim_data->is_stripe)
+		if (prim_data->GetIndexBuffer() && prim_data->num_prims > 0 && !prim_data->is_stripe)
 		{
 			uint32_t idx_stride = prim_data->idx_stride;
 			ptr_listPolygons->reserve(prim_data->num_prims);
@@ -1816,7 +1816,7 @@ bool SelectPrimitives(
 				bool selected = false;
 				for (uint32_t j = 0; j < idx_stride; ++j)
 				{
-					uint32_t vidx = prim_data->vidx_buffer[base + j];
+					uint32_t vidx = prim_data->GetIndexBuffer()[base + j];
 					vmfloat3 p = positions[vidx];
 					vmfloat3 p_ss;
 					vmmath::fTransformPoint(&p_ss, &p, &matRS2SS);
@@ -1857,8 +1857,8 @@ bool SelectPrimitives(
 				bool selected = false;
 				for (uint32_t j = 0; j < 3; ++j)
 				{
-					uint32_t vidx = (prim_data->vidx_buffer) ?
-						prim_data->vidx_buffer[i + j] : (i + j);
+					uint32_t vidx = (prim_data->GetIndexBuffer()) ?
+						prim_data->GetIndexBuffer()[i + j] : (i + j);
 					vmfloat3 p = positions[vidx];
 					vmfloat3 p_ss;
 					vmmath::fTransformPoint(&p_ss, &p, &matRS2SS);
