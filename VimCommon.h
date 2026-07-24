@@ -42,7 +42,8 @@
 //#define __VERSION "1.52" // released at 26.01.17
 //#define __VERSION "1.60" // released at 26.07.17
 //#define __VERSION "1.61" // released at 26.07.18
-#define __VERSION "1.70" // released at 26.07.19 : VmObject family -> virtual interface + _Detail (cobj->VmLens pilot)
+//#define __VERSION "1.70" // released at 26.07.19 : VmObject family -> virtual interface + _Detail (cobj->VmLens pilot)
+#define __VERSION "1.71" // released at 26.07.24 : PrimitiveData::GetNumCustomDefinitions() added (GenerateCopiedObject FACECOLOR deep-copy fix)
 
 #define _HAS_STD_BYTE 0
 
@@ -807,6 +808,16 @@ namespace vmobjects
 		int GetNumVertexDefinitions() const
 		{
 			return (int)defined_vtxbuffers.size();
+		}
+		/*!
+		 * @fn int vmobjects::PrimitiveData::GetNumCustomDefinitions()
+		 * @brief Returns the number of registered custom-buffer definitions (e.g. FACECOLOR).
+		 * @remarks Used by deep-copy paths to detect custom channels whose byte length is not
+		 * derivable here, so they can be refused rather than aliased (double-free) or silently dropped.
+		 */
+		int GetNumCustomDefinitions() const
+		{
+			return (int)defined_custombuffers.size();
 		}
 		/*!
 		 * @fn void vmobjects::PrimitiveData::ClearVertexDefinitionContainer()
