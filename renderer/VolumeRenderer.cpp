@@ -113,6 +113,10 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	// runs. Prevents a stale bounce target from keeping the app's re-render loop spinning after VXGI is turned
 	// off or the volume switches to an x-ray mode (where the block is skipped).
 	iobj->SetObjParam("_int_VxgiBounceTarget", (int)0);
+	// Per-view REBUILD-OWNERSHIP report (read by core's vzm::GetVxgiFieldOwner).
+	// Defaulted to false every frame for the same reason as the target above: a view that stops running
+	// the VXGI block must not keep claiming ownership. The build block below sets it truthfully.
+	iobj->SetObjParam("_bool_VxgiOwner", false);
 
 	vmfloat4 default_phong_lighting_coeff = vmfloat4(0.2, 1.0, 0.5, 5); // Emission, Diffusion, Specular, Specular Power
 	bool force_to_update_otf = _fncontainer->fnParams.GetParam("_bool_ForceToUpdateOtf", false);
@@ -2318,6 +2322,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			iobj->SetObjParam("_int_VxgiBounceTarget", (int)VXGI_BOUNCE_TARGET); // target stays iobj-canonical (convergence key)
 			vxgi_anchor->SetObjParam("_int_VxgiSharedTarget", (int)VXGI_BOUNCE_TARGET); // D10: non-owners derive in-progress from this
 			vxgi_anchor->SetObjParam("_uint64_VxgiOwnerLastMs", vxgi_now_ms);           // D10: owner heartbeat (the 5s-timeout basis)
+			iobj->SetObjParam("_bool_VxgiOwner", true); // this view holds the lease (read by vzm::GetVxgiFieldOwner)
 
 			// Bind the radiance grid (t8) + MAT grid (t9) for the RayCasting march below (nulled after the
 			// dispatch). The grids' alpha is PREMULTIPLIED (obscurance * coverage); the DVR un-premultiplies
@@ -2381,6 +2386,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				// Mirror shared progress onto this view's iobj (D10 수렴 보고) — vobj state left untouched.
 				iobj->SetObjParam("_int_VxgiBounce", vxgi_bounce);
 				iobj->SetObjParam("_int_VxgiBounceTarget", vxgi_shared_target);
+				iobj->SetObjParam("_bool_VxgiOwner", false); // consumer of another view's field
+
 			}
 		}
 		else
