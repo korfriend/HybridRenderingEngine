@@ -642,7 +642,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 #pragma endregion
 
 #pragma region GPU resource updates
-		VmObject* tobj_otf = (VmObject*)actor->GetAssociateRes("OTF"); // essential!
+		VmObject* tobj_otf = (VmObject*)actor->GetAssociateRes("MAPTABLE"); // essential!
 		if (tobj_otf == nullptr)
 		{
 			tobj_otf = (VmObject*)actor->GetAssociateRes("OTF");
