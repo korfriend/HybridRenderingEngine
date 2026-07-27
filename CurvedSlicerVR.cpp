@@ -643,6 +643,10 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 
 #pragma region GPU resource updates
 		VmObject* tobj_otf = (VmObject*)actor->GetAssociateRes("OTF"); // essential!
+		if (tobj_otf == nullptr)
+		{
+			tobj_otf = (VmObject*)actor->GetAssociateRes("OTF");
+		}
 		if (is_xray_mode) {
 			VmObject* tobj_windowing = (VmObject*)actor->GetAssociateRes("WINDOWING");
 			if (tobj_windowing)
