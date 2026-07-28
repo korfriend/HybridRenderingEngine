@@ -4241,7 +4241,20 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 #endif
 	}
 
-	iobj->SetObjParam("_int_NumCallRenders", count_call_render);
+	// A PICK PASS MUST NOT OVERWRITE THE RENDER'S COUNT.
+	//
+	// `count_call_render` is how many actors this pass drew, and RenderOut() reads it back as "was
+	// there a valid rendering pass": zero makes it memset the CPU RGBA framebuffer to black
+	// (vismtv_inbuilt_renderergpudx.cpp:542-549), which is correct for a genuinely empty scene.
+	// A picking pass draws into its own staging buffer and never fills the CPU framebuffer, so
+	// letting it publish its count here means: render N actors -> pick that happens to draw 0 ->
+	// the next GPU->CPU copy-back blanks a frame that was rendered perfectly well.
+	//
+	// That was latent while the copy-back only ever ran at the end of a real render. It stopped
+	// being latent with (API v04) StoreRenderBuffer, which replays the copy-back on demand — so the
+	// blank frame is now reachable from a caller that did everything right, and it returns success.
+	if (!is_picking_routine)
+		iobj->SetObjParam("_int_NumCallRenders", count_call_render);
 	psoManager->GpuProfile("SR Render", true);
 
 

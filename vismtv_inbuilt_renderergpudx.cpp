@@ -297,7 +297,26 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	bool is_picking_routine = _fncontainer.fnParams.GetParam("_bool_IsPickingRoutine", false);
 	bool is_first_renderer = _fncontainer.fnParams.GetParam("_bool_IsFirstRenderer", true);
 	bool is_last_renderer = _fncontainer.fnParams.GetParam("_bool_IsFinalRenderer", true);
-	g_psoManager.gpu_profile = _fncontainer.fnParams.GetParam("_bool_GpuProfile", false);
+
+	// ---- On-demand CPU framebuffer store, WITHOUT rendering ----
+	// "Bring this camera's CPU framebuffer up to date from the frame that is ALREADY on the GPU, and do nothing
+	// else." The GPU->CPU copy-back is the RenderOut() lambda below, normally reachable only at the very end of a
+	// render and gated there by _bool_SkipSysFBUpdate. That gate CANNOT be used to request a copy on demand:
+	// skip_sys_fb_update is a real CameraParameters field, so setting it goes through SetCameraParams, bumps the
+	// camera timeStamp and RESETS TAA accumulation -- destroying the very converged image a caller would be trying
+	// to read back. Hence a plain fnParams string key: invisible to CameraParameters, and no VimCommon.h member
+	// (which would bump __VERSION and force every plugin DLL to be rebuilt against the new handshake).
+	//
+	// Everything a render would do is skipped: no source dispatch, no TAA jitter/target bookkeeping, no 2nd-layer
+	// blend, no TAA resolve, no tonemap, no D2D overlay, no shared-present rotation. The pixels handed to the CPU
+	// are exactly the ones the last real render finalized into __PRESENT_RT_NAME.
+	const bool force_store_fb = _fncontainer.fnParams.GetParam("_bool_ForceStoreRenderBuffer", false);
+
+	// A force-store issues no render passes, so there is nothing to time -- and more importantly the
+	// Begin(dx11qr_disjoint) below is drained by a block at the very END of DoModule, which this path returns
+	// before reaching. Pinning the flag off keeps every GpuProfile() call on this path a no-op (GpuProfile()
+	// early-outs on it) and leaves the disjoint query balanced.
+	g_psoManager.gpu_profile = !force_store_fb && _fncontainer.fnParams.GetParam("_bool_GpuProfile", false);
 	map<string, vmint2>& profile_map = g_psoManager.profile_map;
 	if (g_psoManager.gpu_profile)
 	{
@@ -353,7 +372,13 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	const bool taa_enabled = _fncontainer.fnParams.GetParam("_bool_TaaEnabled", false) && !is_picking_routine;
 	int taa_max_samples = _fncontainer.fnParams.GetParam("_int_TaaMaxSamples", (int)1);
 	if (taa_max_samples < 1) taa_max_samples = 1;
-	if (taa_enabled)
+	if (force_store_fb)
+	{
+		// No render this call, so there is no jitter to choose -- and, critically, no _int_TaaTarget to write.
+		// Core's CheckRenderConvergence reads that value back; the "TAA off" arm below writes 0 == "converged",
+		// which would tell the app the view had finished accumulating when in fact nothing was rendered at all.
+	}
+	else if (taa_enabled)
 	{
 		if (is_first_renderer)
 		{
@@ -394,7 +419,15 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		//g_vmCommonParams.dx11DeviceImmContext->End(g_vmCommonParams.dx11qr_timestamps[0]);
 	}
 
-	if (strRendererSource == "VOLUME")
+	if (force_store_fb)
+	{
+		// THE render-skip. is_vr is normally set by the dispatch arms below; mirror it from the source type so
+		// the DX10.0 build of RenderOut() -- the only configuration that reads it -- still selects the same
+		// RENDER_OUT_* pair the last render wrote into. is_final_render_out stays false, so the whole
+		// finalize-and-present block further down is skipped with it.
+		is_vr = (strRendererSource == "VOLUME" || strRendererSource == "SECTIONAL_VOLUME");
+	}
+	else if (strRendererSource == "VOLUME")
 	{
 		double dRuntime = 0;
 		uint32_t vrSlot = _fncontainer.fnParams.GetParam("DVR_CUSTOM_SLOT", 0u);
@@ -688,6 +721,114 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		ctx->CSSetUnorderedAccessViews(0, 1, &uavNull, NULL);
 	};
 #endif
+
+	// ---- On-demand CPU framebuffer store (_bool_ForceStoreRenderBuffer -- see the flag's declaration above) ----
+	// This is the earliest point at which the branch can live: RenderOut() is fully constructed here and every
+	// value it captures (iobj, _fncontainer, is_last_renderer, planeThickness, is_vr, _rcam) is already final --
+	// none of them is produced BY a render pass, so nothing about the lambda requires one to have run. Everything
+	// it consumes that a render DOES produce -- the contents of __PRESENT_RT_NAME / RENDER_OUT_DEPTH_0 and
+	// "_int_NumCallRenders" -- persists on the GPU resource / the iobj across DoModule calls, which is exactly why
+	// a copy-back without a render is meaningful at all. DispatchTonemap() is in scope here too (see below for why
+	// this path deliberately does not call it).
+	//
+	// Deliberately a standalone block ahead of the chain rather than an arm of it: the is_final_render_out block
+	// and the STORE_RT_IOBJ hand-off below stay byte-for-byte unchanged, and STORE_RT_IOBJ in particular must keep
+	// its own behaviour (it renders first, then stores into the index-1 buffers for the CPU-DVR module).
+	if (force_store_fb)
+	{
+		bool stored = false;
+
+		vmint2 fb_size_now;
+		iobj->GetFrameBufferInfo(&fb_size_now);
+		const vmint2 fb_size_gpu = iobj->GetObjParam("_int2_PreviousScreenSize", vmint2(0, 0));
+
+		// NULL-CHECK -- and note carefully what it does and does NOT establish.
+		//
+		// The CPU framebuffer ALLOCATION lives inside the render path (SlicerSR.cpp's "IOBJECT CPU" region
+		// and its twins in PrimitiveRenderer / VolumeRenderer / CurvedSlicerVR) and is NOT gated on
+		// _bool_SkipSysFBUpdate. So a non-NULL RENDEROUT slot 0 separates these:
+		//     never entered a render pass -> GetFrameBuffer(FrameBufferUsageRENDEROUT, 0) == NULL
+		//     rendered, skip == false      -> allocated, contents current
+		//     rendered, skip == true       -> allocated, contents STALE  <- the case this path exists to fix
+		//
+		// THIS COMMENT USED TO CLAIM THIS WAS A COMPLETE LIVENESS TEST -- "decided by the CPU framebuffer
+		// being NULL and by nothing else". THAT WAS FALSE, and the false rationale mattered more than the
+		// code: a PICKING pass also enters the allocation (PrimitiveRenderer.cpp's "IOBJECT CPU" region has
+		// no enclosing conditional) while every RenderOut() call site is unreachable while picking (:821 is
+		// inside `is_final_render_out && !is_picking_routine`). So a picked-but-never-rendered camera has a
+		// non-NULL slot 0 holding INDETERMINATE HEAP -- vmbyte4 is glm::u8vec4 and GLM_FORCE_CTOR_INIT is
+		// not defined anywhere in this workspace. Copying that out would hand a caller uninitialised memory
+		// as a picture.
+		//
+		// The real liveness gate is therefore NOT here. CommonApi's StoreRenderBuffer requires a RECORDED
+		// FINAL RENDER PASS before it ever dispatches this request, which picking cannot produce because it
+		// does not go through RenderScene. What remains here is a null-deref guard for the pointers
+		// RenderOut() is about to touch. Do not restore the old wording: it is exactly the reasoning that
+		// would let someone delete CommonApi's gate as redundant.
+		//
+		// The two companion buffers below are NOT a second liveness test: RenderOut() dereferences whichever
+		// RENDEROUT index it selects and DEPTH slot 0 unconditionally, so these guard the exact pointers it is
+		// about to touch. On a never-rendered camera all three are NULL together, so they never widen the
+		// failure set -- they only stop a null deref in the (slicer-only) index-1 selection.
+		const int store_out_idx = (planeThickness == 0.f && !is_last_renderer) ? 1 : 0;
+		const bool has_cpu_fb = iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, 0) != NULL
+			&& iobj->GetFrameBuffer(FrameBufferUsageRENDEROUT, store_out_idx) != NULL
+			&& iobj->GetFrameBuffer(FrameBufferUsageDEPTH, 0) != NULL;
+
+		// NOTE "_int_NumCallRenders == 0" is deliberately NOT a failure here. It is a per-render pass counter
+		// (each renderer zeroes a local, counts the actors it drew, and stores it), so 0 means the last render
+		// legitimately drew nothing -- an empty scene, not a missing one. RenderOut() already has an arm for
+		// exactly that and zero-fills, which is bit-for-bit what a real render of that scene produced. Treating
+		// it as "not live" would refuse to store a frame the caller is entitled to.
+		if (!has_cpu_fb)
+		{
+			// Never rendered: no CPU framebuffer exists yet, so there is nothing to store and nothing safe to
+			// store into. The only fail-return of this path.
+			vmlog::LogWarn("ForceStoreRenderBuffer: no rendered frame to store! ("
+				+ std::to_string(iobj->GetObjectID()) + ")");
+		}
+		else if (fb_size_now.x != fb_size_gpu.x || fb_size_now.y != fb_size_gpu.y)
+		{
+			// NOT a liveness signal -- this camera HAS rendered; the buffers just no longer agree on size, and
+			// the copy is not memory-safe until they do. The framebuffer was resized since that render:
+			// VmIObject::ResizeFrameBuffer reallocated the CPU buffers immediately (contents undefined), but
+			// grd_helper::UpdateFrameBuffer early-returns on a cache hit keyed by {src_id, res_name} WITHOUT
+			// ever comparing size (gpures_helper.cpp: "if (g_pCGpuManager->UpdateGpuResource(gres)) return
+			// true;"), so the GPU targets and the SYSTEM_OUT_* staging surfaces are all still at the OLD
+			// dimensions. RenderOut()'s copy loop is bounded by the NEW GetFrameBufferInfo size, so it would
+			// index the mapped staging surface out of bounds. Only a real render notices the change
+			// (_int2_PreviousScreenSize -> ReleaseGpuResourcesBySrcID) and rebuilds them, and re-rendering is
+			// exactly what this path must not do -- so refuse instead of reading past the mapping.
+			vmlog::LogWarn("ForceStoreRenderBuffer: framebuffer resized since the last render! ("
+				+ std::to_string(iobj->GetObjectID()) + ")");
+		}
+		else
+		{
+			// NO DispatchTonemap() here, on purpose. __PRESENT_RT_NAME already holds the FINALIZED frame: the
+			// tonemap ran at the end of the last render AND the D2D overlay was drawn on top of it afterwards.
+			// Re-running the tonemap would rewrite that target from the FP16 scene buffer and silently drop the
+			// overlay from the copy-back, so the CPU image would no longer match what was presented. Idempotent
+			// on the pixels, destructive on the overlay -- so: skip it. (The STORE_RT_IOBJ path below must call it
+			// itself precisely because it bypasses the block that tonemaps.)
+			//
+			// Steer RenderOut() to its readback arm. With a window bound it takes the HWND arm instead, which
+			// CopyResources into the swapchain and never touches the CPU buffers at all -- the opposite of what
+			// was asked for. Clearing the key rather than forcing is_last_renderer=false is what keeps
+			// ReleaseDXGI() off a live window and leaves the output index alone. _fncontainer is the core's
+			// per-call copy (VmFnContainer vfn_sub = vfn), and this function already mutates it elsewhere, so the
+			// write cannot leak into another call.
+			_fncontainer.fnParams.SetParam("_hwnd_WindowHandle", (HWND)NULL);
+			RenderOut();
+			stored = true;
+		}
+
+		// Out-param so a caller can tell "nothing to store" apart from a module failure without reading the log.
+		_fncontainer.fnParams.SetParam("_bool_StoredRenderBuffer", stored);
+
+		g_dProgress = 100;
+		LeaveCriticalSection(&cs);
+		return stored;
+	}
 
 	if (is_final_render_out && !is_picking_routine)
 	{
