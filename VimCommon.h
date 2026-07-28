@@ -44,7 +44,25 @@
 //#define __VERSION "1.61" // released at 26.07.18
 //#define __VERSION "1.70" // released at 26.07.19 : VmObject family -> virtual interface + _Detail (cobj->VmLens pilot)
 //#define __VERSION "1.71" // released at 26.07.24 : PrimitiveData::GetNumCustomDefinitions() added (GenerateCopiedObject FACECOLOR deep-copy fix)
-#define __VERSION "1.72" // released at 26.07.25 : (§4.2a) resource incarnation token — VmObject birth/mutation/poison + owner-only destructive mutators + const GetPrimitiveData/GetVolumeData + encapsulated vidx_buffer/vol_slices
+//#define __VERSION "1.72" // released at 26.07.25 : (§4.2a) resource incarnation token — VmObject birth/mutation/poison + owner-only destructive mutators + const GetPrimitiveData/GetVolumeData + encapsulated vidx_buffer/vol_slices
+// "1.73" — released at 26.07.28. THE FIRST BUMP FOR A BEHAVIOUR CONTRACT RATHER THAN A LAYOUT ONE, and the
+// meaning of this constant is deliberately widened here: it answers "may this DLL be mixed with this core?",
+// and a behaviour contract can make a mismatch just as unsafe as a struct-size one. This time it is worse than
+// unsafe-in-theory — it is silently destructive:
+//   - vismtv_inbuilt_renderergpudx gains the fnParams key _bool_ForceStoreRenderBuffer, which runs the existing
+//     RenderOut() GPU->CPU copy-back with NO render pass and replies through _bool_StoredRenderBuffer. A DLL
+//     that predates the key does not ignore the request: it reads that minimal container as an ORDINARY RENDER
+//     of an empty actor set and BLANKS the CPU framebuffer (RenderOut zero-fills on _int_NumCallRenders == 0),
+//     and only afterwards does the caller notice the missing reply. A blanked frame returned as success.
+//   - vismtv_inbuilt_rwfiles gains _string_UsageMode "EXPORT_2DIMAGE_MEMORY". An older build hits its
+//     unknown-usage-mode else branch, which RETURNS TRUE and writes no output.
+// Neither is caught by the layout signature (no struct changed) and neither is caught by kApiVersionTag /
+// kModuleVersionTag, which are reported in GetEngineAPIsVer()'s string and enforced by nothing. __VERSION is
+// the only value the loader actually refuses on (GpuManager.cpp), so this is where the refusal has to live.
+// CONSEQUENCE, stated plainly: every DLL compiled against VimCommon.h must be rebuilt — all renderergpu
+// variants, renderercpu, and every vismtv_* plugin. One that is not rebuilt is DISABLED at load, which is the
+// intended outcome, because running it is what corrupts the frame.
+#define __VERSION "1.73" // released at 26.07.28 : plugin BEHAVIOUR contract — on-demand GPU->CPU copy-back (renderergpu) + in-memory image encode (rwfiles); an older plugin mishandles both destructively
 
 #define _HAS_STD_BYTE 0
 
@@ -2035,3 +2053,52 @@ namespace fncontainer
 			+ sizeof(VmFnContainer) * 131u * 131u * 131u );
 	}
 }
+
+// =================================================================================================
+// PLUGIN-SIDE HALF OF THE LOAD HANDSHAKE  (core side: VmModuleArbiter::RegisterModule)
+//
+// A plugin DLL declares itself compatible by putting VM_DEFINE_MODULE_HANDSHAKE() at file scope once
+// and VM_REQUIRE_MODULE_HANDSHAKE(name) at the top of its InitModule. Nothing else.
+//
+// WHY THIS IS A MACRO AND NOT SIX MODULES' WORTH OF COPY-PASTE: it was copy-paste first, and that is
+// the problem. The attestation is only worth anything if EVERY module computes it the same way from
+// the same header; six hand-written copies is six chances for one of them to drift into comparing
+// something weaker, and a handshake that silently weakens is worse than none because the loader still
+// prints success. Here there is one definition, it lives in the very header whose contract is being
+// attested, and a module that forgets it does not compile a subtly wrong version -- it exports
+// nothing and is REJECTED at load, which is the safe direction to fail in.
+//
+// The arm is MUTUAL and takes PRIMITIVES ONLY (const char*, unsigned int). That restriction is the
+// point: it must be callable before the two sides are known to agree on any struct layout, so no
+// struct may cross in it. The core arms the DLL right after loading it; InitModule then refuses to
+// run un-armed, so an OLD core that never calls arm leaves a NEW plugin self-disabled rather than
+// half-trusted. Both directions are covered by one exchange.
+//
+// LIFETIME is DLL-LOAD, not per-Init. The arbiter arms once when it loads the library, and a loaded
+// image's VimCommon layout cannot change while it is loaded; the flag is deliberately NOT cleared in
+// DeInitModule, because a module can be DeInit/re-Init'd without being unloaded and re-armed.
+//
+// __VERSION is compared as well as the size fingerprint because since 1.73 it also carries BEHAVIOUR
+// contracts -- a plugin can be layout-identical and still mishandle a new dispatch key destructively,
+// and no sizeof can see that.
+#define VM_DEFINE_MODULE_HANDSHAKE()                                                                \
+	static bool g_vimHandshakeArmed = false;                                                        \
+	__vmstatic bool __ArmVimCommonHandshake(const char* core_version, unsigned int core_sig)         \
+	{                                                                                               \
+		g_vimHandshakeArmed = (core_version != NULL                                                 \
+			&& std::string(core_version) == std::string(__VERSION)                                  \
+			&& core_sig == fncontainer::VimCommonLayoutSig());                                      \
+		return g_vimHandshakeArmed;                                                                 \
+	}
+
+// Put this as the FIRST statement of InitModule. `module_name` is a string literal used only in the
+// diagnostic. Refusing here (rather than trusting the loader to have refused already) is what closes
+// the old-core direction: an old arbiter does not know to call arm at all.
+#define VM_REQUIRE_MODULE_HANDSHAKE(module_name)                                                     \
+	do {                                                                                             \
+		if (!g_vimHandshakeArmed) {                                                                  \
+			vmlog::LogErr(std::string(module_name) + " InitModule refused: VimCommon handshake not"   \
+				" armed (stale or absent core -- rebuild every plugin against the same VimCommon.h)."); \
+			return false;                                                                            \
+		}                                                                                            \
+	} while (0)

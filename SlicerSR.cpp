@@ -1379,7 +1379,23 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 #endif
 	}
 
-	iobj->SetObjParam("_int_NumCallRenders", count_call_render);
+	// A PICK PASS MUST NOT OVERWRITE THE RENDER'S COUNT -- same rule as PrimitiveRenderer.cpp's
+	// write of this key, and for the same reason. RenderOut() reads it back as "was there a valid
+	// rendering pass" and memsets the CPU RGBA framebuffer to black when it is zero
+	// (vismtv_inbuilt_renderergpudx.cpp:490, :542-549). A pick draws into its own staging buffer and
+	// never fills the CPU framebuffer, so publishing its count here means: render N actors -> pick
+	// that happens to draw 0 -> the next GPU->CPU copy-back blanks a frame that rendered fine.
+	//
+	// PickActor dispatches only the SR pass (module_ids[0]) with RenderingSourceType "MESH" or
+	// "SECTIONAL_MESH", so exactly two renderers can be reached by a pick and both now guard this
+	// write: PrimitiveRenderer (MESH) and this file (SECTIONAL_MESH). VolumeRenderer and
+	// CurvedSlicerVR write the same key unguarded, which is correct -- the VR pass is not dispatched
+	// during picking and neither file even reads _bool_IsPickingRoutine.
+	//
+	// Latent until (API v04) StoreRenderBuffer made the copy-back callable on demand; now a caller
+	// that did everything right can get a black image back with a success return.
+	if (!is_picking_routine)
+		iobj->SetObjParam("_int_NumCallRenders", count_call_render);
 	psoManager->GpuProfile("Render Slicer", true);
 
 	dx11DeviceImmContext->ClearState();

@@ -97,26 +97,19 @@ auto checkRefCount = [](IUnknown* obj, const char* name) {
 	};
 
 static CRITICAL_SECTION cs;
-static bool g_vimHandshakeArmed = false;
 static bool g_moduleInitialized = false; // (idempotent DeInit) teardown-ownership marker: set once the first resource DeInit frees is acquired -> DeInit no-ops before that (pre-init), tears down owned stages after (partial/full)
-bool __ArmVimCommonHandshake(const char* core_version, unsigned int core_sig)
-{
-	// (mutual handshake) core calls this with PRIMITIVE args before InitModule to prove a shared VimCommon
-	// size; InitModule refuses un-armed, so an OLD core that never arms leaves this NEW DLL self-disabled.
-	// LIFETIME (verification 17:29 Major 1): this is a DLL-LOAD-LIFETIME attestation, NOT per-Init. arm is called
-	// once by ModuleArbiter::RegisterModule when it LOADS this DLL; the DLL then stays loaded across ClearModule
-	// (DeInit, no FreeLibrary) / ExecuteModule (re-Init calls lpdllInit directly, no re-arm) cycles. That is
-	// correct: the loaded DLL's VimCommon layout is immutable while loaded and the single core (one CommonApi/
-	// ModuleArbiter per process) does not change, so g_vimHandshakeArmed==true always means "this loaded DLL
-	// matched the core AT LOAD" and stays valid for the whole load. armed is intentionally NOT reset in DeInit.
-	g_vimHandshakeArmed = (core_version != NULL && std::string(core_version) == __VERSION
-		&& core_sig == fncontainer::VimCommonLayoutSig());
-	return g_vimHandshakeArmed;
-}
+
+// The plugin half of the load handshake (core side: VmModuleArbiter::RegisterModule). One definition
+// for every module lives in VimCommon.h -- see the comment there for why this is not written out by
+// hand per module. It used to be, here and in four native modules; five identical copies of an
+// attestation is five chances for one to drift into checking something weaker while the loader keeps
+// printing success.
+VM_DEFINE_MODULE_HANDSHAKE()
+
 
 bool InitModule(fncontainer::VmFnContainer& _fncontainer)
 {
-	if (!g_vimHandshakeArmed) { vmlog::LogErr("GPU Renderer InitModule refused: VimCommon handshake not armed (stale/absent core)."); return false; }
+	VM_REQUIRE_MODULE_HANDSHAKE("GPU Renderer");
 	InitializeCriticalSection(&cs);
 	g_moduleInitialized = true; // (idempotent DeInit guard) body is running past this point
 
@@ -474,7 +467,28 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		if (is_last_renderer || planeThickness <= 0.f) is_final_render_out = true;
 	}
 
-	auto RenderOut = [&iobj, &is_last_renderer, &planeThickness, &_fncontainer, &is_vr, &_rcam]() {
+	auto RenderOut = [&iobj, &is_last_renderer, &planeThickness, &_fncontainer, &is_vr, &_rcam,
+	                  &is_picking_routine]() {
+
+		// A PICKING PASS NEVER READS BACK THE FRAMEBUFFER. Structural, not incidental.
+		//
+		// There are two ways to pick in this engine and they must not be confused:
+		//   - RAY picking (BVH / volume ray-cast) does not call this renderer at all -- CommonApi
+		//     dispatches __module_CoreProcV with the ray, and no GPU render happens.
+		//   - RENDER picking DOES call this renderer, but only to rasterize ids. Its result comes
+		//     back through its OWN staging buffer (PrimitiveRenderer's gres_picking_system_buffer,
+		//     read with a single Map of the picked texels) -- never through the colour/depth
+		//     framebuffers this lambda copies.
+		// So a full-frame GPU->CPU copy during a pick is pure cost with no consumer, and worse than
+		// that: the pick draws only pick-visible actors, so the frame it would publish is not the
+		// frame the user is looking at. Under (API v04) StoreRenderBuffer that stale/partial content
+		// becomes reachable by a caller who did nothing wrong.
+		//
+		// The call sites already avoid this (the main one is inside `!is_picking_routine`), but that
+		// is a property of three separate conditions staying correct. This makes it one condition,
+		// here, where the copy actually is.
+		if (is_picking_routine)
+			return;
 
 		g_psoManager.GpuProfile("Copyback");
 
