@@ -647,4 +647,12 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
+  <!-- VimCommon.h is the ABI contract the module loader refuses on, and this repo carries its OWN
+       copy because it is distributed standalone (the include path resolves '.' first, so THIS copy
+       is what the DLL compiles against). If CoreAPIs bumps the header and this copy is not synced,
+       the build succeeds and stamps the DLL with the OLD version, which the loader then refuses at
+       runtime far from the cause. Inert when no CoreAPIs checkout is beside this repo. -->
+  <Target Name="VimCommonSyncGate" BeforeTargets="ClCompile">
+    <Exec Command="&quot;$(MSBuildProjectDirectory)\tools\check_vimcommon_sync.bat&quot; &quot;$(MSBuildProjectDirectory)&quot;" />
+  </Target>
 </Project>
