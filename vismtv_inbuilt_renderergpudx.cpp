@@ -104,7 +104,7 @@ static bool g_moduleInitialized = false; // (idempotent DeInit) teardown-ownersh
 // hand per module. It used to be, here and in four native modules; five identical copies of an
 // attestation is five chances for one to drift into checking something weaker while the loader keeps
 // printing success.
-VM_DEFINE_MODULE_HANDSHAKE()
+VM_DEFINE_MODULE_HANDSHAKE(1)  // generation 1 of this module's own exported interface
 
 
 bool InitModule(fncontainer::VmFnContainer& _fncontainer)

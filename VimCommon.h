@@ -62,7 +62,8 @@
 // CONSEQUENCE, stated plainly: every DLL compiled against VimCommon.h must be rebuilt — all renderergpu
 // variants, renderercpu, and every vismtv_* plugin. One that is not rebuilt is DISABLED at load, which is the
 // intended outcome, because running it is what corrupts the frame.
-#define __VERSION "1.73" // released at 26.07.28 : plugin BEHAVIOUR contract — on-demand GPU->CPU copy-back (renderergpu) + in-memory image encode (rwfiles); an older plugin mishandles both destructively
+//#define __VERSION "1.73" // released at 26.07.28 : plugin BEHAVIOUR contract — on-demand GPU->CPU copy-back (renderergpu) + in-memory image encode (rwfiles); an older plugin mishandles both destructively
+#define __VERSION "1.74" // released at 26.07.30 : every module must now export __GetModuleAbiVersion (VM_DEFINE_MODULE_HANDSHAKE gained a module_abi argument). A 1.73 module lacks it, and the core reads a missing export as version 0 and refuses -- which is the intended outcome: the per-module ABI table cannot protect a module that cannot state its version.
 
 #define _HAS_STD_BYTE 0
 
@@ -2081,7 +2082,30 @@ namespace fncontainer
 // __VERSION is compared as well as the size fingerprint because since 1.73 it also carries BEHAVIOUR
 // contracts -- a plugin can be layout-identical and still mishandle a new dispatch key destructively,
 // and no sizeof can see that.
-#define VM_DEFINE_MODULE_HANDSHAKE()                                                                \
+
+// WHY A SECOND, SEPARATE EXPORT RATHER THAN AN EXTRA ARM PARAMETER.
+//
+// __ArmVimCommonHandshake answers "were you built against MY VimCommon.h?" -- the SHARED contract.
+// __GetModuleAbiVersion answers a question the first one structurally CANNOT: "did YOUR OWN
+// exported interface change?" A module can alter its own signatures without touching VimCommon.h
+// at all -- vismtv_modeling's compute_pair_matching_transform went void -> float exactly that way
+// -- and because these exports are extern "C" there is no name mangling, so the mismatched call
+// LINKS and then reads a garbage return register. __VERSION cannot see that, by construction.
+//
+// It is a SEPARATE export, not another parameter on arm, because changing arm's signature is
+// itself the class of break being guarded, and a module too old to report its version is exactly
+// the one that could not tell you about it. Absent export == GetProcAddress returns NULL ==
+// version 0 == "predates this scheme" == refused. That fallback only holds while the signature
+// never changes:
+//
+//     THE SIGNATURE OF __GetModuleAbiVersion IS FROZEN. No arguments, unsigned int return.
+//     Anything it may ever need to say has to fit inside that number.
+//
+// The core keeps the expected version PER MODULE in one table (VisMtvApiVersion.cpp) and compares
+// it on load. Per-module is the point: fixing one module no longer implies a version bump on the
+// other ten, which is what made the single global kModuleVersionTag useless for this -- one string
+// for eleven modules, and read by nothing.
+#define VM_DEFINE_MODULE_HANDSHAKE(module_abi)                                                                \
 	static bool g_vimHandshakeArmed = false;                                                        \
 	__vmstatic bool __ArmVimCommonHandshake(const char* core_version, unsigned int core_sig)         \
 	{                                                                                               \
@@ -2089,7 +2113,8 @@ namespace fncontainer
 			&& std::string(core_version) == std::string(__VERSION)                                  \
 			&& core_sig == fncontainer::VimCommonLayoutSig());                                      \
 		return g_vimHandshakeArmed;                                                                 \
-	}
+	}                                                                               \
+	__vmstatic unsigned int __GetModuleAbiVersion() { return (unsigned int)(module_abi); }
 
 // Put this as the FIRST statement of InitModule. `module_name` is a string literal used only in the
 // diagnostic. Refusing here (rather than trusting the loader to have refused already) is what closes
