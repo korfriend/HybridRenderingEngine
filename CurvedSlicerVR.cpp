@@ -826,7 +826,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 			GpuRes gres_c_grid, gres_c_mat;
 			if (vxgi_on && !is_xray_mode)
 			{
-				const float vxgi_gi_int = _fncontainer->fnParams.GetParam("_float_VxgiGiIntensity", 1.f);
+				const float vxgi_gi_int = _fncontainer->fnParams.GetParam("_float_VxgiGiIntensity", 0.6f); // aligned default chain (header/core/renderer, 2026-08-01)
 				const float vxgi_ao_int = _fncontainer->fnParams.GetParam("_float_VxgiAoIntensity", 1.f);
 				const uint64_t vxgi_vobj_gen = grd_helper::VxgiIssueGen(vxgi_anchor); // DLL-wide single issuer (D9.3)
 				// W1 bookkeeping shared with the planar consumer via grd_helper — one suppression logic, no fork.

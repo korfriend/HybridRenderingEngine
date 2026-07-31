@@ -93,7 +93,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	// when off). CB_VXGI is bound at b13.
 	bool vxgi_on = _fncontainer->fnParams.GetParam("_bool_VxgiEnabled", false);
 	int vxgi_resolution = _fncontainer->fnParams.GetParam("_int_VxgiResolution", (int)128);
-	float vxgi_gi_intensity = _fncontainer->fnParams.GetParam("_float_VxgiGiIntensity", 1.f);       // volumetric in-scatter (0 = off)
+	float vxgi_gi_intensity = _fncontainer->fnParams.GetParam("_float_VxgiGiIntensity", 0.6f);      // volumetric in-scatter (0 = off); 0.6 = the aligned default chain (header/core/renderer, 2026-08-01)
 	float vxgi_ao_intensity = _fncontainer->fnParams.GetParam("_float_VxgiAoIntensity", 1.f);       // surface AO (0 = off)
 	// (indirect_intensity retired — the v1..v4 screen-space surface-indirect term is gone; removed from
 	// EnableVoxelGI too. SetCb_VXGI's indirect arg defaults to a harmless 1.f into the now-unused CB half.)
