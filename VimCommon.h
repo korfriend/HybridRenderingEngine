@@ -63,7 +63,8 @@
 // variants, renderercpu, and every vismtv_* plugin. One that is not rebuilt is DISABLED at load, which is the
 // intended outcome, because running it is what corrupts the frame.
 //#define __VERSION "1.73" // released at 26.07.28 : plugin BEHAVIOUR contract — on-demand GPU->CPU copy-back (renderergpu) + in-memory image encode (rwfiles); an older plugin mishandles both destructively
-#define __VERSION "1.74" // released at 26.07.30 : every module must now export __GetModuleAbiVersion (VM_DEFINE_MODULE_HANDSHAKE gained a module_abi argument). A 1.73 module lacks it, and the core reads a missing export as version 0 and refuses -- which is the intended outcome: the per-module ABI table cannot protect a module that cannot state its version.
+//#define __VERSION "1.74" // released at 26.07.30 : every module must now export __GetModuleAbiVersion (VM_DEFINE_MODULE_HANDSHAKE gained a module_abi argument). A 1.73 module lacks it, and the core reads a missing export as version 0 and refuses -- which is the intended outcome: the per-module ABI table cannot protect a module that cannot state its version.
+#define __VERSION "1.75" // released at 26.08.02 : VmVObjectVolume::MoveVolumeContentFrom -- O(1) ownership transfer of a privately decoded volume into a live object (the async-load commit). Non-virtual (no vtable slot moves), but the every-edit-bumps rule applies: ship every DLL from one drop.
 
 #define _HAS_STD_BYTE 0
 
@@ -1521,6 +1522,22 @@ namespace vmobjects
 		virtual void ReleaseSlices() = 0;
 		// Frees the current slice array and adopts a new one (ownership transferred to the object).
 		virtual void ReplaceSlices(void** new_slices) = 0;
+
+		// (1.75) Adopt src's ENTIRE volume content by OWNERSHIP TRANSFER -- slices, histogram,
+		// min/max blocks, object parameters -- and re-derive this object's spatial placement from
+		// the adopted vol_data, exactly as RegisterVolumeData does. src is left EMPTY (as if never
+		// filled) and both incarnations are bumped, so stale views of either object invalidate.
+		//
+		// This exists for the asynchronous load path: a worker fills a PRIVATE object off-thread,
+		// and the engine thread adopts the result into the live, engine-visible object in O(1) --
+		// no slice copy, no block recompute. The alternative (RegisterVolumeData with src's data)
+		// re-copies every slice and re-runs the block scan under the engine mutex, which is a
+		// frame hitch proportional to the volume. NON-VIRTUAL on purpose: no vtable slot moves, so
+		// a module built against 1.74 still dispatches every existing virtual correctly (the 1.75
+		// handshake still refuses it, per the every-edit-bumps rule).
+		// Identity is NOT moved: ids, name, birth token and ref-counts stay with each object.
+		// Returns false (nothing changed) when src is null/this/data-less.
+		bool MoveVolumeContentFrom(VmVObjectVolume* src);
 
 		// Optional //
 		/*!
