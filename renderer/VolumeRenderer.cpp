@@ -2399,9 +2399,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			// with VXGI OFF must retract ITS OWN field, so a slicer consumer does not read a ghost after the
 			// light/content changed with no builder left to re-bake. Guard on gen match: only the recorded
 			// builder may clear it — a THIRD, VXGI-less 3D view of the same volume must not knock down someone
-			// else's field. Time-based liveness is deliberately NOT used (a builder whose pane merely stopped
-			// rendering still holds a valid field — see D3). The frame-counter reset of _int_VxgiBounceTarget
-			// at the top already stops the convergence loop; this only governs consumer visibility.
+			// else's field. Time-based liveness is deliberately NOT used (a builder whose pane merely
+			// stopped rendering still holds a valid field -- see D3). The convergence demand is
+			// retracted explicitly below (tag 13 removed the prologue reset).
 			if (is_last_dvr && !is_xray_mode && !isSlicer && !vxgi_on)
 			{
 				const uint64_t my_gen = vxgi_issue_gen(iobj);
@@ -2409,6 +2409,15 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				{
 					vxgi_anchor->SetObjParam("_bool_VxgiFieldReady", false);
 					vxgi_anchor->SetObjParam("_uint64_VxgiOwnerGen", (uint64_t)0);
+					// (api tag 13) RETRACT THE CONVERGENCE DEMAND TOO. This used to be handled by the
+					// per-frame _int_VxgiBounceTarget reset in the prologue, which tag 13 removed because
+					// "absence == converged" was the bug. Without a clear HERE the scene anchor would stay
+					// at bounce < target forever once the only builder drops out (VXGI off / x-ray /
+					// destroyed) mid-bake -- and since the core now reads the ANCHOR, every VXGI camera in
+					// the scene would report unconverged and re-render forever. Settling it as CONVERGED is
+					// the honest answer: no builder remains, so the field will not advance.
+					vxgi_anchor->SetObjParam("_int_VxgiSharedTarget", (int)0);
+					vxgi_anchor->SetObjParam("_int_VxgiBounce", (int)0);
 				}
 			}
 

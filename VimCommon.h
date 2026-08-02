@@ -64,7 +64,8 @@
 // intended outcome, because running it is what corrupts the frame.
 //#define __VERSION "1.73" // released at 26.07.28 : plugin BEHAVIOUR contract — on-demand GPU->CPU copy-back (renderergpu) + in-memory image encode (rwfiles); an older plugin mishandles both destructively
 //#define __VERSION "1.74" // released at 26.07.30 : every module must now export __GetModuleAbiVersion (VM_DEFINE_MODULE_HANDSHAKE gained a module_abi argument). A 1.73 module lacks it, and the core reads a missing export as version 0 and refuses -- which is the intended outcome: the per-module ABI table cannot protect a module that cannot state its version.
-#define __VERSION "1.75" // released at 26.08.02 : VmVObjectVolume::MoveVolumeContentFrom -- O(1) ownership transfer of a privately decoded volume into a live object (the async-load commit). Non-virtual (no vtable slot moves), but the every-edit-bumps rule applies: ship every DLL from one drop.
+//#define __VERSION "1.75" // released at 26.08.02 : VmVObjectVolume::MoveVolumeContentFrom -- O(1) ownership transfer of a privately decoded volume into a live object (the async-load commit). Non-virtual (no vtable slot moves), but the every-edit-bumps rule applies: ship every DLL from one drop.
+#define __VERSION "1.76" // released at 26.08.02 : api tag 13 -- VXGI convergence moved from the per-camera framebuffer to the SCENE anchor. Layout-identical, so nothing structural forces the pairing; bumped ANYWAY because a NEWER renderer under an OLDER core reports a VXGI camera permanently unconverged and turns the documented while(!CheckRenderConvergence) loop into a spin. This converts that silent hang into a loud plugin-disabled refusal.
 
 #define _HAS_STD_BYTE 0
 
