@@ -874,9 +874,10 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 			}
 			if (!vxgi_curved_consumed)
 			{
-				// Stop this view's convergence loop from spinning on a stale mirrored target, and keep the
-				// null-SRV + disabled-CB pairing explicit (the zero cbVxgiC below carries vxgi_flag = 0).
-				iobj->SetObjParam("_int_VxgiBounceTarget", (int)0);
+				// (api tag 13) The target reset is gone: convergence is read from the SCENE anchor and
+				// participation from the camera's own VXGI_ENABLED, so a not-consumed curved slicer no
+				// longer has to lie about the bake's progress to keep its loop from spinning. The
+				// null-SRV + disabled-CB pairing stays explicit (the zero cbVxgiC below carries vxgi_flag = 0).
 				SET_SHADER_RES(8, 1, dx11SRVs_NULL);
 				SET_SHADER_RES(9, 1, dx11SRVs_NULL);
 			}

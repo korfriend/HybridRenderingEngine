@@ -109,10 +109,13 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	bool vxgi_ready = false;
 	ID3D11ShaderResourceView* vxgi_mat_srv_dbg = NULL; // MAT grid (coverage) for the debug gather pass
 	ID3D11ShaderResourceView* vxgi_surf_srv_dbg = NULL; // SURF grid (Part C) for the debug gather pass ONLY (voxel modes 3..6)
-	// Default the convergence demand to "done" each frame; the build block below overwrites it when it actually
-	// runs. Prevents a stale bounce target from keeping the app's re-render loop spinning after VXGI is turned
-	// off or the volume switches to an x-ray mode (where the block is skipped).
-	iobj->SetObjParam("_int_VxgiBounceTarget", (int)0);
+	// (api tag 13) NO per-frame reset of _int_VxgiBounceTarget here any more. It used to default the
+	// convergence demand to "done" every pass, which made ABSENCE read as CONVERGED in the core --
+	// so a view that never reached a mirror write reported the bake finished while it was still
+	// running, and stopped re-rendering. Convergence is now read from the SCENE anchor, and whether
+	// a camera participates is decided by its own VXGI_ENABLED, so the stale-target worry this reset
+	// existed for cannot arise: turning VXGI off on a camera removes it from the question entirely.
+	// The iobj values below are kept as per-view TELEMETRY only.
 	// Per-view REBUILD-OWNERSHIP report (read by core's vzm::GetVxgiFieldOwner).
 	// Defaulted to false every frame for the same reason as the target above: a view that stops running
 	// the VXGI block must not keep claiming ownership. The build block below sets it truthfully.
