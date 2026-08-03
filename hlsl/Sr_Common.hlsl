@@ -764,7 +764,19 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
 	float3 Ks_pobj = g_cbPobj.Ks;
 
 #if __RENDERING_MODE != 2
-	if (BitCheck(g_cbPobj.pobj_flag, 3))
+	// (bit 24) TEXCOORD AS COLOUR -- an inspection mode, driven by the camera's
+	// _int_ForcedMaterialColorMode == 2. Tested BEFORE the vertex-colour bit because it is an
+	// explicit override: a mesh may carry both, and the caller asked for UV.
+	// f2UV needs no rescale -- TEXCOORD0 is uploaded as R16G16_UNORM, so it already arrives in 0..1.
+	// Confined to this #if because __RENDERING_MODE == 2 uses VS_OUTPUT_TTT, which has no f2UV.
+	if (BitCheck(g_cbPobj.pobj_flag, 24))
+	{
+		float3 color_in = float3(input.f2UV, 0);
+		Ka_pobj = color_in * g_cbPobj.pb_shading_factor.x;
+		Kd_pobj = color_in * g_cbPobj.pb_shading_factor.y;
+		Ks_pobj = color_in * g_cbPobj.pb_shading_factor.z;
+	}
+	else if (BitCheck(g_cbPobj.pobj_flag, 3))
 	{
 		float3 color_in = input.f4Color.rgb * input.f4Color.a;
 		Ka_pobj = color_in * g_cbPobj.pb_shading_factor.x;

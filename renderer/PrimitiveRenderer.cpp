@@ -2053,6 +2053,13 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			cbPolygonObj.pobj_dummy_0 = actor->actorId;// pobj->GetObjectID(); // used for picking
 			grd_helper::SetCb_PolygonObj(cbPolygonObj, pobj, actor, matWS2SS, matWS2PS, is_annotation_obj, use_vertex_color);
 			cbPolygonObj.pobj_flag |= (int)cmap_windowing << 7;
+			// _int_ForcedMaterialColorMode == 2 asks for the TEXCOORD to be shown as colour. Bit 24 is
+			// free (used: 1,2,3,5,6,7,9,10,19,20,22,23,30,31) and the shader reads it in the same
+			// block as the vertex-colour bit. Requires UVs -- without them the shader would read an
+			// undefined attribute, so a mesh with no texcoords keeps its normal shading and the mode
+			// is simply inert for it rather than wrong.
+			if (forcedMaterialColorMode == 2 && vtx_uv)
+				cbPolygonObj.pobj_flag |= (0x1 << 24);
 			if (has_painter)
 			{
 				// MeshPainter: Bind paint texture if available for this actor
@@ -2180,7 +2187,19 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 					}
 					else
 					{
-						if (vs_mask & A_T0)
+						// THE UV BRANCH ONLY CLAIMS A MESH IT CAN ACTUALLY ASSIGN A SHADER TO.
+						// It has three arms and NO final else, while the `else` further down belongs to
+						// this outer `if` -- so a mesh WITH texcoords but WITHOUT a usable texture fell
+						// through every arm, left dx11PS_Target NULL, and was drawn with PSSetShader(NULL):
+						// depth written, no colour. On screen that is an invisible object that still
+						// occludes everything behind it, with nothing in the log. Guarding the outer test
+						// with the same three conditions lets such a mesh reach the Phong-Blinn else and
+						// draw normally. General, not sample-specific: any UV'd mesh whose texture is
+						// absent or suppressed hit this.
+						const bool __t0_has_shader =
+							is_annotation_obj || has_texture_img ||
+							((cbPolygonObj.pobj_flag & (0x1 << 19)) && prim_data->ptype == PrimitiveTypeLINE);
+						if ((vs_mask & A_T0) && __t0_has_shader)
 						{
 							if (is_annotation_obj)
 							{
