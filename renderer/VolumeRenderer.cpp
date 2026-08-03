@@ -116,10 +116,6 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 	// a camera participates is decided by its own VXGI_ENABLED, so the stale-target worry this reset
 	// existed for cannot arise: turning VXGI off on a camera removes it from the question entirely.
 	// The iobj values below are kept as per-view TELEMETRY only.
-	// Per-view REBUILD-OWNERSHIP report (read by core's vzm::GetVxgiFieldOwner).
-	// Defaulted to false every frame for the same reason as the target above: a view that stops running
-	// the VXGI block must not keep claiming ownership. The build block below sets it truthfully.
-	iobj->SetObjParam("_bool_VxgiOwner", false);
 
 	vmfloat4 default_phong_lighting_coeff = vmfloat4(0.2, 1.0, 0.5, 5); // Emission, Diffusion, Specular, Specular Power
 	bool force_to_update_otf = _fncontainer->fnParams.GetParam("_bool_ForceToUpdateOtf", false);
@@ -1303,6 +1299,20 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		const bool vxgi_is_scene_vxgi_actor = (vxgi_scene_actor_id < 0)
 			? is_last_dvr                             // legacy core: previous behaviour
 			: (actor->actorId == vxgi_scene_actor_id);
+		// (api tag 15) THE APP MAY PIN WHO BUILDS (SceneParameters::SetVxgiBake host_cam_id), and it
+		// matters in exactly one situation: a camera-attached HEADLIGHT makes the shared field carry
+		// the BUILDING view's camera, so which view builds becomes a look decision instead of an
+		// implementation detail. When nothing is pinned this reads false and the rule below is
+		// unchanged -- the first participating view to render after the field needs work takes the
+		// lease, exactly as before. Core also reports a pin as ABSENT once the named camera stops
+		// participating, so an unusable pin cannot freeze the scene's field.
+		const bool vxgi_host_pinned = _fncontainer->fnParams.GetParam("_bool_VxgiHostPinned", false);
+		const bool vxgi_i_am_host = _fncontainer->fnParams.GetParam("_bool_VxgiIsHost", false);
+		// The host pin does NOT belong here. This flag gates the whole VXGI block -- the owner path AND
+		// the CONSUMER path below it -- so putting the pin in it made every non-host participating view
+		// stop consuming the field entirely and fall into the D3 retraction branch instead. A view the
+		// app had explicitly enabled simply lost its GI. The pin decides who BUILDS, and it is applied
+		// where ownership is decided, not here.
 		const bool vxgi_build = vxgi_on && vxgi_is_scene_vxgi_actor && !is_xray_mode && !isSlicer;
 		if (vxgi_build)
 		{
@@ -1559,6 +1569,18 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			// time ("in progress" is DERIVED as bounce < published target -- no separate flag). A single 3D
 			// view acquires on frame 0 and stays owner forever, reducing all of this to the old behavior.
 			int vxgi_bounce = vxgi_anchor->GetObjParam<int>("_int_VxgiBounce", (int)0); // grid state -> vobj (mirrored to iobj below for CheckRenderConvergence)
+			// (api tag 15) Did THIS frame actually write the field? Only a bake or a propagate does.
+			// The readback below runs on every owner frame, including ones where the bake is finished and
+			// nothing advanced -- publishing a new generation there would make every consumer re-render
+			// forever, which is worse than the staleness it is meant to fix.
+			bool vxgi_field_written = false;
+			// A REBAKE is not the same event as a propagate, and consumers must be able to tell them
+			// apart. A propagate refines the field by a little; a rebake replaces it -- the light moved,
+			// or the content did. A view with a full TAA history blends each new frame at 1/(N+1), so
+			// after a rebake it keeps showing the OLD lighting almost undiluted and only reveals the new
+			// one when something else resets its accumulation. That is a stale picture presented as a
+			// converged one.
+			bool vxgi_rebaked = false;
 			const uint64_t vxgi_owner_gen = vxgi_anchor->GetObjParam<uint64_t>("_uint64_VxgiOwnerGen", (uint64_t)0);
 			const int vxgi_owner_iobj = vxgi_anchor->GetObjParam<int>("_int_VxgiOwnerIobjId", (int)-1);
 			const uint64_t vxgi_owner_seq = vxgi_anchor->GetObjParam<uint64_t>("_uint64_VxgiRebuildSeq", (uint64_t)0);
@@ -1907,12 +1929,29 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			bool vxgi_acquire = false;
 			bool vxgi_blocked = false;
 			bool vxgi_i_own_build = false;
-			if (vxgi_i_am_owner)
+			// PINNED OUT: the app named a DIFFERENT view as the headlight host. Applies to the sitting
+			// owner as well, and that is the whole point -- an owner that keeps its lease regardless of
+			// the pin makes the setting look inert: you choose another view and nothing moves, because
+			// the incumbent simply never yields.
+			const bool vxgi_pinned_out = vxgi_host_pinned && !vxgi_i_am_host;
+			if (vxgi_i_am_owner && vxgi_pinned_out)
+			{
+				// RELINQUISH, and only that. FieldReady and the baked CB stay: the field this view built
+				// is still valid and every consumer -- including this one -- keeps reading it until the
+				// named host bakes its own. Clearing it here would blank the scene for the frames in
+				// between, which is a worse answer than a slightly stale one.
+				vxgi_anchor->SetObjParam("_uint64_VxgiOwnerGen", (uint64_t)0);
+				vxgi_anchor->SetObjParam("_int_VxgiOwnerIobjId", (int)0);
+			}
+			else if (vxgi_i_am_owner)
 			{
 				vxgi_i_own_build = true; // continue my own process; a re-rebuild inside it keeps my Seq (D10 진행)
 			}
-			else if (vxgi_rebuild)
+			else if (vxgi_rebuild && !vxgi_pinned_out)
 			{
+				// A pinned-out view still WANTS a rebuild (its content stamp says so) but must not take
+				// the lease: it stays a consumer and the named host bakes. Gating the whole VXGI block on
+				// the pin instead -- which is what this first was -- cost such a view its GI altogether.
 				if (vxgi_no_owner || !vxgi_in_progress /* complete */)
 					vxgi_acquire = true;                                     // legal acquisition — no warning
 				else if (!vxgi_owner_alive) { vxgi_acquire = true; vxgi_w3_reason = 1; } // dead takeover (W3-dead)
@@ -2116,10 +2155,25 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				std::vector<int> vxgi_wl2_ids;
 				for (const VxgiLightState& c : vxgi_cur_lights)
 					if (c.eff_type == (uint32_t)LightType::AUTO_ATTACH_3DCAM) vxgi_wl2_ids.push_back(c.light_id);
-				if (wl_should_warn("_VxgiWL2Suppress", vxgi_wl2_ids, !vxgi_wl2_ids.empty() && vxgi_cur_lights.size() >= 2))
+				// GATED ON THE PARTICIPATING VIEW COUNT, not the light count. The old gate
+				// (vxgi_cur_lights.size() >= 2) had the common case backwards: ONE headlight lighting
+				// TWO VXGI views is exactly the configuration that misleads -- the shared field
+				// carries the building view's camera, so the other view shows GI lit from somewhere
+				// it is not -- and it stayed silent, because there was only one light. Conversely a
+				// headlight with a single participating view is not a defect and should say nothing.
+				// -1 = a core too old to send the count; fall back to the previous behaviour rather
+				// than warn on every single-view scene.
+				const int vxgi_view_count = _fncontainer->fnParams.GetParam("_int_VxgiViewCount", (int)-1);
+				const bool vxgi_wl2_active =
+					!vxgi_wl2_ids.empty() &&
+					(vxgi_view_count >= 0 ? vxgi_view_count >= 2 : vxgi_cur_lights.size() >= 2);
+				if (wl_should_warn("_VxgiWL2Suppress", vxgi_wl2_ids, vxgi_wl2_active))
 				{
-					vzlog_warning("[VXGI] camera-attached light(s) [%s] in a multi-light set: the shared GI field is lit from the rebuild owner's view (view-dependent notice, W-L2)",
-						wl_join_ids(vxgi_wl2_ids).c_str());
+					vzlog_warning("[VXGI] camera-attached light(s) [%s] with %d VXGI views on this scene: "
+						"there is ONE voxel field per scene and it is baked with the BUILDING view's camera, "
+						"so every other view shows GI lit from a camera it does not have. Use a world-fixed "
+						"DIRECTIONAL light if several views must be lit correctly (W-L2)",
+						wl_join_ids(vxgi_wl2_ids).c_str(), vxgi_view_count);
 				}
 				// W-L4 (ML-D9, rev.14 — MOVED here from core): a NON-dominant light carrying
 				// CAMERA_ATTACHED is interpreted as STATIONARY. Core no longer resolves poses, so the
@@ -2255,6 +2309,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 						(ID3D11Resource*)gres_vxgi_direct.alloc_res_ptrs[DTYPE_RES], 0, NULL);
 					dx11DeviceImmContext->GenerateMips(vxgi_grid_srv);
 					vxgi_bounce = 0; // seeded to bounce 0 exactly
+					vxgi_rebaked = true;
+					vxgi_field_written = true;
 					// Part C checkpoint 0: cones read the DIRECT-seeded field (mips just generated above).
 					if (vxgi_surface_checkpoints > 0)
 						vxgi_surface_gather();
@@ -2263,6 +2319,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				{
 					vxgi_propagate_once();
 					vxgi_bounce = 1; // one diffusion iteration already applied against the new content
+					vxgi_rebaked = true;
+					vxgi_field_written = true;
 					// Part C checkpoint 0 (crossfade path): AFTER the transition step above, so the cones
 					// read the previous field one step into its blend toward the new DIRECT. That first
 					// propagate consumed the PREVIOUS lighting's grid_surf — allowed BY DESIGN (plan §4.3):
@@ -2316,16 +2374,30 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				// -- content static: ONE volumetric diffusion iteration (progressive refinement) --
 				vxgi_propagate_once();
 				vxgi_bounce++;
+				vxgi_field_written = true;
 			}
 
 			// Convergence readback: core's skip-gate / CheckRenderConvergence keep the re-render loop alive
 			// until both TAA samples AND VXGI bounces are done (renderer owns the algorithm, core only reads).
-			vxgi_anchor->SetObjParam("_int_VxgiBounce", vxgi_bounce);   // canonical grid state (D2)
+	// FIELD GENERATION -- the identity a consumer compares its last picture against. The bounce
+	// NUMBER cannot serve: a rebake resets it, so a view that last drew at bounce 5 and a freshly
+	// rebaked field also at 5 look identical while carrying different radiance. Core re-renders a
+	// stale consumer off this WITHOUT touching its TAA -- resetting TAA per bounce made the counter
+	// cycle 0->32->0 and never converge, which is exactly why the scene stamp is not the instrument.
+	// BAKE generation: bumped ONLY by a rebake, never by a propagate. Core forwards it to the
+	// participating views and the TAA signature folds it in, so a rebake DOES clear their history
+	// while ordinary refinement still fades in smoothly. Two different events, two signals.
+	if (vxgi_rebaked)
+		vxgi_anchor->SetObjParam("_uint64_VxgiBakeGen",
+			vxgi_anchor->GetObjParam<uint64_t>("_uint64_VxgiBakeGen", (uint64_t)0) + 1ull);
+	if (vxgi_field_written)
+	vxgi_anchor->SetObjParam("_uint64_VxgiFieldGen",
+	vxgi_anchor->GetObjParam<uint64_t>("_uint64_VxgiFieldGen", (uint64_t)0) + 1ull);
+	vxgi_anchor->SetObjParam("_int_VxgiBounce", vxgi_bounce);   // canonical grid state (D2)
 			iobj->SetObjParam("_int_VxgiBounce", vxgi_bounce);   // mirror: core's CheckRenderConvergence polls the iobj (view)
 			iobj->SetObjParam("_int_VxgiBounceTarget", (int)VXGI_BOUNCE_TARGET); // target stays iobj-canonical (convergence key)
 			vxgi_anchor->SetObjParam("_int_VxgiSharedTarget", (int)VXGI_BOUNCE_TARGET); // D10: non-owners derive in-progress from this
 			vxgi_anchor->SetObjParam("_uint64_VxgiOwnerLastMs", vxgi_now_ms);           // D10: owner heartbeat (the 5s-timeout basis)
-			iobj->SetObjParam("_bool_VxgiOwner", true); // this view holds the lease (read by vzm::GetVxgiFieldOwner)
 
 			// Bind the radiance grid (t8) + MAT grid (t9) for the RayCasting march below (nulled after the
 			// dispatch). The grids' alpha is PREMULTIPLIED (obscurance * coverage); the DVR un-premultiplies
@@ -2389,7 +2461,6 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				// Mirror shared progress onto this view's iobj (D10 수렴 보고) — vobj state left untouched.
 				iobj->SetObjParam("_int_VxgiBounce", vxgi_bounce);
 				iobj->SetObjParam("_int_VxgiBounceTarget", vxgi_shared_target);
-				iobj->SetObjParam("_bool_VxgiOwner", false); // consumer of another view's field
 
 			}
 		}
@@ -2412,10 +2483,15 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 					// (api tag 13) RETRACT THE CONVERGENCE DEMAND TOO. This used to be handled by the
 					// per-frame _int_VxgiBounceTarget reset in the prologue, which tag 13 removed because
 					// "absence == converged" was the bug. Without a clear HERE the scene anchor would stay
-					// at bounce < target forever once the only builder drops out (VXGI off / x-ray /
-					// destroyed) mid-bake -- and since the core now reads the ANCHOR, every VXGI camera in
-					// the scene would report unconverged and re-render forever. Settling it as CONVERGED is
-					// the honest answer: no builder remains, so the field will not advance.
+					// at bounce < target forever once the only builder drops out mid-bake -- and since the
+					// core now reads the ANCHOR, every VXGI camera in the scene would report unconverged and
+					// re-render forever. Settling it as CONVERGED is honest: no builder remains here, so the
+					// field will not advance.
+					// SCOPE, stated because an earlier version of this comment overstated it: the guard above
+					// requires !is_xray_mode and !isSlicer, so this does NOT cover a view that switches to an
+					// x-ray mode, nor a scene whose volume actors all disappear -- neither reaches this code at
+					// all. Both are handled core-side (api tag 14): an x-ray camera does not participate in VXGI
+					// convergence, and the core settles the anchor when no VXGI-capable actor is left.
 					vxgi_anchor->SetObjParam("_int_VxgiSharedTarget", (int)0);
 					vxgi_anchor->SetObjParam("_int_VxgiBounce", (int)0);
 				}

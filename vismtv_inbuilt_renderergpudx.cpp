@@ -378,7 +378,30 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 			vmint2 fb_taa_now;
 			iobj->GetFrameBufferInfo(&fb_taa_now);
 			const uint64_t scene_stamp = (uint64_t)_fncontainer.fnParams.GetParam("_uint64_SceneStamp", (uint64_t)0);
-			const uint64_t sig = scene_stamp ^ (((uint64_t)fb_taa_now.x << 20) ^ (uint64_t)fb_taa_now.y);
+			// (api tag 15) THIS view's own change, folded in beside the scene's. Core used to have only
+			// the scene stamp, so a camera edit had to be published as a SCENE change just to restart
+			// its own accumulation -- which restarted every other view of the scene as well. Orbiting
+			// one of two 3D views therefore reset the other one's TAA continuously. Core now bumps the
+			// scene stamp only when the camera is actually visible to other views (a gizmo, or child
+			// items that follow it) and sends the per-camera stamp always.
+			// 0 = a core too old to send it, which folds in as nothing and leaves the old behaviour.
+			const uint64_t cam_stamp = (uint64_t)_fncontainer.fnParams.GetParam("_uint64_CamStamp", (uint64_t)0);
+			// (api tag 15) A VXGI REBAKE clears this view's history too. Not every bounce -- only a
+			// rebake, which is when the light or the content moved and the field became a different
+			// picture. Without this a consumer sitting at 32/32 blended the rebaked field in at
+			// 1/33 and went on showing the OLD lighting, revealing the new one only when something
+			// else happened to reset it. Core sends 0 for a view that does not participate, so a
+			// rebake cannot disturb a camera that shows no GI.
+			const uint64_t vxgi_bake_gen =
+				(uint64_t)_fncontainer.fnParams.GetParam("_uint64_VxgiBakeGen", (uint64_t)0);
+			// The BOUNCE, so accumulation restarts while the field is still changing and settles only
+			// once it stops. Core sends 0 for a view that does not participate.
+			const uint64_t vxgi_taa_bounce =
+				(uint64_t)(int64_t)_fncontainer.fnParams.GetParam("_int_VxgiTaaBounce", (int)0);
+			const uint64_t sig = scene_stamp ^ (cam_stamp * 0x9E3779B97F4A7C15ull) ^
+			                     (vxgi_bake_gen * 0xC2B2AE3D27D4EB4Full) ^
+			                     (vxgi_taa_bounce * 0xD6E8FEB86659FD93ull) ^
+			                     (((uint64_t)fb_taa_now.x << 20) ^ (uint64_t)fb_taa_now.y);
 			int taa_accum = iobj->GetObjParam<int>("_int_TaaAccum", (int)0);
 			if (sig != iobj->GetObjParam<uint64_t>("_uint64_TaaSig", (uint64_t)0))
 			{
