@@ -2246,7 +2246,15 @@ bool grd_helper::UpdatePrimitiveModel(map<string, GpuRes>& map_gres_vtxs, GpuRes
 						res_new_values.SetParam("HEIGHT", (uint32_t)tex_res_size.y);
 						bool reusable = true;
 						CheckReusability(gres_tex, pobj, update_data_attriute, reusable, res_new_values);
-						if (reusable)
+						// POLARITY: regenerate when it is NOT reusable. CheckReusability only ever
+						// WRITES false, so `if (reusable)` meant "destroy and reallocate a texture that
+						// is still perfectly current" -- and GenerateGpuResource is a destroy-and-
+						// reallocate, not a no-op. The replacement carried no initial data, so every
+						// material map sampled (0,0,0,0); the shader multiplies d by that alpha and
+						// clip()s the fragment, which is why a textured mesh vanished silently while
+						// an untextured one drew. The four sibling call sites in this function all say
+						// !reusable; this one was missed when the flag was renamed from regen_data.
+						if (!reusable)
 							g_pCGpuManager->GenerateGpuResource(gres_tex);
 					}
 
