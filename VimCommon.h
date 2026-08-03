@@ -65,7 +65,8 @@
 //#define __VERSION "1.73" // released at 26.07.28 : plugin BEHAVIOUR contract — on-demand GPU->CPU copy-back (renderergpu) + in-memory image encode (rwfiles); an older plugin mishandles both destructively
 //#define __VERSION "1.74" // released at 26.07.30 : every module must now export __GetModuleAbiVersion (VM_DEFINE_MODULE_HANDSHAKE gained a module_abi argument). A 1.73 module lacks it, and the core reads a missing export as version 0 and refuses -- which is the intended outcome: the per-module ABI table cannot protect a module that cannot state its version.
 //#define __VERSION "1.75" // released at 26.08.02 : VmVObjectVolume::MoveVolumeContentFrom -- O(1) ownership transfer of a privately decoded volume into a live object (the async-load commit). Non-virtual (no vtable slot moves), but the every-edit-bumps rule applies: ship every DLL from one drop.
-#define __VERSION "1.76" // released at 26.08.02 : api tag 13 -- VXGI convergence moved from the per-camera framebuffer to the SCENE anchor. Layout-identical, so nothing structural forces the pairing; bumped ANYWAY because a NEWER renderer under an OLDER core reports a VXGI camera permanently unconverged and turns the documented while(!CheckRenderConvergence) loop into a spin. This converts that silent hang into a loud plugin-disabled refusal.
+//#define __VERSION "1.76" // released at 26.08.02 : api tag 13 -- VXGI convergence moved from the per-camera framebuffer to the SCENE anchor. Layout-identical, so nothing structural forces the pairing; bumped ANYWAY because a NEWER renderer under an OLDER core reports a VXGI camera permanently unconverged and turns the documented while(!CheckRenderConvergence) loop into a spin. This converts that silent hang into a loud plugin-disabled refusal.
+#define __VERSION "1.77" // released at 26.08.02 : VmVObjectPrimitive::MovePrimitiveContentFrom -- the mesh mirror of 1.75's MoveVolumeContentFrom, which is what lets LoadModelFileAsync cover meshes. Non-virtual (no vtable slot moves), but the every-edit-bumps rule applies: ship every module DLL, both renderers and CommonApi from ONE drop.
 
 #define _HAS_STD_BYTE 0
 
@@ -1767,6 +1768,21 @@ namespace vmobjects
 		 * The default is NULL; if NULL, it is not used.
 		 */
 		virtual bool RegisterPrimitiveData(const PrimitiveData& prim_data, LocalProgress* progress = NULL) = 0;
+
+		// (1.77) O(1) ownership transfer of another primitive object's CONTENT into this one -- the
+		// mesh mirror of MoveVolumeContentFrom, and what lets the asynchronous loader cover meshes.
+		// A worker fills a PRIVATE object off-thread and the engine thread adopts the result in O(1):
+		// no vertex/index copy, no BVH or KD-tree rebuild under the engine mutex. Going through
+		// RegisterPrimitiveData instead would re-copy every buffer inside the frame, a hitch
+		// proportional to the mesh.
+		// Object parameters MOVE with the content (they describe it), the AABB is re-derived from the
+		// adopted data, src is left EMPTY, and BOTH incarnation tokens bump so stale views of either
+		// object invalidate. Identity is NOT moved: ids, name, birth token and ref-counts stay put.
+		// NON-VIRTUAL on purpose: no vtable slot moves.
+		// Returns false, having changed nothing, when src is null/this/data-less, when either side is
+		// a REFERENCE object (ref_object_id != 0 neither owns nor frees its buffers, so adopting into
+		// or out of one corrupts the sharing contract), or when either side is mid-access.
+		bool MovePrimitiveContentFrom(VmVObjectPrimitive* src);
 		virtual bool RemovePrimitiveData() = 0;
 		/*!
 		 * @brief Returns the primitive-defined object information stored in the VmVObjectPrimitive.
