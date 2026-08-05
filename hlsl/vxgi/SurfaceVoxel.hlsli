@@ -10,7 +10,7 @@
 // -----------------------------------------------------------------------------
 
 // Surface classification thresholds (coverage is Voxelize's true-coverage field: the boundary is a
-// ~2-voxel anti-aliased ramp, not a 1-voxel shell — both tests below key off that ramp).
+// ~2-REFERENCE-voxel anti-aliased ramp, not a 1-voxel shell — both tests below key off that ramp).
 #define VXGI_SURF_EMPTY_EPS 0.001f // a neighbour below this counts as EMPTY (occupied/empty boundary)
 #define VXGI_SURF_GRAD_TH   0.15f  // |central-difference gradient| above this marks the ramp band
 #define VXGI_SURF_EPS2      1e-8f  // degenerate-direction threshold (gradient/face-sum fallback chain)
@@ -38,8 +38,12 @@
 // NOTE the WS metric correction (g/axis^2, the inverse-transpose transform) legitimately AMPLIFIES the
 // short-world-axis gradient component by 1/L — correct math, but it makes slice-axis ripple worse on
 // anisotropic volumes, which is why the ripple must be removed HERE, at the tap level.
-#define VXGI_SURF_GRAD_MIP  0.0f // gradient tap mip: cubic support at mip 2 = ~16 full-res voxels
-#define VXGI_SURF_GRAD_STEP 1.0f // central-difference half-baseline, in full-res voxels
+// VALUES NOW MATCH THE PRESCRIPTION ABOVE. They had drifted back to MIP 0 / STEP 1 -- exactly the
+// "+/-1-voxel difference inside one ring period" configuration the comment declares unrepairable --
+// and the owner's discrimination (2026-08-05) confirmed the predicted chain on screen: lattice-phase
+// bands in the NORMAL view (debug 6) reproduced in cone occlusion (4) and surface indirect (3).
+#define VXGI_SURF_GRAD_MIP  1.0f // gradient tap mip: cubic support at mip 1 = ~8 full-res voxels
+#define VXGI_SURF_GRAD_STEP 2.0f // central-difference half-baseline, in full-res voxels
 
 // CT-GRADIENT normal refinement (plan §3.3 FUTURE OPTION, promoted): the coverage field of a tilted
 // flat surface is a 1-voxel STAIRCASE at 128^3 — its gradient wobbles by tens of degrees in bands
@@ -87,8 +91,12 @@ VXGI_SurfaceTest VXGI_ClassifySurface(Texture3D grid_mat, const in int3 id, cons
 
 	float a_min = min(min(min(st.a_px, st.a_mx), min(st.a_py, st.a_my)), min(st.a_pz, st.a_mz));
 	st.g_vox = float3(st.a_px - st.a_mx, st.a_py - st.a_my, st.a_pz - st.a_mz);
+	// The fixed-world coverage ramp spans resolution_scale current voxels, so its per-current-voxel
+	// derivative falls by the same factor. Scale the threshold or R=256 would classify a thinner,
+	// phase-dependent subset of the same physical boundary.
+	float grad_th = VXGI_SURF_GRAD_TH / VXGI_ResolutionScale();
 	st.is_surface = (a_min < VXGI_SURF_EMPTY_EPS)
-		|| (dot(st.g_vox, st.g_vox) > VXGI_SURF_GRAD_TH * VXGI_SURF_GRAD_TH);
+		|| (dot(st.g_vox, st.g_vox) > grad_th * grad_th);
 	return st;
 }
 
@@ -130,22 +138,24 @@ SurfaceNormal VXGI_CoverageGradientNormal(Texture3D grid_mat, Texture3D tex_vol,
 	float3 uvc = (float3(id) + 0.5f) / Rf;
 
 #if VXGI_SURF_GRAD_CUBIC == 1
-	// C2-reconstructed WIDE central difference — mip and baseline per the VXGI_SURF_GRAD_MIP/STEP
-	// knobs above (ring-ripple suppression: the support must exceed the ring wavelength).
-	float Rg = max(Rf / exp2(VXGI_SURF_GRAD_MIP), 1.0f); // texel count at the gradient mip
-	float e = VXGI_SURF_GRAD_STEP / Rf;                  // half-baseline in uv units
+	// C2-reconstructed WIDE central difference. Both the reconstruction mip and derivative baseline
+	// preserve their R=128 world-space support; otherwise R=256 halves both and turns coverage-lattice
+	// phase into a twice-as-frequent normal wave on broad surfaces.
+	float resolution_scale = VXGI_ResolutionScale();
+	float grad_lod = clamp(VXGI_SURF_GRAD_MIP + VXGI_ResolutionLodBias(), 0.0f, log2(Rf));
+	float e = (VXGI_SURF_GRAD_STEP * resolution_scale) / Rf;   // fixed-reference half-baseline in uv
 	// Built with a single float3 constructor, NOT declare-then-write-.x/.y/.z: fxc does not treat the three
 	// component writes as proving the vector whole, so the declared-empty form left g_vox "potentially
 	// uninitialized" (X4000). The taint then propagated through out_vox into sn.normal_ws, and fxc reported
 	// it at the two enclosing branch merge points (the closing braces of the gradient / grad_sane blocks) —
 	// which is why the warning did NOT come from the struct it appeared to point at. Same math, no warning.
 	float3 g_vox = float3(
-		VXGI_SampleDensityCubic(grid_mat, uvc + float3(e, 0, 0), VXGI_SURF_GRAD_MIP, Rg)
-	  - VXGI_SampleDensityCubic(grid_mat, uvc - float3(e, 0, 0), VXGI_SURF_GRAD_MIP, Rg),
-		VXGI_SampleDensityCubic(grid_mat, uvc + float3(0, e, 0), VXGI_SURF_GRAD_MIP, Rg)
-	  - VXGI_SampleDensityCubic(grid_mat, uvc - float3(0, e, 0), VXGI_SURF_GRAD_MIP, Rg),
-		VXGI_SampleDensityCubic(grid_mat, uvc + float3(0, 0, e), VXGI_SURF_GRAD_MIP, Rg)
-	  - VXGI_SampleDensityCubic(grid_mat, uvc - float3(0, 0, e), VXGI_SURF_GRAD_MIP, Rg));
+		VXGI_SampleDensityCubicLod(grid_mat, uvc + float3(e, 0, 0), grad_lod, Rf)
+	  - VXGI_SampleDensityCubicLod(grid_mat, uvc - float3(e, 0, 0), grad_lod, Rf),
+		VXGI_SampleDensityCubicLod(grid_mat, uvc + float3(0, e, 0), grad_lod, Rf)
+	  - VXGI_SampleDensityCubicLod(grid_mat, uvc - float3(0, e, 0), grad_lod, Rf),
+		VXGI_SampleDensityCubicLod(grid_mat, uvc + float3(0, 0, e), grad_lod, Rf)
+	  - VXGI_SampleDensityCubicLod(grid_mat, uvc - float3(0, 0, e), grad_lod, Rf));
 #else
 	float3 g_vox = st.g_vox; // raw texel central difference (band-prone — A/B only)
 #endif
@@ -228,12 +238,14 @@ SurfaceNormal VXGI_CoverageGradientNormal(Texture3D grid_mat, Texture3D tex_vol,
 	// DEGENERATE (thin plate: central difference exactly 0 on both sides — a wider gradient cannot
 	// fix that) or RING-CORRUPTED gradient — use the empty-face weighted sum:
 	// one exposed side -> that face's direction; asymmetric exposure -> the composite direction.
-	// NOTE dir_f is a voxel-space direction — convert to WS before returning (returning a vox axis as
-	// a WS normal re-introduces the coordinate mixing on anisotropic grids).
+	// NOTE nf_vox is a voxel-space PLANE NORMAL, not a displacement direction. Apply the same
+	// inverse-transpose metric as the gradient path; a direct mat_vox2ws multiply only happens to be
+	// equivalent for a single axis, not for composite face evidence on anisotropic grids.
 	[branch]
 	if (!resolved && face_valid)
 	{
-		sn.normal_ws = normalize(TransformVector(nf_vox, g_cbVxgi.mat_vox2ws));
+		float3 axis2 = g_cbVxgi.grid_axis_ws * g_cbVxgi.grid_axis_ws;
+		sn.normal_ws = normalize(TransformVector(nf_vox / axis2, g_cbVxgi.mat_vox2ws));
 		sn.path = VXGI_SURF_PATH_FACE;
 		resolved = true;
 	}

@@ -34,7 +34,7 @@
 // ALPHA SEMANTICS (v4.5): the radiance grid's alpha is the per-voxel OBSCURANCE field PREMULTIPLIED
 // by coverage (obscurance * mat.a), NOT opacity. Displaying the field requires dividing by the
 // SAME-lod MAT coverage (t3), whose alpha is the true coverage fraction from Voxelize.
-Texture3D vxgi_grid : register(t0); // rgb = radiance, a = obscurance*coverage (PREMULTIPLIED)
+Texture3D vxgi_grid : register(t0); // rgb = radiance*coverage, a = obscurance*coverage (both PREMULTIPLIED)
 Texture3D tex3D_volume : register(t2); // ORIGINAL intensity volume — CT-gradient normal refinement (modes 5/6)
 Texture3D grid_mat  : register(t3); // rgb = albedo, a = COVERAGE (occupancy source)
 Texture3D grid_surf : register(t4); // Part C SURF grid (rgb = albedo*indirect, a = cone occ), single mip
@@ -117,7 +117,7 @@ void VXGI_Gather(uint3 DTid : SV_DispatchThreadID)
 		if (dbg <= 2 || dbg == 7)
 		{
 			// --- 1/2/7 : radiance / obscurance / RAW coverage at the selected mip (Load == point sample).
-			float4 s = vxgi_grid.Load(int4(vid, mip)); // rgb=radiance, a=obsc*cov
+			float4 s = vxgi_grid.Load(int4(vid, mip)); // rgb=radiance*cov, a=obsc*cov
 			float cov = grid_mat.Load(int4(vid, mip)).a; // true occupancy
 			// Mip compensation (display only): higher mips average occupied voxels with empty space, which
 			// dilutes rgb, coverage AND the premultiplied alpha alike — dividing by the same-lod COVERAGE

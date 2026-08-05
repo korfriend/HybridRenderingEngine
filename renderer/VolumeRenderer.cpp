@@ -1266,7 +1266,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		// Runs on the last DVR volume (non-x-ray) BEFORE its RayCasting dispatch (RayCasting reads the radiance
 		// grid at SRV t8 with cone-trace LOD, gated by g_cbVxgi.vxgi_flag). Five resources:
 		//   VXGI_GRID_MAT    (single mip) : albedo+opacity from Voxelize — static until the CONTENT changes.
-		//   VXGI_VOXEL_GRID  (MIP CHAIN)  : radiance+opacity — what shading cone-traces; mips via GenerateMips.
+		//   VXGI_VOXEL_GRID  (MIP CHAIN)  : radiance*coverage + obscurance*coverage — what shading cone-traces;
+		//                                   both channels keep their premultiplied contract through GenerateMips.
 		//   VXGI_GRID_PING   (single mip) : propagation scratch (read prev radiance -> write next, then copy back).
 		//   VXGI_GRID_DIRECT (single mip) : stable diffusion source from InjectLight — SRV forever after inject
 		//                                   (no UAV/SRV rebinding, no inject-copy texture; plan §3.4).
@@ -1323,7 +1324,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			// resizes (release+recreate) another's grid. The destructive pre-lease churn a per-camera
 			// resolution used to cause (128 view vs 256 view of one scene) is gone at the source.
 			const uint32_t vxgi_R = (uint32_t)(vxgi_resolution > 0 ? vxgi_resolution : 128);
-			GpuRes gres_vxgi_mat, gres_vxgi_ping, gres_vxgi_direct, gres_vxgi_surf;
+			GpuRes gres_vxgi_mat, gres_vxgi_ping, gres_vxgi_direct, gres_vxgi_surf, gres_vxgi_vis;
 			// (rev.16) Grids keyed on the SCENE (vxgi_grid_src = scene_id), not the vobj: a vobj is a
 			// resource shared across scenes, so a vobj key cross-contaminated them. A slicer consumer of the
 			// same scene finds them by the same scene id (its iobj differs, the scene id does not). The
@@ -1344,8 +1345,11 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				vxgi_grids_ok &= grd_helper::UpdateVoxelGrid(gres_vxgi_mat, vxgi_grid_src, "VXGI_GRID_MAT", vxgi_R, DXGI_FORMAT_R16G16B16A16_FLOAT, true, &vxgi_rec); vxgi_grid_recreated |= vxgi_rec; // mips: inject's light march LODs through it
 				vxgi_grids_ok &= grd_helper::UpdateVoxelGrid(gres_vxgi, vxgi_grid_src, "VXGI_VOXEL_GRID", vxgi_R, DXGI_FORMAT_R16G16B16A16_FLOAT, true, &vxgi_rec); vxgi_grid_recreated |= vxgi_rec; // mip chain
 				vxgi_grids_ok &= grd_helper::UpdateVoxelGrid(gres_vxgi_ping, vxgi_grid_src, "VXGI_GRID_PING", vxgi_R, DXGI_FORMAT_R16G16B16A16_FLOAT, false, &vxgi_rec); vxgi_grid_recreated |= vxgi_rec;
-				vxgi_grids_ok &= grd_helper::UpdateVoxelGrid(gres_vxgi_direct, vxgi_grid_src, "VXGI_GRID_DIRECT", vxgi_R, DXGI_FORMAT_R16G16B16A16_FLOAT, false, &vxgi_rec); vxgi_grid_recreated |= vxgi_rec; // stable diffusion source
+				vxgi_grids_ok &= grd_helper::UpdateVoxelGrid(gres_vxgi_direct, vxgi_grid_src, "VXGI_GRID_DIRECT", vxgi_R, DXGI_FORMAT_R16G16B16A16_FLOAT, true, &vxgi_rec); vxgi_grid_recreated |= vxgi_rec; // stable diffusion source; MIPS: the DVR subtracts it at the radiance lod
 				vxgi_grids_ok &= grd_helper::UpdateVoxelGrid(gres_vxgi_surf, vxgi_grid_src, "VXGI_GRID_SURF", vxgi_R, DXGI_FORMAT_R16G16B16A16_FLOAT, false, &vxgi_rec); vxgi_grid_recreated |= vxgi_rec; // Part C surface cone term
+				// Light VISIBILITY (rgb = visibility * coverage). MIPS: the DVR reads it at the same biased lod as
+				// the radiance, so its world footprint is resolution-invariant like every other consumer.
+				vxgi_grids_ok &= grd_helper::UpdateVoxelGrid(gres_vxgi_vis, vxgi_grid_src, "VXGI_GRID_VIS", vxgi_R, DXGI_FORMAT_R16G16B16A16_FLOAT, true, &vxgi_rec); vxgi_grid_recreated |= vxgi_rec; // direct-shadow source
 			}
 			if (vxgi_grid_recreated || !vxgi_grids_ok)
 			{
@@ -1377,7 +1381,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			//
 			// Turning a gate ON gives the physical reading instead: the material is removed from the grid, so
 			// it no longer shadows what it no longer covers, and the exposed cut face becomes a genuine
-			// surface (Voxelize's per-sub-sample test leaves it a ~2-voxel coverage ramp, so the surface
+			// surface (Voxelize's per-sub-sample test leaves it a ~2-reference-voxel coverage ramp, so the surface
 			// classifier picks it up and it gets cone AO + surface GI).
 			//
 			// The default is OFF because ON is expensive in a way that is easy to under-estimate: the gate's
@@ -1436,6 +1440,10 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			// against a grid voxel (grid ~1/4 the volume res), so the baked coverage can collapse to ~0.1-0.2
 			// and take the GI/AO with it. 1.0 = plain MODULATE parity. > 1 is legal (Voxelize saturates).
 			const float vxgi_context_gain = _fncontainer->fnParams.GetParam("_float_VxgiContextAlphaGain", 1.f);
+			// DIRECT-SHADOW split, dev channel (SetRenderTestParam), DEFAULT 0 = legacy. >0 makes the DVR shadow
+			// its own full-res local direct with the field visibility and add INDIRECT only, instead of adding
+			// the field DIRECT on top of an unshadowed local direct (the double count).
+			const float vxgi_direct_shadow = _fncontainer->fnParams.GetParam("_float_VxgiDirectShadow", 0.f);
 			// AO remap tuning knobs (dev channel: vzm::SetRenderTestParam -> fnParams, no public API).
 			// The cubic B-spline density taps spread thin-shell density more than the old trilinear ones,
 			// so pivot/slope may need per-dataset retuning; folded into the content stamp below so a
@@ -1475,7 +1483,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				vxgi_surf_gi_gain = 0.f;
 				vxgi_surf_ao_gain = 0.f;
 			}
-			grd_helper::SetCb_VXGI(cbVxgi, TRANSPOSE(cbVolumeObj.mat_ws2ts), vxgi_R, vxgi_gi_intensity, vxgi_ao_intensity, true, 1.f /* indirect retired */, vxgi_debug_byte, vxgi_medium_flags, vxgi_ao_pivot, vxgi_ao_slope, vxgi_scatter_gain, vxgi_surf_gi_gain, vxgi_surf_ao_gain, vxgi_context_gain);
+			grd_helper::SetCb_VXGI(cbVxgi, TRANSPOSE(cbVolumeObj.mat_ws2ts), vxgi_R, vxgi_gi_intensity, vxgi_ao_intensity, true, 1.f /* indirect retired */, vxgi_debug_byte, vxgi_medium_flags, vxgi_ao_pivot, vxgi_ao_slope, vxgi_scatter_gain, vxgi_surf_gi_gain, vxgi_surf_ao_gain, vxgi_context_gain, vxgi_direct_shadow);
 			// NOTE the CB is mapped BELOW, after the stamp split decides the light-only preserve-AO flag
 			// (vxgi_flag bit6) — it must be part of the uploaded flags for the InjectLight dispatch.
 			// Snapshot the just-built CB as the consumer-facing bake blob NOW, before the per-frame bit6
@@ -1819,6 +1827,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			ID3D11ShaderResourceView* vxgi_mat_srv = (ID3D11ShaderResourceView*)gres_vxgi_mat.alloc_res_ptrs[DTYPE_SRV];
 			ID3D11ShaderResourceView* vxgi_direct_srv = (ID3D11ShaderResourceView*)gres_vxgi_direct.alloc_res_ptrs[DTYPE_SRV];
 			ID3D11ShaderResourceView* vxgi_surf_srv = (ID3D11ShaderResourceView*)gres_vxgi_surf.alloc_res_ptrs[DTYPE_SRV];
+			ID3D11ShaderResourceView* vxgi_vis_srv = (ID3D11ShaderResourceView*)gres_vxgi_vis.alloc_res_ptrs[DTYPE_SRV];
 
 			// ONE damped diffusion iteration: prev radiance (t8, mips) + material (t9) + DIRECT source (t10)
 			// + Part C surface term (t11, mip-0 Loads) -> PING (u0); copy back to grid mip 0; refresh mips.
@@ -2249,10 +2258,21 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				// the rebuild body only runs when the preflight succeeded). Bound/unbound locally -- b11 is
 				// InjectLightML-local (see the CommonShader slot-ledger comment), nothing else may see it.
 				SET_CBUFFERS(11, 1, &cbuf_vxgi_lights);
-				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, &vxgi_uav_direct, (UINT*)(&vxgi_uav_direct));
+				// u0 = DIRECT, u1 = VISIBILITY. InjectLight writes BOTH on every path (the empty-voxel early-out
+				// included): a UAV is not cleared between bakes, so a missed write leaves a stale texel behind.
+				ID3D11UnorderedAccessView* vxgi_uav_vis = (ID3D11UnorderedAccessView*)gres_vxgi_vis.alloc_res_ptrs[DTYPE_UAV];
+				ID3D11UnorderedAccessView* vxgi_uavs_inject[2] = { vxgi_uav_direct, vxgi_uav_vis };
+				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 2, vxgi_uavs_inject, (UINT*)vxgi_uavs_inject);
 				SET_SHADER(GETCS(VXGI_InjectLightMLspot_cs_5_0), NULL, 0);
 				dx11DeviceImmContext->Dispatch(vxgi_groups, vxgi_groups, vxgi_groups);
-				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+				{
+					ID3D11UnorderedAccessView* uav_null2[2] = { NULL, NULL };
+					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 2, uav_null2, (UINT*)uav_null2);
+				}
+				// Both are consumed through their MIP CHAINS -- generate them where the bake produced mip 0.
+				// Skipping this leaves mip>0 undefined and the DVR reads garbage.
+				dx11DeviceImmContext->GenerateMips((ID3D11ShaderResourceView*)gres_vxgi_direct.alloc_res_ptrs[DTYPE_SRV]);
+				dx11DeviceImmContext->GenerateMips((ID3D11ShaderResourceView*)gres_vxgi_vis.alloc_res_ptrs[DTYPE_SRV]);
 				SET_SHADER_RES(9, 1, dx11SRVs_NULL);
 				SET_SHADER_RES(11, 1, dx11SRVs_NULL);
 				{
@@ -2400,10 +2420,15 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			vxgi_anchor->SetObjParam("_uint64_VxgiOwnerLastMs", vxgi_now_ms);           // D10: owner heartbeat (the 5s-timeout basis)
 
 			// Bind the radiance grid (t8) + MAT grid (t9) for the RayCasting march below (nulled after the
-			// dispatch). The grids' alpha is PREMULTIPLIED (obscurance * coverage); the DVR un-premultiplies
-			// with the MAT coverage at the same lod — see the AO fetch in DvrCS.
+			// dispatch). Both radiance RGB and obscurance alpha are coverage-PREMULTIPLIED; the DVR
+			// un-premultiplies each with MAT coverage at the same lod — see VXGI_ApplyVolumetricGI.
 			SET_SHADER_RES(8, 1, &vxgi_grid_srv);
 			SET_SHADER_RES(9, 1, &vxgi_mat_srv);
+			// t10/t11 feed the direct-shadow split (VXGI_DirectVisibility + the INDIRECT subtraction). Bound on
+			// EVERY path that can reach RayCasting and nulled with t8/t9 -- these were the retired SSAO slots,
+			// so leaving them unbound would let another pass's leftovers be sampled.
+			SET_SHADER_RES(10, 1, &vxgi_vis_srv);
+			SET_SHADER_RES(11, 1, &vxgi_direct_srv);
 			} // ---- end OWNER / ACQUIRER path ----
 			else
 			{
@@ -2442,7 +2467,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				// non-owner with no usable bake, e.g. the owner vanished this very frame). r3 == the SRV probe below.
 				CB_VXGI cbVxgiConsume; // ZERO_SET => disabled by default
 				int vxgi_consume_w1 = 0;
-				const bool vxgi_consume_ok = grd_helper::LoadVxgiConsumerCb(cbVxgiConsume, vxgi_consume_w1, vxgi_anchor, vobj, tobj_otf, TRANSPOSE(cbVolumeObj.mat_ws2ts), vxgi_gi_intensity, vxgi_ao_intensity);
+				// this view's own direct-shadow gain (t10/t11 ARE bound on this path) -- NOT the builder's published one
+				const bool vxgi_consume_ok = grd_helper::LoadVxgiConsumerCb(cbVxgiConsume, vxgi_consume_w1, vxgi_anchor, vobj, tobj_otf, TRANSPOSE(cbVolumeObj.mat_ws2ts), vxgi_gi_intensity, vxgi_ao_intensity, vxgi_direct_shadow);
 				D3D11_MAPPED_SUBRESOURCE mappedResVxgiC;
 				dx11DeviceImmContext->Map(cbuf_vxgi, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResVxgiC);
 				memcpy(mappedResVxgiC.pData, &cbVxgiConsume, sizeof(CB_VXGI));
@@ -2452,11 +2478,15 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				{
 					SET_SHADER_RES(8, 1, &vxgi_grid_srv); // shared vobj-keyed radiance grid (the owner maintains it)
 					SET_SHADER_RES(9, 1, &vxgi_mat_srv);
+					SET_SHADER_RES(10, 1, &vxgi_vis_srv);
+					SET_SHADER_RES(11, 1, &vxgi_direct_srv);
 				}
 				else
 				{
 					SET_SHADER_RES(8, 1, dx11SRVs_NULL);  // disabled: null SRVs match the b13 disabled CB (contract below)
 					SET_SHADER_RES(9, 1, dx11SRVs_NULL);
+					SET_SHADER_RES(10, 1, dx11SRVs_NULL);
+					SET_SHADER_RES(11, 1, dx11SRVs_NULL);
 				}
 				// Mirror shared progress onto this view's iobj (D10 수렴 보고) — vobj state left untouched.
 				iobj->SetObjParam("_int_VxgiBounce", vxgi_bounce);
@@ -2542,6 +2572,10 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 						SET_CBUFFERS(13, 1, &cbuf_c);
 						SET_SHADER_RES(8, 1, &c_grid_srv);
 						SET_SHADER_RES(9, 1, &c_mat_srv);
+						// The curved slicer probes only the radiance + MAT pair, so the direct-shadow split stays OFF here:
+						// LoadVxgiConsumerCb never sets direct_shadow_gain, so the shader keeps 0 and never reads t10/t11.
+						SET_SHADER_RES(10, 1, dx11SRVs_NULL);
+						SET_SHADER_RES(11, 1, dx11SRVs_NULL);
 						// Mirror the shared field's progress so this slicer's CheckRenderConvergence tracks it.
 						iobj->SetObjParam("_int_VxgiBounce", vxgi_anchor->GetObjParam<int>("_int_VxgiBounce", (int)0));
 						iobj->SetObjParam("_int_VxgiBounceTarget", vxgi_anchor->GetObjParam<int>("_int_VxgiSharedTarget", (int)0));
@@ -2581,6 +2615,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			SET_CBUFFERS(13, 1, &cbuf_vxgi_off);
 			SET_SHADER_RES(8, 1, dx11SRVs_NULL);
 			SET_SHADER_RES(9, 1, dx11SRVs_NULL);
+			SET_SHADER_RES(10, 1, dx11SRVs_NULL);
+			SET_SHADER_RES(11, 1, dx11SRVs_NULL);
 			} // end if(!vxgi_consumed) — disabled-state contract
 		}
 #endif
@@ -2846,7 +2882,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(50, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 
 		// VXGI v2: the RayCasting dispatch above sampled the voxel grid as SRV t8 (in-scatter) and the MAT
-		// grid as t9 (coverage for AO un-premultiply). The grid build + binds now happen BEFORE RayCasting
+		// grid as t9 (coverage for radiance/AO un-premultiply). The grid build + binds now happen BEFORE RayCasting
 		// (see the block right after the volume CB setup); release both here.
 		// UNCONDITIONAL on purpose (it used to be gated on vxgi_active): these slots are rebound as UAVs by
 		// the next rebuild's Voxelize/Propagate dispatches, so leaving a live SRV here is an SRV/UAV hazard —
@@ -2854,6 +2890,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		// Nulling slots this draw never bound is free.
 		SET_SHADER_RES(8, 1, dx11SRVs_NULL);
 		SET_SHADER_RES(9, 1, dx11SRVs_NULL);
+		SET_SHADER_RES(10, 1, dx11SRVs_NULL);
+		SET_SHADER_RES(11, 1, dx11SRVs_NULL);
 
 		// Slicer x-ray image-level post-processing filter + mesh composite (single fused pass).
 		// Runs once, after the LAST DVR volume, when the post-filter is enabled. On that volume DvrCS wrote

@@ -167,6 +167,8 @@ struct HxCB_VXGI
 	float surface_gi_gain;    // Part C: surface cone indirect strength (read via VXGI_SURFACE_GI_GAIN)
 	float surface_cone_ao_gain; // Part C: surface cone AO blend strength (read via VXGI_SURFACE_CONE_AO_GAIN)
 	float context_alpha_gain;   // VR_MODE 2 coverage boost (read via VXGI_CONTEXT_ALPHA_GAIN; 1 = off)
+	float direct_shadow_gain;  // direct-light shadow strength [0,1]; 0 = feature OFF (legacy add-direct)
+	float _vxgi_pad0, _vxgi_pad1, _vxgi_pad2; // mirrors the C++ padding that keeps CB_VXGI 16-byte aligned
 };
 
 struct HxCB_ClipInfo
@@ -536,6 +538,24 @@ cbuffer cbGlobalParams : register(b13)
 // the baked coverage can collapse to ~0.1-0.2 and take the GI/AO with it. This scales the modulated
 // coverage back up; the shader saturates afterwards, so values > 1 are legal (CPU clamps the low end).
 #define VXGI_CONTEXT_ALPHA_GAIN   (g_cbVxgi.context_alpha_gain)
+
+// Resolution-invariant transport scale. R=128 is the established reference look; lower resolutions
+// deliberately retain their existing kernels, while higher resolutions spend their extra voxels on
+// geometry precision instead of shrinking every filter/clearance/diffusion radius in world space.
+// For R=256: scale=2 and lod_bias=1, so a fixed-world footprint uses twice as many voxels or one
+// coarser mip. Keep the C++ margin reference in SetCb_VXGI synchronized with this value.
+#define VXGI_REFERENCE_GRID_RES 128.0f
+// >0 means: shadow the DVR's own local direct with the field's visibility and add INDIRECT only.
+// 0 keeps every legacy consumer bit-identical (the field's DIRECT is added as before).
+#define VXGI_DIRECT_SHADOW_GAIN (g_cbVxgi.direct_shadow_gain)
+float VXGI_ResolutionScale()
+{
+	return max((float) g_cbVxgi.grid_res / VXGI_REFERENCE_GRID_RES, 1.0f);
+}
+float VXGI_ResolutionLodBias()
+{
+	return log2(VXGI_ResolutionScale());
+}
 // ---------------------------------------------------------------------------------------------------
 // VXGI AO history — how obscurance/AO was computed in previous versions, and why it is THIS way now:
 //  * v1..v3 (RETIRED): a screen-space gather pass (hlsl/vxgi/Gather.hlsl, now debug-only) reconstructed
@@ -610,9 +630,33 @@ float VXGI_SampleDensityCubic(Texture3D tex, const in float3 uv, const in float 
 	return g0.z * (g0.y * vx00 + g1.y * vx10) + g1.z * (g0.y * vx01 + g1.y * vx11);
 }
 
+// Fractional-LOD wrapper for arbitrary (not necessarily power-of-two) grid resolutions. The cubic
+// reconstruction above describes ONE real mip lattice; feeding it a fractional texel count while
+// SampleLevel blends two different lattices mis-registers both kernels. Reconstruct each actual mip
+// with its own integer texel metric, then perform the usual trilinear-mip blend between the results.
+float VXGI_SampleDensityCubicLod(Texture3D tex, const in float3 uv, const in float lod, const in float base_res)
+{
+	float max_lod = floor(log2(max(base_res, 1.0f)));
+	float lod_c = clamp(lod, 0.0f, max_lod);
+	float lod0 = floor(lod_c);
+	float res0 = max(floor(base_res / exp2(lod0)), 1.0f);
+	float d0 = VXGI_SampleDensityCubic(tex, uv, lod0, res0);
+	float blend = lod_c - lod0;
+	float d1 = d0;
+	[branch]
+	if (blend > 1e-5f && lod0 < max_lod)
+	{
+		float lod1 = lod0 + 1.0f;
+		float res1 = max(floor(base_res / exp2(lod1)), 1.0f);
+		d1 = VXGI_SampleDensityCubic(tex, uv, lod1, res1);
+	}
+	return lerp(d0, d1, blend);
+}
+
 // --- obscurance density-tap EXPERIMENT KNOBS (bake side: InjectLight) -----------------------------
-// The three mips set the AO footprint (radius ~ 2^mip voxels): SMALLER mips = punchier contact AO
-// but finer-scale artifacts; LARGER = softer/broader shading. 2/3/4 was chosen against banding
+// These are R=128 BASE mips; InjectLight adds VXGI_ResolutionLodBias so their world footprint stays
+// fixed at higher grid resolutions. SMALLER mips = punchier contact AO but finer-scale artifacts;
+// LARGER = softer/broader shading. 2/3/4 was chosen against banding
 // BEFORE the cubic reconstruction existed — with VXGI_AO_TAP_CUBIC on, 1/2/3 is worth re-testing
 // (cubic suppresses the mip-1 phase bands that forced the widening; restores surface contact AO).
 // VXGI_AO_TAP_CUBIC: 1 = C2 cubic B-spline (band-free, slightly softer), 0 = raw trilinear
@@ -622,10 +666,10 @@ float VXGI_SampleDensityCubic(Texture3D tex, const in float3 uv, const in float 
 #define VXGI_AO_TAP_MIP3  4
 #define VXGI_AO_TAP_CUBIC 1
 
-float VXGI_SampleAoDensity(Texture3D tex, const in float3 uv, const in float lod, const in float res)
+float VXGI_SampleAoDensity(Texture3D tex, const in float3 uv, const in float lod, const in float base_res)
 {
 #if VXGI_AO_TAP_CUBIC == 1
-	return VXGI_SampleDensityCubic(tex, uv, lod, res);
+	return VXGI_SampleDensityCubicLod(tex, uv, lod, base_res);
 #else
 	return tex.SampleLevel(g_samplerLinear_clamp, uv, lod).a;
 #endif

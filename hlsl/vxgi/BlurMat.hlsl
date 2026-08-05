@@ -32,6 +32,9 @@ RWTexture3D<float4> grid_out : register(u0);  // PING (copied back to MAT mip 0 
 // box — the very shape whose mip beating we are removing). Wider kernel = stronger band
 // suppression but a wider coverage ramp: thin structures (septa, cortical shells) erode first —
 // check the double-sided/thin-plate content before committing an increase.
+// Keep this as a one-CURRENT-voxel polish at every resolution: Voxelize already
+// expands the source footprint in reference-grid units, while scaling this dense
+// 3-D pass from radius 1 to 2 would jump from 27 to 125 taps/voxel at R=256.
 #define VXGI_MAT_BLUR_RADIUS 1
 #define VXGI_MAT_BLUR_SIGMA  0.8f
 

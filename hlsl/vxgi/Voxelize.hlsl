@@ -2,7 +2,7 @@
 
 // -----------------------------------------------------------------------------
 // VXGI v1 - Stage 1 : Voxelize the DVR volume into the radiance/opacity grid.
-// The grid box covers the volume box PLUS an empty margin shell (8 voxels per
+// The grid box covers the volume box PLUS an empty margin shell (8 R=128 reference voxels per
 // side): grid coord = volume ts * vox_fit_scale + vox_fit_offset. We sample the
 // volume intensity at the mapped coord, run it through the same OTF LUT mapping
 // DvrCS uses (voxels outside the volume stay empty), and store:
@@ -91,18 +91,22 @@ void VXGI_VoxelizeVolume(uint3 id : SV_DispatchThreadID)
 	}
 
 	// TRUE-COVERAGE voxelization: apply the OTF PER SUB-SAMPLE and average the resulting opacities, over a
-	// 2-voxel footprint. Averaging INTENSITY first and thresholding once (OTF(avg) instead of avg(OTF))
+	// 2-reference-voxel footprint. Averaging INTENSITY first and thresholding once (OTF(avg) instead of avg(OTF))
 	// re-sharpens the opacity band to ~1 voxel no matter how well the intensity is anti-aliased — the OTF's
 	// alpha step undoes the box filter — and that razor-thin band's trilinear field is the maze/stripe
 	// interference that debug mode 1 exposes (and every consumer inherits: AO cones, light march, diffusion).
 	// Per-sub-sample OTF makes alpha the true occupied FRACTION of the footprint: a surface crossing the
-	// voxel yields a smooth ~2-voxel coverage ramp, phase-insensitive by construction. Scene-gated cost only.
+	// voxel yields a smooth ~2-reference-voxel coverage ramp, phase-insensitive by construction. Scene-gated cost only.
 	// Visibility gates below run per sub-sample too, so a clip plane / sculpt edge crossing the footprint
 	// yields the same smooth coverage ramp as a real material boundary.
 	const int SS = 4;
 	const float inv_ss = 1.0f / (float) SS;
-	const float ts_cell = (1.0f / (float) R) / g_cbVxgi.vox_fit_scale; // one grid voxel, in volume ts units
-	const float3 ts_min = tsc - 1.0f * ts_cell;                       // 2-voxel footprint centered on the voxel
+	// Preserve the R=128 reconstruction footprint in volume/world space. At R=256 this spans four
+	// current-grid voxels instead of two, so the sharper lattice does not re-introduce source-voxel /
+	// sharp-OTF phase ripple into the coverage field that every downstream pass consumes.
+	const float resolution_scale = VXGI_ResolutionScale();
+	const float ts_cell = (resolution_scale / (float) R) / g_cbVxgi.vox_fit_scale; // one REFERENCE voxel in volume ts
+	const float3 ts_min = tsc - 1.0f * ts_cell;                                 // 2-reference-voxel footprint
 
 	// Clip is now FLAGGED like the other medium gates (it used to read g_cbClipInfo.clip_flag directly).
 	// The C++ sets VXGI_MEDIUM_CLIP only when the clip is BOTH active and wanted in the medium — turning
@@ -120,9 +124,13 @@ void VXGI_VoxelizeVolume(uint3 id : SV_DispatchThreadID)
 	{
 		int3 sc = int3(s & 3, (s >> 2) & 3, s >> 4); // stratum cell in the 4^3 footprint lattice
 #if VXGI_VOX_SS_JITTER == 1
-		// global half-voxel stratum coordinate (footprint spans [id-0.5, id+1.5] voxels = strata
-		// 2*id-1 .. 2*id+2) -> overlapping footprints of neighbouring voxels hash to the SAME points
-		uint3 gsi = asuint(int3(id) * 2 + sc - 1);
+		// Hash the nominal GLOBAL stratum cell, not a hard-coded 2*id coordinate. At R=128 there
+		// are two strata/current-voxel and this reduces exactly to 2*id+sc-1. At R=256 there is
+		// one stratum/current-voxel, so overlapping four-voxel footprints again reuse identical
+		// jittered points instead of assigning different noise to the same spatial stratum.
+		float strata_per_voxel = (float) SS / (2.0f * resolution_scale);
+		float3 gsi_f = ((float3(id) + 0.5f - resolution_scale) * strata_per_voxel) + float3(sc);
+		uint3 gsi = asuint((int3) floor(gsi_f));
 		float3 jit = float3(VXGI_Pcg3d(gsi)) * (1.0f / 4294967296.0f);
 #else
 		const float3 jit = 0.5f; // regular centers (moire-prone — A/B only)

@@ -2811,7 +2811,7 @@ void grd_helper::SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, 
 	cb_cam.far_plane = (float)fp;
 }
 
-void grd_helper::SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const uint32_t resolution, const float gi_intensity, const float ao_intensity, const bool enabled, const float indirect_intensity, const uint32_t debug_byte, const uint32_t medium_flags, const float ao_pivot, const float ao_slope, const float scatter_gain, const float surface_gi_gain, const float surface_cone_ao_gain, const float context_alpha_gain)
+void grd_helper::SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const uint32_t resolution, const float gi_intensity, const float ao_intensity, const bool enabled, const float indirect_intensity, const uint32_t debug_byte, const uint32_t medium_flags, const float ao_pivot, const float ao_slope, const float scatter_gain, const float surface_gi_gain, const float surface_cone_ao_gain, const float context_alpha_gain, const float direct_shadow_gain)
 {
 	// mat_ws2vox_raw maps world -> voxel [0,1]. For v1 the caller passes the volume's world->texture matrix
 	// (grd_helper::SetCb_VolumeObj mat_ws2ts), so the grid aligns with the volume box. Stored transposed for
@@ -2827,8 +2827,14 @@ void grd_helper::SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const u
 	// mat_ws2vox_raw is the volume's world->texture matrix; append the fit as a post-transform (row-vector
 	// convention: glm '*' composes left-operand-first, and output component j = v . column_j, so the scale
 	// sits on M[j][j] and the translation on M[j][3] — same basis as the TAA jitter injection).
-	const float VXGI_MARGIN_VOXELS = 8.f;
-	const float m = VXGI_MARGIN_VOXELS / (float)(resolution > 0 ? resolution : 128);
+	// Keep the empty shell fixed in world space above the reference resolution. Leaving this at eight
+	// CURRENT-grid voxels made the shell (and therefore the fitted grid box) shrink at R=256+, while
+	// every HLSL transport kernel now preserves the R=128 world-space look.
+	const float VXGI_REFERENCE_GRID_RES = 128.f; // must match hlsl/CommonShader.hlsl
+	const float resolution_safe = (float)(resolution > 0 ? resolution : 128);
+	const float resolution_scale = max(resolution_safe / VXGI_REFERENCE_GRID_RES, 1.f);
+	const float VXGI_MARGIN_VOXELS = 8.f * resolution_scale;
+	const float m = VXGI_MARGIN_VOXELS / resolution_safe;
 	const float fit_s = 1.f / (1.f + 2.f * m);
 	const float fit_o = m * fit_s;
 	vmmat44f matFit(1.f);
@@ -2884,6 +2890,7 @@ void grd_helper::SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const u
 	// spread through mips / InjectLight / Propagate until the next rebuild, and saturate(NaN) is not
 	// guaranteed to be 0 across drivers — so it must not reach the shader in the first place.
 	cb.context_alpha_gain = (context_alpha_gain > 0.f) ? context_alpha_gain : 0.f; // false for NaN too
+	cb.direct_shadow_gain = (direct_shadow_gain > 0.f) ? min(direct_shadow_gain, 1.f) : 0.f; // NaN -> 0 (feature off)
 }
 
 uint64_t grd_helper::VxgiBakeContentKey(VmObject* vobj, VmObject* tobj_otf, const vmmat44f& mat_ws2ts)
@@ -2904,7 +2911,8 @@ uint64_t grd_helper::VxgiBakeContentKey(VmObject* vobj, VmObject* tobj_otf, cons
 // from the CURRENT volume/OTF/transform -- that is a CONTENT identity, genuinely the vobj's property.
 // state_anchor == vobj reproduces the pre-rev.16 behaviour (old-core fallback path).
 bool grd_helper::LoadVxgiConsumerCb(CB_VXGI& cb_out, int& w1_reason, VmObject* state_anchor, VmObject* vobj, VmObject* tobj_otf,
-	const vmmat44f& mat_ws2ts, const float gi_intensity, const float ao_intensity)
+	const vmmat44f& mat_ws2ts, const float gi_intensity, const float ao_intensity,
+	const float direct_shadow_gain)
 {
 	w1_reason = 0;
 	// r1 — no usable bake: FieldReady not set (old self-build users land here) or, defensively, the flag
@@ -2926,6 +2934,10 @@ bool grd_helper::LoadVxgiConsumerCb(CB_VXGI& cb_out, int& w1_reason, VmObject* s
 		| ((uint32_t)XMConvertFloatToHalf(ao_intensity) << 16);
 	cb_out.vxgi_flag &= ~((uint32_t)0xFFu << 24); // clear debug byte [24:31]
 	cb_out.vxgi_flag &= ~(uint32_t)0x40u;         // clear bit6 (preserve-AO)
+	// The verbatim bake copy above included the BUILDER's direct_shadow_gain -- a per-VIEW consume knob,
+	// not bake authority. Overwrite with THIS view's value (callers that cannot bind the VIS/DIRECT grids
+	// pass 0), otherwise a builder with the split on poisons every consumer that samples null SRVs.
+	cb_out.direct_shadow_gain = (direct_shadow_gain > 0.f) ? min(direct_shadow_gain, 1.f) : 0.f;
 	return true;
 }
 

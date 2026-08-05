@@ -35,13 +35,13 @@
 // -----------------------------------------------------------------------------
 
 Texture3D tex3D_volume : register(t0); // ORIGINAL intensity volume (~4x grid res): CT-gradient normal refinement
-Texture3D grid_prev : register(t8); // radiance grid (MIP CHAIN): cone gather source (bounce 0: = DIRECT seed)
+Texture3D grid_prev : register(t8); // radiance*coverage grid (MIP CHAIN): cone source (bounce 0: = DIRECT seed)
 Texture3D grid_mat  : register(t9); // rgb = albedo, a = TRUE coverage (MIP CHAIN): surface test + normal + cone visibility
 RWTexture3D<float4> grid_surf : register(u0); // OUT rgb = albedo * hemisphere indirect, a = cone occlusion
 
-// Self-intersection margins (production values): origin pushed 2 voxels off the iso anchor, cones
-// start another 2 voxels out along their own direction — together with the tangent-plane slab clip
-// (VXGI_TraceCone_2Tex) this clears the voxel's own ~2-voxel coverage ramp for the 60-deg side cones
+// Self-intersection margins (production values): origin pushed 2 REFERENCE voxels off the iso anchor,
+// cones start another 2 reference voxels out along their own direction — together with the tangent-
+// plane slab clip (VXGI_TraceCone_2Tex) this clears the fixed-world coverage ramp for the side cones
 // too. Raising these to 5/4 was the banding-hunt diagnostic; the bands turned out to be the debug
 // viewer's coverage-proportional transparency blending, so contact-AO reach wins the trade again.
 #define VXGI_SURF_TRACE_OFFSET_VOX 2.0f
@@ -104,9 +104,12 @@ void VXGI_SurfaceGather(uint3 id : SV_DispatchThreadID)
 	// (true coverage), radiance from the CURRENT radiance field (bounce 0: the DIRECT seed; later
 	// checkpoints: direct + everything diffused so far — the refinement this pass exists for).
 	float3 uv = (float3(id) + 0.5f) / (float) R;
-	float3 N_vox_axial = normalize(TransformVector(sn.normal_ws, g_cbVxgi.mat_ws2vox));
+	// The trace anchor follows the local tangent-plane normal in voxel coordinates. A normal maps
+	// world->voxel by A^T (A = mat_vox2ws linear part), not by the A^-1 direction transform. Besides
+	// fixing anisotropic spacing, this makes iso_d and cone_clearance true signed plane distances.
+	float3 N_vox_plane = normalize(mul(transpose((float3x3) g_cbVxgi.mat_vox2ws), sn.normal_ws));
 
-	// PHASE-CONTINUOUS trace anchor: a fixed "center + 2 voxels" push gives every band voxel a
+	// PHASE-CONTINUOUS trace anchor: a fixed "center + 2 reference voxels" push gives every band voxel a
 	// DIFFERENT clearance above the true surface — the voxel center sits at a lattice-quantized,
 	// sub-voxel-phase-varying depth inside the ~2-voxel coverage ramp, so the cones' near-field
 	// occlusion oscillates with the surface phase and prints contour-following wave bands into
@@ -116,22 +119,27 @@ void VXGI_SurfaceGather(uint3 id : SV_DispatchThreadID)
 	// slope from the classification's own central difference (|g|/2 per voxel, floored against
 	// blow-up). Every band voxel then starts its cones at the SAME height above the SAME local
 	// surface — the lattice phase cancels out of the trace geometry entirely.
-	float slope = max(0.5f * length(st.g_vox), 0.15f); // coverage drop per voxel along N
+	float resolution_scale = VXGI_ResolutionScale();
+	float slope = max(0.5f * length(st.g_vox), 0.15f / resolution_scale); // coverage drop per current voxel
 	float iso_d = sn.double_sided ? 0.0f               // thin plate: center IS the natural anchor
-	            : clamp((mat.a - 0.5f) / slope, -1.5f, 1.5f); // voxels from center to the iso, along +N
+	            : clamp((mat.a - 0.5f) / slope, -1.5f * resolution_scale, 1.5f * resolution_scale); // current voxels to iso
 #if VXGI_SURF_DIAG_NO_ISO_ANCHOR == 1
 	iso_d = 0.0f; // DIAGNOSTIC: plain voxel-center origins — isolates the anchor's slope-noise channel
 #endif
 
-	// start_dist = 2 voxels: together with the origin push this clears the local ramp for the 60-deg
+	// start_dist = 2 reference voxels: together with the origin push this clears the local ramp for the 60-deg
 	// side cones too (their height gain is only 0.5/voxel — with a 1-voxel start their first samples
 	// grazed the ramp: systematic false cone occlusion; see the note in VXGI_TraceCone_2Tex).
 	// clearance above the local tangent plane (the iso anchor) = the origin push; the slab clip
 	// inside the trace measures every sample's height against that plane (staircase guard).
-	const float cone_start = VXGI_SURF_CONE_START_VOX / (float) R;
-	const float cone_clearance = VXGI_SURF_TRACE_OFFSET_VOX / (float) R;
+	// Offsets are specified in R=128 reference voxels. Scaling them with R keeps their world-space
+	// clearance outside the source-voxel staircase and the now fixed-world coverage footprint.
+	const float trace_offset_vox = VXGI_SURF_TRACE_OFFSET_VOX * resolution_scale;
+	const float cone_start_vox = VXGI_SURF_CONE_START_VOX * resolution_scale;
+	const float cone_start = cone_start_vox / (float) R;
+	const float cone_clearance = trace_offset_vox / (float) R;
 	float4 gi = VXGI_ConeTraceGI_2Tex(grid_mat, grid_prev, g_samplerLinear_clamp,
-		uv + N_vox_axial * ((VXGI_SURF_TRACE_OFFSET_VOX + iso_d) / (float) R), sn.normal_ws,
+		uv + N_vox_plane * ((trace_offset_vox + iso_d) / (float) R), sn.normal_ws,
 		VXGI_CONE_APERTURE, g_cbVxgi.max_trace_dist, (float) R, VXGI_NUM_CONES, cone_start, cone_clearance);
 	[branch]
 	if (sn.double_sided)
@@ -139,7 +147,7 @@ void VXGI_SurfaceGather(uint3 id : SV_DispatchThreadID)
 		// symmetric thin plate: trace the opposite hemisphere too and average — both sides really
 		// receive light (2x cost on these voxels only).
 		float4 gi_back = VXGI_ConeTraceGI_2Tex(grid_mat, grid_prev, g_samplerLinear_clamp,
-			uv - N_vox_axial * (VXGI_SURF_TRACE_OFFSET_VOX / (float) R), -sn.normal_ws,
+			uv - N_vox_plane * (trace_offset_vox / (float) R), -sn.normal_ws,
 			VXGI_CONE_APERTURE, g_cbVxgi.max_trace_dist, (float) R, VXGI_NUM_CONES, cone_start, cone_clearance);
 		gi = 0.5f * (gi + gi_back);
 	}

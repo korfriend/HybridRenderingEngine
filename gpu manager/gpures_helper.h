@@ -746,9 +746,21 @@ namespace grd_helper
 		float    surface_gi_gain;    // Part C surface cone indirect strength (HLSL VXGI_SURFACE_GI_GAIN; clamped [0, 0.95])
 		float    surface_cone_ao_gain; // Part C surface cone AO blend strength (HLSL VXGI_SURFACE_CONE_AO_GAIN; 0 = density AO only)
 		float    context_alpha_gain; // VR_MODE 2 coverage boost (HLSL VXGI_CONTEXT_ALPHA_GAIN; 1 = plain MODULATE parity, > 1 legal — shader saturates)
+		// Direct-light SHADOW strength [0,1]. The voxel field is the ONLY place this system computes
+		// light visibility; the DVR's local Phong has none. 0 = legacy (field DIRECT is added on top of
+		// the unshadowed local direct = the double count). >0 = the DVR shadows its own full-res direct
+		// with the field's visibility and adds INDIRECT only. Also gates the feature: 0 leaves every
+		// consumer (incl. the curved slicer, whose CB is built by LoadVxgiConsumerCb) on legacy.
+		float    direct_shadow_gain;
+		float    _vxgi_pad0, _vxgi_pad1, _vxgi_pad2; // keep sizeof(CB_VXGI) a multiple of 16 (see the static_assert)
 
 		ZERO_SET(CB_VXGI)
 	};
+	// D3D11 REJECTS a constant buffer whose ByteWidth is not a multiple of 16, and gpures_helper.cpp's
+	// CREATE_AND_SET passes sizeof(STRUCT) straight through. Without this assert the failure appears only
+	// at runtime, as 'error : basic dx11 resources!' followed by the whole renderer refusing to load --
+	// a symptom that points nowhere near the struct that grew. Pad when you add a field.
+	static_assert(sizeof(CB_VXGI) % 16 == 0, "CB_VXGI must stay 16-byte aligned (D3D11 constant-buffer rule)");
 
 	// ---- Multi-Light (plan: secret_recipies/MULTI_LIGHT_PLAN.md, ML-D3) ----
 	// VXGI light-set CB, bound at register b11 which is declared LOCALLY in hlsl/vxgi/InjectLight.hlsl
@@ -1195,7 +1207,7 @@ namespace grd_helper
 	// a gate NOT set means that material stays in the grid (it still occludes and scatters) AND its state
 	// stops feeding the VXGI content stamp, so editing it does not re-voxelize.
 	// context_alpha_gain applies to the context flag only (see VXGI_CONTEXT_ALPHA_GAIN).
-	void SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const uint32_t resolution, const float gi_intensity, const float ao_intensity, const bool enabled, const float indirect_intensity = 1.f, const uint32_t debug_byte = 0, const uint32_t medium_flags = 0, const float ao_pivot = 0.3f, const float ao_slope = 1.5f, const float scatter_gain = 0.75f, const float surface_gi_gain = 0.15f, const float surface_cone_ao_gain = 1.f, const float context_alpha_gain = 1.f);
+	void SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const uint32_t resolution, const float gi_intensity, const float ao_intensity, const bool enabled, const float indirect_intensity = 1.f, const uint32_t debug_byte = 0, const uint32_t medium_flags = 0, const float ao_pivot = 0.3f, const float ao_slope = 1.5f, const float scatter_gain = 0.75f, const float surface_gi_gain = 0.15f, const float surface_cone_ao_gain = 1.f, const float context_alpha_gain = 1.f, const float direct_shadow_gain = 0.f);
 
 	// D9.1 bake CONTENT KEY — the SINGLE function computing it, so the producer (VolumeRenderer bake
 	// publish) and the consumer (LoadVxgiConsumerCb) cannot drift. View-INDEPENDENT by construction:
@@ -1212,7 +1224,12 @@ namespace grd_helper
 	// and the debug byte + transient preserve-AO bit cleared (D3 consume rules). Never runs any bake work.
 	// (rev.16) state_anchor = scene state object (VXGI state); vobj = volume (for the content key only).
 	bool LoadVxgiConsumerCb(CB_VXGI& cb_out, int& w1_reason, VmObject* state_anchor, VmObject* vobj, VmObject* tobj_otf,
-		const vmmat44f& mat_ws2ts, const float gi_intensity, const float ao_intensity);
+		const vmmat44f& mat_ws2ts, const float gi_intensity, const float ao_intensity,
+		// Direct-shadow gain of THE CONSUMING VIEW. The bake CB blob carries the BUILDER's gain, and the
+		// verbatim copy handed it to consumers that never bind t10/t11 (curved slicer: null vis -> black
+		// local direct AND undiminished field direct -- neither legacy nor split). Default 0 = feature off
+		// unless the caller both opts in and binds the grids.
+		const float direct_shadow_gain = 0.f);
 
 	// D9.3 — session-monotonic VXGI identity token, the SINGLE issuer for the whole DLL. Object ids are
 	// RECYCLED by the engine's ResourceManager, so every VXGI identity decision (builder/owner gen, warning

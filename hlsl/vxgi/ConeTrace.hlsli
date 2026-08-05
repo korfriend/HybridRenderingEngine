@@ -37,10 +37,10 @@ static const float VXGI_CONE_WEIGHTS[6] = { 0.25f, 0.15f, 0.15f, 0.15f, 0.15f, 0
 // TRUE cone tracing: the sample LOD follows the cone diameter through the grid's
 // mip chain (lod = log2(diameter_in_voxels)), so distant/wider footprints read
 // pre-filtered coarser voxels — smooth, cheap, and correctly long-range.
-#define VXGI_MAX_LOD 5.0f
+#define VXGI_MAX_LOD_BASE 5.0f
 
 // Cone-AO coverage reconstruction: 1 = cubic B-spline for the near-field lods (band-free, default),
-// 0 = raw trilinear (A/B comparison only). WHY: the box-filtered mips of the ~2-voxel-thin surface
+// 0 = raw trilinear (A/B comparison only). WHY: the box-filtered mips of the fixed-world surface
 // band carry surface-vs-mip-lattice CONTOUR BANDING (strong from mip 1 up — verified in the raw
 // coverage debug view), and the cone integrates that coverage into acc_occ, printing wave bands into
 // the cone-AO channel (verified: bands vanish with SURFACE_CONE_AO_GAIN=0). This is the SAME
@@ -54,19 +54,26 @@ static const float VXGI_CONE_WEIGHTS[6] = { 0.25f, 0.15f, 0.15f, 0.15f, 0.15f, 0
 // occlusion). 5.0 (= every lod) was the banding-hunt diagnostic; the visible bands turned out to be
 // the debug viewer's transparency blending, and the mid/far-cone mip banding contribution was not
 // distinguishable in the clean opaque view — revisit only if a smooth-view regression points here.
-#define VXGI_CONE_AO_CUBIC_MAX_LOD 2.0f
+#define VXGI_CONE_AO_CUBIC_MAX_LOD_BASE 2.0f
 
 // Tangent-plane slab window (voxels above the local surface plane): occlusion fades in between LO
 // and HI of the sample footprint's LOWEST point. This is the self-intersection guard for the whole
 // LOCAL SURFACE (a voxelized flat-but-tilted plane is a 1-voxel staircase, and its coverage AA ramp
-// extends the "own surface" material up to ~2 voxels above the ideal plane — measured: with HI at
+// extends the "own surface" material up to ~2 reference voxels above the ideal plane — measured: with HI at
 // 1.5 the side cones' footprints still clipped the staircase ramp and AO bands returned on flat
 // facial bone at production origin offsets 2/2). HI=2.5 covers step+ramp; geometry that matters
 // (crevice walls, undercuts) rises well past it. Prefer widening THIS window over pushing the cone
 // origins farther out — the slab excludes only the surface-parallel shell, while a bigger origin
 // offset forfeits contact occlusion from ALL nearby geometry in every direction.
-#define VXGI_CONE_SLAB_FADE_LO 1.0f
-#define VXGI_CONE_SLAB_FADE_HI 2.5f
+// EXPERIMENT (2026-08-05, owner's discrete-hit hypothesis): widened from 1.0/2.5. A 60-deg side cone
+// gains only cos(60)=0.5 voxel of height per voxel marched, so whether its early samples clear the
+// NEIGHBOURING staircase step is decided by the per-voxel-quantized clearance (anchor iso_d + normal)
+// -- a binary hit/miss that flips along the lattice phase = vertical bands. A wider fade converts
+// that flip into a gradual ramp. Cost: near-surface cone occlusion weakens (contact AO softer).
+// If bands soften proportionally this confirms the mechanism; the structural fix is then a SURF-grid
+// smoothing pass, not more clearance.
+#define VXGI_CONE_SLAB_FADE_LO 1.5f
+#define VXGI_CONE_SLAB_FADE_HI 4.0f
 // Distance-proportional slab widening: the tangent plane is only as good as the derived normal, and
 // the residual normal wobble (a few degrees along the staircase phase isolines) tilts it — the REAL
 // surface then rises above the assumed plane by dist*sin(tilt), so far cone samples re-detect the
@@ -85,19 +92,12 @@ static const float VXGI_CONE_WEIGHTS[6] = { 0.25f, 0.15f, 0.15f, 0.15f, 0.15f, 0
 //     (The radiance grid's alpha is obscurance*coverage since v4, NOT opacity —
 //     using it as a visibility weight was a latent defect; the retired debug
 //     Gather mode 4 traces the MAT grid separately for exactly this reason.)
-//   * gathered radiance       <- radiance grid .rgb, UN-PREMULTIPLIED by the
-//     same-lod coverage: GenerateMips box-filters rgb against empty (rgb=0)
-//     voxels, diluting it by the local coverage fraction — divide it back out
-//     (rad = rgb/max(cov,1e-3)), the established convention of the DVR's
-//     obscurance fetch and debug Gather mode 8.
-//     v1 APPROXIMATION (plan §3.5): InjectLight/Propagate store rgb WITHOUT
-//     coverage premultiplication, so "rgb mip = coverage-premultiplied" is exact
-//     only where coverage is binary; on the ~2-voxel partial-coverage ramps the
-//     division overshoots. The error is bounded — the contribution is
-//     cov*(rgb/cov) = rgb, so the division cancels in the visibility product and
-//     the residual only skews acc_occ. If ringing/over-brightening shows on soft
-//     OTF boundaries, switch to a custom coverage-premultiplied radiance mip-gen
-//     (FUTURE, plan §6.7).
+//   * gathered radiance       <- radiance grid .rgb, PREMULTIPLIED by the
+//     same-lod coverage. InjectLight and Propagate apply coverage at mip 0, so
+//     GenerateMips stores average(coverage*radiance) at every level. Dividing by
+//     the trilinear same-lod coverage recovers the conditional radiance; the
+//     subsequent visibility product applies coverage exactly once. This is exact
+//     for both binary occupancy and the fixed-world soft-OTF coverage ramp.
 // NOTE this function requires CommonShader.hlsl to be #included first (it reads
 // nothing itself, but its GI wrapper below uses g_cbVxgi + TransformVector).
 // -----------------------------------------------------------------------------
@@ -115,8 +115,12 @@ float4 VXGI_TraceCone_2Tex(Texture3D grid_mat, Texture3D radiance, SamplerState 
 	float acc_occ = 0.0f;
 
 	float tan_half = tan(0.5f * aperture);
+	float resolution_scale = max(grid_res / VXGI_REFERENCE_GRID_RES, 1.0f);
+	float lod_bias = log2(resolution_scale);
+	float max_lod = min(log2(max(grid_res, 1.0f)), VXGI_MAX_LOD_BASE + lod_bias);
+	float cubic_max_lod = VXGI_CONE_AO_CUBIC_MAX_LOD_BASE + lod_bias;
 	// SELF-INTERSECTION: the surface-normal origin push alone is not enough — the true-coverage ramp
-	// is ~2 voxels thick and a 60-deg side cone gains only cos(60) = 0.5 voxel of height per voxel
+	// is ~2 reference voxels thick and a 60-deg side cone gains only cos(60) = 0.5 voxel of height per voxel
 	// marched, so with a 1-voxel start its first samples still graze the voxel's OWN ramp (worse for
 	// inner-band voxels, whose pushed origin barely clears the ramp): systematic false occlusion in
 	// the cone-AO channel. The caller sets start_dist to push the first sample past its own ramp
@@ -134,27 +138,29 @@ float4 VXGI_TraceCone_2Tex(Texture3D grid_mat, Texture3D radiance, SamplerState 
 			break;
 
 		float diameter = max(voxel_size, 2.0f * tan_half * dist);
-		float lod = clamp(log2(diameter * grid_res), 0.0f, VXGI_MAX_LOD);
+		float lod = clamp(log2(diameter * grid_res), 0.0f, max_lod);
 		float cov_tri = grid_mat.SampleLevel(samp, p, lod).a;                 // TRUE coverage (box mips)
 		// occlusion/visibility coverage: cubic-reconstructed near the surface (see VXGI_CONE_AO_CUBIC)
 		float cov = cov_tri;
 		float kernel_r_vox = 0.5f * diameter * grid_res; // sampling footprint radius, voxels (trilinear)
 #if VXGI_CONE_AO_CUBIC == 1
 		[branch]
-		if (lod < VXGI_CONE_AO_CUBIC_MAX_LOD)
+		if (lod < cubic_max_lod)
 		{
 			float lodq = floor(lod + 0.5f); // cubic needs a single mip's texel metric
-			cov = VXGI_SampleDensityCubic(grid_mat, p, lodq, max(grid_res / exp2(lodq), 1.0f));
+			// lodq is integral here, so stay on the single-lattice helper (also keeps fxc from
+			// inlining a fractional-mip branch into this dynamic cone loop).
+			cov = VXGI_SampleDensityCubic(grid_mat, p, lodq, max(floor(grid_res / exp2(lodq)), 1.0f));
 			// the B-spline kernel spans 4 texels of its mip REGARDLESS of the cone diameter — at
 			// near-field lods it is WIDER than the cone footprint and is what actually reaches down
 			// into the surface ramp; the slab height test below must use the real reach.
 			kernel_r_vox = max(kernel_r_vox, 2.0f * exp2(lodq));
 		}
 #endif
-		// rad divisor stays TRILINEAR on purpose: rgb contribution = cov*(rad_mip/cov_mip) — the same-
-		// filter division cancels the mip dilution (and its banding) exactly; a cubic divisor would
-		// break that identity (plan §3.5).
-		float3 rad = radiance.SampleLevel(samp, p, lod).rgb / max(cov_tri, 1e-3f); // mip-dilution restore
+		// RGB and cov_tri use the same trilinear footprint: pm/cov recovers conditional radiance.
+		// Visibility may use the smoother cubic reconstruction above, but storage coverage is applied
+		// exactly once because mip RGB itself is average(coverage*radiance).
+		float3 rad = radiance.SampleLevel(samp, p, lod).rgb / max(cov_tri, 1e-3f);
 
 		// STAIRCASE self-intersection guard (tangent-plane slab clip): a voxelized FLAT surface is a
 		// 1-voxel staircase, and the near-field cone re-detects the neighbouring steps as occluders —
@@ -167,7 +173,8 @@ float4 VXGI_TraceCone_2Tex(Texture3D grid_mat, Texture3D radiance, SamplerState 
 		// slab is the receiver's own surface, whose radiance would be self-illumination double-count.
 		float h_low = (clearance_g + dist * cos_n) * grid_res - kernel_r_vox; // sampling reach bottom, in voxels above the plane
 		float tilt_m = VXGI_CONE_SLAB_TILT_MARGIN * dist * grid_res;         // plane-tilt tolerance grows with distance
-		float w_slab = smoothstep(VXGI_CONE_SLAB_FADE_LO + tilt_m, VXGI_CONE_SLAB_FADE_HI + tilt_m, h_low);
+		float w_slab = smoothstep(VXGI_CONE_SLAB_FADE_LO * resolution_scale + tilt_m,
+			VXGI_CONE_SLAB_FADE_HI * resolution_scale + tilt_m, h_low);
 
 		float a = w_slab * cov * (1.0f - acc_occ);                            // front-to-back visibility
 		acc_rgb += a * rad;
@@ -197,7 +204,10 @@ float4 VXGI_ConeTraceGI_2Tex(Texture3D grid_mat, Texture3D radiance, SamplerStat
 	VXGI_BuildBasis(N_ws, T, B);
 
 	uint nc = min(max(num_cones, 1u), 6u);
-	float3 N_vox_a = normalize(TransformVector(N_ws, g_cbVxgi.mat_ws2vox)); // plane normal, voxel space
+	// Plane normals are covectors, not displacement directions. With voxel->world linear map A,
+	// n_vox = A^T*n_ws. Using mat_ws2vox (= A^-1) here skewed the tangent-plane climb rate on
+	// anisotropic DICOM grids even though cone directions themselves correctly use A^-1 below.
+	float3 N_vox_a = normalize(mul(transpose((float3x3) g_cbVxgi.mat_vox2ws), N_ws));
 
 	float3 rad = (float3) 0;
 	float occ = 0.0f;

@@ -15,7 +15,13 @@
 
 Texture3D grid_mat : register(t9);              // rgb = albedo, a = opacity (MIP CHAIN)
 Texture3D prev_direct : register(t11);          // LIGHT-ONLY rebuild: previous DIRECT (baked alpha source)
-RWTexture3D<float4> grid_direct : register(u0); // rgb = arriving direct light, a = per-voxel obscurance
+RWTexture3D<float4> grid_direct : register(u0); // rgb = direct light * coverage, a = obscurance * coverage
+// PER-VOXEL LIGHT VISIBILITY (r = scalar visibility * coverage, replicated to rgb). This is why the grid
+// does not have to be high resolution: visibility is a LOW-FREQUENCY quantity, so the field carries it
+// while the DVR keeps its own full-resolution gradient shading and MULTIPLIES its directional shade by
+// this instead of ADDING this grid's direct on top -- adding both is the direct double-count.
+// Coverage-premultiplied like every other channel so the generated mips stay physically consistent.
+RWTexture3D<float4> grid_vis : register(u1);
 
 // ---- Multi-Light (plan ML-D3/ML-D4) ----
 // The VXGI light set, LOCAL to this shader at b11 (CommonShader.hlsl declares nothing at b11; the only
@@ -55,6 +61,8 @@ void VXGI_InjectLight(uint3 id : SV_DispatchThreadID)
 	if (mat.a <= 0.0f)
 	{
 		grid_direct[id] = (float4) 0; // empty voxel
+		grid_vis[id] = (float4) 0;    // MUST clear too: a UAV is not cleared between bakes, and a stale
+		                              // visibility texel would shadow material that moved into this cell.
 		return;
 	}
 
@@ -68,6 +76,7 @@ void VXGI_InjectLight(uint3 id : SV_DispatchThreadID)
 	float voxel = 1.0f / (float) R;
 	float tan_half = 0.1f; // narrow shaft
 	float3 light_sum = (float3) 0;
+	float3 light_sum_unshadowed = (float3) 0; // same sum with T == 1 -> their ratio is the visibility
 	uint n_lights = min(light_count, (uint) VXGI_MAX_LIGHTS);
 	[loop]
 	for (uint li = 0; li < n_lights; li++)
@@ -103,7 +112,11 @@ void VXGI_InjectLight(uint3 id : SV_DispatchThreadID)
 		float tau_per_grid = ws_per_grid / max(g_cbVxgi.voxel_ref_ws, 1e-6f); // grid step -> voxel-thickness units
 		float max_dist = min(g_cbVxgi.max_trace_dist, d_light); // point light: never march past the light
 		float tau = 0.0f;
-		float dist = 1.5f * voxel;
+		// Start in REFERENCE voxels, not current voxels. Voxelize now builds a FIXED-WORLD ~2-reference-
+		// voxel coverage ramp, so a 1.5-current-voxel start at R=256 begins INSIDE the voxel's own ramp --
+		// every march integrates self-coverage as tau and the whole DIRECT field (and everything diffused
+		// from it) darkens as R rises. The one transport start the resolution-invariance pass missed.
+		float dist = 1.5f * voxel * VXGI_ResolutionScale();
 		[loop]
 		for (int i = 0; i < 64; i++)
 		{
@@ -148,7 +161,10 @@ void VXGI_InjectLight(uint3 id : SV_DispatchThreadID)
 
 		// ML-D10: per-light color * intensity (defaults white/1.0 = the old ltint_diffuse constant, so a
 		// single default light reproduces the legacy DIRECT bit patterns up to FP re-association -- V1).
-		light_sum += vxgi_lights[li].color * vxgi_lights[li].intensity * T * spot;
+		float3 light_i = vxgi_lights[li].color * vxgi_lights[li].intensity * spot;
+		light_sum += light_i * T;
+		// FREE: the cone march that produced T has already run, this is one add.
+		light_sum_unshadowed += light_i;
 	}
 
 	// alpha = per-voxel OBSCURANCE (shared VXGI_Obscurance — this seeds the radiance grid's alpha at
@@ -173,15 +189,37 @@ void VXGI_InjectLight(uint3 id : SV_DispatchThreadID)
 		// CommonShader.hlsl (footprint vs contact-punch trade-off; cubic reconstruction suppresses the
 		// mip-texel contour bands that trilinear taps print). The flat-surface baseline (half-space
 		// density ~0.5) is SCALE-INVARIANT across mip choices, so the VXGI_Obscurance remap holds.
-		float d1 = VXGI_SampleAoDensity(grid_mat, uv, VXGI_AO_TAP_MIP1, (float)max(R >> VXGI_AO_TAP_MIP1, 1u));
-		float d2 = VXGI_SampleAoDensity(grid_mat, uv, VXGI_AO_TAP_MIP2, (float)max(R >> VXGI_AO_TAP_MIP2, 1u));
-		float d3 = VXGI_SampleAoDensity(grid_mat, uv, VXGI_AO_TAP_MIP3, (float)max(R >> VXGI_AO_TAP_MIP3, 1u));
+		// Fixed-world AO footprints: one extra mip whenever R doubles above the R=128 reference.
+		// The old integer shifts silently halved every density radius at R=256.
+		float lod_bias = VXGI_ResolutionLodBias();
+		float lod1 = min((float) VXGI_AO_TAP_MIP1 + lod_bias, log2((float) R));
+		float lod2 = min((float) VXGI_AO_TAP_MIP2 + lod_bias, log2((float) R));
+		float lod3 = min((float) VXGI_AO_TAP_MIP3 + lod_bias, log2((float) R));
+		float d1 = VXGI_SampleAoDensity(grid_mat, uv, lod1, (float) R);
+		float d2 = VXGI_SampleAoDensity(grid_mat, uv, lod2, (float) R);
+		float d3 = VXGI_SampleAoDensity(grid_mat, uv, lod3, (float) R);
 		a_out = VXGI_Obscurance(d1, d2, d3) * mat.a;
 	}
 
 	static const float VXGI_DIRECT_SOURCE_SCALE = 1.0f;
 
 	// direct = albedo * SUM_i(color_i * intensity_i * T_i) -- additive, no normalization (ML-D4).
+	// RGB is coverage-premultiplied just like alpha. The radiance grid copies this seed and keeps the
+	// same contract through Propagate, so GenerateMips computes average(coverage*radiance) instead of
+	// treating every partial-coverage ramp voxel as a fully occupied emitter.
 	float3 direct = mat.rgb * light_sum;
-	grid_direct[id] = float4(direct * VXGI_DIRECT_SOURCE_SCALE, a_out);
+	grid_direct[id] = float4(direct * (VXGI_DIRECT_SOURCE_SCALE * mat.a), a_out);
+
+	// SCALAR visibility = luminance(shadowed) / luminance(unshadowed). Deliberately NOT per-channel: a
+	// pure-red light drives the G/B denominators to 0, the 'unlit -> fully lit' fallback then reports
+	// G/B visibility 1, and the local Phong (which never sees light colour) keeps full G/B direct -- a
+	// coloured shadow the light cannot cast. This is an AGGREGATE multi-light approximation, stated as
+	// such: an exact per-light decomposition needs each light's N.L weight, which no voxel field has.
+	// (Paper experiments should use a single dominant light, where the aggregate is exact.)
+	// Where no light reaches the voxel at all the denominator is 0 too -- report 1 (fully lit) so a
+	// light-less scene can never darken the DVR below its legacy look.
+	const float3 LUM_W = float3(0.2126f, 0.7152f, 0.0722f); // Rec.709
+	float lum_un = dot(light_sum_unshadowed, LUM_W);
+	float vis = (lum_un > 1e-6f) ? saturate(dot(light_sum, LUM_W) / lum_un) : 1.0f;
+	grid_vis[id] = float4(vis.xxx * mat.a, mat.a);
 }
