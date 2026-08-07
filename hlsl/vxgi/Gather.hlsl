@@ -134,7 +134,13 @@ void VXGI_Gather(uint3 DTid : SV_DispatchThreadID)
 			// that faked the surface-view "bands"). cov*4 saturates within 1-2 meaningfully-covered
 			// voxels — the display lands on the front surface — while staying cov-proportional so
 			// low-alpha OTF content (thin soft tissue) does not paint solid blocks out of near-air.
-			dens = cov * 4.0f;
+			// exp2(mip) = WORLD-LENGTH compensation. The extinction here is per mip-TEXEL, which
+			// self-normalizes only for SOLID interiors (cov stays 1 at every mip). A thin surface
+			// band instead halves its coverage per mip (that dilution IS the mip's content) while
+			// still being crossed in ~1 texel — so its display optical depth halved per LOD and the
+			// shell went translucent exactly when the value needed inspecting. Scaling by the texel's
+			// world size cancels the dilution: band opacity is now LOD-invariant, mip 0 unchanged.
+			dens = cov * 4.0f * exp2((float) mip);
 		}
 		else
 		{

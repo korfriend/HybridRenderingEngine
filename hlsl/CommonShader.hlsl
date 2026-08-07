@@ -168,7 +168,8 @@ struct HxCB_VXGI
 	float surface_cone_ao_gain; // Part C: surface cone AO blend strength (read via VXGI_SURFACE_CONE_AO_GAIN)
 	float context_alpha_gain;   // VR_MODE 2 coverage boost (read via VXGI_CONTEXT_ALPHA_GAIN; 1 = off)
 	float direct_shadow_gain;  // direct-light shadow strength [0,1]; 0 = feature OFF (legacy add-direct)
-	float _vxgi_pad0, _vxgi_pad1, _vxgi_pad2; // mirrors the C++ padding that keeps CB_VXGI 16-byte aligned
+	float ao_base_lod;         // DVR AO consume-fetch base mip (dev knob _float_VxgiAoBaseLod; <= 0 -> legacy 2.5 fallback)
+	float _vxgi_pad1, _vxgi_pad2; // mirrors the C++ padding that keeps CB_VXGI 16-byte aligned
 };
 
 struct HxCB_ClipInfo
@@ -548,6 +549,11 @@ cbuffer cbGlobalParams : register(b13)
 // >0 means: shadow the DVR's own local direct with the field's visibility and add INDIRECT only.
 // 0 keeps every legacy consumer bit-identical (the field's DIRECT is added as before).
 #define VXGI_DIRECT_SHADOW_GAIN (g_cbVxgi.direct_shadow_gain)
+// Base mip of the DVR's per-sample AO consumption fetch (VXGI_ResolutionLodBias is added on top by
+// the consumer). Runtime-swept — the grid-period banding amplitude tracks the WORLD width of that
+// one filter — so the value lives in the CB, not in a compiled constant. <= 0 (unbound b13, zeroed
+// blob, untouched knob) means "use the legacy 2.5": consumers must apply that fallback themselves.
+#define VXGI_AO_BASE_LOD (g_cbVxgi.ao_base_lod)
 float VXGI_ResolutionScale()
 {
 	return max((float) g_cbVxgi.grid_res / VXGI_REFERENCE_GRID_RES, 1.0f);

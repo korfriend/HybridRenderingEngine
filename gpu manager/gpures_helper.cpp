@@ -919,6 +919,8 @@ int grd_helper::Initialize(VmGpuManager* pCGpuManager, PSOManager* gpu_params)
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52003), "VXGI_Propagate_cs_5_0", "cs_5_0"), VXGI_Propagate_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52007), "VXGI_SurfaceGather_cs_5_0", "cs_5_0"), VXGI_SurfaceGather_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52008), "VXGI_BlurMat_cs_5_0", "cs_5_0"), VXGI_BlurMat_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52011), "VXGI_DownsampleGrid_cs_5_0", "cs_5_0"), VXGI_DownsampleGrid_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA52012), "VXGI_BlurSurf_cs_5_0", "cs_5_0"), VXGI_BlurSurf_cs_5_0);
 
 #endif
 	}
@@ -960,6 +962,10 @@ void grd_helper::Deinitialize()
 		delete meshPainter;
 		meshPainter = nullptr;
 	}
+
+	// VXGI tent-mip view cache: release BEFORE the device goes away, or its SRVs/UAVs survive as
+	// STATE_CREATION live objects in the debug layer's process-exit report.
+	VxgiReleaseMipViewCache();
 
 	if (g_psoManager->dx11DeviceImmContext)
 	{
@@ -2417,6 +2423,126 @@ bool grd_helper::UpdateVoxelGrid(GpuRes& gres, const int src_id, const string& r
 	return g_pCGpuManager->GenerateGpuResource(gres);
 }
 
+// Per-mip view cache for VxgiDownsampleGridMips. FILE-SCOPE (not a function-local static) so
+// grd_helper::Deinitialize can release it: a function-local static kept these SRVs/UAVs alive past
+// device teardown and surfaced as STATE_CREATION live objects in the debug layer's process-exit
+// report. Keyed by (scene id, grid name) — a handful of entries; the OLD views are released the
+// moment the resource pointer moves (grid recreation on a resolution change), so no released 3D
+// texture is ever kept alive by a stale cached view.
+struct __VxgiMipViews
+{
+	ID3D11Resource* res = NULL;
+	std::vector<ID3D11ShaderResourceView*> srvs;
+	std::vector<ID3D11UnorderedAccessView*> uavs;
+	void release()
+	{
+		for (auto* v : srvs) if (v) v->Release();
+		for (auto* v : uavs) if (v) v->Release();
+		srvs.clear(); uavs.clear(); res = NULL;
+	}
+};
+static std::map<std::pair<int, std::string>, __VxgiMipViews> g_vxgi_mip_view_cache;
+
+void grd_helper::VxgiReleaseMipViewCache()
+{
+	for (auto& e : g_vxgi_mip_view_cache)
+		e.second.release();
+	g_vxgi_mip_view_cache.clear();
+}
+
+void grd_helper::VxgiDownsampleGridMips(GpuRes& gres)
+{
+	// Overlapping-kernel (6-tap binomial per axis) mip cascade replacing box GenerateMips for the
+	// VXGI grids.
+	// WHY: the box kernels of neighbouring mip texels share NO source texel, so a thin surface
+	// band's sub-texel phase against the mip lattice is stored as a value oscillation in every
+	// generated level (clean at LOD 0, rippled from LOD 1 in the debug Load views) — a pattern
+	// no read-side filter can remove because it is in the data. See hlsl/vxgi/DownsampleGrid.hlsl.
+	// One dispatch per level: t0 = single-level SRV of mip L-1, u0 = mip-slice UAV of mip L —
+	// DISJOINT subresources (D3D11 hazard tracking is per-subresource).
+	ID3D11Resource* res = (ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES];
+	ID3D11ComputeShader* cs = (ID3D11ComputeShader*)g_psoManager->safe_get_res(
+		COMRES_INDICATOR(GpuhelperResType::COMPUTE_SHADER, "VXGI_DownsampleGrid_cs_5_0"));
+	const uint32_t R = gres.res_values.GetParam("WIDTH", (uint32_t)0);
+	if (res == NULL || cs == NULL || R == 0)
+		return;
+	uint32_t levels = 1;
+	{
+		uint32_t w = R;
+		while (w > 1) { w >>= 1; levels++; } // full floor-halving chain, same as MIP_GEN's
+	}
+
+	__VxgiMipViews& vc = g_vxgi_mip_view_cache[std::make_pair(gres.vm_src_id, gres.res_name)];
+	if (vc.res != res || vc.srvs.size() != (size_t)levels)
+	{
+		vc.release();
+		D3D11_SHADER_RESOURCE_VIEW_DESC sdesc = {};
+		sdesc.Format = (DXGI_FORMAT)(uint32_t)gres.options["FORMAT"];
+		sdesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE3D;
+		D3D11_UNORDERED_ACCESS_VIEW_DESC udesc = {};
+		udesc.Format = sdesc.Format;
+		udesc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE3D;
+		for (uint32_t L = 0; L < levels; L++)
+		{
+			ID3D11ShaderResourceView* srv = NULL;
+			ID3D11UnorderedAccessView* uav = NULL;
+			sdesc.Texture3D.MostDetailedMip = L;
+			sdesc.Texture3D.MipLevels = 1;
+			udesc.Texture3D.MipSlice = L;
+			udesc.Texture3D.FirstWSlice = 0;
+			udesc.Texture3D.WSize = (UINT)-1;
+			if (g_psoManager->dx11Device->CreateShaderResourceView(res, &sdesc, &srv) != S_OK
+				|| g_psoManager->dx11Device->CreateUnorderedAccessView(res, &udesc, &uav) != S_OK)
+			{
+				if (srv) srv->Release();
+				if (uav) uav->Release();
+				vc.release();
+				vzlog_warning("[VXGI] tent mip views failed - mips left stale this frame (toggle _bool_VxgiGaussMips off to fall back to box GenerateMips)");
+				return;
+			}
+			vc.srvs.push_back(srv);
+			vc.uavs.push_back(uav);
+		}
+		vc.res = res;
+	}
+
+	ID3D11DeviceContext* ctx = g_psoManager->dx11DeviceImmContext;
+	// SAVE the caller's t0/u0/CS and RESTORE them on exit, instead of nulling. The DVR binds the
+	// VOLUME texture at t0 early in the frame and relies on it persisting to the RayCasting
+	// dispatch; nulling t0 here made every frame that advanced the field render the volume as
+	// EMPTY — "transparent while temporal-progressive, final image only after convergence".
+	// (CSGet* AddRefs — matching Release below.)
+	ID3D11ShaderResourceView* prev_srv = NULL;
+	ID3D11UnorderedAccessView* prev_uav = NULL;
+	ID3D11ComputeShader* prev_cs = NULL;
+	ctx->CSGetShaderResources(0, 1, &prev_srv);
+	ctx->CSGetUnorderedAccessViews(0, 1, &prev_uav);
+	ctx->CSGetShader(&prev_cs, NULL, NULL);
+
+	ctx->CSSetShader(cs, NULL, 0);
+	for (uint32_t L = 1; L < levels; L++)
+	{
+		const uint32_t dl = (R >> L) > 0 ? (R >> L) : 1;
+		// UAV FIRST, then SRV. The other order left the PREVIOUS level's UAV (mip L-1) bound while
+		// binding the SRV of the SAME mip L-1: a same-subresource hazard the runtime resolves by
+		// force-nulling the SRV — every level past the first then read a null source, which is
+		// exactly the observed "mips exist only down to LOD 1". Binding the level-L UAV first
+		// replaces the conflicting one before the SRV arrives.
+		ctx->CSSetUnorderedAccessViews(0, 1, &vc.uavs[L], NULL);
+		ctx->CSSetShaderResources(0, 1, &vc.srvs[L - 1]);
+		const uint32_t g = (dl + 3) / 4; // numthreads(4,4,4)
+		ctx->Dispatch(g, g, g);
+	}
+	// Restore in the same hazard-safe order (UAV first — the restored pair was legal together by
+	// definition, but the restored SRV must not meet MY last mip UAV).
+	ctx->CSSetUnorderedAccessViews(0, 1, &prev_uav, NULL);
+	ctx->CSSetShaderResources(0, 1, &prev_srv);
+	ctx->CSSetShader(prev_cs, NULL, 0);
+	if (prev_srv) prev_srv->Release();
+	if (prev_uav) prev_uav->Release();
+	if (prev_cs) prev_cs->Release();
+}
+
 bool grd_helper::UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string& resName, const void* bufPtr, const int numElements, DXGI_FORMAT dxFormat, const int type_bytes, LocalProgress* progress, uint64_t cpu_update_custom_time)
 {
 	gres.vm_src_id = srcObj->GetObjectID();
@@ -2811,7 +2937,7 @@ void grd_helper::SetCb_Camera(CB_CameraState& cb_cam, const vmmat44f& matWS2SS, 
 	cb_cam.far_plane = (float)fp;
 }
 
-void grd_helper::SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const uint32_t resolution, const float gi_intensity, const float ao_intensity, const bool enabled, const float indirect_intensity, const uint32_t debug_byte, const uint32_t medium_flags, const float ao_pivot, const float ao_slope, const float scatter_gain, const float surface_gi_gain, const float surface_cone_ao_gain, const float context_alpha_gain, const float direct_shadow_gain)
+void grd_helper::SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const uint32_t resolution, const float gi_intensity, const float ao_intensity, const bool enabled, const float indirect_intensity, const uint32_t debug_byte, const uint32_t medium_flags, const float ao_pivot, const float ao_slope, const float scatter_gain, const float surface_gi_gain, const float surface_cone_ao_gain, const float context_alpha_gain, const float direct_shadow_gain, const float ao_base_lod)
 {
 	// mat_ws2vox_raw maps world -> voxel [0,1]. For v1 the caller passes the volume's world->texture matrix
 	// (grd_helper::SetCb_VolumeObj mat_ws2ts), so the grid aligns with the volume box. Stored transposed for
@@ -2891,6 +3017,10 @@ void grd_helper::SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const u
 	// guaranteed to be 0 across drivers — so it must not reach the shader in the first place.
 	cb.context_alpha_gain = (context_alpha_gain > 0.f) ? context_alpha_gain : 0.f; // false for NaN too
 	cb.direct_shadow_gain = (direct_shadow_gain > 0.f) ? min(direct_shadow_gain, 1.f) : 0.f; // NaN -> 0 (feature off)
+	// AO consume-fetch base lod. NaN/<=0 -> 0 -> the shader substitutes the legacy 2.5 (see DvrCS), so a
+	// zeroed blob or an untouched knob is bit-identical to before. Upper cap 8: beyond the deepest mip of
+	// any supported grid — the shader additionally clamps by the actual grid_max_lod.
+	cb.ao_base_lod = (ao_base_lod > 0.f) ? min(ao_base_lod, 8.f) : 0.f;
 }
 
 uint64_t grd_helper::VxgiBakeContentKey(VmObject* vobj, VmObject* tobj_otf, const vmmat44f& mat_ws2ts)
@@ -2912,7 +3042,7 @@ uint64_t grd_helper::VxgiBakeContentKey(VmObject* vobj, VmObject* tobj_otf, cons
 // state_anchor == vobj reproduces the pre-rev.16 behaviour (old-core fallback path).
 bool grd_helper::LoadVxgiConsumerCb(CB_VXGI& cb_out, int& w1_reason, VmObject* state_anchor, VmObject* vobj, VmObject* tobj_otf,
 	const vmmat44f& mat_ws2ts, const float gi_intensity, const float ao_intensity,
-	const float direct_shadow_gain)
+	const float direct_shadow_gain, const float ao_base_lod)
 {
 	w1_reason = 0;
 	// r1 — no usable bake: FieldReady not set (old self-build users land here) or, defensively, the flag
@@ -2938,6 +3068,10 @@ bool grd_helper::LoadVxgiConsumerCb(CB_VXGI& cb_out, int& w1_reason, VmObject* s
 	// not bake authority. Overwrite with THIS view's value (callers that cannot bind the VIS/DIRECT grids
 	// pass 0), otherwise a builder with the split on poisons every consumer that samples null SRVs.
 	cb_out.direct_shadow_gain = (direct_shadow_gain > 0.f) ? min(direct_shadow_gain, 1.f) : 0.f;
+	// Same per-view override for the AO consume-fetch base lod: the blob froze the builder's value at
+	// bake time, but this knob must track the live sweep every frame WITHOUT re-baking. Same guard as
+	// SetCb_VXGI (NaN/<=0 -> 0 -> shader falls back to the legacy 2.5).
+	cb_out.ao_base_lod = (ao_base_lod > 0.f) ? min(ao_base_lod, 8.f) : 0.f;
 	return true;
 }
 

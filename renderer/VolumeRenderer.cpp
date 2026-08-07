@@ -1444,6 +1444,10 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			// its own full-res local direct with the field visibility and add INDIRECT only, instead of adding
 			// the field DIRECT on top of an unshadowed local direct (the double count).
 			const float vxgi_direct_shadow = _fncontainer->fnParams.GetParam("_float_VxgiDirectShadow", 0.f);
+			// AO consume-fetch base lod (dev sweep knob, default 2.5 = legacy). CONSUME-side like the
+			// direct-shadow gain above: it moves the world width of the DVR's per-sample AO filter and is
+			// deliberately NOT folded into any bake stamp — a sweep must repaint, never re-bake.
+			const float vxgi_ao_base_lod = _fncontainer->fnParams.GetParam("_float_VxgiAoBaseLod", 2.5f);
 			// AO remap tuning knobs (dev channel: vzm::SetRenderTestParam -> fnParams, no public API).
 			// The cubic B-spline density taps spread thin-shell density more than the old trilinear ones,
 			// so pivot/slope may need per-dataset retuning; folded into the content stamp below so a
@@ -1456,6 +1460,17 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			// smoothing the source before the cubic density taps removes the same residual band energy
 			// that pass cleaned after them, and A/B showed no remaining visible contribution.
 			const bool vxgi_mat_blur = _fncontainer->fnParams.GetParam("_bool_VxgiMatBlur", true);
+			// Tent (overlapping-kernel) mip cascade instead of box GenerateMips, for ALL VXGI grids.
+			// Box mips STORE the surface band's sub-texel phase as value ripples in every level >= 1
+			// (debug Load views: clean at LOD 0, rippled from LOD 1) — the root of the grid-period
+			// AO banding that no read-side change could touch. Folded into the mat stamp below so an
+			// A/B toggle re-bakes the whole chain immediately.
+			const bool vxgi_gauss_mips = _fncontainer->fnParams.GetParam("_bool_VxgiGaussMips", true);
+			// Surface-aware blur on the SURF grid after each SurfaceGather: the cone occlusion surf.a
+			// oscillates with the surface-vs-lattice phase (cones start at voxel centers buried at
+			// different ramp depths) and is the band that caps how low the AO consume lod can go.
+			// Folded into the mat stamp below so an A/B toggle re-bakes immediately.
+			const bool vxgi_surf_blur = _fncontainer->fnParams.GetParam("_bool_VxgiSurfBlur", true);
 			// Diffusion gain: deeper light creep at higher values; consumption/debug scale by (1-gain)
 			// so brightness self-normalizes. Folded into the content stamp (light side) so a change
 			// re-runs the diffusion to the new fixed point. COUPLED with _int_VxgiBounceTarget
@@ -1483,7 +1498,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				vxgi_surf_gi_gain = 0.f;
 				vxgi_surf_ao_gain = 0.f;
 			}
-			grd_helper::SetCb_VXGI(cbVxgi, TRANSPOSE(cbVolumeObj.mat_ws2ts), vxgi_R, vxgi_gi_intensity, vxgi_ao_intensity, true, 1.f /* indirect retired */, vxgi_debug_byte, vxgi_medium_flags, vxgi_ao_pivot, vxgi_ao_slope, vxgi_scatter_gain, vxgi_surf_gi_gain, vxgi_surf_ao_gain, vxgi_context_gain, vxgi_direct_shadow);
+			grd_helper::SetCb_VXGI(cbVxgi, TRANSPOSE(cbVolumeObj.mat_ws2ts), vxgi_R, vxgi_gi_intensity, vxgi_ao_intensity, true, 1.f /* indirect retired */, vxgi_debug_byte, vxgi_medium_flags, vxgi_ao_pivot, vxgi_ao_slope, vxgi_scatter_gain, vxgi_surf_gi_gain, vxgi_surf_ao_gain, vxgi_context_gain, vxgi_direct_shadow, vxgi_ao_base_lod);
 			// NOTE the CB is mapped BELOW, after the stamp split decides the light-only preserve-AO flag
 			// (vxgi_flag bit6) — it must be part of the uploaded flags for the InjectLight dispatch.
 			// Snapshot the just-built CB as the consumer-facing bake blob NOW, before the per-frame bit6
@@ -1752,6 +1767,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				vxgi_medium_stamp ^= (uint64_t)(uint32_t)sculpt_index << 16;
 			vxgi_medium_stamp ^= (f2u64(vxgi_ao_pivot) << 20) ^ (f2u64(vxgi_ao_slope) << 28); // AO remap knobs re-bake
 			vxgi_medium_stamp ^= vxgi_mat_blur ? (1ull << 58) : 0ull; // MAT blur re-voxel-bakes too
+			vxgi_medium_stamp ^= vxgi_gauss_mips ? (1ull << 59) : 0ull; // tent-vs-box mips: A/B toggle must re-bake everything
+			vxgi_medium_stamp ^= vxgi_surf_blur ? (1ull << 60) : 0ull; // SURF cone blur: same A/B rule
 			// CONTEXT (VR_MODE 2, opt-in): when the context medium is ON its inputs are baked into the
 			// coverage, so they are CONTENT — without this, dragging the grad-scale or gain slider would
 			// change the picture but not the grid. Keyed on vxgi_context_on, NOT on is_modulation_mode:
@@ -1854,7 +1871,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				dx11DeviceImmContext->CopySubresourceRegion(
 					(ID3D11Resource*)gres_vxgi.alloc_res_ptrs[DTYPE_RES], 0, 0, 0, 0,
 					(ID3D11Resource*)gres_vxgi_ping.alloc_res_ptrs[DTYPE_RES], 0, NULL);
-				dx11DeviceImmContext->GenerateMips(vxgi_grid_srv);
+				if (vxgi_gauss_mips) grd_helper::VxgiDownsampleGridMips(gres_vxgi);
+				else dx11DeviceImmContext->GenerateMips(vxgi_grid_srv);
 			};
 
 			// Part C CHECKPOINT (plan §4.2): re-trace all 6 cones per SURFACE voxel against the CURRENT
@@ -1878,6 +1896,24 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
 				SET_SHADER_RES(8, 1, dx11SRVs_NULL);
 				SET_SHADER_RES(9, 1, dx11SRVs_NULL);
+				// Surface-aware smoothing of the fresh cone results (see BlurSurf.hlsl): mixes shallow-
+				// and deep-buried cone origins along the surface band, killing surf.a's lattice-phase
+				// oscillation at the source. Same cadence as the gather itself; PING is free here.
+				if (vxgi_surf_blur)
+				{
+					ID3D11UnorderedAccessView* vxgi_uav_ping_s = (ID3D11UnorderedAccessView*)gres_vxgi_ping.alloc_res_ptrs[DTYPE_UAV];
+					SET_SHADER_RES(8, 1, (ID3D11ShaderResourceView**)&gres_vxgi_surf.alloc_res_ptrs[DTYPE_SRV]);
+					SET_SHADER_RES(9, 1, &vxgi_mat_srv);
+					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, &vxgi_uav_ping_s, (UINT*)(&vxgi_uav_ping_s));
+					SET_SHADER(GETCS(VXGI_BlurSurf_cs_5_0), NULL, 0);
+					dx11DeviceImmContext->Dispatch(vxgi_groups, vxgi_groups, vxgi_groups);
+					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 1, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));
+					SET_SHADER_RES(8, 1, dx11SRVs_NULL);
+					SET_SHADER_RES(9, 1, dx11SRVs_NULL);
+					dx11DeviceImmContext->CopySubresourceRegion(
+						(ID3D11Resource*)gres_vxgi_surf.alloc_res_ptrs[DTYPE_RES], 0, 0, 0, 0,
+						(ID3D11Resource*)gres_vxgi_ping.alloc_res_ptrs[DTYPE_RES], 0, NULL);
+				}
 			};
 
 			const uint64_t vxgi_prev_stamp = vxgi_anchor->GetObjParam<uint64_t>("_uint64_VxgiStamp", (uint64_t)~0ull);
@@ -2238,7 +2274,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 							(ID3D11Resource*)gres_vxgi_mat.alloc_res_ptrs[DTYPE_RES], 0, 0, 0, 0,
 							(ID3D11Resource*)gres_vxgi_ping.alloc_res_ptrs[DTYPE_RES], 0, NULL);
 					}
-					dx11DeviceImmContext->GenerateMips(vxgi_mat_srv);
+					if (vxgi_gauss_mips) grd_helper::VxgiDownsampleGridMips(gres_vxgi_mat);
+					else dx11DeviceImmContext->GenerateMips(vxgi_mat_srv);
 				}
 
 				// 2) Inject: light-transmittance march through MAT (t9, mips) -> DIRECT field (u0).
@@ -2271,8 +2308,16 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				}
 				// Both are consumed through their MIP CHAINS -- generate them where the bake produced mip 0.
 				// Skipping this leaves mip>0 undefined and the DVR reads garbage.
-				dx11DeviceImmContext->GenerateMips((ID3D11ShaderResourceView*)gres_vxgi_direct.alloc_res_ptrs[DTYPE_SRV]);
-				dx11DeviceImmContext->GenerateMips((ID3D11ShaderResourceView*)gres_vxgi_vis.alloc_res_ptrs[DTYPE_SRV]);
+				if (vxgi_gauss_mips)
+				{
+					grd_helper::VxgiDownsampleGridMips(gres_vxgi_direct);
+					grd_helper::VxgiDownsampleGridMips(gres_vxgi_vis);
+				}
+				else
+				{
+					dx11DeviceImmContext->GenerateMips((ID3D11ShaderResourceView*)gres_vxgi_direct.alloc_res_ptrs[DTYPE_SRV]);
+					dx11DeviceImmContext->GenerateMips((ID3D11ShaderResourceView*)gres_vxgi_vis.alloc_res_ptrs[DTYPE_SRV]);
+				}
 				SET_SHADER_RES(9, 1, dx11SRVs_NULL);
 				SET_SHADER_RES(11, 1, dx11SRVs_NULL);
 				{
@@ -2327,7 +2372,8 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 					dx11DeviceImmContext->CopySubresourceRegion(
 						(ID3D11Resource*)gres_vxgi.alloc_res_ptrs[DTYPE_RES], 0, 0, 0, 0,
 						(ID3D11Resource*)gres_vxgi_direct.alloc_res_ptrs[DTYPE_RES], 0, NULL);
-					dx11DeviceImmContext->GenerateMips(vxgi_grid_srv);
+					if (vxgi_gauss_mips) grd_helper::VxgiDownsampleGridMips(gres_vxgi);
+					else dx11DeviceImmContext->GenerateMips(vxgi_grid_srv);
 					vxgi_bounce = 0; // seeded to bounce 0 exactly
 					vxgi_rebaked = true;
 					vxgi_field_written = true;
@@ -2468,7 +2514,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				CB_VXGI cbVxgiConsume; // ZERO_SET => disabled by default
 				int vxgi_consume_w1 = 0;
 				// this view's own direct-shadow gain (t10/t11 ARE bound on this path) -- NOT the builder's published one
-				const bool vxgi_consume_ok = grd_helper::LoadVxgiConsumerCb(cbVxgiConsume, vxgi_consume_w1, vxgi_anchor, vobj, tobj_otf, TRANSPOSE(cbVolumeObj.mat_ws2ts), vxgi_gi_intensity, vxgi_ao_intensity, vxgi_direct_shadow);
+				const bool vxgi_consume_ok = grd_helper::LoadVxgiConsumerCb(cbVxgiConsume, vxgi_consume_w1, vxgi_anchor, vobj, tobj_otf, TRANSPOSE(cbVolumeObj.mat_ws2ts), vxgi_gi_intensity, vxgi_ao_intensity, vxgi_direct_shadow, vxgi_ao_base_lod);
 				D3D11_MAPPED_SUBRESOURCE mappedResVxgiC;
 				dx11DeviceImmContext->Map(cbuf_vxgi, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResVxgiC);
 				memcpy(mappedResVxgiC.pData, &cbVxgiConsume, sizeof(CB_VXGI));
@@ -2552,7 +2598,9 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				CB_VXGI cbVxgiC;
 				int vxgi_w1_reason = 0;
 				if (grd_helper::LoadVxgiConsumerCb(cbVxgiC, vxgi_w1_reason, vxgi_anchor, vobj, tobj_otf,
-					TRANSPOSE(cbVolumeObj.mat_ws2ts), vxgi_gi_intensity, vxgi_ao_intensity))
+					TRANSPOSE(cbVolumeObj.mat_ws2ts), vxgi_gi_intensity, vxgi_ao_intensity,
+					0.f /* direct-shadow stays OFF here: this path binds no t10/t11 (see the SRV nulling below) */,
+					_fncontainer->fnParams.GetParam("_float_VxgiAoBaseLod", 2.5f) /* keep the slicer on the same AO physics as the 3D view during a sweep (§D5) */))
 				{
 					// D4 probe: find the vobj-keyed grid WITHOUT creating it (UpdateVoxelGrid is a CREATOR; a
 					// consumer that called it would fabricate an empty grid when the builder is gone). Same

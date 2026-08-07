@@ -286,6 +286,8 @@
 // 52009 retired (VXGI_InjectLightML, 48B 3-row light — superseded by the 64B/4-row SPOT layout
 // VXGI_InjectLightMLspot, IDR_RCDATA52010; rev.18 §9.2 atomic rename = stale-CSO fail-fast)
 #define IDR_RCDATA52010					  52010
+#define IDR_RCDATA52011					  52011
+#define IDR_RCDATA52012					  52012
 
 // MeshPainter Shaders
 #define IDR_RCDATA80001					  80001

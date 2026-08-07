@@ -14,8 +14,10 @@
 // stored phase energy at every level — the single-source fix every consumer
 // (cone visibility/AO, obscurance density taps, normal gradient, light march)
 // inherits.
-// Weights (1,2,1)^3/64. Alpha is averaged plainly; albedo is OPACITY-WEIGHTED
-// (empty neighbours must not darken the color — same convention as Voxelize).
+// Weights (1,2,1)^3/64. COVERAGE (alpha) is averaged; ALBEDO PASSES THROUGH
+// untouched (see the body comment: the retired opacity-weighted albedo remix
+// caused static colour spots in the surface indirect at low-coverage fringe
+// voxels — and the band medicine never needed the colour, only the coverage).
 // Trade-off: the coverage ramp widens ~2 -> ~3 voxels (slightly softer optical
 // depth in InjectLight, slightly wider surface band). Gated by
 // _bool_VxgiMatBlur (folded into the MAT stamp).
@@ -53,7 +55,6 @@ void VXGI_BlurMat(uint3 id : SV_DispatchThreadID)
 
 	float wsum = 0.0f;
 	float asum = 0.0f;
-	float3 ca_sum = (float3) 0;
 	[unroll]
 	for (int z = -VXGI_MAT_BLUR_RADIUS; z <= VXGI_MAT_BLUR_RADIUS; z++)
 	{
@@ -64,15 +65,21 @@ void VXGI_BlurMat(uint3 id : SV_DispatchThreadID)
 			for (int x = -VXGI_MAT_BLUR_RADIUS; x <= VXGI_MAT_BLUR_RADIUS; x++)
 			{
 				float w = exp(-(float) (x * x + y * y + z * z) * inv2s2);
-				float4 s = grid_mat_src.Load(int4(clamp(ip + int3(x, y, z), (int3) 0, (int3) Rmax), 0));
-				asum += w * s.a;
-				ca_sum += w * s.a * s.rgb;
+				asum += w * grid_mat_src.Load(int4(clamp(ip + int3(x, y, z), (int3) 0, (int3) Rmax), 0)).a;
 				wsum += w;
 			}
 		}
 	}
 
+	// COVERAGE ONLY — albedo passes through as the voxel's own Voxelize value. The band medicine's
+	// active ingredient was always the coverage (the mip-lattice phase lives there, and coverage is
+	// what the density taps / cone visibility / every un-premultiply consume); albedo is NOT part of
+	// the premultiplied contract. The former opacity-weighted albedo remix (ca_sum/asum) let a few
+	// opaque neighbours DOMINATE the colour of low-coverage fringe voxels, and SurfaceGather's
+	// surf.rgb = albedo * gather printed that as static, light-invariant SPOTS in the surface
+	// indirect (debug 3) — worse with wider fringes (this very blur), absent from debug 4 (alpha
+	// never sees albedo). Verified by elimination: spots survive normal-path (5) and normal (6)
+	// checks, and are fixed under light motion.
 	float a = asum / wsum;
-	float3 albedo = ca_sum / max(asum, 1e-4f);
-	grid_out[id] = float4(albedo, a);
+	grid_out[id] = float4(grid_mat_src.Load(int4(ip, 0)).rgb, a);
 }

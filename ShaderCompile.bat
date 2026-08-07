@@ -157,6 +157,8 @@ fxc /E VXGI_Gather /T cs_5_0 ./hlsl/vxgi/Gather.hlsl /Fo ./shader_compiled_objs/
 fxc /E VXGI_Propagate /T cs_5_0 ./hlsl/vxgi/Propagate.hlsl /Fo ./shader_compiled_objs/VXGI_Propagate_cs_5_0
 fxc /E VXGI_SurfaceGather /T cs_5_0 ./hlsl/vxgi/SurfaceGather.hlsl /Fo ./shader_compiled_objs/VXGI_SurfaceGather_cs_5_0
 fxc /E VXGI_BlurMat /T cs_5_0 ./hlsl/vxgi/BlurMat.hlsl /Fo ./shader_compiled_objs/VXGI_BlurMat_cs_5_0
+fxc /E VXGI_DownsampleGrid /T cs_5_0 ./hlsl/vxgi/DownsampleGrid.hlsl /Fo ./shader_compiled_objs/VXGI_DownsampleGrid_cs_5_0
+fxc /E VXGI_BlurSurf /T cs_5_0 ./hlsl/vxgi/BlurSurf.hlsl /Fo ./shader_compiled_objs/VXGI_BlurSurf_cs_5_0
 
 fxc /E RayMarchingDistanceMap /T cs_5_0 ./hlsl/particle/BlobParticle.hlsl /Fo ./shader_compiled_objs/PCE_BlobRayMarching_cs_5_0
 fxc /E KickoffEmitterSystem /T cs_5_0 ./hlsl/particle/Emitter.hlsl /Fo ./shader_compiled_objs/PCE_KickoffEmitterSystem_cs_5_0

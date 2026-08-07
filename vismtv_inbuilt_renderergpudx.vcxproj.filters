@@ -230,9 +230,6 @@
     <FxCompile Include="hlsl\kbuf\KplusB.hlsl">
       <Filter>hlsl source code\k buf</Filter>
     </FxCompile>
-    <FxCompile Include="hlsl\ssao\SSAO.hlsl">
-      <Filter>hlsl source code\ssao</Filter>
-    </FxCompile>
     <FxCompile Include="hlsl\dvr\DvrCS.hlsl">
       <Filter>hlsl source code\dvr</Filter>
     </FxCompile>
@@ -313,6 +310,12 @@
     </FxCompile>
     <FxCompile Include="hlsl\Tonemap.hlsl">
       <Filter>hlsl source code\taa</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\vxgi\DownsampleGrid.hlsl">
+      <Filter>hlsl source code\vxgi</Filter>
+    </FxCompile>
+    <FxCompile Include="hlsl\vxgi\BlurSurf.hlsl">
+      <Filter>hlsl source code\vxgi</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>

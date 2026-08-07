@@ -545,6 +545,21 @@ namespace grd_helper
 	// never a fresh grid). Returns false when generation failed (resource unusable).
 	bool UpdateVoxelGrid(GpuRes& gres, const int src_id, const string& res_name, const uint32_t resolution, const uint32_t dx_format, const bool with_mips = false, bool* out_recreated = NULL);
 
+	// Overlapping-kernel (6-tap binomial per axis) mip cascade for a VXGI grid — the box
+	// GenerateMips replacement.
+	// Box mips store the thin surface band's sub-texel phase as value ripples in every level >= 1
+	// (visible in the debug Load views from LOD 1 up); the tent's shared support attenuates that at
+	// the source. Same linear-averaging operator class as the box, so the premultiplied-by-coverage
+	// channel contract is preserved. Dispatches one CS per level over disjoint (SRV mip L-1 / UAV
+	// mip L) subresource views, cached per (scene id, grid name) and released on grid recreation.
+	// Gated by the caller (_bool_VxgiGaussMips): on any failure it warns and leaves mips stale for
+	// the frame — the box GenerateMips path stays available behind the knob. Saves and restores the
+	// caller's t0/u0/CS bindings (the DVR's volume SRV at t0 must survive this call).
+	void VxgiDownsampleGridMips(GpuRes& gres);
+	// Releases the per-grid mip view cache — called by Deinitialize before device teardown so the
+	// cached SRVs/UAVs do not appear as live objects in the debug layer's exit report.
+	void VxgiReleaseMipViewCache();
+
 	// Upload a CPU buffer as a DYNAMIC Texture3D (write-discard). The source is assumed to be tightly packed
 	// (row pitch = width * bytes_per_texel, depth pitch = row pitch * height); destination Texture3D pitches
 	// are handled internally.
@@ -752,7 +767,14 @@ namespace grd_helper
 		// with the field's visibility and adds INDIRECT only. Also gates the feature: 0 leaves every
 		// consumer (incl. the curved slicer, whose CB is built by LoadVxgiConsumerCb) on legacy.
 		float    direct_shadow_gain;
-		float    _vxgi_pad0, _vxgi_pad1, _vxgi_pad2; // keep sizeof(CB_VXGI) a multiple of 16 (see the static_assert)
+		// Base mip of the DVR's per-sample AO consumption fetch (HLSL adds VXGI_ResolutionLodBias on
+		// top). Runtime-swept because the grid-period banding amplitude tracks the WORLD width of this
+		// one filter (lowering R below 128 hits the lod-bias floor, widens the footprint 1/R, and the
+		// bands vanish — observed on real data). Dev knob _float_VxgiAoBaseLod; <= 0 (incl. the
+		// ZERO_SET default) makes the shader fall back to the legacy 2.5, so untouched paths are
+		// bit-identical. CONSUME-side: must never be folded into the bake content stamp.
+		float    ao_base_lod;
+		float    _vxgi_pad1, _vxgi_pad2; // keep sizeof(CB_VXGI) a multiple of 16 (see the static_assert)
 
 		ZERO_SET(CB_VXGI)
 	};
@@ -1207,7 +1229,7 @@ namespace grd_helper
 	// a gate NOT set means that material stays in the grid (it still occludes and scatters) AND its state
 	// stops feeding the VXGI content stamp, so editing it does not re-voxelize.
 	// context_alpha_gain applies to the context flag only (see VXGI_CONTEXT_ALPHA_GAIN).
-	void SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const uint32_t resolution, const float gi_intensity, const float ao_intensity, const bool enabled, const float indirect_intensity = 1.f, const uint32_t debug_byte = 0, const uint32_t medium_flags = 0, const float ao_pivot = 0.3f, const float ao_slope = 1.5f, const float scatter_gain = 0.75f, const float surface_gi_gain = 0.15f, const float surface_cone_ao_gain = 1.f, const float context_alpha_gain = 1.f, const float direct_shadow_gain = 0.f);
+	void SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const uint32_t resolution, const float gi_intensity, const float ao_intensity, const bool enabled, const float indirect_intensity = 1.f, const uint32_t debug_byte = 0, const uint32_t medium_flags = 0, const float ao_pivot = 0.3f, const float ao_slope = 1.5f, const float scatter_gain = 0.75f, const float surface_gi_gain = 0.15f, const float surface_cone_ao_gain = 1.f, const float context_alpha_gain = 1.f, const float direct_shadow_gain = 0.f, const float ao_base_lod = 2.5f);
 
 	// D9.1 bake CONTENT KEY — the SINGLE function computing it, so the producer (VolumeRenderer bake
 	// publish) and the consumer (LoadVxgiConsumerCb) cannot drift. View-INDEPENDENT by construction:
@@ -1229,7 +1251,12 @@ namespace grd_helper
 		// verbatim copy handed it to consumers that never bind t10/t11 (curved slicer: null vis -> black
 		// local direct AND undiminished field direct -- neither legacy nor split). Default 0 = feature off
 		// unless the caller both opts in and binds the grids.
-		const float direct_shadow_gain = 0.f);
+		const float direct_shadow_gain = 0.f,
+		// AO consumption base lod of THE CONSUMING VIEW (same rationale: the blob carries the builder's
+		// value frozen at bake time, but this is a consume-filter knob that must track the live sweep
+		// every frame). All callers read the same _float_VxgiAoBaseLod fnParam, so the views keep showing
+		// one physics (§D5). <= 0 -> shader falls back to the legacy 2.5.
+		const float ao_base_lod = 2.5f);
 
 	// D9.3 — session-monotonic VXGI identity token, the SINGLE issuer for the whole DLL. Object ids are
 	// RECYCLED by the engine's ResourceManager, so every VXGI identity decision (builder/owner gen, warning

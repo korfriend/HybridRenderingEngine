@@ -712,7 +712,23 @@ void VXGI_ApplyVolumetricGI(inout float4 vis_sample, const float3 pos_sample_ts,
 	float lod_bias = VXGI_ResolutionLodBias();
 	float grid_max_lod = log2(max((float) g_cbVxgi.grid_res, 1.0f));
 	float radiance_lod = min(1.0f + lod_bias, grid_max_lod);
-	float ao_lod = min(2.5f + lod_bias, grid_max_lod);
+	// AO base lod is CB-swept (dev knob _float_VxgiAoBaseLod): an R-sweep showed the
+	// grid-period banding amplitude tracks the WORLD width of this one fetch's filter (below R=128
+	// the lod-bias floor widens the footprint 1/R and the bands vanish), so the width must be
+	// sweepable on screen to find where the bands die at full R. <= 0 (unbound b13 on DX10, zeroed
+	// blob, untouched knob) falls back to the legacy 2.5 — bit-identical to the compiled constant
+	// this replaces. Freeze the found value back into a constant once the sweep settles.
+	float ao_base_lod = VXGI_AO_BASE_LOD > 0.01f ? VXGI_AO_BASE_LOD : 2.5f;
+	// ABSOLUTE noise floor, on top of the world-invariant base+bias: the surface-phase noise is
+	// LATTICE-anchored, so it needs a fixed number of downsample levels regardless of R — measured
+	// on real data as the same floor from two sides (R=128 needs base 1.5+0, R=256 is clean at
+	// 0.5+1; both = absolute 1.5). The floor makes one knob value valid at every R: lowering the
+	// base below the floor simply yields each R's crispest safe AO (higher R -> the floor corresponds
+	// to a smaller world footprint), instead of dipping into raw-mip noise at low R.
+	// 1.5 -> 1.0 PROBE: the 1.5 measurement predates the radius-2 BlurSurf (the surf.a cone noise
+	// was the dominant lattice-noise source, now smoothed at its source), so the required filter
+	// depth may have dropped. If bands/noise return at the bottom of the knob, restore 1.5f.
+	float ao_lod = min(max(ao_base_lod + lod_bias, 1.0f), grid_max_lod);
 	float4 sc = vxgi_grid.SampleLevel(g_samplerLinear_clamp, sc_p, radiance_lod);
 	float sc_cov = vxgi_grid_mat.SampleLevel(g_samplerLinear_clamp, sc_p, radiance_lod).a;
 	// The field's radiance = direct + bounced. The local-direct shadow is lerp(1, V, gain), so the direct
