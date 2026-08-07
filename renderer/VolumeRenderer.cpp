@@ -1459,7 +1459,13 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			// It SUBSUMED the retired post-bake obscurance blur (_bool_VxgiAoBlur / BlurObscuranceX/Y/Z):
 			// smoothing the source before the cubic density taps removes the same residual band energy
 			// that pass cleaned after them, and A/B showed no remaining visible contribution.
-			const bool vxgi_mat_blur = _fncontainer->fnParams.GetParam("_bool_VxgiMatBlur", true);
+			// Default OFF since the 6-tap downsample cascade took over its main job (kernel overlap at
+			// every generated level; BlurMat only approximated that from mip 0) and BlurSurf smooths the
+			// cone results directly. Measured: ON still smooths debug 4 a little but WORSENS the surface
+			// indirect (debug 3 — the fringe voxels it creates carry noisy own-albedo), and the final
+			// image is indifferent. OFF also keeps the shell at ~2 voxels (slightly crisper AO) and skips
+			// a rebuild-class pass. The knob stays for data-dependent re-enable.
+			const bool vxgi_mat_blur = _fncontainer->fnParams.GetParam("_bool_VxgiMatBlur", false);
 			// Tent (overlapping-kernel) mip cascade instead of box GenerateMips, for ALL VXGI grids.
 			// Box mips STORE the surface band's sub-texel phase as value ripples in every level >= 1
 			// (debug Load views: clean at LOD 0, rippled from LOD 1) — the root of the grid-period
