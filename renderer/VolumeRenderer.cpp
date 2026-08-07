@@ -2400,8 +2400,20 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 					// The throttle applies to SUSTAINED edits ONLY (see vxgi_edit_sustained): on the first
 					// frame of an edit the stale surf is the OLD content's, and it would otherwise ride the
 					// field for every bounce up to the T/2 checkpoint.
-					if (vxgi_surface_checkpoints > 0 && (!vxgi_edit_sustained || (temporal_render_count % 8) == 0))
+					// Elapsed-count throttle, NOT a modulo: the global count strides by the number of views
+					// per app frame, and stride/offset pairs like (4, odd) never hit 0 mod 8 — the gather
+					// would then NEVER run during a sustained drag and the stale surf would ride the field
+					// for the whole edit (the exact failure the first-frame exemption exists to prevent).
+					// Same fix pattern as the slow-motion advance gate below.
+					const uint64_t vxgi_last_drag_gather = vxgi_anchor->GetObjParam<uint64_t>("_uint64_VxgiLastDragGather", (uint64_t)0);
+					if (vxgi_surface_checkpoints > 0
+						&& (!vxgi_edit_sustained
+							|| (temporal_render_count >= vxgi_last_drag_gather + 8)
+							|| (temporal_render_count < vxgi_last_drag_gather)))
+					{
+						vxgi_anchor->SetObjParam("_uint64_VxgiLastDragGather", temporal_render_count);
 						vxgi_surface_gather();
+					}
 				}
 				vxgi_anchor->SetObjParam("_uint64_VxgiStamp", vxgi_content_stamp);
 				vxgi_anchor->SetObjParam("_uint64_VxgiMatStamp", vxgi_mat_stamp);
@@ -2422,24 +2434,44 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 					grd_helper::VxgiBakeContentKey(vobj, tobj_otf, TRANSPOSE(cbVolumeObj.mat_ws2ts)));
 				vxgi_anchor->SetObjParam("_uint64_VxgiOwnerGen", vxgi_own_gen);
 			}
-			else if (vxgi_bounce < VXGI_BOUNCE_TARGET
-				// Slow-motion is an explicit app toggle (SetRenderTestParam "_bool_VxgiSlowMotion"), no longer
-				// tied to the debug view mode: advance one iteration every 8th rendered frame while on, full
-				// speed otherwise. Frame index = the GLOBAL render count forwarded by core (monotonic).
-				&& (!vxgi_slowmo || (temporal_render_count % 8) == 0))
+			else if (vxgi_bounce < VXGI_BOUNCE_TARGET)
 			{
-				// Part C refinement checkpoints (plan §4.2/§4.5): derived from N and the target T —
-				// N=2 adds {T/2}, N=3 adds {T/2, T-1} (checkpoint 0 ran in the rebuild branch). Bounce-value
-				// based, so the slow-motion gate above is automatically compatible (bounce only advances on
-				// frames that propagate). SurfaceGather runs BEFORE this bounce's propagate: the rewritten
-				// surface term is composited into the field the same frame (§4.3 order).
-				const bool vxgi_ckpt = (vxgi_surface_checkpoints >= 2 && vxgi_bounce == VXGI_BOUNCE_TARGET / 2)
-					|| (vxgi_surface_checkpoints >= 3 && vxgi_bounce == VXGI_BOUNCE_TARGET - 1);
-				if (vxgi_ckpt)
-					vxgi_surface_gather();
-				// -- content static: ONE volumetric diffusion iteration (progressive refinement) --
-				vxgi_propagate_once();
-				vxgi_bounce++;
+				// Slow-motion is an explicit app toggle (SetRenderTestParam "_bool_VxgiSlowMotion"), no longer
+				// tied to the debug view mode: advance one iteration every ~8th rendered frame while on, full
+				// speed otherwise. NOT a modulo test: temporal_render_count is the GLOBAL RenderScene
+				// execution counter (VisMtvApi 9160), so with V views per app frame the OWNER samples it with
+				// stride V at a fixed offset — and for (V, offset) pairs like (4, odd) the sequence NEVER hits
+				// 0 mod 8: slow motion then never advances at all (observed: restart + slow motion pinned the
+				// bounce at 0 forever). Elapsed-count tracking is stride- and offset-proof; the < guard
+				// recovers if the counter ever regresses (app restart with a kept scene state object).
+				const uint64_t vxgi_last_adv = vxgi_anchor->GetObjParam<uint64_t>("_uint64_VxgiLastSlowmoAdvance", (uint64_t)0);
+				if (!vxgi_slowmo
+					|| (temporal_render_count >= vxgi_last_adv + 8)
+					|| (temporal_render_count < vxgi_last_adv))
+				{
+					if (vxgi_slowmo)
+						vxgi_anchor->SetObjParam("_uint64_VxgiLastSlowmoAdvance", temporal_render_count);
+					// Part C refinement checkpoints (plan §4.2/§4.5): derived from N and the target T —
+					// N=2 adds {T/2}, N=3 adds {T/2, T-1} (checkpoint 0 ran in the rebuild branch). Bounce-value
+					// based, so the slow-motion gate above is automatically compatible (bounce only advances on
+					// frames that propagate). SurfaceGather runs BEFORE this bounce's propagate: the rewritten
+					// surface term is composited into the field the same frame (§4.3 order).
+					const bool vxgi_ckpt = (vxgi_surface_checkpoints >= 2 && vxgi_bounce == VXGI_BOUNCE_TARGET / 2)
+						|| (vxgi_surface_checkpoints >= 3 && vxgi_bounce == VXGI_BOUNCE_TARGET - 1);
+					if (vxgi_ckpt)
+						vxgi_surface_gather();
+					// -- content static: ONE volumetric diffusion iteration (progressive refinement) --
+					vxgi_propagate_once();
+					vxgi_bounce++;
+				}
+				// FieldGen must move on EVERY frame of an unconverged field — the slow-motion skip frames
+				// included. CheckRenderConvergence is FieldGen-gated (api tag 17, one-predicate rule): on a
+				// skip frame the view draws the unchanged field, its rendered gen catches up, the host loop
+				// stops calling RenderScene, the GLOBAL render count freezes, and the %8 gate above can
+				// never fire again — bounce deadlocks at its current value (observed stuck at 0 right after
+				// a restart with slow motion on; full speed never skips, hence never deadlocks). Bumping the
+				// gen on skip frames costs a redraw of an identical field — which is slow motion's price by
+				// definition — and TAA is keyed on BakeGen, so no history reset is involved.
 				vxgi_field_written = true;
 			}
 
