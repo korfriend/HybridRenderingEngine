@@ -124,6 +124,11 @@ bool InitModule(fncontainer::VmFnContainer& _fncontainer)
 			g_d2dResMap.erase(it);
 		}
 	});
+	// VXGI per-mip view cache (tent downsample): its SRVs/UAVs hold COM refs on the scene's VXGI
+	// grids, so a scene deletion must evict them or the R^3 textures survive the release.
+	RegisterPerSrcIdReleaseHook([](int srcId) {
+		grd_helper::VxgiEvictMipViewCache(srcId);
+	});
 
 	if(g_pCGpuManager == NULL)
 		g_pCGpuManager = new VmGpuManager(GpuSdkTypeDX11, __DLLNAME);

@@ -559,6 +559,12 @@ namespace grd_helper
 	// Releases the per-grid mip view cache — called by Deinitialize before device teardown so the
 	// cached SRVs/UAVs do not appear as live objects in the debug layer's exit report.
 	void VxgiReleaseMipViewCache();
+	// Evicts every cached entry of one src id (scene) — registered as a PerSrcIdReleaseHook in
+	// InitModule so scene deletion (__ReleaseGpuResourcesBySrcID) drops the view refs atomically
+	// with the textures they wrap.
+	void VxgiEvictMipViewCache(const int src_id);
+	// Evicts one grid's entry — called by UpdateVoxelGrid before its size/format-mismatch release.
+	void VxgiEvictMipViewCacheEntry(const int src_id, const string& res_name);
 
 	// Upload a CPU buffer as a DYNAMIC Texture3D (write-discard). The source is assumed to be tightly packed
 	// (row pitch = width * bytes_per_texel, depth pitch = row pitch * height); destination Texture3D pitches

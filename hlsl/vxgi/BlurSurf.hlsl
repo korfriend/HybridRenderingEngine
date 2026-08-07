@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// VXGI - surface-band-aware 3^3 Gaussian on the SURF grid (Part C cone results).
+// VXGI - surface-band-aware 5^3 (radius-2) Gaussian on the SURF grid (Part C cone results).
 //
 // WHY: SurfaceGather traces its hemisphere cones from each surface VOXEL CENTER.
 // Along an oblique surface, neighbouring centers sit at different depths inside
@@ -9,7 +9,7 @@
 // band that caps how LOW the DVR's AO consume lod can go (owner-verified:
 // cone-AO gain 0 -> low lods clean; gain 1 -> mip0's band prints). Averaging a
 // surface voxel with its surface NEIGHBOURS mixes shallow- and deep-buried
-// centers — the same lattice-aligned source-side medicine as BlurMat/BlurDirect,
+// centers — the same lattice-aligned source-side medicine as BlurMat,
 // applied to the last untreated cone-origin field. rgb (surface indirect) rides
 // along: same origin, same phase, additive-and-weak so it never showed, but
 // smoothing it is consistent and free here.

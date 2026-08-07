@@ -2404,6 +2404,9 @@ bool grd_helper::UpdateVoxelGrid(GpuRes& gres, const int src_id, const string& r
 		const uint32_t prevFmt = (uint32_t)gres.options["FORMAT"];
 		if (prevW == resolution && prevFmt == dx_format)
 			return true;
+		// Drop any cached per-mip views FIRST: they hold COM refs on the texture being released, and
+		// the lazy self-heal in VxgiDownsampleGridMips would only run on the next downsample.
+		VxgiEvictMipViewCacheEntry(gres.vm_src_id, gres.res_name);
 		g_pCGpuManager->ReleaseGpuResource(gres, false);
 	}
 
@@ -2448,6 +2451,38 @@ void grd_helper::VxgiReleaseMipViewCache()
 	for (auto& e : g_vxgi_mip_view_cache)
 		e.second.release();
 	g_vxgi_mip_view_cache.clear();
+}
+
+// Per-scene eviction — wired to RegisterPerSrcIdReleaseHook in InitModule so that
+// __ReleaseGpuResourcesBySrcID (scene/actor deletion) cannot leave cached SRVs/UAVs holding a
+// COM ref on the released VXGI textures. Without this, a deleted scene's R^3 grids stayed alive
+// until process end unless the same (src_id, name) key happened to be reused.
+void grd_helper::VxgiEvictMipViewCache(const int src_id)
+{
+	for (auto it = g_vxgi_mip_view_cache.begin(); it != g_vxgi_mip_view_cache.end();)
+	{
+		if (it->first.first == src_id)
+		{
+			it->second.release();
+			it = g_vxgi_mip_view_cache.erase(it);
+		}
+		else
+			++it;
+	}
+}
+
+// Single-grid eviction — called by UpdateVoxelGrid right before it releases a size/format-mismatched
+// grid, so the view refs drop in the same breath as the resource (atomic with the release, per the
+// resource-lifetime review). The lazy pointer-compare self-heal in VxgiDownsampleGridMips remains as
+// a second line of defense, but it only fires on the NEXT downsample of a reused key.
+void grd_helper::VxgiEvictMipViewCacheEntry(const int src_id, const string& res_name)
+{
+	auto it = g_vxgi_mip_view_cache.find(std::make_pair(src_id, res_name));
+	if (it != g_vxgi_mip_view_cache.end())
+	{
+		it->second.release();
+		g_vxgi_mip_view_cache.erase(it);
+	}
 }
 
 void grd_helper::VxgiDownsampleGridMips(GpuRes& gres)
