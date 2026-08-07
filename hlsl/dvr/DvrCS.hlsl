@@ -677,15 +677,7 @@ float VXGI_DirectVisibility(const float3 pos_sample_ts)
 	if (VXGI_IS_ENABLED && VXGI_DIRECT_SHADOW_GAIN > 0.0f)
 	{
 		float3 sc_p = pos_sample_ts * g_cbVxgi.vox_fit_scale + g_cbVxgi.vox_fit_offset;
-		// SAME WIDE FILTER AS THE AO FETCH (2.5 + bias), and for the same reason: V ramps 0->1 within a
-		// few voxels of an occluder, the ramp is lattice-anchored, and multiplying such a steep factor
-		// per DVR sample re-exposes the wood-grain banding the AO comment below describes. lod 1+bias
-		// printed exactly that: structure-fixed layers that vanish at gain 0, survive in no debug view
-		// of the FIELD (each ramp is individually smooth -- the product at ray-march rate is what bands),
-		// and do not halve their spacing with R (both factors are world-invariant now). Verified by the
-		// owner's 6-step discrimination, 2026-08-05. The cost is a softer penumbra -- which is consistent
-		// with this channel's design claim: visibility is a LOW-FREQUENCY quantity carried by the grid.
-		float lod = min(2.5f + VXGI_ResolutionLodBias(), log2(max((float) g_cbVxgi.grid_res, 1.0f)));
+		float lod = min(1.0f + VXGI_ResolutionLodBias(), log2(max((float) g_cbVxgi.grid_res, 1.0f)));
 		float cov = vxgi_grid_mat.SampleLevel(g_samplerLinear_clamp, sc_p, lod).a;
 		float vis = saturate(vxgi_grid_vis.SampleLevel(g_samplerLinear_clamp, sc_p, lod).r / max(cov, 1e-3f));
 		v = lerp(1.0f, vis, saturate(VXGI_DIRECT_SHADOW_GAIN));

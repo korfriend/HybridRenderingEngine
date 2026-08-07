@@ -38,12 +38,8 @@
 // NOTE the WS metric correction (g/axis^2, the inverse-transpose transform) legitimately AMPLIFIES the
 // short-world-axis gradient component by 1/L — correct math, but it makes slice-axis ripple worse on
 // anisotropic volumes, which is why the ripple must be removed HERE, at the tap level.
-// VALUES NOW MATCH THE PRESCRIPTION ABOVE. They had drifted back to MIP 0 / STEP 1 -- exactly the
-// "+/-1-voxel difference inside one ring period" configuration the comment declares unrepairable --
-// and the owner's discrimination (2026-08-05) confirmed the predicted chain on screen: lattice-phase
-// bands in the NORMAL view (debug 6) reproduced in cone occlusion (4) and surface indirect (3).
-#define VXGI_SURF_GRAD_MIP  1.0f // gradient tap mip: cubic support at mip 1 = ~8 full-res voxels
-#define VXGI_SURF_GRAD_STEP 2.0f // central-difference half-baseline, in full-res voxels
+#define VXGI_SURF_GRAD_MIP  0.0f // gradient tap mip: cubic support at mip 2 = ~16 full-res voxels
+#define VXGI_SURF_GRAD_STEP 1.0f // central-difference half-baseline, in full-res voxels
 
 // CT-GRADIENT normal refinement (plan §3.3 FUTURE OPTION, promoted): the coverage field of a tilted
 // flat surface is a 1-voxel STAIRCASE at 128^3 — its gradient wobbles by tens of degrees in bands

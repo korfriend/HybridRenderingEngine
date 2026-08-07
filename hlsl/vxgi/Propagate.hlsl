@@ -108,31 +108,7 @@ void VXGI_Propagate(uint3 id : SV_DispatchThreadID)
 	// feedback loop gain stays raw_gain * albedo * cone_visibility — bounded by the CPU-side clamp of
 	// SURFACE_GI_GAIN to [0, 0.95] (strict contraction even at albedo=1). Dropping this (1-GAIN)
 	// factor breaks the convergence contract in plan §4.4. Non-surface voxels carry surf == 0.
-	// SURF is smoothed AT CONSUMPTION (2026-08-06). The per-voxel cone gather is quantized twice over --
-	// one normal per voxel, and the oblique cones' staircase hit/miss flips with the lattice phase -- so
-	// grid_surf carries voxel-period bands that no upstream widening removed (grad MIP1/±2 and the slab
-	// fade experiment both failed to, per the owner's screen checks). Average over the 6 face neighbours,
-	// EXCLUDING all-zero texels: non-surface voxels store exact 0 by contract, and letting them into the
-	// mean would dilute the band edge instead of smoothing along the band. Rare legit-zero surface voxels
-	// (fully open + unlit) are excluded too -- a small error in an already-dark voxel. Both consumers
-	// (rgb -> radiance source, a -> obscurance blend) inherit the smoothing from this one site.
-	// Cost: 6 extra Loads/voxel/iteration, next to the 42 diffusion samples above.
-	float4 surf;
-	{
-		float4 s_c = grid_surf.Load(int4(id, 0));
-		float4 s_sum = 2.0f * s_c;
-		float w_sum = 2.0f;
-		const int3 F[6] = { int3(1,0,0), int3(-1,0,0), int3(0,1,0), int3(0,-1,0), int3(0,0,1), int3(0,0,-1) };
-		[unroll]
-		for (int f = 0; f < 6; f++)
-		{
-			float4 s_n = grid_surf.Load(int4(id + F[f], 0));
-			float w = any(s_n != 0.0f) ? 1.0f : 0.0f;
-			s_sum += s_n * w;
-			w_sum += w;
-		}
-		surf = s_sum / w_sum;
-	}
+	float4 surf = grid_surf.Load(int4(id, 0));
 	// SOURCE-TERM form: r' = direct + surf_term + GAIN*albedo*gather — direct is composed, never damped.
 	// History: `direct + 0.85*gather` blew up to direct/(1-0.85) ~ 6.7x in dense interiors; the damped
 	// fix `(1-K)*direct + K*albedo*gather` bounded that but scaled DIRECT by (1-K), only restoring it

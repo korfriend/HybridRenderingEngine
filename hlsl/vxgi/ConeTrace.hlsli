@@ -65,15 +65,8 @@ static const float VXGI_CONE_WEIGHTS[6] = { 0.25f, 0.15f, 0.15f, 0.15f, 0.15f, 0
 // (crevice walls, undercuts) rises well past it. Prefer widening THIS window over pushing the cone
 // origins farther out — the slab excludes only the surface-parallel shell, while a bigger origin
 // offset forfeits contact occlusion from ALL nearby geometry in every direction.
-// EXPERIMENT (2026-08-05, owner's discrete-hit hypothesis): widened from 1.0/2.5. A 60-deg side cone
-// gains only cos(60)=0.5 voxel of height per voxel marched, so whether its early samples clear the
-// NEIGHBOURING staircase step is decided by the per-voxel-quantized clearance (anchor iso_d + normal)
-// -- a binary hit/miss that flips along the lattice phase = vertical bands. A wider fade converts
-// that flip into a gradual ramp. Cost: near-surface cone occlusion weakens (contact AO softer).
-// If bands soften proportionally this confirms the mechanism; the structural fix is then a SURF-grid
-// smoothing pass, not more clearance.
-#define VXGI_CONE_SLAB_FADE_LO 1.5f
-#define VXGI_CONE_SLAB_FADE_HI 4.0f
+#define VXGI_CONE_SLAB_FADE_LO 1.0f
+#define VXGI_CONE_SLAB_FADE_HI 2.5f
 // Distance-proportional slab widening: the tangent plane is only as good as the derived normal, and
 // the residual normal wobble (a few degrees along the staircase phase isolines) tilts it — the REAL
 // surface then rises above the assumed plane by dist*sin(tilt), so far cone samples re-detect the
