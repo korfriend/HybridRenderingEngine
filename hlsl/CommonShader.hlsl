@@ -168,7 +168,7 @@ struct HxCB_VXGI
 	float surface_cone_ao_gain; // Part C: surface cone AO blend strength (read via VXGI_SURFACE_CONE_AO_GAIN)
 	float context_alpha_gain;   // VR_MODE 2 coverage boost (read via VXGI_CONTEXT_ALPHA_GAIN; 1 = off)
 	float direct_shadow_gain;  // direct-light shadow strength [0,1]; 0 = feature OFF (legacy add-direct)
-	float ao_base_lod;         // DVR AO consume-fetch base mip (dev knob _float_VxgiAoBaseLod; <= 0 -> legacy 2.5 fallback)
+	float ao_base_lod;         // DVR AO consume-fetch base mip (knob _float_VxgiAoBaseLod; <= 0 -> the 1.5 default)
 	float _vxgi_pad1, _vxgi_pad2; // mirrors the C++ padding that keeps CB_VXGI 16-byte aligned
 };
 
@@ -552,7 +552,8 @@ cbuffer cbGlobalParams : register(b13)
 // Base mip of the DVR's per-sample AO consumption fetch (VXGI_ResolutionLodBias is added on top by
 // the consumer). Runtime-swept — the grid-period banding amplitude tracks the WORLD width of that
 // one filter — so the value lives in the CB, not in a compiled constant. <= 0 (unbound b13, zeroed
-// blob, untouched knob) means "use the legacy 2.5": consumers must apply that fallback themselves.
+// blob, untouched knob) means "use the 1.5 default": consumers must apply that fallback themselves,
+// and it must match the C++ fnParams default or bound and unbound paths would show different AO.
 #define VXGI_AO_BASE_LOD (g_cbVxgi.ao_base_lod)
 float VXGI_ResolutionScale()
 {

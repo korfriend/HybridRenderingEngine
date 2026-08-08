@@ -1444,10 +1444,12 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			// its own full-res local direct with the field visibility and add INDIRECT only, instead of adding
 			// the field DIRECT on top of an unshadowed local direct (the double count).
 			const float vxgi_direct_shadow = _fncontainer->fnParams.GetParam("_float_VxgiDirectShadow", 0.f);
-			// AO consume-fetch base lod (dev sweep knob, default 2.5 = legacy). CONSUME-side like the
-			// direct-shadow gain above: it moves the world width of the DVR's per-sample AO filter and is
-			// deliberately NOT folded into any bake stamp — a sweep must repaint, never re-bake.
-			const float vxgi_ao_base_lod = _fncontainer->fnParams.GetParam("_float_VxgiAoBaseLod", 2.5f);
+			// AO consume-fetch base lod. CONSUME-side like the direct-shadow gain above: it moves the
+			// world width of the DVR's per-sample AO filter and is deliberately NOT folded into any bake
+			// stamp — a sweep must repaint, never re-bake. Default 1.5 (was 2.5, a value chosen against
+			// box-mip-era banding that the mip cascade + cone-AO smoothing since removed at the source);
+			// it must stay in step with DvrCS's own <= 0 fallback and every other default of this knob.
+			const float vxgi_ao_base_lod = _fncontainer->fnParams.GetParam("_float_VxgiAoBaseLod", 1.5f);
 			// AO remap tuning knobs (dev channel: vzm::SetRenderTestParam -> fnParams, no public API).
 			// The cubic B-spline density taps spread thin-shell density more than the old trilinear ones,
 			// so pivot/slope may need per-dataset retuning; folded into the content stamp below so a
@@ -2638,7 +2640,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 				if (grd_helper::LoadVxgiConsumerCb(cbVxgiC, vxgi_w1_reason, vxgi_anchor, vobj, tobj_otf,
 					TRANSPOSE(cbVolumeObj.mat_ws2ts), vxgi_gi_intensity, vxgi_ao_intensity,
 					0.f /* direct-shadow stays OFF here: this path binds no t10/t11 (see the SRV nulling below) */,
-					_fncontainer->fnParams.GetParam("_float_VxgiAoBaseLod", 2.5f) /* keep the slicer on the same AO physics as the 3D view during a sweep (§D5) */))
+					_fncontainer->fnParams.GetParam("_float_VxgiAoBaseLod", 1.5f) /* keep the slicer on the same AO physics as the 3D view during a sweep (§D5) */))
 				{
 					// D4 probe: find the vobj-keyed grid WITHOUT creating it (UpdateVoxelGrid is a CREATOR; a
 					// consumer that called it would fabricate an empty grid when the builder is gone). Same

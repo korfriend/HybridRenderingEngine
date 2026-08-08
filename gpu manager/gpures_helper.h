@@ -776,9 +776,9 @@ namespace grd_helper
 		// Base mip of the DVR's per-sample AO consumption fetch (HLSL adds VXGI_ResolutionLodBias on
 		// top). Runtime-swept because the grid-period banding amplitude tracks the WORLD width of this
 		// one filter (lowering R below 128 hits the lod-bias floor, widens the footprint 1/R, and the
-		// bands vanish — observed on real data). Dev knob _float_VxgiAoBaseLod; <= 0 (incl. the
-		// ZERO_SET default) makes the shader fall back to the legacy 2.5, so untouched paths are
-		// bit-identical. CONSUME-side: must never be folded into the bake content stamp.
+		// bands vanish — observed on real data). Knob _float_VxgiAoBaseLod; <= 0 (incl. the
+		// ZERO_SET default) makes the shader fall back to 1.5, the same value every default here
+		// carries. CONSUME-side: must never be folded into the bake content stamp.
 		float    ao_base_lod;
 		float    _vxgi_pad1, _vxgi_pad2; // keep sizeof(CB_VXGI) a multiple of 16 (see the static_assert)
 
@@ -1235,7 +1235,7 @@ namespace grd_helper
 	// a gate NOT set means that material stays in the grid (it still occludes and scatters) AND its state
 	// stops feeding the VXGI content stamp, so editing it does not re-voxelize.
 	// context_alpha_gain applies to the context flag only (see VXGI_CONTEXT_ALPHA_GAIN).
-	void SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const uint32_t resolution, const float gi_intensity, const float ao_intensity, const bool enabled, const float indirect_intensity = 1.f, const uint32_t debug_byte = 0, const uint32_t medium_flags = 0, const float ao_pivot = 0.3f, const float ao_slope = 1.5f, const float scatter_gain = 0.75f, const float surface_gi_gain = 0.15f, const float surface_cone_ao_gain = 1.f, const float context_alpha_gain = 1.f, const float direct_shadow_gain = 0.f, const float ao_base_lod = 2.5f);
+	void SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const uint32_t resolution, const float gi_intensity, const float ao_intensity, const bool enabled, const float indirect_intensity = 1.f, const uint32_t debug_byte = 0, const uint32_t medium_flags = 0, const float ao_pivot = 0.3f, const float ao_slope = 1.5f, const float scatter_gain = 0.75f, const float surface_gi_gain = 0.15f, const float surface_cone_ao_gain = 1.f, const float context_alpha_gain = 1.f, const float direct_shadow_gain = 0.f, const float ao_base_lod = 1.5f);
 
 	// D9.1 bake CONTENT KEY — the SINGLE function computing it, so the producer (VolumeRenderer bake
 	// publish) and the consumer (LoadVxgiConsumerCb) cannot drift. View-INDEPENDENT by construction:
@@ -1261,8 +1261,8 @@ namespace grd_helper
 		// AO consumption base lod of THE CONSUMING VIEW (same rationale: the blob carries the builder's
 		// value frozen at bake time, but this is a consume-filter knob that must track the live sweep
 		// every frame). All callers read the same _float_VxgiAoBaseLod fnParam, so the views keep showing
-		// one physics (§D5). <= 0 -> shader falls back to the legacy 2.5.
-		const float ao_base_lod = 2.5f);
+		// one physics (§D5). <= 0 -> shader falls back to 1.5, the same default.
+		const float ao_base_lod = 1.5f);
 
 	// D9.3 — session-monotonic VXGI identity token, the SINGLE issuer for the whole DLL. Object ids are
 	// RECYCLED by the engine's ResourceManager, so every VXGI identity decision (builder/owner gen, warning

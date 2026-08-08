@@ -846,7 +846,7 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 				if (grd_helper::LoadVxgiConsumerCb(cbVxgiC, vxgi_w1_reason, vxgi_anchor, vobj, tobj_otf,
 					TRANSPOSE(cbVolumeObj.mat_ws2ts), vxgi_gi_int, vxgi_ao_int,
 					0.f /* direct-shadow stays OFF here: the curved consumer never binds t10/t11 */,
-					_fncontainer->fnParams.GetParam("_float_VxgiAoBaseLod", 2.5f) /* same AO physics as the 3D view during a sweep (§D5) */))
+					_fncontainer->fnParams.GetParam("_float_VxgiAoBaseLod", 1.5f) /* same AO physics as the 3D view during a sweep (§D5) */))
 				{
 					// D4 probe: find the vobj-keyed grids WITHOUT creating them (absent => r3, defensive).
 					gres_c_grid.vm_src_id = vxgi_grid_src; gres_c_grid.res_name = "VXGI_VOXEL_GRID";

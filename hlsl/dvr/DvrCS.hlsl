@@ -714,11 +714,15 @@ void VXGI_ApplyVolumetricGI(inout float4 vis_sample, const float3 pos_sample_ts,
 	float radiance_lod = min(1.0f + lod_bias, grid_max_lod);
 	// AO base lod is CB-swept (dev knob _float_VxgiAoBaseLod): an R-sweep showed the
 	// grid-period banding amplitude tracks the WORLD width of this one fetch's filter (below R=128
-	// the lod-bias floor widens the footprint 1/R and the bands vanish), so the width must be
-	// sweepable on screen to find where the bands die at full R. <= 0 (unbound b13 on DX10, zeroed
-	// blob, untouched knob) falls back to the legacy 2.5 — bit-identical to the compiled constant
-	// this replaces. Freeze the found value back into a constant once the sweep settles.
-	float ao_base_lod = VXGI_AO_BASE_LOD > 0.01f ? VXGI_AO_BASE_LOD : 2.5f;
+	// the lod-bias floor widens the footprint 1/R and the bands vanish), so the width is sweepable
+	// on screen. <= 0 (unbound b13 on DX10, zeroed blob, untouched knob) falls back to the DEFAULT,
+	// which must equal the C++ side's fnParams default or an unbound path would show different AO
+	// than a bound one.
+	// DEFAULT 2.5 -> 1.5: 2.5 was chosen against the banding of the box-mip era. With the
+	// overlapping-kernel mip cascade and the surface-aware cone-AO smoothing removing that banding
+	// at its source, 1.5 is clean on real data and noticeably crisper in contact shading — so the
+	// shipped look no longer pays for a problem that is gone.
+	float ao_base_lod = VXGI_AO_BASE_LOD > 0.01f ? VXGI_AO_BASE_LOD : 1.5f;
 	// ABSOLUTE noise floor, on top of the world-invariant base+bias: the surface-phase noise is
 	// LATTICE-anchored, so it needs a fixed number of downsample levels regardless of R — measured
 	// on real data as the same floor from two sides (R=128 needs base 1.5+0, R=256 is clean at
@@ -743,7 +747,7 @@ void VXGI_ApplyVolumetricGI(inout float4 vis_sample, const float3 pos_sample_ts,
 			sc_num = max(sc_num - g_ds * vxgi_grid_direct.SampleLevel(g_samplerLinear_clamp, sc_p, radiance_lod).rgb, (float3) 0);
 	}
 	float3 sc_radiance = sc_num / max(sc_cov, 1e-3f);
-	// AO from a WIDER filter (R=128 base lod 2.5 + resolution bias): the obscurance ramp rises 0->1 within a few voxels
+	// AO from a WIDER filter (R=128 base lod, default 1.5, + resolution bias): the obscurance ramp rises 0->1 within a few voxels
 	// of the surface, and multiplying such a steep per-sample factor re-exposes the DVR's
 	// classic sample-quantization (wood-grain) banding — the pre-integrated OTF machinery
 	// only covers the OTF's own steepness, not this external factor. The coarser mip
