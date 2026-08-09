@@ -27,7 +27,7 @@ This project is for a hybrid rendering engine that handles the fusion of multipl
 - Direct3D 11.3 (default windows SDK) 
 
 ### Build Environments
-Current build environment assumes the following structure of the developement folders. As external dependencies, our VisMotive-based projects use the core APIs and libraries (https://github.com/korfriend/VisMotive-CoreAPIs/) for most of the volumetric and polygonal processing tasks. To be clear your folder structure should be something quite similar to:
+Current build environment assumes the following structure of the developement folders. As external dependencies, our VisMotive-based projects use the VisMotive-CoreAPIs core APIs and libraries for most of the volumetric and polygonal processing tasks. That source is not publicly distributed, so if you are building this from outside, take the prebuilt libraries and headers from https://github.com/korfriend/VisMotive-BuiltBinary instead, which is what fills the bin folder below. To be clear your folder structure should be something quite similar to:
 
     yourdevfolder/
      |

@@ -20,7 +20,7 @@
 
 using namespace Concurrency;	// for PPL
 
-// ---- Multi-Light rev.14 (plan: secret_recipies/MULTI_LIGHT_PLAN.md, ML-D2) ----
+// ---- Multi-Light rev.14: lights are scene actors; one of them is the dominant light ----
 // Lights are ACTORS: they ride VmFnContainer::sceneActors by pointer, already filtered by this
 // view's hidden_actors + scene-level visible. There is no light payload channel any more (the old
 // "_VmLight_LightSource" value copy and "_vector<VmSceneLight>*_SceneLights" are retired); core

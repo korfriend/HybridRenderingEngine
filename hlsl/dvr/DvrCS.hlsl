@@ -1367,7 +1367,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #if VR_MODE == 2 // VR_MODE 2: context-aware
 			//float modulator = pow(min(grad_len * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f), pow(g_cbVobj.kappa_i, g_cbVobj.kappa_s));
 			//float modulator = min(grad_len * g_cbVobj.value_range * g_cbVobj.grad_scale / g_cbVobj.grad_max, 1.f);
-			//vis_sample *= modulator; // https://github.com/korfriend/OsstemCoreAPIs/discussions/199#discussion-5114460
+			//vis_sample *= modulator; // superseded: the modulator is applied by MODULATE() below
 			MODULATE(0, grad_len);
 #endif // VR_MODE 2: context-aware
 			//vis_sample *= mask_weight;
@@ -2501,7 +2501,6 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 		float sample_v_norm = tex3D_volume.SampleLevel(g_samplerLinear, pos_sample_ts, 0).r;
 		// AvgIP = opacity-weighted mean density (F13 + air-exclusion): weight each sample by its OTF
 		// opacity so air (alpha~=0) drops out of the mean. opacity_correction=1 -> raw OTF alpha.
-		// https://github.com/korfriend/OsstemCoreAPIs/discussions/185#discussion-4843169
 		float w = LoadOtfBuf(sample_v_norm * g_cbTmap.tmap_size_x, buf_otf, 1).a;
 		sampleSum += sample_v_norm * w;
 		weightSum += w;

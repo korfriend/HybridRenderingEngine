@@ -790,7 +790,7 @@ namespace grd_helper
 	// a symptom that points nowhere near the struct that grew. Pad when you add a field.
 	static_assert(sizeof(CB_VXGI) % 16 == 0, "CB_VXGI must stay 16-byte aligned (D3D11 constant-buffer rule)");
 
-	// ---- Multi-Light (plan: secret_recipies/MULTI_LIGHT_PLAN.md, ML-D3) ----
+	// ---- Multi-Light: the VXGI light-set constant buffer ----
 	// VXGI light-set CB, bound at register b11 which is declared LOCALLY in hlsl/vxgi/InjectLight.hlsl
 	// (CommonShader.hlsl declares nothing at b11 -- see its b-slot ledger comment). Cap = the view's
 	// visible lights with the smallest actorIds; the rest are dropped with a W-L1 warning.
