@@ -78,7 +78,7 @@
     <ClInclude Include="vzm2\Geometrics.h" />
     <ClInclude Include="vzm2\Helpers.h" />
     <ClInclude Include="vzm2\JobSystem.h" />
-    <ClInclude Include="vzm2\Math.h" />
+    <ClInclude Include="vzm2\vzMath.h" />
     <ClInclude Include="vzm2\Timer.h" />
   </ItemGroup>
   <ItemGroup>

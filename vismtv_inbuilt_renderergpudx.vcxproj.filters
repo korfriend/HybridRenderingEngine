@@ -87,7 +87,7 @@
     <ClInclude Include="vzm2\JobSystem.h">
       <Filter>vzm2</Filter>
     </ClInclude>
-    <ClInclude Include="vzm2\Math.h">
+    <ClInclude Include="vzm2\vzMath.h">
       <Filter>vzm2</Filter>
     </ClInclude>
     <ClInclude Include="vzm2\Timer.h">
