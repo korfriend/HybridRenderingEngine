@@ -700,7 +700,13 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 		const bool vxgi_debug_view = _fncontainer.fnParams.GetParam("_int_VxgiDebug", (int)0) != 0;
 
 #if __TONEMAP_ENABLED
-		if (!vxgi_debug_view)
+		// Windowed MPR / curved slices are already display values, never photographic HDR.
+		// Keep the format resolve (FP16 -> RGBA8) at identity even if a native caller retained
+		// ACES, exposure or sRGB settings on the camera. is_sectional is captured BEFORE the
+		// planar SECTIONAL_VOLUME source is rewritten to VOLUME above.
+		const bool display_slice = is_sectional || curved_slicer ||
+			_fncontainer.fnParams.GetParam("_bool_IsSlicer", false);
+		if (!vxgi_debug_view && !display_slice)
 		{
 		tmParams.tm_operator = (uint32_t)max(0, _rcam ? _rcam->GetParam("TONEMAP_OPERATOR", (int)0) : 0); // (1.70) tonemap from VmActor::_vmparams
 		tmParams.encode = (uint32_t)max(0, _rcam ? _rcam->GetParam("TONEMAP_ENCODE", (int)0) : 0);
