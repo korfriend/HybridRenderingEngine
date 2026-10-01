@@ -310,6 +310,13 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	// are exactly the ones the last real render finalized into __PRESENT_RT_NAME.
 	const bool force_store_fb = _fncontainer.fnParams.GetParam("_bool_ForceStoreRenderBuffer", false);
 
+	// Second-layer contents belong to this frame, even when hiding the last helper
+	// skips the surface pass and the volume renderer runs first. Otherwise the final
+	// blend reuses the previous frame's axis texture. Preserve the current surface
+	// pass for a following volume pass; picking and readback must not mutate it.
+	if (is_first_renderer && !is_picking_routine && !force_store_fb)
+		iobj->SetObjParam("NUM_SECOND_LAYER_OBJECTS", (int)0);
+
 	// A force-store issues no render passes, so there is nothing to time -- and more importantly the
 	// Begin(dx11qr_disjoint) below is drained by a block at the very END of DoModule, which this path returns
 	// before reaching. Pinning the flag off keeps every GpuProfile() call on this path a no-op (GpuProfile()

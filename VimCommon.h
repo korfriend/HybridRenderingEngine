@@ -1,74 +1,10 @@
-﻿/**
- * @mainpage    VizMotive Framework
- *
- * @section intro Introduction
- *      - Describes the Global Data Structures, Helper Functions, and Engine APIs that make up the VizMotive Framework.
- *
- * @section CREATEINFO Authoring Information
- *      - Author       :   DongJoon Kim
- *      - Date         :   2019/7/11
- *      - Contact     :   korfriend@gmail.com
- *
- * @section MODIFYINFO Revision Information
- *      - 2019.7.11    :   Initial Framework Doxygen 0.0.1 documentation authored against the source as of this date
- */
+﻿/// Shared native resource, actor and module-dispatch types.
  
-/**
- * @file VimCommon.h
- * @brief File declaring the Global Data Structures, Classes, and Helper Functions.
- * @section Include & Link Information
- *		- Include : VimCommon.h
- *		- Library : CommonUnits.lib
- *		- Linking Binary : CommonUnits.dll
- */
+/// Include VimCommon.h and link CommonUnits.lib; all DLL consumers must use matching headers.
  
 #pragma once
- //#define __VERSION "0.x beta" // released at 22.01.10
-//#define __VERSION "1.00" // released at 22.02.5
-//#define __VERSION "1.01" // released at 22.02.15
-//#define __VERSION "1.10" // released at 22.04.02
-//#define __VERSION "1.11" // released at 22.05.17
-//#define __VERSION "1.12" // released at 22.08.08
-//#define __VERSION "1.13" // released at 22.12.05
-//#define __VERSION "1.20" // released at 23.04.03
-//#define __VERSION "1.30" // released at 25.02.04
-//#define __VERSION "1.31" // released at 25.02.07
-//#define __VERSION "1.32" // released at 25.02.08
-//#define __VERSION "1.33" // released at 25.08.11
-//#define __VERSION "1.40" // released at 25.11.29
-//#define __VERSION "1.41" // released at 25.12.01
-//#define __VERSION "1.50" // released at 25.12.29
-//#define __VERSION "1.51" // released at 26.01.12
-//#define __VERSION "1.52" // released at 26.01.17
-//#define __VERSION "1.60" // released at 26.07.17
-//#define __VERSION "1.61" // released at 26.07.18
-//#define __VERSION "1.70" // released at 26.07.19 : VmObject family -> virtual interface + _Detail (cobj->VmLens pilot)
-//#define __VERSION "1.71" // released at 26.07.24 : PrimitiveData::GetNumCustomDefinitions() added (GenerateCopiedObject FACECOLOR deep-copy fix)
-//#define __VERSION "1.72" // released at 26.07.25 : (§4.2a) resource incarnation token — VmObject birth/mutation/poison + owner-only destructive mutators + const GetPrimitiveData/GetVolumeData + encapsulated vidx_buffer/vol_slices
-// "1.73" — released at 26.07.28. THE FIRST BUMP FOR A BEHAVIOUR CONTRACT RATHER THAN A LAYOUT ONE, and the
-// meaning of this constant is deliberately widened here: it answers "may this DLL be mixed with this core?",
-// and a behaviour contract can make a mismatch just as unsafe as a struct-size one. This time it is worse than
-// unsafe-in-theory — it is silently destructive:
-//   - vismtv_inbuilt_renderergpudx gains the fnParams key _bool_ForceStoreRenderBuffer, which runs the existing
-//     RenderOut() GPU->CPU copy-back with NO render pass and replies through _bool_StoredRenderBuffer. A DLL
-//     that predates the key does not ignore the request: it reads that minimal container as an ORDINARY RENDER
-//     of an empty actor set and BLANKS the CPU framebuffer (RenderOut zero-fills on _int_NumCallRenders == 0),
-//     and only afterwards does the caller notice the missing reply. A blanked frame returned as success.
-//   - vismtv_inbuilt_rwfiles gains _string_UsageMode "EXPORT_2DIMAGE_MEMORY". An older build hits its
-//     unknown-usage-mode else branch, which RETURNS TRUE and writes no output.
-// Neither is caught by the layout signature (no struct changed) and neither is caught by kApiVersionTag /
-// kModuleVersionTag, which are reported in GetEngineAPIsVer()'s string and enforced by nothing. __VERSION is
-// the only value the loader actually refuses on (GpuManager.cpp), so this is where the refusal has to live.
-// CONSEQUENCE, stated plainly: every DLL compiled against VimCommon.h must be rebuilt — all renderergpu
-// variants, renderercpu, and every vismtv_* plugin. One that is not rebuilt is DISABLED at load, which is the
-// intended outcome, because running it is what corrupts the frame.
-//#define __VERSION "1.73" // released at 26.07.28 : plugin BEHAVIOUR contract — on-demand GPU->CPU copy-back (renderergpu) + in-memory image encode (rwfiles); an older plugin mishandles both destructively
-//#define __VERSION "1.74" // released at 26.07.30 : every module must now export __GetModuleAbiVersion (VM_DEFINE_MODULE_HANDSHAKE gained a module_abi argument). A 1.73 module lacks it, and the core reads a missing export as version 0 and refuses -- which is the intended outcome: the per-module ABI table cannot protect a module that cannot state its version.
-//#define __VERSION "1.75" // released at 26.08.02 : VmVObjectVolume::MoveVolumeContentFrom -- O(1) ownership transfer of a privately decoded volume into a live object (the async-load commit). Non-virtual (no vtable slot moves), but the every-edit-bumps rule applies: ship every DLL from one drop.
-//#define __VERSION "1.76" // released at 26.08.02 : api tag 13 -- VXGI convergence moved from the per-camera framebuffer to the SCENE anchor. Layout-identical, so nothing structural forces the pairing; bumped ANYWAY because a NEWER renderer under an OLDER core reports a VXGI camera permanently unconverged and turns the documented while(!CheckRenderConvergence) loop into a spin. This converts that silent hang into a loud plugin-disabled refusal.
-//#define __VERSION "1.77" // released at 26.08.02 : VmVObjectPrimitive::MovePrimitiveContentFrom -- the mesh mirror of 1.75's MoveVolumeContentFrom, which is what lets LoadModelFileAsync cover meshes. Non-virtual (no vtable slot moves), but the every-edit-bumps rule applies: ship every module DLL, both renderers and CommonApi from ONE drop.
-//#define __VERSION "1.78" // released at 26.08.08 : the VXGI banding drop -- overlapping-kernel mip cascade replacing box GenerateMips, surface-aware cone-AO smoothing, CB-driven AO consume lod with an absolute noise floor, and the slow-motion convergence deadlock fixes. VimCommon itself is LAYOUT-IDENTICAL to 1.77; bumped anyway so the handshake enforces the one-drop rule -- the renderer's grid data (tent-filtered mips) and its consumption constants moved together, and a mixed drop would pair a consumer with a field baked under different filter assumptions.
-#define __VERSION "1.80" // released at 26.09.17 : the CSG + guide drop. THREE BEHAVIOUR changes ship together and must arrive together: (a) vzmproc::BooleanMeshes with the "BOOLEAN_MESHES" handler under BVH_OPERATION and its TWO new public enums, MeshBooleanOp and MeshBooleanStatus, (b) GENERATE_GUIDE_SHELL's widened emission gate (GRAZING and DEPTH_JUMP columns now produce material, which took a production case from genus 41 to 0), its punch-through refusal, and its refusal of an explicit lattice pitch coarser than the fit gap, and (c) vzmproc::GenerateGuideFieldShell with the "GENERATE_GUIDE_FIELD_SHELL" handler -- a SECOND CONSTRUCTION and not a mode of GENERATE_GUIDE_SHELL, whose own parameter list (c) does not touch. THIS LINE DESCRIBES THE WHOLE DROP AND NOT ONLY THE PART THAT FORCED THE BUMP: what forced it is (b), because FOUR GENERATE_GUIDE_SHELL out-keys kept their names, types and units while changing what they MEASURE -- which no size fingerprint, no layout signature and no export diff can see. VimCommon itself is LAYOUT-IDENTICAL to 1.78; bumped anyway under the every-edit-bumps rule. 1.79 was never released; 1.78 went straight to 1.80 to mark that this drop lands as one piece. Ship every DLL from ONE drop. CLAUSE (a) SAID "four new public enums" AND THE ANSWER IS TWO: the other two were MeshBooleanInputSlot and MeshBooleanResultSlot, index spaces into caller-allocated float arrays, and BooleanMeshes' three diagnostics became std::map<std::string, float> keyed by 49 named string constants before this version shipped, so those two index spaces do not exist. THAT CORRECTION DOES NOT MOVE THIS NUMBER, AND THAT IS AN APPLICATION OF THE EVERY-EDIT-BUMPS RULE RATHER THAN AN EXCEPTION TO IT. The rule exists to stop a CONTRACT CHANGE from reaching a consumer without a version to name it. The two index spaces were withdrawn DURING the assembly of this very version, so what the correction changed is 1.80's own release note and nothing a consumer holds: there is no artifact anywhere that carries version 1.80 together with those two enums, and never was. STATE IT IN THOSE TERMS AND NOT AS "1.80 HAS NOT SHIPPED YET" -- that sentence stood on this line and SELF-FALSIFIES the day this drop ships, after which it reads as a claim about a released version, is simply false, and sits permanently in a header mirrored into a PUBLIC repository where nothing retires it. THE TEST FOR ANY NON-BUMP ARGUMENT WRITTEN HERE: would it still be true a year after this version has shipped. A statement about what a version's own preparation contained passes; a statement about what has or has not been released does not. Bumping to 1.81 for such a correction would spend a number distinguishing two drafts of a release note. A mismatched core/module pair is still refused loudly in both directions, but NOT by a required-key check -- one stood in CommonApi's BooleanMeshes forwarder, fired on the module's own argument rejections, and was removed as unsound. What catches the skew is the three fnParams PAYLOAD key names, which carry their payload TYPE in their own spelling: a module built against either side of the vector-to-map change writes a different name, CommonApi reads NULL and refuses with MESH_BOOL_ST_MODULE_KEY_SET. TWO STANDING EDITORIAL RULES GOVERN EVERY NOTE ON THIS LINE, THIS ONE AND THE ONES WRITTEN AFTER IT. FIRST: A RELEASE NOTE STATES WHAT THE CHANGE DID AND DOES NOT CHARACTERISE THE PROVENANCE OF AN INPUT. What a change did is a property of the artifact and stays checkable against it; where an input came from is a property of neither the change nor the artifact, is not what a consumer holding a version number needs, and once written here nothing retires it. MEASUREMENTS ARE THE OPPOSITE CASE AND ARE ALWAYS KEPT: the genus 41 to 0 figure above is the technical fact that explains why this bump happened, and a note that drops it loses its reason -- so state the measured result, and leave the pedigree of what was measured out of it. SECOND: AN EDIT THAT CHANGES ONLY THE WORDING OF A NOTE ALREADY ON THIS LINE DOES NOT MOVE THIS NUMBER. Wording is not a term of the contract -- a rewording touches no gate, no behaviour and no measured result -- so no two artifacts carrying version 1.80 can differ by it and none ever could. Both rules are stated forward, to bind the note written next, so both pass the one-year test above.
+ // __VERSION identifies the shared layout and behaviour contract; deploy matching core/module builds.
+#define __VERSION "1.80" // Shared core/module contract.
 
 #define _HAS_STD_BYTE 0
 
@@ -98,16 +34,9 @@ using namespace vz;
 #include <windows.h>
 #endif
 
-/**
- * @brief VizMotive Framework
- */
+/// VizMotive Framework
 
-//=====================================================================
-// Please, project's character set as UNICODE
-// GLM library is used as a common math
-// Copyright by DongJoon Kim. All rights reserved.
-//=====================================================================
-
+// Build with UNICODE. Math helpers use GLM and the row-vector convention.
 
 // ONLY FOR WINDOWS VERSION
 #define VMENGINEVERSION 0x29AD7	// 170711(allocating 20 bits) and  12 bits for modules and engine enhancement version
@@ -260,17 +189,11 @@ namespace vmenums {
 * @brief Data structure describing progress as defined by the framework.
 */
 struct LocalProgress {
-	/**
-	 * @brief Start of the progress range, between 0.0 and 100.0
-	 */
+	/// Start of the progress range, between 0.0 and 100.0
 	double start;
-	/**
-	 * @brief Extent of the progress range, between 0.0 and 100.0
-	 */
+	/// Extent of the progress range, between 0.0 and 100.0
 	double range;
-	/**
-	 * @brief Pointer to a static parameter inside a module/function where the current progress is recorded
-	 */
+	/// Pointer to a static parameter inside a module/function where the current progress is recorded
 	double* progress_ptr; /*out*/
 	/// constructor; initialization
 	LocalProgress()
@@ -492,39 +415,17 @@ namespace vmobjects
 		}
 	};
 
-	/**
-	 * @class AxisInfoRS2OS
-	 * @brief Defines the orientation in which the Resource-Space axes x(1,0,0), y(0,1,0), z(0,0,1) are initially placed into Object Space (RHS). \n
-	 * Pitch is not considered; only direction is defined (i.e. valid for vectors only)
-	 * @sa
-	 * @ref vmobjects::VolumeData
-	 */
+	/// Defines the orientation in which the Resource-Space axes x(1,0,0), y(0,1,0), z(0,0,1) are initially placed into Object Space (RHS). \n Pitch is not considered; only direction is defined (i.e. valid for vectors only)
 	struct AxisInfoRS2OS {
-		/**
-		 * @brief Defines the placed object's x-axis in Object Space corresponding to the Resource-Space x-axis (1,0,0); unit vector
-		 */
+		/// Defines the placed object's x-axis in Object Space corresponding to the Resource-Space x-axis (1,0,0); unit vector
 		vmdouble3 vec_axisx_os;
-		/**
-		 * @brief Defines the placed object's y-axis in Object Space corresponding to the Resource-Space y-axis (0,1,0); unit vector
-		 */
+		/// Defines the placed object's y-axis in Object Space corresponding to the Resource-Space y-axis (0,1,0); unit vector
 		vmdouble3 vec_axisy_os;
-		/**
-		 * @brief Whether the XY right-handed cross-product direction is reversed when defining the placed object's z-axis in World Space corresponding to the Object-Space z-axis (0,0,1)\n
-		 * If true, it is placed right-handed and the transform holds in affine space; if false, the z-axis is placed left-handed
-		 */
+		/// Whether the XY right-handed cross-product direction is reversed when defining the placed object's z-axis in World Space corresponding to the Object-Space z-axis (0,0,1) If true, it is placed right-handed and the transform holds in affine space; if false, the z-axis is placed left-handed
 		bool is_rhs;
-		/**
-		 * @brief Initial RS2OS transform matrix derived from vec_axisx_ws, vec_axisy_ws, and is_rhs
-		 */
+		/// Initial RS2OS transform matrix derived from vec_axisx_ws, vec_axisy_ws, and is_rhs
 		vmmat44 mat_rs2os;
-		/**
-		 * @brief constructor; performs initialization
-		 * @details
-		 * >> vec_axisx_ws = (1, 0, 0);
-		 * >> vec_axisy_ws = (0, 1, 0);
-		 * >> RHS;
-		 * >> mat_os2ws is identity matrix
-		 */
+		/// constructor; performs initialization
 		AxisInfoRS2OS()
 		{
 			vec_axisx_os = vmdouble3(1, 0, 0);
@@ -555,35 +456,13 @@ namespace vmobjects
 		}
 	};
 
-	/**
-	 * @class VolumeData
-	 * @brief Data structure holding the detailed information of a volume as defined by the framework
-	 * @sa
-	 * @ref vmobjects::VmVObjectVolume \n
-	 */
+	/// Data structure holding the detailed information of a volume as defined by the framework
 	struct VolumeData {
-		/**
-		 * @brief Data type of the volume array, <typeinfo>
-		 */
+		/// Data type of the volume array, <typeinfo>
 		data_type store_dtype;
-		/**
-		 * @brief Original volume data type before it was stored in memory
-		 */
+		/// Original volume data type before it was stored in memory
 		data_type origin_dtype;
-		/**
-		 * @brief 2D array storing the volume (safe-sample version)
-		 * @details
-		 * Actual allocated size along x = i3VolumeSize.x + i3SizeExtraBoundary.x*2 \n
-		 * Actual allocated size along y = i3VolumeSize.y + i3SizeExtraBoundary.y*2 \n
-		 * Actual allocated size along z = i3VolumeSize.z + i3SizeExtraBoundary.z*2 \n
-		 * @par ex.
-		 * Sampling the value at index (100, 120, 150) in a uint16_t 512x512x512 volume \n
-		 * @par
-		 * >> int iSamplePosX = 100 + i3SizeExtraBoundary.x; \n
-		 * >> int iSamplePosY = 120 + i3SizeExtraBoundary.y; \n
-		 * >> int iSamplePosZ = 150 + i3SizeExtraBoundary.z; \n
-		 * >> uint16_t usValue = ((uint16_t**)ppvVolumeSlices)[iSamplePosZ][iSamplePosX + iSamplePosY*(i3VolumeSize.x + i3SizeExtraBoundary.x*2)];
-		 */
+		/// Padded voxel slices. Allocated dimensions are vol_size + 2*bnd_size; do not assume tightly packed storage.
 	private:
 		// (1.72, §4.2a) encapsulated raw field. Reassigning/freeing the slice array is a buffer-
 		// destroying act that must go through the owner (VmVObjectVolume::ReplaceSlices/ReleaseSlices/
@@ -612,32 +491,15 @@ namespace vmobjects
 		 * @details vox_pitch = (OS-space voxel size along x, along y, along z)
 		 */
 		vmdouble3 vox_pitch;
-		/**
-		 * @brief Minimum (store_Mm_values.x) and maximum (store_Mm_values.y) of the stored volume (ppvVolumeSlices)
-		 */
+		/// Minimum (store_Mm_values.x) and maximum (store_Mm_values.y) of the stored volume (ppvVolumeSlices)
 		vmdouble2 store_Mm_values;
-		/**
-		 * @brief Minimum (actual_Mm_values.x) and maximum (actual_Mm_values.y) defined before the volume was stored
-		 * @par ex.
-		 * e.g. when a volume stored as float in the range -1.5 ~ 2.5 is stored as uint16_t
-		 * @par
-		 * >> store_Mm_values = vmdouble2(0, 65535), actual_Mm_values = vmdouble2(-1.5, 2.5);
-		 */
+		/// Minimum (actual_Mm_values.x) and maximum (actual_Mm_values.y) defined before the volume was stored
 		vmdouble2 actual_Mm_values;
-		/**
-		 * @brief Array defining the histogram of the volume
-		 * @details
-		 * The array size is uint32_t(d2MinMaxValue.y - d2MinMaxValue.x + 1.5) \n
-		 * pullHistogram[volume value] = # of voxels
-		 */
+		/// Array defining the histogram of the volume
 		uint64_t* histo_values;
-		/**
-		 * @brief Transform matrix mapping the volume space stored in memory (sample coordinates) to its initial placement in world space
-		 */
+		/// Transform matrix mapping the volume space stored in memory (sample coordinates) to its initial placement in world space
 		AxisInfoRS2OS axis_info;
-		/**
-		 * @brief constructor; performs initialization
-		 */
+		/// constructor; performs initialization
 		VolumeData() {
 			vol_size = vox_pitch = bnd_size = vmdouble3(0);
 			store_dtype = data_type(typeid(void), 0);
@@ -648,13 +510,9 @@ namespace vmobjects
 			histo_values = NULL;
 		}
 
-		/**
-		 * @brief Returns the histogram array size, uint32_t(store_Mm_values.y - store_Mm_values.x + 1.5)
-		 */
+		/// Returns the histogram array size, uint32_t(store_Mm_values.y - store_Mm_values.x + 1.5)
 		uint32_t GetHistogramSize() const { return (uint32_t)((double)__max(store_Mm_values.y - store_Mm_values.x + 1.5, 1.0)); }
-		/**
-		 * @brief Returns the ppvVolumeSlices array size, including the extra boundary
-		 */
+		/// Returns the ppvVolumeSlices array size, including the extra boundary
 		vmint3 GetSampleSize() const { return vmint3(vol_size.x + bnd_size.x * 2, vol_size.y + bnd_size.y * 2, vol_size.z + bnd_size.z * 2); }
 
 		// Frees the memory allocated for the ppvVolumeSlices and pullHistogram pointers
@@ -670,53 +528,26 @@ namespace vmobjects
 		}
 	};
 
-	/**
-	 * @class PrimitiveData
-	 * @brief Data structure holding the detailed information of a primitive-based object as defined by the framework
-	 * @sa vmobjects::VmVObjectPrimitive
-	 */
+	/// Data structure holding the detailed information of a primitive-based object as defined by the framework
 	struct PrimitiveData {
 	private:
-		/**
-		 * @brief Container map storing the vertex arrays
-		 * string ==> POSITION, NORMAL, TEXCOORD[n], ...
-		 * Holds the allocated pointers as values, which are freed in @ref PrimitiveData::Delete.
-		 */
+		/// Container map storing the vertex arrays string ==> POSITION, NORMAL, TEXCOORD[n], ... Holds the allocated pointers as values, which are freed in PrimitiveData::Delete.
 		std::map<std::string, uint8_t*> defined_vtxbuffers;
 		std::map<std::string, uint8_t*> defined_custombuffers;
 	public:
-		/**
-		 * @brief Vertex winding order of the object's polygons relative to their normal vectors
-		 */
+		/// Vertex winding order of the object's polygons relative to their normal vectors
 		bool is_ccw;	// will be deprecated
-		/**
-		 * @brief Primitive Type
-		 */
+		/// Primitive Type
 		EvmPrimitiveType ptype;
-		/**
-		 * @brief How the primitive's vertices are arranged; true: strip, false: list
-		 */
+		/// How the primitive's vertices are arranged; true: strip, false: list
 		bool is_stripe;
-		/**
-		* @brief Whether redundancy among the primitive's vertices and edges has been removed
-		*/
+		/// Whether redundancy among the primitive's vertices and edges has been removed
 		bool check_redundancy;
-		/**
-		 * @brief Number of polygons in the primitive-based object
-		 */
+		/// Number of polygons in the primitive-based object
 		uint32_t num_prims;
-		/**
-		 * @brief Number of indices that define a single primitive (polygon)
-		 */
+		/// Number of indices that define a single primitive (polygon)
 		uint32_t idx_stride;
-		/**
-		 * @brief Size of the index buffer (puiIndexList) used to define polygons by vertex index
-		 * @details
-		 * >> if(is_stripe)\n
-		 * >>    num_vidx = num_prims + (idx_stride - 1);\n
-		 * >> else\n
-		 * >>    num_vidx = num_prims * idx_stride;
-		 */
+		/// Size of the index buffer (puiIndexList) used to define polygons by vertex index
 		uint32_t num_vidx;
 	private:
 		// (1.72, §4.2a) encapsulated raw field. Reassigning/freeing the index buffer is a buffer-
@@ -733,18 +564,11 @@ namespace vmobjects
 		// from GetPrimitiveData(). Local builder PrimitiveData (filled then handed to RegisterPrimitiveData)
 		// uses it; object-owned data must use VmVObjectPrimitive::ReplaceIndexBuffer instead.
 		void SetIndexBuffer(uint32_t* index_buffer) { vidx_buffer = index_buffer; }
-		/**
-		 * @brief Number of vertices in the primitive-based object
-		 */
+		/// Number of vertices in the primitive-based object
 		uint32_t num_vtx;
-		/**
-		 * @brief Bounding box defined in OS at the PrimitiveData level
-		 */
+		/// Bounding box defined in OS at the PrimitiveData level
 		AaBbMinMax aabb_os;
-		/**
-		 * @brief Information about the texture resource \n
-		 * <w, h, bytes_stride, res_ptr>
-		 */
+		/// Information about the texture resource <w, h, bytes_stride, res_ptr>
 		std::map<std::string, std::tuple<int, int, int, uint8_t*>> texture_res_info;
 
 		bool GetTexureInfo(const std::string& desc, int& w, int& h, int& bytes_stride, uint8_t** res_ptr) const
@@ -792,13 +616,7 @@ namespace vmobjects
 			}
 			defined_custombuffers.clear();
 		}
-		/*!
-		 * @fn vmfloat3* vmobjects::PrimitiveData::GetVerticeDefinition(const string& vtype)
-		 * @brief Method returning the pointer stored as a value in defined_buffers,
-		 * @param vtype [in] \n string \n Name of the vertex buffer (the key in defined_buffers) \n
-		 * keys : POSITION, NORMAL, TEXCOORD[n], ...
-		 * @return vmfloat3 \n Pointer to the vertex buffer; returns NULL if not found
-		 */
+		/// Method returning the pointer stored as a value in defined_buffers,
 		// (1.72) const-qualified so it is callable on an owner-const PrimitiveData taken from
 		// GetPrimitiveData(). Returns a content-mutable pointer (token contract = pointer VALIDITY,
 		// not content immutability); only reallocation/free is gated (ReplaceOrAdd*/Delete stay non-const).
@@ -831,14 +649,7 @@ namespace vmobjects
 			return (uint8_t*)itrVtxDef->second;
 		}
 
-		/*!
-		 * @fn void vmobjects::PrimitiveData::ReplaceOrAddVerticeDefinition(const string& vtype, vmfloat3* vtx_buffer)
-		 * @brief Method returning the pointer stored as a value in defined_buffers,
-		 * @param vtype [in] \n string \n Name of the vertex buffer: POSITION, NORMAL, TEXCOORD[n], ...
-		 * @param vtx_buffer [in] \n vmfloat3* \n Pointer to the vmfloat3 array defining the vertex buffer.
-		 * @remarks Because vtype is used as the key, if a vertex definition is already registered, \n
-		 * its existing vertex pointer is freed from memory and the new vertex pointer is registered
-		 */
+		/// Replace a vertex buffer, freeing the previous buffer and adopting the supplied allocation.
 		void ReplaceOrAddVerticeDefinition(const std::string& vtype, void* vtx_buffer) {
 			uint8_t* vtx_buffer_old = GetVerticeDefinition<uint8_t>(vtype);
 			if (vtx_buffer_old != NULL)
@@ -857,30 +668,17 @@ namespace vmobjects
 			}
 			defined_custombuffers.insert(std::pair<std::string, uint8_t*>(vtype, (uint8_t*)buffer));
 		}
-		/*!
-		 * @fn int vmobjects::PrimitiveData::GetNumVertexDefinitions()
-		 * @brief Returns the number of registered vertex definitions
-		 * @return int \n Number of registered vertex definitions
-		 */
+		/// Returns the number of registered vertex definitions
 		int GetNumVertexDefinitions() const
 		{
 			return (int)defined_vtxbuffers.size();
 		}
-		/*!
-		 * @fn int vmobjects::PrimitiveData::GetNumCustomDefinitions()
-		 * @brief Returns the number of registered custom-buffer definitions (e.g. FACECOLOR).
-		 * @remarks Used by deep-copy paths to detect custom channels whose byte length is not
-		 * derivable here, so they can be refused rather than aliased (double-free) or silently dropped.
-		 */
+		/// Returns the number of registered custom-buffer definitions (e.g. FACECOLOR).
 		int GetNumCustomDefinitions() const
 		{
 			return (int)defined_custombuffers.size();
 		}
-		/*!
-		 * @fn void vmobjects::PrimitiveData::ClearVertexDefinitionContainer()
-		 * @brief Clears mapVerticeDefinitions.
-		 * @remarks Only the container is cleared; the memory of the registered vertex pointers is not freed.
-		 */
+		/// Clear vertex-buffer entries without freeing their allocations.
 		void ClearVertexDefinitionContainer()
 		{
 			defined_vtxbuffers.clear();
@@ -889,11 +687,7 @@ namespace vmobjects
 		{
 			defined_custombuffers.clear();
 		}
-		/*!
-		* @fn void vmobjects::PrimitiveData::ComputeOrthoBoundingBoxWithCurrentValues()
-		* @brief Computes the AABB min/max from the positions in the POSITION vtx_buffer registered in defined_buffers.
-		* @remarks Unnecessary if the PrimitiveData's aabb_os has already been computed; otherwise this must be run to define the AABB.
-		*/
+		/// Computes the AABB min/max from the positions in the POSITION vtx_buffer registered in defined_buffers.
 		void ComputeOrthoBoundingBoxWithCurrentValues()
 		{
 			vmfloat3* vtx_buffer = GetVerticeDefinition<vmfloat3>("POSITION");
@@ -921,58 +715,24 @@ namespace vmobjects
 	 * @brief Data structure holding the detailed information of an OTF as defined by the framework
 	 */
 	struct MapTable {
-		/**
-		 * @brief Pointer to the OTF array
-		 * @details
-		 * 1D : [0][0 to (array_lengths.x - 1)] - default, [1][0 to (array_lengths.x - 1)] - customized
-		 * 2D : [0][0 to (array_lengths.x*array_lengths.y - 1)] - default, [...][0 to (array_lengths.x*array_lengths.y - 1)] - customized
-		 * 3D : [0 to (array_lengths.z - 1)][0 to (array_lengths.x*array_lengths.y - 1)]
-		 */
+		/// Pointer to the OTF array
 		void** tmap_buffers;
 		/**
 		 * @brief Pointer dimensionality of the OTF array
 		 * @details num_dim = 1 or 2 or 3
 		 */
 		int num_dim;
-		/**
-		 * @brief Minimum valid OTF array index for each allocated dimension
-		 * @details
-		 * valid_min_idx.x : minimum array index of the 1st dimension \n
-		 * valid_min_idx.y : minimum array index of the 2nd dimension \n
-		 * valid_min_idx.z : minimum array index of the 3rd dimension
-		 */
+		/// Minimum valid OTF array index for each allocated dimension
 		vmint3 valid_min_idx;
-		/**
-		 * @brief Maximum valid OTF array index for each allocated dimension
-		 * @details
-		 * valid_max_idx.x : maximum array index of the 1st dimension \n
-		 * valid_max_idx.y : maximum array index of the 2nd dimension \n
-		 * valid_max_idx.z : maximum array index of the 3rd dimension
-		 */
+		/// Maximum valid OTF array index for each allocated dimension
 		vmint3 valid_max_idx;
-		/**
-		 * @brief Size of the OTF array along each dimension
-		 * @details
-		 * array_lengths.x : array size of the 1st dimension \n
-		 * array_lengths.y : array size of the 2nd dimension \n
-		 * array_lengths.z : array size of the 3rd dimension \n
-		 * For valid dimensions array_lengths.xyz > 0; for invalid dimensions array_lengths.xyz <= 0
-		 */
+		/// Size of the OTF array along each dimension
 		vmint3 array_lengths;
-		/**
-		 * @brief Bin size over the range of volume values that the OTF metric is based on
-		 * @par ex.
-		 * For a 2D OTF (density, gradient magnitude) over 16-bit volume data, assuming each range is 0~65535 \n
-		 * defining a 512x1024 2D OTF makes the bin's XY size (65536/512, 65536/1024).
-		 */
+		/// Bin size over the range of volume values that the OTF metric is based on
 		vmdouble3 bin_size;
-		/**
-		 * @brief Data type of the OTF array values
-		 */
+		/// Data type of the OTF array values
 		data_type dtype;
-		/**
-		 * @brief constructor; initializes everything to 0 (NULL or false)
-		 */
+		/// constructor; initializes everything to 0 (NULL or false)
 		MapTable() {
 			tmap_buffers = NULL;
 			num_dim = 0;
@@ -981,16 +741,7 @@ namespace vmobjects
 		}
 
 		// Static Helper Functions //
-		/*!
-		 * @brief Static helper function that allocates the OTF array stored in VolumeData
-		 * @param num_dim [in] \n int \n OTF dimension
-		 * @param dim_length [in] \n int 3 \n Size of each OTF dimension
-		 * @param dtype [in] \n data_type \n Data type of the OTF array
-		 * @param res_tmap [in] \n void \n Pointer to the void** of the 2D OTF array (a 3D pointer)
-		 * @return bool \n Returns true on success, false on failure
-		 * @remarks The OTF array is always stored as a 2D OTF
-		 * @sa vmobjects::TMapData
-		 */
+		/// Static helper function that allocates the OTF array stored in VolumeData
 		bool CreateTMapBuffer(const int num_dim, const vmint3& dim_length)
 		{
 			if (num_dim <= 0 || num_dim > 3)
@@ -1046,17 +797,9 @@ namespace vmobjects
 		}
 	};
 
-	/**
-	 * @class VolumeBlocks
-	 * @brief Data structure for a block-based volume
-	 * @sa vmobjects::VmVObjectVolume, vmobjects::VolumeData
-	 */
+	/// Data structure for a block-based volume
 	struct VolumeBlocks {
-		/**
-		 * @brief Size of a single block
-		 * @details Size excluding the extra boundary \n
-		 * unitblk_size = vmint3(size of x, size of y, size of z)
-		 */
+		/// Size of a single block
 		vmint3 unitblk_size;
 		/**
 		* @brief Extra-boundary size of mM_blks and pbTaggedActivatedBlocks, which store the block information
@@ -1073,41 +816,9 @@ namespace vmobjects
 		 * @details Normally the same as vmobjects::VolumeData.store_dtype
 		 */
 		data_type dtype;
-		/**
-		 * @brief 1D array storing the per-block min/max values
-		 * @details
-		 * The array size equals the total number of blocks and does not account for the extra boundary \n
-		 * The data type has 2 channels and matches the volume type. x : minimum, y : maximum
-		 * @par ex.
-		 * Min/max of the block at OS coordinate (100, 100, 100) in a 512x512x512 volume (uint16_t) partitioned into 8x8x8 blocks \n
-		 * In this case unitblk_size = vmint3(8, 8, 8), blk_vol_size = (ceil(512/8), ceil(512/8), ceil(512/8)) \n
-		 *
-		 * @par
-		 * >> vmint3 blk_id = vmint3(floor(100/8), floor(100/8), floor(100/8)); \n
-		 * >> int blk_idx = blk_id.x + blk_bnd_size.x
-		 * >>                     + (blk_id.y + blk_bnd_size.y)*(blk_id.x + 2*blk_bnd_size.x)
-		 * >>                     + (blk_id.z + blk_bnd_size.z)*(blk_id.x + 2*blk_bnd_size.x)*(blk_id.y + 2*blk_bnd_size.y); \n
-		 * >> vmushort2 mM = ((vmushort2*)mM_blks)[iBlockIdIndex];
-		 */
+		/// 1D array storing the per-block min/max values
 		void* mM_blks;
-		/**
-		 * @brief 1D array of per-block binary tags, defined per object
-		 * @details
-		 * The array size equals the total number of blocks and does not account for the extra boundary \n
-		 * When the resource manager deletes a TObject, it cleans up the resources of the registered volume object's blocks \n
-		 * Pointer operations are available via VolumeBlocks::GetTaggedActivatedBlocks and VolumeBlocks::GetTaggedActivatedBlocks \n
-		 * @par ex.
-		 * Tag of the block at OS coordinate (100, 100, 100) in a 512x512x512 volume (uint16_t) partitioned into 8x8x8 blocks \n
-		 * In this case unitblk_size = vmint3(8, 8, 8), blk_vol_size = (ceil(512/8), ceil(512/8), ceil(512/8)) \n
-		 *
-		 * @par
-		 * >> uint8_t* tflag_blks = itratorMap->second;
-		 * >> vmint3 blk_id = vmint3(floor(100/8), floor(100/8), floor(100/8)); \n
-		 * >> int blk_idx = blk_id.x + blk_bnd_size.x
-		 * >>                     + (blk_id.y + blk_bnd_size.y)*(blk_id.x + 2*blk_bnd_size.x)
-		 * >>                     + (blk_id.z + blk_bnd_size.z)*(blk_id.x + 2*blk_bnd_size.x)*(blk_id.y + 2*blk_bnd_size.y); \n
-		 * >> byte tflag = tflag_blks[blk_idx];
-		 */
+		/// 1D array of per-block binary tags, defined per object
 		std::map<int, uint8_t*> tflag_blks_map;
 		std::map<int, uint64_t> updatetime_map;
 
@@ -1190,42 +901,26 @@ namespace vmobjects
 		}
 	};
 
-	/**
-	 * @class FrameBuffer
-	 * @brief Data structure holding the detailed information of a frame buffer as defined by the framework
-	 * @sa vmobjects::VmIObject
-	 */
+	/// Data structure holding the detailed information of a frame buffer as defined by the framework
 	struct FrameBuffer {
-		/**
-		 * @brief Width of the frame buffer
-		 */
+		/// Width of the frame buffer
 		int w;
-		/**
-		 * @brief Height of the frame buffer
-		 */
+		/// Height of the frame buffer
 		int h;
-		/**
-		 * @brief Frame buffer defined as an array
-		 */
+		/// Frame buffer defined as an array
 		void* fbuffer;
-		/**
-		 * @brief Data type of the frame buffer
-		 */
+		/// Data type of the frame buffer
 		data_type dtype;
 		/**
 		 * @brief Intended usage of the frame buffer
 		 * @details When buffer_usage == FrameBufferUsageRENDEROUT, it must be set to vmbyte4.
 		 */
 		EvmFrameBufferUsage buffer_usage;
-		/**
-		 * @brief Descriptor of the frame buffer
-		 */
+		/// Descriptor of the frame buffer
 		std::string descriptor;
 
 #ifdef __WINDOWS
-		/**
-		 * @brief Handle for buffer interoperation through file memory on win32
-		 */
+		/// Handle for buffer interoperation through file memory on win32
 		HANDLE hFileMap;
 #endif
 
@@ -1276,7 +971,6 @@ namespace vmobjects
 		}
 	};
 
-
 	//=========================
 	// Global Objects
 	//=========================
@@ -1296,38 +990,18 @@ namespace vmobjects
 		VmObject();
 		~VmObject();
 
-		/*!
-		 * @brief Checks whether the VmObject's contents are defined
-		 * @remarks Contents are defined by the leaf-most VmObject subclass
-		 * @li @ref vmobjects::VmIObject
-		 * @li @ref vmobjects::VmVObjectVolume
-		 * @li @ref vmobjects::VmVObjectPrimitive
-		 */
+		/// Checks whether the VmObject's contents are defined
 		bool IsDefined();
-		/*!
-		 * @brief Sets the VmObject's object ID
-		 * @param obj_id [in] \n int \n 32 bit ID
-		 * @remarks
-		 * Normally assigned by the resource manager (@ref VmResourceManager) \n
-		 * [8bit : Object Type][8bit : Magic Bits][16 bit : Count-based ID]
-		 */
+		/// Sets the VmObject's object ID
 		void SetObjectID(const int obj_id);
 		/*!
 		 * @brief Returns the VmObject's object ID
 		 * @return int \n Returns the object ID
 		 */
 		int GetObjectID() const;
-		/*!
-		 * @brief Sets the ID of the most closely related VmObject used to define this VmObject
-		 * @param ref_obj_id [in] \n int \n ID of the most closely related VmObject used to define this VmObject
-		 * @remarks The default ID is 0
-		 */
+		/// Sets the ID of the most closely related VmObject used to define this VmObject
 		void SetReferenceObjectID(const int ref_obj_id);
-		/*!
-		 * @brief Returns the ID of the most closely related VmObject used to define this VmObject
-		 * @return int \n ID of the most closely related VmObject used to define this VmObject
-		 * @remarks Returns 0 if no related VmObject ID has been set
-		 */
+		/// Returns the ID of the most closely related VmObject used to define this VmObject
 		int GetReferenceObjectID() const;
 		/*!
 		 * @brief Sets the user description for the VmObject
@@ -1340,31 +1014,14 @@ namespace vmobjects
 		 */
 		std::string GetDescriptor() const;
 		
-		/*!
-		 * @brief Returns the type of the defined VmObject
-		 * @return ObjectType:: \n Returns the type of the defined VmObject
-		 * @remarks When the VmObject is defined, its instance is created according to this type
-		 */
+		/// Returns the type of the defined VmObject
 		EvmObjectType GetObjectType();
 
 		uint64_t GetContentUpdateTime();
 
 		void SetContentUpdateTime();
 
-		// ------------------------------------------------------------------
-		// (1.72, §4.2a) Resource incarnation / generation token.
-		// The ONLY contract the token expresses: "same token => a pointer previously
-		// returned by GetPrimitiveData()/GetVolumeData() is still valid".
-		//   token = (uint64_t(birth) << 32) | mutation
-		// * birth   : a PROCESS-LIFETIME monotonic id issued by the SINGLE CommonApi
-		//             ResourceManager at RegisterObject (never reused, never reset).
-		//             Stored here so GetResObjGeneration can read it back.
-		// * mutation: an owner-local counter bumped exactly once BEFORE every buffer-
-		//             destroying operation (Register*Data / owner-only mutators).
-		// * poison  : latched when mutation would saturate; a poisoned incarnation
-		//             never yields a token again (fail-closed).
-		// ------------------------------------------------------------------
-		// Set once by the ResourceManager at registration. 0 means "not yet issued".
+		// Resource incarnation: birth/mutation/poison identify content lifetime. Compare tokens for equality only; direct payload writes need separate content-change tracking.
 		void SetResBirth(const uint32_t birth);
 		uint32_t GetResBirth() const;
 		// Composes token from (birth, mutation). Returns false if birth==0 (unissued)
@@ -1396,30 +1053,14 @@ namespace vmobjects
 		bool RemoveObjParameters();
 		bool RemoveObjParameter(const std::string& _key);
 		// Static Helper Functions //
-		/*!
-		 * @brief Static helper function that returns the object type from a VmObject ID
-		 * @param obj_id [in] \n int \n ID of the VmObject
-		 * @return ObjectType \n Object type encoded in the VmObject ID
-		 * @remarks
-		 *
-		 */
+		/// Static helper function that returns the object type from a VmObject ID
 		static EvmObjectType GetObjectTypeFromID(const int obj_id);
-		/*!
-		 * @brief Static helper function that checks, from a VmObject ID, whether the object type is a VObject
-		 * @param obj_id [in] \n int \n ID of the VmObject
-		 * @return bool \n Returns true if it is a VmVObject, false otherwise
-		 * @remarks
-		 * Supported for the VmObject ID format.\n
-		 */
+		/// Static helper function that checks, from a VmObject ID, whether the object type is a VObject
 		static bool IsVObject(const int obj_id);
 	};
 
 	struct VObjectArchive;
-	/**
-	 * @class VmVObject
-	 * @brief Base class inheriting from VmObject that holds the spatial information shared by VmVObjectVolume and VmVObjectPrimitive
-	 * @sa vmobjects::VmVObjectVolume, vmobjects::VmVObjectPrimitive
-	 */
+	/// Base class inheriting from VmObject that holds the spatial information shared by VmVObjectVolume and VmVObjectPrimitive
 	// (1.70) Live-instance census. Every VmObject ctor/dtor adjusts one CommonUnits-side atomic counter, so this
 	// returns how many VmObject instances (volume/primitive/iobj/tobj/...) are still alive. The API layer logs an
 	// error at DeinitEngineLib when it is non-zero, i.e. something outlived engine teardown.
@@ -1452,11 +1093,7 @@ namespace vmobjects
 		// transforms between OS and WS are moved into actor parameters (stored in LObject)
 		// here, RS normally refers to volume space (indexing the memory address), and MS refers to dicom-specified model
 		// Transform //
-		/*!
-		 * @brief Sets the matrix defining the transform between the VmVObject's Resource Space (RS) and Model Space (MS)
-		 * @param mat_os2ws [in] \n double44 \n Matrix defining the RS-to-MS transform to store
-		 * @remarks Internally the coordinate spaces related to the RS/MS transform are reset, along with the associated matrices
-		 */
+		/// Sets the matrix defining the transform between the VmVObject's Resource Space (RS) and Model Space (MS)
 		void SetMatrixRS2OS(const vmmat44& mat_rs2os);
 		void SetMatrixRS2OSf(const vmmat44f& mat_rs2os);
 		/*!
@@ -1473,11 +1110,7 @@ namespace vmobjects
 		vmmat44f GetMatrixOS2RSf();
 	};
 
-	/**
-	 * @class VmVObjectVolume
-	 * @brief Class holding volume information whose OS-to-WS placement is established through VmVObject
-	 * @sa vmobjects::VmVObject
-	 */
+	/// Class holding volume information whose OS-to-WS placement is established through VmVObject
 	__vmstaticclass VmVObjectVolume : public VmVObject	// CT Volume or Processing Result Volume or Histogram (2D : Size(x, y, 1))
 	{
 	public:
@@ -1489,32 +1122,9 @@ namespace vmobjects
 		// Block & Brick for Interactive Rendering //
 		// Not Hierarchical blocking
 		// Octree : level 0, Large Block,  level 1, Small Block
-		/*!
-		 * @brief Registers the @ref vmobjects::VolumeData structure holding the volume information into the VmVObjectVolume
-		 * @param vol_data [in] \n VolumeData \n VolumeData with the volume information defined
-		 * @param blk_size2[2] [in] \n int3 \n
-		 * A static array of size 2 holding the block sizes of the unit-block structure that defines the volume \n
-		 * When block sizes are given, the per-block min/max structures are created internally, but the volume itself is not reorganized into blocks \n
-		 * blk_size2[0] : large block, blk_size2[1] : small block \n
-		 * If NULL, no blocks are created
-		 * @param ref_obj_id [in] \n int \n
-		 * ID of the VmVObjectVolume to share the content's pointer reference with \n
-		 * Normally the copy method is used without pointer sharing, in which case 0 is used. The default is 0
-		 * @param progress [out](optional) \n LocalProgress \n
-		 * Pointer to a LocalProgress carrying the function's progress information \n
-		 * The default is NULL; if NULL, it is not used.
-		 * @remarks If blk_size2 is given, @ref VmVObjectVolume::GenerateVolumeMinMaxBlocks is called internally,
-		 */
+		/// Registers the vmobjects::VolumeData structure holding the volume information into the VmVObjectVolume Copies volume data by default; ref_obj_id selects pointer sharing. Null blk_size2 omits block generation.
 		virtual bool RegisterVolumeData(const VolumeData& vol_data, vmint3 blk_size2[2]/* 0 : Large, 1: Small */, const int ref_obj_id = 0, LocalProgress* progress = NULL) = 0;
-		/*!
-		 * @brief Returns the volume information defined in the VmVObjectVolume.
-		 * @return const VolumeData* \n Pointer to the VolumeData holding the volume information
-		 * @remarks (1.72, §4.2a) The general return type is now const: an object-owned VolumeData
-		 * handle cannot be reallocated/freed (VolumeData::Delete and SetVolSlices are non-const,
-		 * so they do not compile on this handle). Slice CONTENT is still mutable via GetVolSlices().
-		 * Buffer-destroying changes must go through the owner-only mutators below (each bumps the
-		 * incarnation token first).
-		 */
+		/// Returns the volume information defined in the VmVObjectVolume. Borrowed const view; destructive edits go through the owning object.
 		virtual const VolumeData* GetVolumeData() = 0;
 
 		// (1.72, §4.2a) owner-only destructive mutators. Each bumps the object's incarnation
@@ -1527,124 +1137,36 @@ namespace vmobjects
 		// Frees the current slice array and adopts a new one (ownership transferred to the object).
 		virtual void ReplaceSlices(void** new_slices) = 0;
 
-		// (1.75) Adopt src's ENTIRE volume content by OWNERSHIP TRANSFER -- slices, histogram,
-		// min/max blocks, object parameters -- and re-derive this object's spatial placement from
-		// the adopted vol_data, exactly as RegisterVolumeData does. src is left EMPTY (as if never
-		// filled) and both incarnations are bumped, so stale views of either object invalidate.
-		//
-		// This exists for the asynchronous load path: a worker fills a PRIVATE object off-thread,
-		// and the engine thread adopts the result into the live, engine-visible object in O(1) --
-		// no slice copy, no block recompute. The alternative (RegisterVolumeData with src's data)
-		// re-copies every slice and re-runs the block scan under the engine mutex, which is a
-		// frame hitch proportional to the volume. NON-VIRTUAL on purpose: no vtable slot moves, so
-		// a module built against 1.74 still dispatches every existing virtual correctly (the 1.75
-		// handshake still refuses it, per the every-edit-bumps rule).
-		// Identity is NOT moved: ids, name, birth token and ref-counts stay with each object.
-		// Returns false (nothing changed) when src is null/this/data-less.
+		// Transfer all volume content from src in O(1), preserving this resource identity and invalidating content tokens.
 		bool MoveVolumeContentFrom(VmVObjectVolume* src);
 
 		// Optional //
-		/*!
-		* @brief Updates the @ref VolumeBlock structure holding the per-block min/max values after the volume's internal values change
-		* @param progress [out](optional) \n LocalProgress \n
-		* Pointer to a LocalProgress carrying the function's progress information \n
-		* The default is NULL; if NULL, it is not used.
-		* @param i3BlockSizes[2] [in](optional) \n vmint3[] \n
-		* Block sizes to create. The array index denotes the level.
-		* The default is NULL; if NULL, blocks are reused or regenerated per internal logic.
-		* @return bool \n Returns true if the update succeeds, false otherwise.
-		* @remarks
-		* Only refreshes the values of the existing min/max blocks; if none exist, blocks are created internally via VmVObjectVolume::GenerateVolumeMinMaxBlocks \n
-		*/
+		/// Updates the VolumeBlock structure holding the per-block min/max values after the volume's internal values change
 		virtual bool UpdateVolumeMinMaxBlocks(LocalProgress* progress = NULL, const vmint3 blk_size2[2] = NULL) = 0;
 		
-		/*!
-		 * @brief Returns the volume's block structure
-		 * @param level [in] \n int \n Block level, 0 or 1
-		 * @return VolumeBlocks \n
-		 * Pointer to the VolumeBlocks holding the volume's block structure \n
-		 * Returns NULL if the volume or block structure is undefined, or if the level value is invalid.
-		 */
+		/// Returns the volume's block structure
 		virtual VolumeBlocks* GetVolumeBlock(const int level) = 0;	// 0 or 1
 
-		/*!
-		 * @brief Updates the tags of the blocks whose values fall within the min/max range configured in the volume's block structure
-		 * @param tobj_id [in] \n int \n TObject ID semantically bound to the block
-		 * @param level [in] \n int \n Block level, 0 or 1
-		 * @param targetMm [in] \n double2 \n Minimum (x) and maximum (y) to use \n
-		 * @param progress [out] \n LocalProgress \n
-		 * Pointer to a LocalProgress carrying the function's progress information \n
-		 * The default is NULL; if NULL, it is not used.
-		 * @remarks
-		 * The existing min/max blocks must already be registered in the class \n
-		 * @sa vmobjects::VolumeBlocks
-		 */
+		/// Updates the tags of the blocks whose values fall within the min/max range configured in the volume's block structure
 		virtual void UpdateTagBlocks(const int tobj_id, const int level, const vmdouble2& targetMm, LocalProgress* progress = NULL) = 0;
 
-		/*!
-		 * @fn void FillBoundaryWithValue(const double v, const bool clamp_z = false, LocalProgress* progress = NULL)
-		 * @brief Fills the extra-boundary volume region defined in VolumeData with the volume's minimum value
-		 * @param v [in] \n double \n Volume value to fill into the volume's extra boundary
-		 * @param clamp_z [in] \n bool \n Whether to fill the z-axis extra boundary by clamping (replicating the border value)
-		 * @param progress [in](optional)
-		 * LocalProgress \n Pointer to a LocalProgress that tracks the current progress \n
-		 * The default is NULL, in which case the function runs without tracking progress
-		 * @return true : success, false : failure
-		 * @remarks
-		 * vol_slices must be defined. \n
-		 * If clamp_z is false, the extra-boundary region is filled with the value v
-		*/
+		/// Fills the extra-boundary volume region defined in VolumeData with the volume's minimum value
 		static bool FillBoundaryWithValue(VolumeData& vol_data, const double v, const bool clamp_z, LocalProgress* progress = NULL);
 
-		/*!
-		 * @fn void FillHistogram(LocalProgress* progress = NULL)
-		 * @brief Builds the histogram for the volume defined in VolumeData
-		 * @param progress [in](optional) \n
-		 * LocalProgress \n Pointer to a LocalProgress that tracks the current progress \n
-		 * The default is NULL, in which case the function runs without tracking progress
-		 * @return true : success, false : failure
-		 * @remarks
-		 * If one already exists, it is deleted and then rebuilt and redefined \n
-		 * The histogram array (histo_values) size is set to uint32_t(store_Mm_values.y - store_Mm_values.x + 1.5)
-		*/
+		/// Builds the histogram for the volume defined in VolumeData
 		static bool FillHistogram(VolumeData& vol_data, LocalProgress* progress = NULL);
 		static bool FillMinMaxStoreValues(VolumeData& vol_data, LocalProgress* progress = NULL);
 		static bool ComputeIntialAlignmentMatrixRS2OS(vmmat44& mat_rs2os, AxisInfoRS2OS& axis_info, const vmdouble3& vox_pitch, const AaBbMinMax& aabbMm_rs);
 	};
 	__vmstatic VmVObjectVolume* NewVObjectVolume(); // (1.70) factory; VmVObjectVolume_Detail hidden in VimCommon.cpp
 
-	/**
-	 * @class VmIObject camera doc (camera state now lives on fncontainer::VmCamera)
-	 * @brief Class, included as a single instance in VmIObject, that handles camera-related information
-	 * @remarks 
-	 * The spaces used by this class are as follows.
-	 * @li WS (World Space) : the real world where the camera and objects are placed.
-	 * @li CS (Camera Space or Viewing Space) : camera-relative space, same units as WS \n
-	 * origin : camera position, y-axis : up vector, -z-axis : viewing direction
-	 * @li PS (Projection Space) : space defined as a normalized cube-shaped frustum from the interior of the CS view frustum \n
-	 * origin : the point where the near plane meets the viewing direction.\n
-	 * The y and z axes match the CS directions, but are scaled so that the length defined by the view frustum is normalized to 1.
-	 * @li SS (Screen Space or Window Space) : space corresponding to buffer pixels \n
-	 * origin : the top-left of the z = 0 plane of the normalized view frustum in PS \n
-	 * x-axis : same as the PS x-axis, y-axis : PS -y-axis, z-axis : PS -z-axis \n
-	 * xy scaling : the resolution of the buffer that defines the screen or window \n
-	 * z scaling : 1 (i.e. the PS z value with its sign flipped)
-	 * @remarks The image plane is defined on the near plane.
-	 * @sa vmobjects::VmIObject
-	 */
+	/// Class, included as a single instance in VmIObject, that handles camera-related information
 	// (1.70) VmLens was REMOVED: its optics/projection/pose + WS<->SS matrices are now plain fields on
 	// fncontainer::VmCamera, and the matrix math lives in the CommonApi layer (UpdateCameraTransforms, run during
 	// the scene-tree update). VmIObject holds a borrowed VmCamera* as its "camera object".
 
 	struct IObjectArchive;
-	/**
-	 * @class VmIObject
-	 * @brief VmObject-derived render-target: holds image-plane buffers and references (non-owning) one camera (fncontainer::VmCamera).
-	 * @remarks
-	 * For a single resolution (width, height), several image buffers (frame buffers) for various uses are defined. \n
-	 * The connected camera (fncontainer::VmCamera) is referenced non-owningly; the VmCamera scene actor owns it.
-	 * @sa vmobjects::VmObject, fncontainer::VmCamera
-	 */
+	/// VmObject-derived render-target: holds image-plane buffers and references (non-owning) one camera (fncontainer::VmCamera).
 	__vmstaticclass VmIObject : public VmObject
 	{
 	private:
@@ -1652,80 +1174,27 @@ namespace vmobjects
 		IObjectArchive* ioa_res;
 
 	public:
-		/*!
-		 * @brief constructor; requires the resolution that defines the frame buffer mapped to the image plane
-		 * @param w [in](optional) \n int \n Resolution width (pixels); default 0
-		 * @param h [in](optional) \n int \n Resolution height (pixels); default 0
-		 * @remarks If width or height is 0 or less, the frame-buffer creation functions (@ref VmIObject::ResizeFrameBuffer, @ref  VmIObject::InsertFrameBuffer) fail
-		 */
+		/// constructor; requires the resolution that defines the frame buffer mapped to the image plane
 		VmIObject(const int w = 0, const int h = 0);
 		~VmIObject();
 
-		/*!
-		 * @brief Resizes the defined frame buffers
-		 * @param w [in] \n int \n Resolution width (pixels), 1 or more
-		 * @param h [in] \n int \n Resolution height (pixels), 1 or more
-		 * @remarks
-		 * Frees the previously defined frame buffers from memory, then reallocates them at the given size\n
-		 * The contents stored in the frame buffers are also discarded (a module or function must be called to refill them)\n
-		 * The image plane's pixel x-pitch and y-pitch are assumed equal, so the width-to-height ratio changes\n
-		 * Accordingly, the WS image-plane information defined by VmCamera is reset, along with the associated transform matrices.
-		 */
+		/// Resizes the defined frame buffers
 		void ResizeFrameBuffer(const int w, const int h);
-		/*!
-		 * @brief Returns information about the defined frame buffers
-		 * @param buffer_size [out] \n int 2 \n Pointer to receive the frame buffer resolution: width(x), height(y)
-		 * @param num_buffers [out](optional) \n int \n Pointer to receive the number of currently defined frame buffers
-		 * @param bytes_per_pixel [out](optional) \n int \n Pointer to receive the summed byte size of the per-pixel types across all currently defined frame buffers
-		 * @remarks Passing NULL for a parameter you do not need skips storing that value.
-		 */
+		/// Returns information about the defined frame buffers
 		void GetFrameBufferInfo(vmint2* buffer_size/*out*/, int* num_buffers = NULL/*out*/, int* bytes_per_pixel = NULL/*out*/);
-		/*!
-		 * @brief Returns the @ref vmobjects::FrameBuffer (including its array) holding the defined frame buffer's information
-		 * @param fb_usage [in] \n EvmFrameBufferUsage \n Retrieves the buffer of this usage among the defined frame buffers
-		 * @param buffer_idx [in] \n int \n Retrieves the index-th buffer among the frame buffers of that usage
-		 * @return FrameBuffer \n Pointer to the @ref vmobjects::FrameBuffer (including its array) holding the frame buffer's information
-		 */
+		/// Returns the vmobjects::FrameBuffer (including its array) holding the defined frame buffer's information
 		FrameBuffer* GetFrameBuffer(const EvmFrameBufferUsage fb_usage, const int buffer_idx);
 
-		/*!
-		 * @brief Adds a single frame buffer
-		 * @param dtype [in] \n data_type \n Data type of the frame buffer to add
-		 * @param fb_usage [in] \n EvmFrameBufferUsage \n Usage of the frame buffer to add
-		 * @param descriptor [in] \n string \n Descriptor for the frame buffer to add
-		 * @remarks When fb_usage == vmenums::EvmFrameBufferUsage::FrameBufferUsageRENDEROUT, the data type must be typeid(vmbyte4).name().
-		 */
+		/// Adds a single frame buffer
 		void InsertFrameBuffer(const data_type& dtype, const EvmFrameBufferUsage fb_usage, const std::string& descriptor);
 
-		/*!
-		 * @brief Replaces a frame buffer
-		 * @param fb_usage [in] \n EvmFrameBufferUsage \n Usage of the frame buffer to replace
-		 * @param buffer_idx [in] \n int \n Index of the frame buffer to replace
-		 * @param dtype [in] \n data_type \n New data type for the frame buffer
-		 * @param descriptor [in] \n string \n New descriptor for the frame buffer
-		 * @return bool \n Returns true if a buffer exists at buffer_idx, false otherwise
-		 * @remarks If the buffer at that index is already declared with dtype, returns true without doing anything
-		 */
+		/// Replaces a frame buffer
 		bool ReplaceFrameBuffer(const EvmFrameBufferUsage fb_usage, const int buffer_idx, const data_type& dtype, const std::string& descriptor);
 
-		/*!
-		 * @brief Deletes a frame buffer
-		 * @param fb_usage [in] \n EvmFrameBufferUsage \n Usage of the frame buffer to delete
-		 * @param buffer_idx [in] \n int \n Deletes the index-th buffer among the frame buffers of that usage (eFrameBufferUsage)
-		 * @return Returns true if the frame buffer exists and is deleted successfully, false otherwise
-		 * @remarks The frame buffer (fb_usage && buffer_idx) is freed from memory.
-		 */
+		/// Deletes a frame buffer
 		bool DeleteFrameBuffer(const EvmFrameBufferUsage fb_usage, const int buffer_idx);
 
-		/*!
-		 * @brief (1.70) DEPRECATED no-op. Camera state lives on the VmCamera actor; nothing is created here.
-		 * @param aabbMm [ignored] retained for source/ABI compatibility; the no-op discards it.
-		 * @param stage_vtype [ignored] retained for source/ABI compatibility; the no-op discards it.
-		 * @remarks No-op since 1.70. The camera object IS the VmCamera scene actor, created by CommonApi (NewCamera)
-		 * and configured/connected by MakeCameraRes -- NOT by this method. The impl (void)-discards both parameters;
-		 * this stub is kept only so pre-1.70 callers keep compiling.
-		 * @sa vmobjects::VmObject, fncontainer::VmCamera
-		 */
+		/// Deprecated no-op; camera state belongs to the VmCamera actor.
 		void AttachCamera(const AaBbMinMax& aabbMm, const EvmStageViewType stage_vtype);
 		/*!
 		 * @brief returns this iobj's borrowed (non-owning) camera pointer (fncontainer::VmCamera*).
@@ -1736,25 +1205,11 @@ namespace vmobjects
 		// holds a borrowed VmCamera* so ResizeFrameBuffer can keep updating the camera's SS/projection on resize.
 		void SetCameraObject(fncontainer::VmCamera* camera);
 
-		/*!
-		 * @brief Returns the vector container holding the frame buffers
-		 * @param fb_usage [in] \n EvmFrameBufferUsage \n The frame usage to retrieve
-		 * @return Pointer to the vector<FrameBuffer> holding the defined frame buffers
-		 */
+		/// Returns the vector container holding the frame buffers
 		std::vector<FrameBuffer>* GetBufferPointerList(const EvmFrameBufferUsage fb_usage);
 	};
 
-	/**
-	 * @class VmVObjectPrimitive
-	 * @brief Class holding the information of a primitive object whose OS-to-WS placement is established through VmVObject.
-	 * @remarks
-	 * The original OS is split into two: OS and VOS. \n
-	 * @li OS : the primitive coordinate space in which PrimitiveData is stored
-	 * @li VOS : the coordinate space in which individual objects defined by PrimitiveData are placed before the WS coordinate space \n
-	 * The VmVObject's OS becomes the VOS, and the OS/VOS/WS transforms are user-defined \n
-	 * @remarks Through the OS-to-VOS object transform, individual objects defined by PrimitiveData can be placed and deformed in WS in various ways (affine transforms).
-	 * @sa vmobjects::VmVObject, fncontainer::VmCamera
-	 */
+	/// Class holding the information of a primitive object whose OS-to-WS placement is established through VmVObject.
 	__vmstaticclass VmVObjectPrimitive : public VmVObject
 	{
 	public:
@@ -1762,39 +1217,13 @@ namespace vmobjects
 		// VmVObjectPrimitive_Detail, hidden in VimCommon.cpp. Construct via NewVObjectPrimitive().
 		virtual ~VmVObjectPrimitive() {}
 
-		/*!
-		 * @brief Registers the @ref vmobjects::PrimitiveData structure holding the primitive-defined object information into this primitive object
-		 * @param prim_data [in] \n PrimitiveData \n Primitive-defined object information
-		 * @param progress [out](optional) \n LocalProgress \n
-		 * Pointer carrying the function's progress information \n
-		 * The default is NULL; if NULL, it is not used.
-		 */
+		/// Registers the vmobjects::PrimitiveData structure holding the primitive-defined object information into this primitive object
 		virtual bool RegisterPrimitiveData(const PrimitiveData& prim_data, LocalProgress* progress = NULL) = 0;
 
-		// (1.77) O(1) ownership transfer of another primitive object's CONTENT into this one -- the
-		// mesh mirror of MoveVolumeContentFrom, and what lets the asynchronous loader cover meshes.
-		// A worker fills a PRIVATE object off-thread and the engine thread adopts the result in O(1):
-		// no vertex/index copy, no BVH or KD-tree rebuild under the engine mutex. Going through
-		// RegisterPrimitiveData instead would re-copy every buffer inside the frame, a hitch
-		// proportional to the mesh.
-		// Object parameters MOVE with the content (they describe it), the AABB is re-derived from the
-		// adopted data, src is left EMPTY, and BOTH incarnation tokens bump so stale views of either
-		// object invalidate. Identity is NOT moved: ids, name, birth token and ref-counts stay put.
-		// NON-VIRTUAL on purpose: no vtable slot moves.
-		// Returns false, having changed nothing, when src is null/this/data-less, when either side is
-		// a REFERENCE object (ref_object_id != 0 neither owns nor frees its buffers, so adopting into
-		// or out of one corrupts the sharing contract), or when either side is mid-access.
+		// Transfer primitive content from src in O(1); destination identity stays, content tokens change.
 		bool MovePrimitiveContentFrom(VmVObjectPrimitive* src);
 		virtual bool RemovePrimitiveData() = 0;
-		/*!
-		 * @brief Returns the primitive-defined object information stored in the VmVObjectPrimitive.
-		 * @return const PrimitiveData* \n Pointer to the PrimitiveData holding the primitive-defined object information
-		 * @remarks (1.72, §4.2a) The general return type is now const: an object-owned PrimitiveData
-		 * handle cannot be reallocated/freed (PrimitiveData::Delete, ReplaceOrAdd*Definition and
-		 * SetIndexBuffer are non-const, so they do not compile on this handle). Buffer CONTENT is still
-		 * mutable via GetVerticeDefinition/GetCustomDefinition/GetIndexBuffer. Buffer-destroying changes
-		 * must go through the owner-only mutators below (each bumps the incarnation token first).
-		 */
+		/// Returns the primitive-defined object information stored in the VmVObjectPrimitive. Borrowed const view; destructive edits go through the owning object.
 		virtual const PrimitiveData* GetPrimitiveData() = 0;
 
 		// (1.72, §4.2a) owner-only destructive mutators. Each bumps the object's incarnation
@@ -1827,7 +1256,6 @@ namespace vmobjects
 	__vmstatic VmVObjectPrimitive* NewVObjectPrimitive(); // (1.70) factory; VmVObjectPrimitive_Detail hidden in VimCommon.cpp
 }; // namespace vmobjects
 
-
 namespace vmgeom {
 	__vmstatic void GeneratePrimitive_Sphere(vmobjects::PrimitiveData& prim_data/*out*/, const vmdouble3& pos_center, const double radius, const int num_iter);
 	__vmstatic void GeneratePrimitive_Cone(vmobjects::PrimitiveData& prim_data/*out*/, const vmdouble3& pos_s, const vmdouble3& pos_e, const double radius, const bool open_cone, const int num_interpolations);
@@ -1836,7 +1264,6 @@ namespace vmgeom {
 	__vmstatic void GeneratePrimitive_Line(vmobjects::PrimitiveData& prim_data/*out*/, const vmdouble3& pos_s, const vmdouble3& pos_e);
 	__vmstatic void GeneratePrimitive_Arrow(vmobjects::PrimitiveData& prim_data, const vmdouble3& pos_s, const vmdouble3& pos_e, const double arrow_body_ratio, const vmdouble2& arrow_components_radius, const int num_interpolation);
 };
-
 
 //==========================================
 // Function Container : 2022.03.10
@@ -1858,13 +1285,7 @@ namespace fncontainer
 		std::string name = "No Name";
 		int actorId = 0;
 		int sceneId = 0;
-		// (rev.14) LAST-CHANGE stamp, common to every actor kind (absorbed VmLight::timeStamp).
-		// POLICY: core updates it whenever the actor's state meaningfully changes, and EVERY plugin
-		// module must update it when it changes this actor -- it is the intended coarse clue for
-		// future process gates ("did anyone touch this?"). It does NOT replace the value-compare
-		// gates (__LightParamsEqual, the VXGI D11 deadband): those answer the different, finer
-        // question "did the value actually change?" -- a stamp moves even on a same-value re-set.
-		// Coarse then fine; the two stack, neither substitutes for the other.
+		// Last-change timestamp for all actor kinds; core updates it on successful effective edits.
 		uint64_t timeStamp = 0ull;
 
 		VmActor* parentActor = NULL;
@@ -1975,29 +1396,7 @@ namespace fncontainer
 		}
 	};
 
-	// (Multi-Light rev.14 -- user directive #6) A light IS an actor: it carries actorId / name /
-	// visible / matOS2WS / parent-child / timeStamp like any other, rides VmFnContainer::sceneActors
-	// BY POINTER, and is filtered by per-view hidden_actors + scene-level visible exactly like a
-	// geometry actor. Give it a geometry resource and the existing mesh path simply draws it (the
-	// debug-view use case that makes actor-hood mandatory).
-	//
-	// NEVER COPY THIS BY VALUE across the module boundary: it is an identity, and a copy would
-	// duplicate actorId / parentActor / childActors / _vmparams. That is why the old value channel
-	// "_VmLight_LightSource" (and the VmSceneLight { light_id; light; } pair, whose light_id is now
-	// simply actorId) were retired -- the renderer receives VmLight* out of sceneActors and the core
-	// only adds "_int_DominantLightId".
-	//
-	// pos/dir CONTRACT (ML-D9): these are the RESOLVED WORLD-SPACE values for a STATIONARY light --
-	// core writes them from the final matOS2WS in UpdateActorMatrix (view-independent, idempotent).
-	// For a CAMERA_ATTACHED light (type == AUTO_ATTACH_3DCAM) the renderer overrides them with its own
-	// camera, but ONLY when this light is the view's dominant (actorId == _int_DominantLightId);
-	// otherwise the light is interpreted as DIRECTIONAL/STATIONARY and the renderer warns (W-L4). The
-	// stored type is never rewritten -- the demotion is an interpretation, not a mutation of the param.
-	// (Multi-Light rev.18) Single light-type field replacing the base `is_pointlight` + `is_on_camera`
-	// bool pair (and the rev.17 `is_spotlight` proposal). Kept BYTE-VALUE-IDENTICAL to the public
-	// vzm::LightParameters::LightType in VisMtvApi.h (the two headers do not include each other; __LightParamsToVmLight
-	// converts field-wise). AUTO_ATTACH_3DCAM is the default = the old headlight (directional, pose
-	// follows the active 3D camera) so an unconfigured scene is unchanged.
+	// Lights are scene actors: they share actor identity, transform, visibility and lifetime.
 	enum class LightType : uint32_t {
 		DIRECTIONAL       = 0, // parallel light; STATIONARY pose (actor transform, local -z)
 		POINT             = 1, // omni positional; STATIONARY pose (matOS2WS origin)
@@ -2015,15 +1414,7 @@ namespace fncontainer
 		float spot_inner_deg = 30.f; // SPOT: full-intensity half-angle (deg); <= spot_outer_deg
 		float spot_outer_deg = 45.f; // SPOT: zero-intensity half-angle (deg); inner==outer = hard edge
 
-		// (Multi-Light ML-D10, API v76) light EMISSION color & intensity, consumed by the direct-shading
-		// tint (ambient/diffuse/specular alike) AND the VXGI light injection. The defaults (white, 1.0)
-		// reproduce the legacy fixed-white shading exactly.
-		//
-		// NAMED light_color, NOT color, ON PURPOSE (api-stability review, rev.14): VmActor::color already
-		// exists and means something else entirely -- the actor's RGBA render/cull color (a light drawn as
-		// a debug gizmo uses THAT one, and its alpha drives the a==0 cull). Two members called `color` on
-		// one type would resolve by the static type of the pointer you happen to hold, silently and with
-		// no compiler diagnostic: VmActor* -> RGBA, VmLight* -> emission. Different names, no trap.
+		// Linear emission RGB and intensity for direct shading; separate from display/gizmo color.
 		vmfloat3 light_color = vmfloat3(1.f);
 		float intensity = 1.f;
 
@@ -2078,11 +1469,7 @@ namespace fncontainer
 		vmobjects::VmParamMap<std::string, std::any> fnParams;
 	};
 
-	// (1.61 size handshake) ABI layout fingerprint of the structs that cross the core<->renderer DLL boundary.
-	// __VERSION is a hand-maintained string that can lag a layout change (e.g. VmCamera grew a tonemap/temporal
-	// tail within 1.61 without a version bump); computed from sizeof, so a stale core/renderer pair with the SAME
-	// __VERSION but a drifted SIZE is caught at load (a size-preserving field reorder/type change is NOT -- add
-	// field offsets here if that becomes a risk). Core and each renderer compute it from their OWN header copy.
+	// Cross-DLL size fingerprint; __VERSION additionally covers size-preserving contract changes.
 	inline unsigned int VimCommonLayoutSig() {
 		return (unsigned int)( sizeof(VmCamera)
 			+ sizeof(VmLight)  * 131u
@@ -2091,56 +1478,11 @@ namespace fncontainer
 	}
 }
 
-// =================================================================================================
-// PLUGIN-SIDE HALF OF THE LOAD HANDSHAKE  (core side: VmModuleArbiter::RegisterModule)
-//
-// A plugin DLL declares itself compatible by putting VM_DEFINE_MODULE_HANDSHAKE() at file scope once
-// and VM_REQUIRE_MODULE_HANDSHAKE(name) at the top of its InitModule. Nothing else.
-//
-// WHY THIS IS A MACRO AND NOT SIX MODULES' WORTH OF COPY-PASTE: it was copy-paste first, and that is
-// the problem. The attestation is only worth anything if EVERY module computes it the same way from
-// the same header; six hand-written copies is six chances for one of them to drift into comparing
-// something weaker, and a handshake that silently weakens is worse than none because the loader still
-// prints success. Here there is one definition, it lives in the very header whose contract is being
-// attested, and a module that forgets it does not compile a subtly wrong version -- it exports
-// nothing and is REJECTED at load, which is the safe direction to fail in.
-//
-// The arm is MUTUAL and takes PRIMITIVES ONLY (const char*, unsigned int). That restriction is the
-// point: it must be callable before the two sides are known to agree on any struct layout, so no
-// struct may cross in it. The core arms the DLL right after loading it; InitModule then refuses to
-// run un-armed, so an OLD core that never calls arm leaves a NEW plugin self-disabled rather than
-// half-trusted. Both directions are covered by one exchange.
-//
-// LIFETIME is DLL-LOAD, not per-Init. The arbiter arms once when it loads the library, and a loaded
-// image's VimCommon layout cannot change while it is loaded; the flag is deliberately NOT cleared in
-// DeInitModule, because a module can be DeInit/re-Init'd without being unloaded and re-armed.
-//
-// __VERSION is compared as well as the size fingerprint because since 1.73 it also carries BEHAVIOUR
-// contracts -- a plugin can be layout-identical and still mishandle a new dispatch key destructively,
-// and no sizeof can see that.
+// Declare VM_DEFINE_MODULE_HANDSHAKE(module_abi) once per plugin and require it at InitModule entry.
+// The core checks shared version/layout before use; arming lasts for the DLL load lifetime.
 
-// WHY A SECOND, SEPARATE EXPORT RATHER THAN AN EXTRA ARM PARAMETER.
-//
-// __ArmVimCommonHandshake answers "were you built against MY VimCommon.h?" -- the SHARED contract.
-// __GetModuleAbiVersion answers a question the first one structurally CANNOT: "did YOUR OWN
-// exported interface change?" A module can alter its own signatures without touching VimCommon.h
-// at all -- vismtv_modeling's compute_pair_matching_transform went void -> float exactly that way
-// -- and because these exports are extern "C" there is no name mangling, so the mismatched call
-// LINKS and then reads a garbage return register. __VERSION cannot see that, by construction.
-//
-// It is a SEPARATE export, not another parameter on arm, because changing arm's signature is
-// itself the class of break being guarded, and a module too old to report its version is exactly
-// the one that could not tell you about it. Absent export == GetProcAddress returns NULL ==
-// version 0 == "predates this scheme" == refused. That fallback only holds while the signature
-// never changes:
-//
-//     THE SIGNATURE OF __GetModuleAbiVersion IS FROZEN. No arguments, unsigned int return.
-//     Anything it may ever need to say has to fit inside that number.
-//
-// The core keeps the expected version PER MODULE in one table (VisMtvApiVersion.cpp) and compares
-// it on load. Per-module is the point: fixing one module no longer implies a version bump on the
-// other ten, which is what made the single global kModuleVersionTag useless for this -- one string
-// for eleven modules, and read by nothing.
+// Module-specific ABI is checked separately against the core table. Missing version export is refused.
+// __GetModuleAbiVersion has a frozen signature: no arguments, unsigned int result.
 #define VM_DEFINE_MODULE_HANDSHAKE(module_abi)                                                                \
 	static bool g_vimHandshakeArmed = false;                                                        \
 	__vmstatic bool __ArmVimCommonHandshake(const char* core_version, unsigned int core_sig)         \

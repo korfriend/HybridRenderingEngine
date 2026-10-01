@@ -589,7 +589,8 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 #pragma region // Parameter Setting //
 	fncontainer::VmCamera* _rcam = _fncontainer->fnParams.GetParam("_VmCamera*_RenderCamera", (fncontainer::VmCamera*)NULL);
 	VmIObject* iobj = _rcam ? _rcam->iobj : NULL; // (increment 3) iobj derived from the render-from VmCamera
-	iobj->SetObjParam("NUM_SECOND_LAYER_OBJECTS", (int)0);
+	// DoModule resets second-layer state at the first real pass of each frame,
+	// including volume-only frames; a picking pass must preserve that state.
 
 	int k_value_old = iobj->GetObjParam("_int_NumK", (int)K_NUM_3D);
 	int k_value = _fncontainer->fnParams.GetParam("_int_NumK", k_value_old);

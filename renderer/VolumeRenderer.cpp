@@ -1384,18 +1384,14 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			// surface (Voxelize's per-sub-sample test leaves it a ~2-reference-voxel coverage ramp, so the surface
 			// classifier picks it up and it gets cone AO + surface GI).
 			//
-			// The default is OFF because ON is expensive in a way that is easy to under-estimate: the gate's
-			// state is exactly what puts clip/sculpt into the VXGI CONTENT STAMP (below). With a gate ON,
-			// every DRAG FRAME changes that state, which changes the MAT stamp, which re-runs Voxelize +
-			// BlurMat + GenerateMips + InjectLight — a rebuild-class spike per frame — while the crossfade
-			// path pins the bounce counter at 1, so the GI never converges for as long as you are dragging.
-			// With the gate OFF none of it is stamped: a clip drag costs the VXGI pipeline nothing and the
-			// diffusion keeps converging right through it.
+			// Default ON: clip/sculpt edits remove material from the lighting field as well as the image.
+			// Their changes enter the content stamp and rebuild the medium; GI converges after dragging
+			// stops. Explicit OFF retains the intact medium for a viewing-only cutaway.
 			//
 			// The multi-OTF gate is NOT optional: it selects WHICH OTF row defines the material, i.e. it is
 			// part of the material definition, not a removal.
-			const bool vxgi_clip_medium = _fncontainer->fnParams.GetParam("_bool_VxgiClipMedium", false);
-			const bool vxgi_sculpt_medium = _fncontainer->fnParams.GetParam("_bool_VxgiSculptMedium", false);
+			const bool vxgi_clip_medium = _fncontainer->fnParams.GetParam("_bool_VxgiClipMedium", true);
+			const bool vxgi_sculpt_medium = _fncontainer->fnParams.GetParam("_bool_VxgiSculptMedium", true);
 			uint32_t vxgi_medium_flags = 0;
 			const bool vxgi_mask_bound = mask_vol_obj != NULL; // t2 bound above whenever present
 			if (vxgi_mask_bound && (ray_cast_type == __RM_MULTIOTF || ray_cast_type == __RM_MULTIOTF_MODULATION || ray_cast_type == __RM_OPAQUE_MULTIOTF))
