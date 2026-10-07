@@ -178,6 +178,90 @@ INVALID CASE IN THIS VERSION
 //    return (int) (tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r * g_cbVobj.value_range + 0.5f);
 //}
 
+#if SCULPT_MASK == 1 || SCULPT_BITS == 1 // sculpt visibility helpers
+// The ONE sculpt visibility test. Every sculpt-aware check below goes through it, so the visibility
+// predicate and the edge gradient (GradientSculptedVolume) can never disagree on what is carved away.
+bool IsSculptVisible(const float3 pos_sample_ts)
+{
+#if SCULPT_MASK == 1
+	int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint_clamp, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
+	int sculpt_value = (int)(g_cbVobj.vobj_flag >> 24);
+	return mask_vint == 0 || mask_vint > sculpt_value;
+#elif USE_SCULPT_BITS_TEX3D_TILED == 1 // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
+	int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
+	uint3 tex_id = uint3((uint)voxel_id.x >> 2, (uint)voxel_id.y >> 2, (uint)voxel_id.z >> 1);
+	uint sub = ((uint)voxel_id.x & 3u) | (((uint)voxel_id.y & 3u) << 2) | (((uint)voxel_id.z & 1u) << 4);
+	uint word = sculpt_bits_tex.Load(int4((int3)tex_id, 0));
+	return !(bool)(word & (1u << sub));
+#elif USE_SCULPT_BITS_TEX3D == 1
+	int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
+	uint word = sculpt_bits_tex.Load(int4(voxel_id.x >> 5, voxel_id.y, voxel_id.z, 0));
+	return !(bool)(word & (1u << ((uint)voxel_id.x & 31u)));
+#else
+	int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
+	int wwh = g_cbVobj.vol_original_size.x * g_cbVobj.vol_original_size.y;
+	uint bit_id = voxel_id.x + voxel_id.y * g_cbVobj.vol_original_size.x + voxel_id.z * wwh;
+	uint mod = bit_id % 32;
+	return !(bool)(sculpt_bits[bit_id / 32] & (0x1u << mod));
+#endif // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
+}
+
+// Sculpt-edge shading.
+// The DVR gradient (GRAD_VOL) samples tex3D_volume without looking at the sculpt state. On a carved face
+// the first visible sample sits INSIDE the material and its gradient taps reach back into the carved-away
+// region, which still holds the original intensities, so the normal follows the interior texture
+// (e.g. trabecular bone) instead of the carved face, and the face shades as noise.
+// The edge is found for free while marching: a sample that passes the OTF but is hidden by the sculpt
+// arms a short countdown, and the next SCULPT_EDGE_STEPS visible samples get the replacement treatment.
+// An OTF-transparent sample or an empty block disarms it, so a real surface reached through empty space
+// keeps the regular gradient. Cost is paid only at those few samples, not at every step.
+//   SCULPT_EDGE_SHADING 0 : legacy (raw GRAD_VOL everywhere)
+//   SCULPT_EDGE_SHADING 1 : flat (no Phong at edge samples, the same treatment as the clip-plane slab)
+//   SCULPT_EDGE_SHADING 2 : sculpt-masked central-difference gradient at edge samples (default)
+#ifndef SCULPT_EDGE_SHADING // macro default guard: SCULPT_EDGE_SHADING
+#define SCULPT_EDGE_SHADING 1
+#endif // macro default guard: SCULPT_EDGE_SHADING
+// Number of visible samples after a carved run that use the edge treatment. GRAD_VOL reaches 2 samples
+// back along the ray, so 2 covers its footprint.
+#ifndef SCULPT_EDGE_STEPS // macro default guard: SCULPT_EDGE_STEPS
+#define SCULPT_EDGE_STEPS 2
+#endif // macro default guard: SCULPT_EDGE_STEPS
+// Tap distance of the masked gradient, in units of the regular gradient offset (vec_grad_*).
+// A larger value smooths the voxel staircase of the binary sculpt state at the cost of detail.
+#ifndef SCULPT_EDGE_GRAD_SCALE // macro default guard: SCULPT_EDGE_GRAD_SCALE
+#define SCULPT_EDGE_GRAD_SCALE 1.f
+#endif // macro default guard: SCULPT_EDGE_GRAD_SCALE
+
+float SculptMaskedSample(const float3 pos_sample_ts)
+{
+	return IsSculptVisible(pos_sample_ts) ? tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r : 0.f;
+}
+
+// Central difference over WS axes (vec_grad_* are WS axes expressed in TS) with carved taps read as empty,
+// the same idea as GradientClippedVolume2 for the clip box: on a carved face the empty-vs-material jump
+// dominates and the gradient follows the carved face; where the face meets a real boundary the two blend.
+float3 GradientSculptedVolume(const float3 pos_sample_ts)
+{
+	const float3 vx = g_cbVobj.vec_grad_x * SCULPT_EDGE_GRAD_SCALE;
+	const float3 vy = g_cbVobj.vec_grad_y * SCULPT_EDGE_GRAD_SCALE;
+	const float3 vz = g_cbVobj.vec_grad_z * SCULPT_EDGE_GRAD_SCALE;
+	return float3(
+		SculptMaskedSample(pos_sample_ts + vx) - SculptMaskedSample(pos_sample_ts - vx),
+		SculptMaskedSample(pos_sample_ts + vy) - SculptMaskedSample(pos_sample_ts - vy),
+		SculptMaskedSample(pos_sample_ts + vz) - SculptMaskedSample(pos_sample_ts - vz));
+}
+#endif // sculpt visibility helpers
+
+// edge tracking is compiled only where a sculpt variant marches with slab samples and shades
+#if (SCULPT_MASK == 1 || SCULPT_BITS == 1) && VR_MODE != 3 && SCULPT_EDGE_SHADING != 0
+#define SCULPT_EDGE_ACTIVE 1
+#else
+#define SCULPT_EDGE_ACTIVE 0
+#endif
+// After a failed Vis_Volume_And_Check_Slab in a sculpt variant: true when the OTF accepted the sample and
+// only the sculpt hid it. Both sculpt paths of that function write vis_otf before the visibility AND.
+#define SCULPT_HIDDEN_BY_CUT(vis_otf) ((uint)((vis_otf).a * 255.f) > 0)
+
 // min_valid_v is g_cbTmap.first_nonzeroalpha_index
 #if VR_MODE == 3 // VR_MODE 3: mask-bit visualization
 bool Sample_Volume_And_Check(inout float sample_v, const float3 pos_sample_ts, const int min_valid_v)
@@ -232,29 +316,10 @@ bool Sample_Volume_And_Check(inout float sample_v, const float3 pos_sample_ts, c
 	
 	return (sample_v * g_cbTmap.tmap_size_x) >= min_valid_v;
 #elif SCULPT_MASK == 1
-	int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint_clamp, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
-    
-	int sculpt_value = (int)(g_cbVobj.vobj_flag >> 24);
-	return (sample_v * g_cbTmap.tmap_size_x) >= min_valid_v && (mask_vint == 0 || mask_vint > sculpt_value);
+	return (sample_v * g_cbTmap.tmap_size_x) >= min_valid_v && IsSculptVisible(pos_sample_ts);
 #else
 #if SCULPT_BITS == 1 // sculpt-bits visibility test
-#if USE_SCULPT_BITS_TEX3D_TILED == 1 // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
-	int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
-	uint3 tex_id = uint3((uint)voxel_id.x >> 2, (uint)voxel_id.y >> 2, (uint)voxel_id.z >> 1);
-	uint sub = ((uint)voxel_id.x & 3u) | (((uint)voxel_id.y & 3u) << 2) | (((uint)voxel_id.z & 1u) << 4);
-	uint word = sculpt_bits_tex.Load(int4((int3)tex_id, 0));
-	bool visible = !(bool)(word & (1u << sub));
-#elif USE_SCULPT_BITS_TEX3D == 1
-	int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
-	uint word = sculpt_bits_tex.Load(int4(voxel_id.x >> 5, voxel_id.y, voxel_id.z, 0));
-	bool visible = !(bool)(word & (1u << ((uint)voxel_id.x & 31u)));
-#else
-	int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
-	int wwh = g_cbVobj.vol_original_size.x * g_cbVobj.vol_original_size.y;
-	uint bit_id = voxel_id.x + voxel_id.y * g_cbVobj.vol_original_size.x + voxel_id.z * wwh;
-	uint mod = bit_id % 32;
-	bool visible = !(bool)(sculpt_bits[bit_id / 32] & (0x1u << mod));
-#endif // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
+	bool visible = IsSculptVisible(pos_sample_ts);
 	return (sample_v * g_cbTmap.tmap_size_x) >= min_valid_v && visible;
 #else
 	return (sample_v * g_cbTmap.tmap_size_x) >= min_valid_v;
@@ -271,32 +336,13 @@ bool Vis_Volume_And_Check(inout float4 vis_otf, inout float sample_v, const floa
 	vis_otf = LoadOtfBufId(sample_v * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, mask_vint);
 	return vis_otf.a >= FLT_OPACITY_MIN__;//&& mask_vint > 0;//&& mask_vint == 3;
 #elif SCULPT_MASK == 1
-	int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint_clamp, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
-	//int mask_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, g_cbVobj.mask_value_range, tex3D_volmask);
-    int sculpt_value = (int) (g_cbVobj.vobj_flag >> 24);
     vis_otf = LoadOtfBuf(sample_v * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
-    return ((uint)(vis_otf.a * 255.f) > 0) && (mask_vint == 0 || mask_vint > sculpt_value);
+    return ((uint)(vis_otf.a * 255.f) > 0) && IsSculptVisible(pos_sample_ts);
 #else 
 
 	vis_otf = LoadOtfBuf(sample_v * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction);
 #if SCULPT_BITS == 1 // sculpt-bits visibility test
-#if USE_SCULPT_BITS_TEX3D_TILED == 1 // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
-	int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
-	uint3 tex_id = uint3((uint)voxel_id.x >> 2, (uint)voxel_id.y >> 2, (uint)voxel_id.z >> 1);
-	uint sub = ((uint)voxel_id.x & 3u) | (((uint)voxel_id.y & 3u) << 2) | (((uint)voxel_id.z & 1u) << 4);
-	uint word = sculpt_bits_tex.Load(int4((int3)tex_id, 0));
-	bool visible = !(bool)(word & (1u << sub));
-#elif USE_SCULPT_BITS_TEX3D == 1
-	int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
-	uint word = sculpt_bits_tex.Load(int4(voxel_id.x >> 5, voxel_id.y, voxel_id.z, 0));
-	bool visible = !(bool)(word & (1u << ((uint)voxel_id.x & 31u)));
-#else
-	int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
-	int wwh = g_cbVobj.vol_original_size.x * g_cbVobj.vol_original_size.y;
-	uint bit_id = voxel_id.x + voxel_id.y * g_cbVobj.vol_original_size.x + voxel_id.z * wwh;
-	uint mod = bit_id % 32;
-	bool visible = !(bool)(sculpt_bits[bit_id / 32] & (0x1u << mod));
-#endif // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
+	bool visible = IsSculptVisible(pos_sample_ts);
 	return ((uint)(vis_otf.a * 255.f) > 0) && visible;
 #else
     return vis_otf.a >= FLT_OPACITY_MIN__;
@@ -319,32 +365,13 @@ bool Vis_Volume_And_Check_Slab(inout float4 vis_otf, inout float sample_v, float
 	return vis_otf.a >= FLT_OPACITY_MIN__;//&& mask_vint > 0;//&& mask_vint == 3;
 
 #elif SCULPT_MASK == 1
-	int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint_clamp, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
-	//int mask_vint = LoadMaxValueInt(pos_sample_ts, g_cbVobj.vol_size, 255, tex3D_volmask);
-	int sculpt_value = (int)(g_cbVobj.vobj_flag >> 24);
 	vis_otf = LoadSlabOtfBuf_PreInt(sample_v * g_cbTmap.tmap_size_x, sample_prev * g_cbTmap.tmap_size_x, buf_preintotf, OPACITY_CORR);
-	return ((uint)(vis_otf.a * 255.f) > 0) && (mask_vint == 0 || mask_vint > sculpt_value);
+	return ((uint)(vis_otf.a * 255.f) > 0) && IsSculptVisible(pos_sample_ts);
 #else
 
 	vis_otf = LoadSlabOtfBuf_PreInt(sample_v * g_cbTmap.tmap_size_x, sample_prev * g_cbTmap.tmap_size_x, buf_preintotf, OPACITY_CORR);
 #if SCULPT_BITS == 1 // sculpt-bits visibility test
-#if USE_SCULPT_BITS_TEX3D_TILED == 1 // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
-	int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
-	uint3 tex_id = uint3((uint)voxel_id.x >> 2, (uint)voxel_id.y >> 2, (uint)voxel_id.z >> 1);
-	uint sub = ((uint)voxel_id.x & 3u) | (((uint)voxel_id.y & 3u) << 2) | (((uint)voxel_id.z & 1u) << 4);
-	uint word = sculpt_bits_tex.Load(int4((int3)tex_id, 0));
-	bool visible = !(bool)(word & (1u << sub));
-#elif USE_SCULPT_BITS_TEX3D == 1
-	int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
-	uint word = sculpt_bits_tex.Load(int4(voxel_id.x >> 5, voxel_id.y, voxel_id.z, 0));
-	bool visible = !(bool)(word & (1u << ((uint)voxel_id.x & 31u)));
-#else
-	int3 voxel_id = (int3)(pos_sample_ts * (g_cbVobj.vol_original_size - uint3(1, 1, 1)));
-	int wwh = g_cbVobj.vol_original_size.x * g_cbVobj.vol_original_size.y;
-	uint bit_id = voxel_id.x + voxel_id.y * g_cbVobj.vol_original_size.x + voxel_id.z * wwh;
-	uint mod = bit_id % 32;
-	bool visible = !(bool)(sculpt_bits[bit_id / 32] & (0x1u << mod));
-#endif // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
+	bool visible = IsSculptVisible(pos_sample_ts);
 	return ((uint)(vis_otf.a * 255.f) > 0) && visible;
 #else
 	return vis_otf.a >= FLT_OPACITY_MIN__;
@@ -1225,13 +1252,13 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		pos_ray_start_ws -= dir_sample_unit_ws * (rand * g_cbVobj.sample_dist);
 	}
     // recompute the vis result
-	
+
     vis_out = (float4) 0;
 	depth_out = FLT_MAX;
-	
+
 	// DVR ray-casting core part
 #if RAYMODE == 0 // DVR // RAYMODE 0: DVR
-	
+
 	float depth_hit = depth_out = length(pos_ray_start_ws - pos_ip_ws);
 	float sample_dist = g_cbVobj.sample_dist;
 
@@ -1284,7 +1311,11 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	// note that raycasters except vismask mode (or x-ray) use SLAB sample
 	float sample_prev = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_ray_start_ts - dir_sample_ts, 0).r;
 #endif // VR_MODE != 3: intensity / DVR modes
-	
+#if SCULPT_EDGE_ACTIVE == 1
+	// remaining visible samples that take the sculpt-edge treatment (see SCULPT_EDGE_SHADING)
+	int sculpt_edge = 0;
+#endif
+
 #if VR_MODE == 1 // VR_MODE 1: opaque surface
 	// opauqe vr
 	float depth_sample = depth_hit;
@@ -1381,11 +1412,17 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #endif // Z-thickness fragment merging
 #endif	// ONLY_SINGLE_LAYER == 1 // single-layer path (no K-buffer)
 		}
+#if SCULPT_EDGE_ACTIVE == 1
+		else
+		{
+			sculpt_edge = SCULPT_HIDDEN_BY_CUT(vis_otf) ? SCULPT_EDGE_STEPS : 0;
+		}
+#endif
 #if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
 		sample_prev = sample_v;
 #endif // VR_MODE != 3: intensity / DVR modes
 	}
-	
+
 	int sample_count = 0;
 	//fragment_vis[tex2d_xy] = float4((pos_ray_start_ts + (float3)1) * 0.5f, 1.f);
 	//if (num_ray_samples > start_idx + 30)
@@ -1426,12 +1463,35 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 				if (Vis_Volume_And_Check(vis_otf, pos_sample_blk_ts))
 #endif // VR_MODE != 3: intensity / DVR modes
 				{
+#if SCULPT_EDGE_ACTIVE == 1
+					const bool is_sculpt_edge = sculpt_edge > 0;
+					sculpt_edge = max(sculpt_edge - 1, 0);
+					float3 grad;
+					[branch]
+					if (is_sculpt_edge)
+					{
+#if SCULPT_EDGE_SHADING == 1 && VR_MODE != 2
+						grad = (float3)0; // flat: nothing consumes the gradient at an edge sample
+#else
+						grad = GradientSculptedVolume(pos_sample_blk_ts);
+#endif
+					}
+					else
+					{
+						grad = GRAD_VOL(sample_v, sample_prev, pos_sample_blk_ts, v_v, v_u, v_r, uv_v, uv_u, uv_r);
+					}
+#else
 					float3 grad = GRAD_VOL(sample_v, sample_prev, pos_sample_blk_ts, v_v, v_u, v_r, uv_v, uv_u, uv_r);
+#endif
 					float grad_len = length(grad);
 					float3 nrl = grad / (grad_len + 0.00001f);
 
+					bool do_phong = grad_len > 0;
+#if SCULPT_EDGE_ACTIVE == 1 && SCULPT_EDGE_SHADING == 1
+					do_phong = do_phong && !is_sculpt_edge;
+#endif
 					float shade = 1.f;
-					if (grad_len > 0) {
+					if (do_phong) {
 						shade = saturate(PhongBlinnVr(view_dir, g_cbVobj.pb_shading_factor, light_dirinv, nrl, true));
 					}
 
@@ -1473,6 +1533,13 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 						break;
 					}
 				} // if(sample valid check)
+#if SCULPT_EDGE_ACTIVE == 1
+				else
+				{
+					// carved-away material arms the edge; an OTF-transparent sample disarms it
+					sculpt_edge = SCULPT_HIDDEN_BY_CUT(vis_otf) ? SCULPT_EDGE_STEPS : 0;
+				}
+#endif
 #if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
 				sample_prev = sample_v;
 #endif // VR_MODE != 3: intensity / DVR modes
@@ -1484,6 +1551,9 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
 			sample_prev = -1;
 #endif // VR_MODE != 3: intensity / DVR modes
+#if SCULPT_EDGE_ACTIVE == 1
+			sculpt_edge = 0; // empty block: whatever comes next is a real boundary
+#endif
 		}
 		i += blkSkip.num_skip_steps;
 		// this is for outer loop's i++

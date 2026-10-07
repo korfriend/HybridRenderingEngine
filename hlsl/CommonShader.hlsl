@@ -773,10 +773,13 @@ float4 ConvertUIntToFloat4(const uint iColor)
 uint ConvertFloat4ToUInt(const in float4 fColor)
 {
 	// RGBA
-	uint iR = (uint) (min(fColor.x * 255.f, 255.f) + 0.5f);
-	uint iG = (uint) (min(fColor.y * 255.f, 255.f) + 0.5f);
-	uint iB = (uint) (min(fColor.z * 255.f, 255.f) + 0.5f);
-	uint iA = (uint) (min(fColor.w * 255.f, 255.f) + 0.5f);
+	// saturate, not min(x * 255, 255): D3D min() returns the non-NaN operand, so a NaN channel used to pack
+	// as 255 and a NaN fragment became an opaque white pixel. saturate(NaN) is 0, so a degenerate fragment
+	// packs as transparent and is dropped by the alpha checks. Finite inputs pack exactly as before.
+	uint iR = (uint) (saturate(fColor.x) * 255.f + 0.5f);
+	uint iG = (uint) (saturate(fColor.y) * 255.f + 0.5f);
+	uint iB = (uint) (saturate(fColor.z) * 255.f + 0.5f);
+	uint iA = (uint) (saturate(fColor.w) * 255.f + 0.5f);
 	return (iA << 24) | (iR << 16) | (iG << 8) | iB;
 }
 
@@ -1533,6 +1536,26 @@ float4 MixOpt(const in float4 vis1, const in float alphaw1, const in float4 vis2
 	//return color_merge;
 }
 
+// MixOpt with the colour of a zero-alpha term left out. A term with no alpha has no defined colour
+// (rgb / a = 0 / 0), so it must not enter the weighted mean even when its weight is zero (0 / 0 * 0 is NaN).
+float4 MixOptSafe(const in float4 vis1, const in float alphaw1, const in float4 vis2, const in float alphaw2)
+{
+	const bool has1 = vis1.a > 0 && alphaw1 > 0;
+	const bool has2 = vis2.a > 0 && alphaw2 > 0;
+	const float w1 = has1 ? alphaw1 : 0;
+	const float w2 = has2 ? alphaw2 : 0;
+	float4 vout = (float4)0;
+	if (w1 + w2 > 0)
+	{
+		const float3 C_mix1 = has1 ? vis1.rgb / vis1.a * w1 : (float3)0;
+		const float3 C_mix2 = has2 ? vis2.rgb / vis2.a * w2 : (float3)0;
+		const float3 I_mix = (C_mix1 + C_mix2) / (w1 + w2);
+		const float A_mix = 1 - (1 - vis1.a) * (1 - vis2.a);
+		vout = float4(I_mix * A_mix, A_mix);
+	}
+	return vout;
+}
+
 MergeRS_OUT2 MergeRS2(RaySegment2 rs_prior, RaySegment2 rs_posterior, const in float beta)
 {
 	// Overall algorithm computation cost 
@@ -1813,6 +1836,13 @@ struct Fragment_OUT
 	Fragment f_posterior;
 };
 
+// LINEAR_MODE splits a fragment V at a depth by SCALING, never by subtracting.
+// The back piece used to be (V - V*r) / (1 - V.a*r). When r is close to 1 (the two fragments' back boundaries nearly
+// coincide -- e.g. a mesh lying on the DVR surface, with the TAA ray-start dither moving the DVR slabs across it),
+// V - V*r is pure rounding residue, rounded per CHANNEL, so alpha can reach 0 while rgb does not; MixOpt's rgb / a then
+// blows up and the pixel saturates to white. The piece is now V * (r_back / (1 - V.a*r_fore)) with r_back taken from the
+// DEPTHS rather than from 1 - r_fore: one scalar on all four channels keeps rgb / a exactly V's, however thin the piece.
+// Algebraically identical to the subtraction away from r ~ 1. The non-linear path (#else) is unchanged.
 Fragment_OUT MergeFrags(Fragment f_prior, Fragment f_posterior, const in float beta)
 {
 	// Overall algorithm computation cost 
@@ -1866,13 +1896,29 @@ Fragment_OUT MergeFrags(Fragment f_prior, Fragment f_posterior, const in float b
 			}
 #endif
 
-			float old_alpha = f_prior_vis.a;
-			f_prior.zthick -= fs_out.f_prior.zthick;
-			f_prior_vis = (f_prior_vis - f_m_prior_vis) / (1.f - f_m_prior_vis.a);
+#if LINEAR_MODE == 1
+			{
+				// Split f_prior at zfront_posterior_f by SCALING, never by subtracting (see above MergeFrags).
+				const float T = f_prior.zthick;
+				const float r_fore = saturate(fs_out.f_prior.zthick / T);                // [zfront_prior, zfront_post]
+				const float r_back = saturate((f_prior.z - zfront_posterior_f) / T);     // [zfront_post, prior.z], from depths
+				f_m_prior_vis = f_prior_vis * r_fore;
+				f_prior_vis = f_prior_vis * (r_back / (1.f - f_m_prior_vis.a));
+				f_prior.zthick = f_prior.z - zfront_posterior_f;
+				fs_out.f_prior.opacity_sum = f_prior.opacity_sum * r_fore;
+				f_prior.opacity_sum = f_prior.opacity_sum * r_back;
+			}
+#else
+			{
+				float old_alpha = f_prior_vis.a;
+				f_prior.zthick -= fs_out.f_prior.zthick;
+				f_prior_vis = (f_prior_vis - f_m_prior_vis) / (1.f - f_m_prior_vis.a);
 
-			fs_out.f_prior.opacity_sum = f_prior.opacity_sum * f_m_prior_vis.a / old_alpha;
-			//f_prior.opacity_sum = f_prior.opacity_sum * f_prior_vis.a / old_alpha;
-			f_prior.opacity_sum = f_prior.opacity_sum - fs_out.f_prior.opacity_sum;
+				fs_out.f_prior.opacity_sum = f_prior.opacity_sum * f_m_prior_vis.a / old_alpha;
+				//f_prior.opacity_sum = f_prior.opacity_sum * f_prior_vis.a / old_alpha;
+				f_prior.opacity_sum = f_prior.opacity_sum - fs_out.f_prior.opacity_sum;
+			}
+#endif
 		}
 		else
 		{
@@ -1905,30 +1951,67 @@ Fragment_OUT MergeFrags(Fragment f_prior, Fragment f_posterior, const in float b
 			}
 #endif
 
-			float old_alpha = f_posterior_vis.a;
-			f_posterior.zthick -= fs_out.f_prior.zthick;
-			f_posterior_vis = (f_posterior_vis - f_m_prior_vis) / (1.f - f_m_prior_vis.a);
+#if LINEAR_MODE == 1
+			{
+				// Split f_posterior at zfront_prior_f by SCALING, never by subtracting (see above MergeFrags).
+				const float T = f_posterior.zthick;
+				const float r_fore = saturate(fs_out.f_prior.zthick / T);                // [zfront_post, zfront_prior]
+				const float r_back = saturate((f_posterior.z - zfront_prior_f) / T);     // [zfront_prior, post.z], from depths
+				f_m_prior_vis = f_posterior_vis * r_fore;
+				f_posterior_vis = f_posterior_vis * (r_back / (1.f - f_m_prior_vis.a));
+				f_posterior.zthick = f_posterior.z - zfront_prior_f;
+				fs_out.f_prior.opacity_sum = f_posterior.opacity_sum * r_fore;
+				f_posterior.opacity_sum = f_posterior.opacity_sum * r_back;
+			}
+#else
+			{
+				float old_alpha = f_posterior_vis.a;
+				f_posterior.zthick -= fs_out.f_prior.zthick;
+				f_posterior_vis = (f_posterior_vis - f_m_prior_vis) / (1.f - f_m_prior_vis.a);
 
-			fs_out.f_prior.opacity_sum = f_posterior.opacity_sum * f_m_prior_vis.a / old_alpha;
-			//f_posterior.opacity_sum = f_posterior.opacity_sum * f_posterior_vis.a / old_alpha;
-			f_posterior.opacity_sum = f_posterior.opacity_sum - fs_out.f_prior.opacity_sum;
+				fs_out.f_prior.opacity_sum = f_posterior.opacity_sum * f_m_prior_vis.a / old_alpha;
+				//f_posterior.opacity_sum = f_posterior.opacity_sum * f_posterior_vis.a / old_alpha;
+				f_posterior.opacity_sum = f_posterior.opacity_sum - fs_out.f_prior.opacity_sum;
+			}
+#endif
 		}
 
 		// merge the fusion sub_rs (f_prior) to fs_out.f_prior
 		fs_out.f_prior.zthick += f_prior.zthick;
 		fs_out.f_prior.z = f_prior.z;
-		float4 f_mid_vis = f_posterior_vis * (f_prior.zthick / f_posterior.zthick); // REDESIGN
-		float f_mid_alphaw = f_posterior.opacity_sum * f_mid_vis.a / f_posterior_vis.a;
-		//float4 f_mid_mix_vis = BlendFloat4AndFloat4(f_mid_vis, f_prior_vis);
-		float4 f_mid_mix_vis = MixOpt(f_mid_vis, f_mid_alphaw, f_prior_vis, f_prior.opacity_sum);
-		f_m_prior_vis += f_mid_mix_vis * (1.f - f_m_prior_vis.a);
-		fs_out.f_prior.opacity_sum += f_mid_alphaw + f_prior.opacity_sum;
+#if LINEAR_MODE == 1
+		{
+			// Split the rest of f_posterior at f_prior.z by SCALING: mid = [front, prior.z] mixes with f_prior,
+			// rest = [prior.z, post.z] stays behind. Both thickness fractions come from depths.
+			const float T = max(f_posterior.zthick, 1e-12f);
+			const float r_mid = saturate(f_prior.zthick / T);
+			const float r_rest = saturate((f_posterior.z - f_prior.z) / T);
+			const float4 f_mid_vis = f_posterior_vis * r_mid;
+			const float f_mid_alphaw = f_posterior.opacity_sum * r_mid;
+			const float4 f_mid_mix_vis = MixOptSafe(f_mid_vis, f_mid_alphaw, f_prior_vis, f_prior.opacity_sum);
+			f_m_prior_vis += f_mid_mix_vis * (1.f - f_m_prior_vis.a);
+			fs_out.f_prior.opacity_sum += f_mid_alphaw + f_prior.opacity_sum;
 
-		f_posterior.zthick -= f_prior.zthick;
-		float old_alpha = f_posterior_vis.a;
-		f_posterior_vis = (f_posterior_vis - f_mid_vis) / (1.f - f_mid_vis.a);
-		//f_posterior.opacity_sum *= f_posterior_vis.a / old_alpha;
-		f_posterior.opacity_sum -= f_mid_alphaw;
+			f_posterior.zthick = f_posterior.z - f_prior.z;
+			f_posterior_vis = f_posterior_vis * (r_rest / (1.f - f_mid_vis.a));
+			f_posterior.opacity_sum = f_posterior.opacity_sum * r_rest;
+		}
+#else
+		{
+			float4 f_mid_vis = f_posterior_vis * (f_prior.zthick / f_posterior.zthick); // REDESIGN
+			float f_mid_alphaw = f_posterior.opacity_sum * f_mid_vis.a / f_posterior_vis.a;
+			//float4 f_mid_mix_vis = BlendFloat4AndFloat4(f_mid_vis, f_prior_vis);
+			float4 f_mid_mix_vis = MixOpt(f_mid_vis, f_mid_alphaw, f_prior_vis, f_prior.opacity_sum);
+			f_m_prior_vis += f_mid_mix_vis * (1.f - f_m_prior_vis.a);
+			fs_out.f_prior.opacity_sum += f_mid_alphaw + f_prior.opacity_sum;
+
+			f_posterior.zthick -= f_prior.zthick;
+			float old_alpha = f_posterior_vis.a;
+			f_posterior_vis = (f_posterior_vis - f_mid_vis) / (1.f - f_mid_vis.a);
+			//f_posterior.opacity_sum *= f_posterior_vis.a / old_alpha;
+			f_posterior.opacity_sum -= f_mid_alphaw;
+		}
+#endif
 
 		// convert to 8b channels
 		//f_prior.i_vis = ConvertFloat4ToUInt(f_prior_vis);
