@@ -105,6 +105,10 @@ static bool g_moduleInitialized = false; // (idempotent DeInit) teardown-ownersh
 // attestation is five chances for one to drift into checking something weaker while the loader keeps
 // printing success.
 VM_DEFINE_MODULE_HANDSHAKE(1)  // generation 1 of this module's own exported interface
+#include "ModuleBuildVersion.h"
+// Build version "<__VERSION>.<build count>" (see ModuleBuildVersion.h); read and logged by the core module
+// loaders at load time. Reported only -- the handshake above is what accepts or refuses this module.
+__vmstatic const char* __GetModuleBuildVersion() { return __VERSION "." VM_MODULE_BUILD_COUNT_STR; }
 
 
 bool InitModule(fncontainer::VmFnContainer& _fncontainer)

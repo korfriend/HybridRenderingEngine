@@ -668,4 +668,13 @@
   <Target Name="VimCommonSyncGate" BeforeTargets="ClCompile">
     <Exec Command="&quot;$(MSBuildProjectDirectory)\tools\check_vimcommon_sync.bat&quot; &quot;$(MSBuildProjectDirectory)&quot;" />
   </Target>
+  <!-- Module build version (ModuleBuildVersion.h): bump the build count when any source of this module changed
+       since the last bump. Inputs/Outputs make MSBuild skip the target when nothing changed; the stamp lives in
+       the shared x64 directory so building several configurations bumps once. -->
+  <ItemGroup>
+    <ModuleBuildExtraInput Include="shader_compiled_objs\*;shader_compiled_objs_4_0\*" />
+  </ItemGroup>
+  <Target Name="BumpModuleBuildCount" BeforeTargets="ClCompile" Inputs="@(ClCompile);@(ClInclude);@(ResourceCompile);@(ModuleBuildExtraInput);$(MSBuildProjectDirectory)\VimCommon.h" Outputs="$(MSBuildProjectDirectory)\x64\ModuleBuildVersion.stamp">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\tools\bump_module_build.ps1&quot; -Header &quot;$(MSBuildProjectDirectory)\ModuleBuildVersion.h&quot; -VimCommon &quot;$(MSBuildProjectDirectory)\VimCommon.h&quot; -Stamp &quot;$(MSBuildProjectDirectory)\x64\ModuleBuildVersion.stamp&quot;" />
+  </Target>
 </Project>
