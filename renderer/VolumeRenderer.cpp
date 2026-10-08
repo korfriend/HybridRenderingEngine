@@ -307,7 +307,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			}
 		}
 #else
-#define CS_NUM 50
+#define CS_NUM 51
 #define SET_CS(NAME) psoManager->safe_set_res(grd_helper::COMRES_INDICATOR(GpuhelperResType::COMPUTE_SHADER, NAME), dx11CShader, true)
 
 		string strNames_CS[CS_NUM] = {
@@ -361,6 +361,7 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			,"VXGI_Propagate_cs_5_0"
 			,"VXGI_SurfaceGather_cs_5_0"
 			,"VXGI_BlurMat_cs_5_0"
+			,"VR_CUTVIS_BUILD_cs_5_0"
 		};
 
 		for (int i = 0; i < CS_NUM; i++)
@@ -2885,6 +2886,80 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 		dx11DeviceImmContext->CSSetUnorderedAccessViews(0, 4, dx11UAVs, (UINT*)(&dx11UAVs));
 
 		SET_SHADER_RES(50, 1, (ID3D11ShaderResourceView**)&gres_fb_ref_pidx.alloc_res_ptrs[DTYPE_SRV]); // search why this does not work
+#endif
+
+#ifndef DX10_0
+		// ---- Cut-edge visibility grid (multi-OTF only; DvrCS.hlsl CUT_EDGE_SHADING 4) ----
+		// A low-resolution R8 grid (longest axis <= 128, aspect kept) holding, per texel, the fraction of the
+		// source voxels it covers that are visible under their own mask id's OTF. The DVR samples it ONLY at
+		// samples judged to be a carved face (cut by a per-id OTF) to get a smooth normal there; nowhere else.
+		// Built by VR_CUTVIS_BUILD_cs_5_0 from what is already bound for this volume (t0 volume, t2 mask, t3 OTF,
+		// volume/tmap CBs), and rebuilt only when the grid is new or the volume, mask or OTF content is newer
+		// than the grid (the GPU resource's LAST_UPDATE_TIME). The source is the MASK volume and the name carries the
+		// OTF id (one grid per OTF, like the per-OTF volume blocks), so it is released with the mask. Bound at t12.
+		{
+			ID3D11ShaderResourceView* cutvis_srv = NULL;
+			if (mask_vol_obj != NULL && ray_cast_type == __RM_MULTIOTF && !is_xray_mode)
+			{
+				const uint32_t cutvis_cap = 128;
+				const vmint3 vs = vol_data->vol_size;
+				const int vs_max = std::max(vs.x, std::max(vs.y, vs.z));
+				const float s = vs_max > (int)cutvis_cap ? (float)cutvis_cap / (float)vs_max : 1.f;
+				const uint32_t gw = std::max(1u, (uint32_t)((float)vs.x * s + 0.5f));
+				const uint32_t gh = std::max(1u, (uint32_t)((float)vs.y * s + 0.5f));
+				const uint32_t gd = std::max(1u, (uint32_t)((float)vs.z * s + 0.5f));
+
+				GpuRes gres_cutvis;
+				gres_cutvis.vm_src_id = mask_vol_obj->GetObjectID();
+				gres_cutvis.res_name = "CUT_VIS_GRID_OTF" + std::to_string(tobj_otf->GetObjectID());
+				bool cutvis_rebuild = true;
+				if (gpu_manager->UpdateGpuResource(gres_cutvis))
+				{
+					const bool same_size = gres_cutvis.res_values.GetParam("WIDTH", (uint32_t)0) == gw
+						&& gres_cutvis.res_values.GetParam("HEIGHT", (uint32_t)0) == gh
+						&& gres_cutvis.res_values.GetParam("DEPTH", (uint32_t)0) == gd;
+					if (same_size)
+					{
+						const uint64_t t_grid = gres_cutvis.res_values.GetParam("LAST_UPDATE_TIME", (uint64_t)0);
+						const uint64_t t_src = std::max(vobj->GetContentUpdateTime(),
+							std::max(mask_vol_obj->GetContentUpdateTime(), tobj_otf->GetContentUpdateTime()));
+						cutvis_rebuild = t_src > t_grid;
+					}
+					else
+						gpu_manager->ReleaseGpuResource(gres_cutvis, false);
+				}
+				if (gres_cutvis.alloc_res_ptrs.find(DTYPE_SRV) == gres_cutvis.alloc_res_ptrs.end()
+					|| gres_cutvis.alloc_res_ptrs[DTYPE_SRV] == NULL)
+				{
+					gres_cutvis.rtype = RTYPE_TEXTURE3D;
+					gres_cutvis.options["USAGE"] = D3D11_USAGE_DEFAULT;
+					gres_cutvis.options["CPU_ACCESS_FLAG"] = NULL;
+					gres_cutvis.options["BIND_FLAG"] = D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_SHADER_RESOURCE;
+					gres_cutvis.options["FORMAT"] = DXGI_FORMAT_R8_UNORM;
+					gres_cutvis.res_values.SetParam("WIDTH", gw);
+					gres_cutvis.res_values.SetParam("HEIGHT", gh);
+					gres_cutvis.res_values.SetParam("DEPTH", gd);
+					gpu_manager->GenerateGpuResource(gres_cutvis);
+					grd_helper::WarnIfManyGpuResources(gres_cutvis.vm_src_id, gres_cutvis.res_name.c_str());
+					cutvis_rebuild = true;
+				}
+				ID3D11UnorderedAccessView* cutvis_uav = (ID3D11UnorderedAccessView*)gres_cutvis.alloc_res_ptrs[DTYPE_UAV];
+				if (cutvis_rebuild && cutvis_uav != NULL)
+				{
+					ID3D11ShaderResourceView* null_srv = NULL;
+					SET_SHADER_RES(12, 1, &null_srv); // never read and write the grid in one dispatch
+					dx11DeviceImmContext->CSSetUnorderedAccessViews(6, 1, &cutvis_uav, NULL);
+					SET_SHADER(GETCS(VR_CUTVIS_BUILD_cs_5_0), NULL, 0);
+					dx11DeviceImmContext->Dispatch((gw + 3) / 4, (gh + 3) / 4, (gd + 3) / 4);
+					ID3D11UnorderedAccessView* null_uav = NULL;
+					dx11DeviceImmContext->CSSetUnorderedAccessViews(6, 1, &null_uav, NULL);
+					gres_cutvis.options["Update LAST_UPDATE_TIME"] = 1u;
+					gpu_manager->UpdateGpuResource(gres_cutvis);
+				}
+				cutvis_srv = (ID3D11ShaderResourceView*)gres_cutvis.alloc_res_ptrs[DTYPE_SRV];
+			}
+			SET_SHADER_RES(12, 1, &cutvis_srv);
+		}
 #endif
 
 		if(!is_xray_mode) {

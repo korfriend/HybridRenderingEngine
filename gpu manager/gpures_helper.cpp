@@ -867,6 +867,7 @@ int grd_helper::Initialize(VmGpuManager* pCGpuManager, PSOManager* gpu_params)
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50078), "VR_SINGLE_SCULPTMASK_CONTEXT_FM_cs_5_0", "cs_5_0"), VR_SINGLE_SCULPTMASK_CONTEXT_FM_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50080), "VR_SINGLE_DEFAULT_SCULPTBITS_FM_cs_5_0", "cs_5_0"), VR_SINGLE_DEFAULT_SCULPTBITS_FM_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50081), "VR_SINGLE_CONTEXT_SCULPTBITS_FM_cs_5_0", "cs_5_0"), VR_SINGLE_CONTEXT_SCULPTBITS_FM_cs_5_0);
+		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50082), "VR_CUTVIS_BUILD_cs_5_0", "cs_5_0"), VR_CUTVIS_BUILD_cs_5_0);
 
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50013), "VR_DEFAULT_cs_5_0", "cs_5_0"), VR_DEFAULT_cs_5_0);
 		VRETURN(register_shader(MAKEINTRESOURCE(IDR_RCDATA50014), "VR_OPAQUE_cs_5_0", "cs_5_0"), VR_OPAQUE_cs_5_0);
@@ -1226,6 +1227,25 @@ void grd_helper::Fence()
 	//}
 }
 
+void grd_helper::WarnIfManyGpuResources(const int src_id, const char* what)
+{
+	vector<GpuRes> gres_list;
+	const int count = g_pCGpuManager->UpdateGpuResourcesBySrcID(src_id, gres_list);
+	if (count <= kGpuResPerSrcWarn)
+		return;
+	// warn on the first crossing, then once per further 32 resources, so a misuse that creates a new resource
+	// every frame is visible in the log without flooding it
+	static std::map<int, int> last_warned;
+	auto it = last_warned.find(src_id);
+	if (it != last_warned.end() && count < it->second + 32)
+		return;
+	last_warned[src_id] = count;
+	vmlog::LogWarn("GPU resources for source object " + to_string(src_id) + ": " + to_string(count)
+		+ " (limit " + to_string(kGpuResPerSrcWarn) + "), last created: " + string(what)
+		+ ". Resources keyed per OTF accumulate until the source is released -- reuse the OTF object instead of"
+		" creating a new one for each change.");
+}
+
 int __UpdateBlocks(GpuRes& gres, const VmVObjectVolume* vobj, const string& vmode, const DXGI_FORMAT dxformat, LocalProgress* progress)
 {
 	gres.vm_src_id = vobj->GetObjectID();
@@ -1261,6 +1281,7 @@ int __UpdateBlocks(GpuRes& gres, const VmVObjectVolume* vobj, const string& vmod
 	//	cout << vmode << endl;
 
 	g_pCGpuManager->GenerateGpuResource(gres);
+	grd_helper::WarnIfManyGpuResources(gres.vm_src_id, gres.res_name.c_str());
 
 	return 1;
 }

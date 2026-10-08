@@ -191,21 +191,54 @@ INVALID CASE IN THIS VERSION
 // The next CUT_EDGE_STEPS visible samples then get the edge treatment. An empty block or (sculpt) an
 // OTF-transparent sample disarms it, so a real surface reached through empty space keeps the regular gradient.
 //   CUT_EDGE_SHADING 0 : legacy (raw GRAD_VOL everywhere)
-//   CUT_EDGE_SHADING 1 : flat (no Phong at edge samples, the same treatment as the clip-plane slab) -- default
+//   CUT_EDGE_SHADING 1 : flat (no Phong at edge samples, the same treatment as the clip-plane slab)
 //   CUT_EDGE_SHADING 2 : central-difference gradient with the hidden taps read as empty, at edge samples
+//   CUT_EDGE_SHADING 3 : gradient of a SMOOTH visibility field at edge samples -- each tap trilinearly
+//                        interpolates the visible/hidden state of its 8 surrounding voxels, so the normal follows
+//                        the cut face without the voxel staircase of mode 2. VR_MODE 2 (context) keeps using the
+//                        mode-2 gradient there, because its MODULATE needs a gradient MAGNITUDE on the data scale.
+//                        (use with CUT_EDGE_GRAD_SCALE 2: at 1 the voxel steps of the cut face still show as
+//                        stripes; at 2 they are mostly gone)
+//   CUT_EDGE_SHADING 4 : (OTF_MASK, DX11+) gradient of a precomputed low-resolution visibility grid at edge
+//                        samples -- VR_CUTVIS_BUILD_cs_5_0 fills it (longest axis <= 128, R8, the fraction of the
+//                        source voxels each texel covers that are visible under their own mask id's OTF), the
+//                        renderer binds it at t12 and rebuilds it only when the volume, mask or OTF changes.
+// Defaults: clip and sculpt faces are shaded FLAT (1); multi-OTF mask faces get the smooth normal -- the grid (4)
+// where compute is available, the in-shader smooth field (3) on the DX10.0 pixel-shader path.
 #ifndef CUT_EDGE_SHADING // macro default guard: CUT_EDGE_SHADING
+#if OTF_MASK == 1 && DX10_0 != 1
+#define CUT_EDGE_SHADING 4
+#elif OTF_MASK == 1
+#define CUT_EDGE_SHADING 3
+#else
 #define CUT_EDGE_SHADING 1
+#endif
 #endif // macro default guard: CUT_EDGE_SHADING
 // Number of visible samples after a hidden run that use the edge treatment. GRAD_VOL reaches 2 samples
 // back along the ray, so 2 covers its footprint.
 #ifndef CUT_EDGE_STEPS // macro default guard: CUT_EDGE_STEPS
 #define CUT_EDGE_STEPS 2
 #endif // macro default guard: CUT_EDGE_STEPS
-// Tap distance of the masked gradient (CUT_EDGE_SHADING 2), in units of the regular gradient offset
+// Tap distance of the edge gradient (CUT_EDGE_SHADING 2 and 3), in units of the regular gradient offset
 // (vec_grad_*). A larger value smooths the voxel staircase of a binary hidden state at the cost of detail.
 #ifndef CUT_EDGE_GRAD_SCALE // macro default guard: CUT_EDGE_GRAD_SCALE
+#if OTF_MASK == 1
+#define CUT_EDGE_GRAD_SCALE 2.f // mask faces: smooth-normal modes (see CUT_EDGE_SHADING 3)
+#else
 #define CUT_EDGE_GRAD_SCALE 1.f
+#endif
 #endif // macro default guard: CUT_EDGE_GRAD_SCALE
+// 1: an empty (skipped) block disarms the edge state, so a surface reached across it shades normally.
+// 0: keep the state across empty blocks (a hidden run whose next visible sample lies past a skipped block
+//    is still treated as a carved face).
+// Mode 3: below this smooth-field gradient length the cut feature is smaller than the stencil and has no
+// usable direction; the sample falls back to flat shading.
+#ifndef CUT_EDGE_MIN_GRAD // macro default guard: CUT_EDGE_MIN_GRAD
+#define CUT_EDGE_MIN_GRAD 0.05f
+#endif // macro default guard: CUT_EDGE_MIN_GRAD
+#ifndef CUT_EDGE_RESET_ON_EMPTY // macro default guard: CUT_EDGE_RESET_ON_EMPTY
+#define CUT_EDGE_RESET_ON_EMPTY 1
+#endif // macro default guard: CUT_EDGE_RESET_ON_EMPTY
 
 #if SCULPT_MASK == 1 || SCULPT_BITS == 1 // sculpt visibility helpers
 // The ONE sculpt visibility test. Every sculpt-aware check below goes through it, so the visibility
@@ -289,6 +322,74 @@ float3 GradientIdCutVolume(const float3 pos_sample_ts)
 #elif SCULPT_MASK == 1 || SCULPT_BITS == 1
 #define CUT_EDGE_GRADIENT(P) GradientSculptedVolume(P)
 #endif // per-id-OTF cut-edge helpers
+
+#if (CUT_EDGE_SHADING == 3 || CUT_VIS_BUILD == 1) && (OTF_MASK == 1 || SCULPT_MASK == 1 || SCULPT_BITS == 1) // smooth cut-face normal
+// 1 where the voxel at volume texture coordinate tc (a voxel CENTRE) shows material, 0 where it is hidden --
+// transparent under its own mask id's OTF (OTF_MASK), or OTF-transparent / carved away (sculpt).
+float CutVisibleAtVoxel(const float3 tc)
+{
+	const float v = tex3D_volume.SampleLevel(g_samplerPoint_clamp, tc, 0).r;
+#if OTF_MASK == 1
+	const int id = (int)(tex3D_volmask.SampleLevel(g_samplerPoint_clamp, tc, 0).r * g_cbVobj.mask_value_range + 0.5f);
+	return IsDenseUnderIdOtf(v, id) ? 1.f : 0.f;
+#else
+	const bool dense = LoadOtfBuf(v * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction).a >= FLT_OPACITY_MIN__;
+	return (dense && IsSculptVisible(tc)) ? 1.f : 0.f;
+#endif
+}
+
+// Trilinear interpolation of CutVisibleAtVoxel over the 8 voxels around pos_ts: a continuous field whose 0.5
+// level follows the visible/hidden boundary between voxel centres.
+float CutVisibleSmooth(const float3 pos_ts)
+{
+	const float3 size = g_cbVobj.vol_size;
+	const float3 pv = pos_ts * size - 0.5f;
+	const float3 i0 = floor(pv);
+	const float3 f = pv - i0;
+	float acc = 0.f;
+	[unroll]
+	for (int k = 0; k < 8; k++)
+	{
+		const float3 o = float3(k & 1, (k >> 1) & 1, (k >> 2) & 1);
+		const float3 w = lerp(1.f - f, f, o);
+		acc += w.x * w.y * w.z * CutVisibleAtVoxel((i0 + o + 0.5f) / size);
+	}
+	return acc;
+}
+
+// Central difference of the smooth field over WS axes (vec_grad_* are WS axes in TS).
+float3 GradientCutSmooth(const float3 pos_sample_ts)
+{
+	const float3 vx = g_cbVobj.vec_grad_x * CUT_EDGE_GRAD_SCALE;
+	const float3 vy = g_cbVobj.vec_grad_y * CUT_EDGE_GRAD_SCALE;
+	const float3 vz = g_cbVobj.vec_grad_z * CUT_EDGE_GRAD_SCALE;
+	return float3(
+		CutVisibleSmooth(pos_sample_ts + vx) - CutVisibleSmooth(pos_sample_ts - vx),
+		CutVisibleSmooth(pos_sample_ts + vy) - CutVisibleSmooth(pos_sample_ts - vy),
+		CutVisibleSmooth(pos_sample_ts + vz) - CutVisibleSmooth(pos_sample_ts - vz));
+}
+#endif // smooth cut-face normal
+
+#if CUT_EDGE_SHADING == 4 && OTF_MASK == 1 && DX10_0 != 1 // precomputed visibility grid
+Texture3D<float> cut_vis_grid : register(t12);
+
+// Central difference of the trilinearly filtered grid over WS axes, one GRID texel apart (vec_grad_* are WS
+// axes in TS and are about one source voxel long, so they are scaled by source voxels per grid texel).
+float3 GradientCutGrid(const float3 pos_sample_ts)
+{
+	float3 dim;
+	cut_vis_grid.GetDimensions(dim.x, dim.y, dim.z);
+	const float3 ratio = g_cbVobj.vol_size / max(dim, 1.f);
+	const float k = max(ratio.x, max(ratio.y, ratio.z));
+	const float3 vx = g_cbVobj.vec_grad_x * k;
+	const float3 vy = g_cbVobj.vec_grad_y * k;
+	const float3 vz = g_cbVobj.vec_grad_z * k;
+	return float3(
+		cut_vis_grid.SampleLevel(g_samplerLinear_clamp, pos_sample_ts + vx, 0) - cut_vis_grid.SampleLevel(g_samplerLinear_clamp, pos_sample_ts - vx, 0),
+		cut_vis_grid.SampleLevel(g_samplerLinear_clamp, pos_sample_ts + vy, 0) - cut_vis_grid.SampleLevel(g_samplerLinear_clamp, pos_sample_ts - vy, 0),
+		cut_vis_grid.SampleLevel(g_samplerLinear_clamp, pos_sample_ts + vz, 0) - cut_vis_grid.SampleLevel(g_samplerLinear_clamp, pos_sample_ts - vz, 0));
+}
+#endif // precomputed visibility grid
 
 // edge tracking is compiled only where a sculpt or multi-OTF variant marches with slab samples and shades
 #if (SCULPT_MASK == 1 || SCULPT_BITS == 1 || OTF_MASK == 1) && VR_MODE != 3 && CUT_EDGE_SHADING != 0
@@ -1533,6 +1634,14 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 					{
 #if CUT_EDGE_SHADING == 1 && VR_MODE != 2
 						grad = (float3)0; // flat: nothing consumes the gradient at an edge sample
+#elif CUT_EDGE_SHADING == 3 && VR_MODE != 2
+						grad = GradientCutSmooth(pos_sample_blk_ts);
+						if (length(grad) < CUT_EDGE_MIN_GRAD)
+							grad = (float3)0; // no usable direction (feature smaller than the stencil): flat
+#elif CUT_EDGE_SHADING == 4 && VR_MODE != 2
+						grad = GradientCutGrid(pos_sample_blk_ts);
+						if (length(grad) < CUT_EDGE_MIN_GRAD)
+							grad = (float3)0; // no usable direction (feature smaller than a grid texel): flat
 #else
 						grad = CUT_EDGE_GRADIENT(pos_sample_blk_ts);
 #endif
@@ -1619,7 +1728,7 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
 			sample_prev = -1;
 #endif // VR_MODE != 3: intensity / DVR modes
-#if CUT_EDGE_ACTIVE == 1
+#if CUT_EDGE_ACTIVE == 1 && CUT_EDGE_RESET_ON_EMPTY == 1
 			cut_edge = 0; // empty block: whatever comes next is a real boundary
 #if OTF_MASK == 1
 			cut_prev_clear = false;
@@ -2704,3 +2813,40 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 #endif // DX10.0 only
 }
 /**/
+
+#if CUT_VIS_BUILD == 1 && OTF_MASK == 1 // visibility grid build pass (VR_CUTVIS_BUILD_cs_5_0)
+RWTexture3D<unorm float> cut_vis_grid_out : register(u6);
+
+// One thread per grid texel: the fraction of the source voxels the texel covers that are visible under their
+// own mask id's OTF. Reads t0 (volume), t2 (mask), t3 (OTF) and the volume/tmap constant buffers, all bound by
+// the renderer for the DVR pass that follows.
+[numthreads(4, 4, 4)]
+void BuildCutVisGrid(uint3 DTid : SV_DispatchThreadID)
+{
+	uint3 dim;
+	cut_vis_grid_out.GetDimensions(dim.x, dim.y, dim.z);
+	if (any(DTid >= dim))
+		return;
+	const float3 vsize = g_cbVobj.vol_size;
+	const int3 vmax = max((int3)vsize, int3(1, 1, 1));
+	const int3 i0 = min((int3)floor((float3)DTid / (float3)dim * vsize), vmax - 1);
+	const int3 i1 = clamp((int3)ceil((float3)(DTid + 1) / (float3)dim * vsize), i0 + 1, vmax);
+	float acc = 0.f;
+	float cnt = 0.f;
+	[loop]
+	for (int z = i0.z; z < i1.z; z++)
+	{
+		[loop]
+		for (int y = i0.y; y < i1.y; y++)
+		{
+			[loop]
+			for (int x = i0.x; x < i1.x; x++)
+			{
+				acc += CutVisibleAtVoxel((float3(x, y, z) + 0.5f) / vsize);
+				cnt += 1.f;
+			}
+		}
+	}
+	cut_vis_grid_out[DTid] = acc / max(cnt, 1.f);
+}
+#endif // visibility grid build pass

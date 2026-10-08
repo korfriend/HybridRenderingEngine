@@ -498,6 +498,12 @@ namespace grd_helper
 	void Fence();
 
 	// volume/block structure
+	// Logs a warning when one source object owns more than kGpuResPerSrcWarn GPU resources. Call it right
+	// after GENERATING a resource that is keyed per OTF (or per any other object id) under that source: such
+	// resources live until the source is released, so a caller that keeps handing in NEW OTF objects for the
+	// same volume grows them without bound. Throttled per source.
+	static const int kGpuResPerSrcWarn = 128;
+	void WarnIfManyGpuResources(const int src_id, const char* what);
 	bool UpdateOtfBlocks(GpuRes& gres, VmVObjectVolume* main_vobj, VmVObjectVolume* mask_vobj,
 		VmObject* tobj, const int sculpt_value, LocalProgress* progress = NULL);
 	bool UpdateMinMaxBlocks(GpuRes& gres_min, GpuRes& gres_max, const VmVObjectVolume* vobj, LocalProgress* progress = NULL);
