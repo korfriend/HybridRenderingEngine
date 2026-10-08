@@ -76,7 +76,10 @@ static const float VXGI_CONE_WEIGHTS[6] = { 0.25f, 0.15f, 0.15f, 0.15f, 0.15f, 0
 // lying nearly PARALLEL to the plane stays "own surface" at any distance, while genuine occluders
 // (crevice walls, undercuts — rising ~1:1) lose only a negligible sliver.
 #define VXGI_CONE_SLAB_TILT_MARGIN 0.05f
-
+// Cone occlusion extinction per reference voxel at full coverage (see the opacity step in
+// VXGI_TraceCone_2Tex). 0.18 reproduces the R=128 look of the former per-sample-coverage opacity
+// (mean shaded luminance within 0.3% on a CT skull) while narrowing the coarse-grid brightness gap.
+#define VXGI_CONE_EXTINCTION 0.18f
 // -----------------------------------------------------------------------------
 // 2-TEXTURE cone march (VXGI v5, Part C — SurfaceGather). Front-to-back march
 // with the shared cone-growth schedule; the two roles the retired single-grid
@@ -169,7 +172,14 @@ float4 VXGI_TraceCone_2Tex(Texture3D grid_mat, Texture3D radiance, SamplerState 
 		float w_slab = smoothstep(VXGI_CONE_SLAB_FADE_LO * resolution_scale + tilt_m,
 			VXGI_CONE_SLAB_FADE_HI * resolution_scale + tilt_m, h_low);
 
-		float a = w_slab * cov * (1.0f - acc_occ);                            // front-to-back visibility
+		// Per-step opacity from a LENGTH-INTEGRATED, coverage-LINEAR extinction (Beer-Lambert over the step,
+		// measured in R=128 reference voxels), not the raw coverage: a per-sample `cov` made the occlusion
+		// depend on the step schedule and, on coarse grids, on how far the voxelization smeared a thin
+		// structure (a diluted plate read as a weaker occluder). Linear in coverage, the integral of a
+		// smeared plate equals that of a sharp one. VXGI_CONE_EXTINCTION is calibrated so the R=128
+		// reference look is unchanged.
+		float step_ref = 0.5f * diameter * VXGI_REFERENCE_GRID_RES;
+		float a = w_slab * (1.0f - exp(-VXGI_CONE_EXTINCTION * cov * step_ref)) * (1.0f - acc_occ); // front-to-back visibility
 		acc_rgb += a * rad;
 		acc_occ += a;
 
