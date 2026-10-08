@@ -203,13 +203,12 @@ INVALID CASE IN THIS VERSION
 //                        samples -- VR_CUTVIS_BUILD_cs_5_0 fills it (longest axis <= 128, R8, the fraction of the
 //                        source voxels each texel covers that are visible under their own mask id's OTF), the
 //                        renderer binds it at t12 and rebuilds it only when the volume, mask or OTF changes.
-// Defaults: clip and sculpt faces are shaded FLAT (1); multi-OTF mask faces get the smooth normal -- the grid (4)
-// where compute is available, the in-shader smooth field (3) on the DX10.0 pixel-shader path.
+// Defaults: DX11+ -- clip and sculpt faces are shaded FLAT (1), multi-OTF mask faces take their normal from the
+// precomputed grid (4). DX10.0 (pixel-shader path, no compute to build the grid) -- every cut face is FLAT (1).
+// Mode 3 stays available by define on either path.
 #ifndef CUT_EDGE_SHADING // macro default guard: CUT_EDGE_SHADING
 #if OTF_MASK == 1 && DX10_0 != 1
 #define CUT_EDGE_SHADING 4
-#elif OTF_MASK == 1
-#define CUT_EDGE_SHADING 3
 #else
 #define CUT_EDGE_SHADING 1
 #endif
@@ -1480,7 +1479,10 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 			shade = PhongBlinnVr(view_dir, g_cbVobj.pb_shading_factor, light_dirinv, nrl, true);
 
 		//float4 vis_sample = float4(shade * vis_otf.rgb, vis_otf.a);
-		float4 vis_sample = float4(shade * vis_otf.rgb, 1.f);
+		float4 vis_sample = float4(VXGI_ShadowLocalShade(shade, pos_ray_start_ts) * vis_otf.rgb, 1.f);
+		// The ISO hit is fully opaque. Consume the same scene field as DVR,
+		// with full sample coverage rather than the OTF ramp's first-hit alpha.
+		VXGI_ApplyVolumetricGI(vis_sample, pos_ray_start_ts, 1.f);
 		vis_sample.rgb = saturate(vis_sample.rgb);
 
 #if ONLY_SINGLE_LAYER == 1 // single-layer path (no K-buffer)

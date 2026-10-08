@@ -3052,8 +3052,11 @@ void grd_helper::SetCb_VXGI(CB_VXGI& cb, const vmmat44f& mat_ws2vox_raw, const u
 	vmmath::fTransformVector(&axis_z_ws, &vmfloat3(0, 0, 1.f), &mat_vox2ws);
 	cb.grid_axis_ws = vmfloat3(vmmath::fLengthVector(&axis_x_ws),
 		vmmath::fLengthVector(&axis_y_ws), vmmath::fLengthVector(&axis_z_ws));
+	// Optical-depth length basis in REFERENCE voxels (R=128), not current ones: sigma_t =
+	// -ln(1-coverage)/voxel_ref_ws, so a per-current-voxel basis made the medium's extinction scale with
+	// R (R=32 -> 1/4, R=256 -> 2x), and the whole DIRECT field brightened as the grid got coarser.
 	cb.voxel_ref_ws = (cb.grid_axis_ws.x + cb.grid_axis_ws.y + cb.grid_axis_ws.z)
-		/ (3.f * (float)(resolution > 0 ? resolution : 128));
+		/ (3.f * VXGI_REFERENCE_GRID_RES);
 	cb.mat_vox2ws = TRANSPOSE(mat_vox2ws); // Voxelize clip tests: grid coord -> WS for IsInsideClipBound
 	// diffusion gain MUST stay < 1 (contraction) — clamp hard so a bad app value cannot blow the field up
 	cb.scatter_gain = max(0.05f, min(0.95f, scatter_gain));

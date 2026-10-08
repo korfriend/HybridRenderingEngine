@@ -765,7 +765,7 @@ namespace grd_helper
 		// grid_axis_ws = world length of each full [0,1] grid axis (volume bbox edge incl. margin);
 		// world length of a unit grid-space step along direction L = length(L * grid_axis_ws).
 		vmfloat3 grid_axis_ws;
-		float    voxel_ref_ws;       // one voxel's reference world thickness (mean axis / res): coverage alpha -> optical-depth scale
+		float    voxel_ref_ws;       // one voxel's reference world thickness (mean axis / R=128 reference, fixed in world): coverage alpha -> optical-depth scale
 
 		vmmat44f mat_vox2ws;         // voxel [0,1] -> world (clip tests in Voxelize; inverse of mat_ws2vox)
 
