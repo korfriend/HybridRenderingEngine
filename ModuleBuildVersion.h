@@ -4,4 +4,4 @@
 // changes. Do not edit by hand. Tracked on purpose so the count is shared.
 #pragma once
 #define VM_MODULE_BOUND_CORE "1.80"
-#define VM_MODULE_BUILD_COUNT_STR "1"
+#define VM_MODULE_BUILD_COUNT_STR "2"

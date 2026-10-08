@@ -178,6 +178,35 @@ INVALID CASE IN THIS VERSION
 //    return (int) (tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r * g_cbVobj.value_range + 0.5f);
 //}
 
+// ---- Cut-edge shading: carved faces of SCULPT_MASK / SCULPT_BITS and per-id-OTF faces of OTF_MASK ----
+// The DVR gradient (GRAD_VOL) samples tex3D_volume without looking at what hid the neighbouring samples. On a
+// carved face -- material removed by the sculpt, or made transparent by its mask id's OTF -- the first visible
+// sample sits INSIDE the material and its gradient taps reach into the hidden region, which still holds the
+// original intensities, so the normal follows the interior texture (e.g. trabecular bone) and the face shades
+// as noise. The edge is found while marching, at no per-sample cost:
+//   sculpt   : a sample that passes the OTF but is hidden by the sculpt arms the countdown.
+//   OTF_MASK : at the first visible sample (id k) after a transparent one, the transparent sample's value is
+//              looked up in id k's OTF; if id k would show it, that sample was cut away by its own id's OTF
+//              rather than being empty space, and the countdown is armed. One OTF fetch per transition.
+// The next CUT_EDGE_STEPS visible samples then get the edge treatment. An empty block or (sculpt) an
+// OTF-transparent sample disarms it, so a real surface reached through empty space keeps the regular gradient.
+//   CUT_EDGE_SHADING 0 : legacy (raw GRAD_VOL everywhere)
+//   CUT_EDGE_SHADING 1 : flat (no Phong at edge samples, the same treatment as the clip-plane slab) -- default
+//   CUT_EDGE_SHADING 2 : central-difference gradient with the hidden taps read as empty, at edge samples
+#ifndef CUT_EDGE_SHADING // macro default guard: CUT_EDGE_SHADING
+#define CUT_EDGE_SHADING 1
+#endif // macro default guard: CUT_EDGE_SHADING
+// Number of visible samples after a hidden run that use the edge treatment. GRAD_VOL reaches 2 samples
+// back along the ray, so 2 covers its footprint.
+#ifndef CUT_EDGE_STEPS // macro default guard: CUT_EDGE_STEPS
+#define CUT_EDGE_STEPS 2
+#endif // macro default guard: CUT_EDGE_STEPS
+// Tap distance of the masked gradient (CUT_EDGE_SHADING 2), in units of the regular gradient offset
+// (vec_grad_*). A larger value smooths the voxel staircase of a binary hidden state at the cost of detail.
+#ifndef CUT_EDGE_GRAD_SCALE // macro default guard: CUT_EDGE_GRAD_SCALE
+#define CUT_EDGE_GRAD_SCALE 1.f
+#endif // macro default guard: CUT_EDGE_GRAD_SCALE
+
 #if SCULPT_MASK == 1 || SCULPT_BITS == 1 // sculpt visibility helpers
 // The ONE sculpt visibility test. Every sculpt-aware check below goes through it, so the visibility
 // predicate and the edge gradient (GradientSculptedVolume) can never disagree on what is carved away.
@@ -206,31 +235,6 @@ bool IsSculptVisible(const float3 pos_sample_ts)
 #endif // sculpt-bits source: tiled Tex3D (4x4x2 per texel)
 }
 
-// Sculpt-edge shading.
-// The DVR gradient (GRAD_VOL) samples tex3D_volume without looking at the sculpt state. On a carved face
-// the first visible sample sits INSIDE the material and its gradient taps reach back into the carved-away
-// region, which still holds the original intensities, so the normal follows the interior texture
-// (e.g. trabecular bone) instead of the carved face, and the face shades as noise.
-// The edge is found for free while marching: a sample that passes the OTF but is hidden by the sculpt
-// arms a short countdown, and the next SCULPT_EDGE_STEPS visible samples get the replacement treatment.
-// An OTF-transparent sample or an empty block disarms it, so a real surface reached through empty space
-// keeps the regular gradient. Cost is paid only at those few samples, not at every step.
-//   SCULPT_EDGE_SHADING 0 : legacy (raw GRAD_VOL everywhere)
-//   SCULPT_EDGE_SHADING 1 : flat (no Phong at edge samples, the same treatment as the clip-plane slab)
-//   SCULPT_EDGE_SHADING 2 : sculpt-masked central-difference gradient at edge samples (default)
-#ifndef SCULPT_EDGE_SHADING // macro default guard: SCULPT_EDGE_SHADING
-#define SCULPT_EDGE_SHADING 1
-#endif // macro default guard: SCULPT_EDGE_SHADING
-// Number of visible samples after a carved run that use the edge treatment. GRAD_VOL reaches 2 samples
-// back along the ray, so 2 covers its footprint.
-#ifndef SCULPT_EDGE_STEPS // macro default guard: SCULPT_EDGE_STEPS
-#define SCULPT_EDGE_STEPS 2
-#endif // macro default guard: SCULPT_EDGE_STEPS
-// Tap distance of the masked gradient, in units of the regular gradient offset (vec_grad_*).
-// A larger value smooths the voxel staircase of the binary sculpt state at the cost of detail.
-#ifndef SCULPT_EDGE_GRAD_SCALE // macro default guard: SCULPT_EDGE_GRAD_SCALE
-#define SCULPT_EDGE_GRAD_SCALE 1.f
-#endif // macro default guard: SCULPT_EDGE_GRAD_SCALE
 
 float SculptMaskedSample(const float3 pos_sample_ts)
 {
@@ -242,9 +246,9 @@ float SculptMaskedSample(const float3 pos_sample_ts)
 // dominates and the gradient follows the carved face; where the face meets a real boundary the two blend.
 float3 GradientSculptedVolume(const float3 pos_sample_ts)
 {
-	const float3 vx = g_cbVobj.vec_grad_x * SCULPT_EDGE_GRAD_SCALE;
-	const float3 vy = g_cbVobj.vec_grad_y * SCULPT_EDGE_GRAD_SCALE;
-	const float3 vz = g_cbVobj.vec_grad_z * SCULPT_EDGE_GRAD_SCALE;
+	const float3 vx = g_cbVobj.vec_grad_x * CUT_EDGE_GRAD_SCALE;
+	const float3 vy = g_cbVobj.vec_grad_y * CUT_EDGE_GRAD_SCALE;
+	const float3 vz = g_cbVobj.vec_grad_z * CUT_EDGE_GRAD_SCALE;
 	return float3(
 		SculptMaskedSample(pos_sample_ts + vx) - SculptMaskedSample(pos_sample_ts - vx),
 		SculptMaskedSample(pos_sample_ts + vy) - SculptMaskedSample(pos_sample_ts - vy),
@@ -252,11 +256,45 @@ float3 GradientSculptedVolume(const float3 pos_sample_ts)
 }
 #endif // sculpt visibility helpers
 
-// edge tracking is compiled only where a sculpt variant marches with slab samples and shades
-#if (SCULPT_MASK == 1 || SCULPT_BITS == 1) && VR_MODE != 3 && SCULPT_EDGE_SHADING != 0
-#define SCULPT_EDGE_ACTIVE 1
+#if OTF_MASK == 1 // per-id-OTF cut-edge helpers
+// Mask id read by the last Vis_Volume_And_Check_Slab call (per thread), so the march can compare the ids of
+// consecutive samples without a second mask fetch.
+static int g_mask_id_last = 0;
+
+// True when sample_v would be visible under mask id `id`'s OTF.
+bool IsDenseUnderIdOtf(const float sample_v, const int id)
+{
+	return LoadOtfBufId(sample_v * g_cbTmap.tmap_size_x, buf_otf, g_cbVobj.opacity_correction, id).a >= FLT_OPACITY_MIN__;
+}
+
+float IdMaskedSample(const float3 pos_sample_ts)
+{
+	const float v = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_sample_ts, 0).r;
+	const int id = (int)(tex3D_volmask.SampleLevel(g_samplerPoint_clamp, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
+	return IsDenseUnderIdOtf(v, id) ? v : 0.f;
+}
+
+// GradientSculptedVolume's counterpart: taps that are transparent under their own id's OTF read as empty.
+float3 GradientIdCutVolume(const float3 pos_sample_ts)
+{
+	const float3 vx = g_cbVobj.vec_grad_x * CUT_EDGE_GRAD_SCALE;
+	const float3 vy = g_cbVobj.vec_grad_y * CUT_EDGE_GRAD_SCALE;
+	const float3 vz = g_cbVobj.vec_grad_z * CUT_EDGE_GRAD_SCALE;
+	return float3(
+		IdMaskedSample(pos_sample_ts + vx) - IdMaskedSample(pos_sample_ts - vx),
+		IdMaskedSample(pos_sample_ts + vy) - IdMaskedSample(pos_sample_ts - vy),
+		IdMaskedSample(pos_sample_ts + vz) - IdMaskedSample(pos_sample_ts - vz));
+}
+#define CUT_EDGE_GRADIENT(P) GradientIdCutVolume(P)
+#elif SCULPT_MASK == 1 || SCULPT_BITS == 1
+#define CUT_EDGE_GRADIENT(P) GradientSculptedVolume(P)
+#endif // per-id-OTF cut-edge helpers
+
+// edge tracking is compiled only where a sculpt or multi-OTF variant marches with slab samples and shades
+#if (SCULPT_MASK == 1 || SCULPT_BITS == 1 || OTF_MASK == 1) && VR_MODE != 3 && CUT_EDGE_SHADING != 0
+#define CUT_EDGE_ACTIVE 1
 #else
-#define SCULPT_EDGE_ACTIVE 0
+#define CUT_EDGE_ACTIVE 0
 #endif
 // After a failed Vis_Volume_And_Check_Slab in a sculpt variant: true when the OTF accepted the sample and
 // only the sculpt hid it. Both sculpt paths of that function write vis_otf before the visibility AND.
@@ -357,6 +395,7 @@ bool Vis_Volume_And_Check_Slab(inout float4 vis_otf, inout float sample_v, float
 
 #if OTF_MASK==1 // multi-OTF (per-mask transfer function) path
 	int mask_vint = (int)(tex3D_volmask.SampleLevel(g_samplerPoint_clamp, pos_sample_ts, 0).r * g_cbVobj.mask_value_range + 0.5f);
+	g_mask_id_last = mask_vint;
 	
 	vis_otf = LoadSlabOtfBufId_PreInt(sample_v * g_cbTmap.tmap_size_x, sample_prev * g_cbTmap.tmap_size_x, buf_preintotf, OPACITY_CORR, mask_vint);
 	//vis_otf = LoadSlabOtfBuf_PreInt(sample_v * g_cbTmap.tmap_size_x, sample_prev * g_cbTmap.tmap_size_x, buf_preintotf, g_cbVobj.opacity_correction);
@@ -1311,9 +1350,13 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	// note that raycasters except vismask mode (or x-ray) use SLAB sample
 	float sample_prev = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_ray_start_ts - dir_sample_ts, 0).r;
 #endif // VR_MODE != 3: intensity / DVR modes
-#if SCULPT_EDGE_ACTIVE == 1
-	// remaining visible samples that take the sculpt-edge treatment (see SCULPT_EDGE_SHADING)
-	int sculpt_edge = 0;
+#if CUT_EDGE_ACTIVE == 1
+	// remaining visible samples that take the cut-edge treatment (see CUT_EDGE_SHADING)
+	int cut_edge = 0;
+#if OTF_MASK == 1
+	bool cut_prev_clear = false; // the previous sample was transparent
+	int cut_prev_id = -1;        // ... and this was its mask id
+#endif
 #endif
 
 #if VR_MODE == 1 // VR_MODE 1: opaque surface
@@ -1372,6 +1415,10 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 		if (Vis_Volume_And_Check(vis_otf, pos_ray_start_ts))
 #endif // VR_MODE != 3: intensity / DVR modes
 		{
+#if CUT_EDGE_ACTIVE == 1 && OTF_MASK == 1
+			cut_prev_clear = false;
+			cut_prev_id = g_mask_id_last;
+#endif
 			float depth_sample = depth_hit;
 #if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
 			// note that depth_hit is the front boundary of slab
@@ -1412,10 +1459,15 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #endif // Z-thickness fragment merging
 #endif	// ONLY_SINGLE_LAYER == 1 // single-layer path (no K-buffer)
 		}
-#if SCULPT_EDGE_ACTIVE == 1
+#if CUT_EDGE_ACTIVE == 1
 		else
 		{
-			sculpt_edge = SCULPT_HIDDEN_BY_CUT(vis_otf) ? SCULPT_EDGE_STEPS : 0;
+#if OTF_MASK == 1
+			cut_prev_clear = true;
+			cut_prev_id = g_mask_id_last;
+#else
+			cut_edge = SCULPT_HIDDEN_BY_CUT(vis_otf) ? CUT_EDGE_STEPS : 0;
+#endif
 		}
 #endif
 #if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
@@ -1463,17 +1515,26 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 				if (Vis_Volume_And_Check(vis_otf, pos_sample_blk_ts))
 #endif // VR_MODE != 3: intensity / DVR modes
 				{
-#if SCULPT_EDGE_ACTIVE == 1
-					const bool is_sculpt_edge = sculpt_edge > 0;
-					sculpt_edge = max(sculpt_edge - 1, 0);
+#if CUT_EDGE_ACTIVE == 1
+#if OTF_MASK == 1
+					// First visible sample (id k) after a transparent one: if id k's OTF would show the previous
+					// sample's value, that sample was cut away by its own id's OTF, not empty space -> carved face.
+					// sample_prev still holds the previous sample's value here (it is advanced after this block).
+					if (cut_prev_clear && cut_prev_id != g_mask_id_last && IsDenseUnderIdOtf(sample_prev, g_mask_id_last))
+						cut_edge = CUT_EDGE_STEPS;
+					cut_prev_clear = false;
+					cut_prev_id = g_mask_id_last;
+#endif
+					const bool is_cut_edge = cut_edge > 0;
+					cut_edge = max(cut_edge - 1, 0);
 					float3 grad;
 					[branch]
-					if (is_sculpt_edge)
+					if (is_cut_edge)
 					{
-#if SCULPT_EDGE_SHADING == 1 && VR_MODE != 2
+#if CUT_EDGE_SHADING == 1 && VR_MODE != 2
 						grad = (float3)0; // flat: nothing consumes the gradient at an edge sample
 #else
-						grad = GradientSculptedVolume(pos_sample_blk_ts);
+						grad = CUT_EDGE_GRADIENT(pos_sample_blk_ts);
 #endif
 					}
 					else
@@ -1487,8 +1548,8 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 					float3 nrl = grad / (grad_len + 0.00001f);
 
 					bool do_phong = grad_len > 0;
-#if SCULPT_EDGE_ACTIVE == 1 && SCULPT_EDGE_SHADING == 1
-					do_phong = do_phong && !is_sculpt_edge;
+#if CUT_EDGE_ACTIVE == 1 && CUT_EDGE_SHADING == 1
+					do_phong = do_phong && !is_cut_edge;
 #endif
 					float shade = 1.f;
 					if (do_phong) {
@@ -1533,11 +1594,18 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 						break;
 					}
 				} // if(sample valid check)
-#if SCULPT_EDGE_ACTIVE == 1
+#if CUT_EDGE_ACTIVE == 1
 				else
 				{
+#if OTF_MASK == 1
+					// transparent under its own id: decided at the next visible sample (see above)
+					cut_prev_clear = true;
+					cut_prev_id = g_mask_id_last;
+					cut_edge = 0;
+#else
 					// carved-away material arms the edge; an OTF-transparent sample disarms it
-					sculpt_edge = SCULPT_HIDDEN_BY_CUT(vis_otf) ? SCULPT_EDGE_STEPS : 0;
+					cut_edge = SCULPT_HIDDEN_BY_CUT(vis_otf) ? CUT_EDGE_STEPS : 0;
+#endif
 				}
 #endif
 #if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
@@ -1551,8 +1619,11 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 #if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
 			sample_prev = -1;
 #endif // VR_MODE != 3: intensity / DVR modes
-#if SCULPT_EDGE_ACTIVE == 1
-			sculpt_edge = 0; // empty block: whatever comes next is a real boundary
+#if CUT_EDGE_ACTIVE == 1
+			cut_edge = 0; // empty block: whatever comes next is a real boundary
+#if OTF_MASK == 1
+			cut_prev_clear = false;
+#endif
 #endif
 		}
 		i += blkSkip.num_skip_steps;
