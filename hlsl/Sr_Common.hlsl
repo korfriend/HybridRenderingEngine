@@ -262,7 +262,8 @@ float4 OutlineTest_old(const in int2 tex2d_xy, const in float depth_c, const in 
     return vout;
 }
 
-float4 OutlineTest(const in int2 tex2d_xy, inout float depth_c, const in float discont_depth_criterion, const in float3 edge_color, const in int thick, const in bool fadeMode)
+float4 OutlineTest(const in int2 tex2d_xy, inout float depth_c, const in float discont_depth_criterion, const in float3 edge_color, const in int thick, const in bool fadeMode,
+    const in bool innerMode, const in float inner_thres)
 {
     float2 min_rect = (float2)0;
     float2 max_rect = float2(g_cbCamState.rt_width - 1, g_cbCamState.rt_height - 1);
@@ -312,6 +313,65 @@ float4 OutlineTest(const in int2 tex2d_xy, inout float depth_c, const in float d
         //vout = float4(nor_c, 1);
         //vout = float4(depth_h0 / 40, depth_h0 / 40, depth_h0 / 40, 1);
     }
+#if DX10_0 != 1
+    else if (innerMode)
+    {
+        // Inner contour: the covered pixel lies on a surface that is occluded, within 'thick' pixels,
+        // by a nearer part of the same object. The local surface is predicted as a plane through the
+        // centre (screen-space depth gradient from the smoother one-sided difference), and a sample
+        // counts only when it is nearer than that plane by more than inner_thres. A plain max-min
+        // depth test would also fire on slanted surfaces; the plane prediction removes that.
+        const int t = max(thick, 1);
+        float2 grad = (float2)0;
+        [unroll]
+        for (int axis = 0; axis < 2; axis++) {
+            int2 o = axis == 0 ? int2(1, 0) : int2(0, 1);
+            float2 pp = tex2d_xy.xy + o;
+            float2 pm = tex2d_xy.xy - o;
+            bool vp = all(pp >= min_rect) && all(pp <= max_rect);
+            bool vm = all(pm >= min_rect) && all(pm <= max_rect);
+            float dp = vp ? sr_fragment_zdepth[pp].r : FLT_MAX;
+            float dm = vm ? sr_fragment_zdepth[pm].r : FLT_MAX;
+            float gp = dp - depth_c, gm = depth_c - dm;
+            vp = dp < 100000 && abs(gp) < inner_thres;
+            vm = dm < 100000 && abs(gm) < inner_thres;
+            float g = 0;
+            if (vp && vm) g = abs(gp) < abs(gm) ? gp : gm;
+            else if (vp) g = gp;
+            else if (vm) g = gm;
+            grad[axis] = g;
+        }
+
+        int count = 0;
+        float depth_min = depth_c;
+        for (int y = -t; y <= t; y++) {
+            for (int x = -t; x <= t; x++) {
+                float2 sample_pos = tex2d_xy.xy + float2(x, y);
+                if (any(sample_pos < min_rect) || any(sample_pos > max_rect))
+                    continue;
+                float depth = sr_fragment_zdepth[sample_pos].r;
+                if (depth >= 100000)
+                    continue;
+                float depth_pred = depth_c + grad.x * x + grad.y * y;
+                if (depth_pred - depth > inner_thres) {
+                    count++;
+                    depth_min = min(depth_min, depth);
+                }
+            }
+        }
+
+        if (count > 0) {
+            if (fadeMode) {
+                float w = 2 * t + 1;
+                float alpha = min((float)count / (w * w / 2.f), 1.f);
+                vout = float4(edge_color * alpha, alpha);
+            }
+            else vout = float4(edge_color, 1);
+            // place the line at the occluding edge's depth so it is not tied with this surface
+            depth_c = depth_min;
+        }
+    }
+#endif
 
     return vout;
 }

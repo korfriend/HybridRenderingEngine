@@ -24,7 +24,9 @@ PS_FILL_OUTPUT BasicShader4(__VS_OUT input)
     float3 outline_color = (float3)1.f;
     int pixThickness = 1;
     bool fadeMode = false;
-    
+    bool innerMode = false;
+    float innerThres = FLT_MAX;
+
     if (g_cbPobj.pobj_dummy_1 == 0) {
         // group silhouette
         int outlinePPack = g_cbCamState.iSrCamDummy__1;
@@ -40,11 +42,14 @@ PS_FILL_OUTPUT BasicShader4(__VS_OUT input)
         outline_color = g_cbPobj.Kd;
 #if DX10_0 != 1
         pixThickness = g_cbPobj.pobj_dummy_1;
-        fadeMode = (bool)g_cbPobj.pobj_dummy_0;
+        // pobj_dummy_0: bit0 = fade effect, bit1 = inner contour (threshold in depth_thres, WS units)
+        fadeMode = (g_cbPobj.pobj_dummy_0 & 0x1) != 0;
+        innerMode = (g_cbPobj.pobj_dummy_0 & 0x2) != 0;
+        innerThres = g_cbPobj.depth_thres;
 #endif
     }
-    
-    v_rgba = OutlineTest(tex2d_xy, z_depth, 10000.f, outline_color, pixThickness, fadeMode);    
+
+    v_rgba = OutlineTest(tex2d_xy, z_depth, 10000.f, outline_color, pixThickness, fadeMode, innerMode, innerThres);
     if (v_rgba.a <= 0.01) clip(-1);
 
 #if DX10_0 == 1

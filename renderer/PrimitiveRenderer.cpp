@@ -2937,11 +2937,26 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 					float outline_depthThres = actor->GetParam("_float_SilhouetteDepthThres", 10000.f);
 					vmfloat3 outline_color = actor->GetParam("_float3_SilhouetteColor", vmfloat3(1));
 					bool outline_fadeEffect = actor->GetParam("_bool_SilhouetteFadeEffect", true);
+					bool outline_inner = actor->GetParam("_bool_SilhouetteInner", false);
 
 					cbPolygonObjData->Kd = outline_color;
 					cbPolygonObjData->Ns = scale_z_res;
-					cbPolygonObjData->pobj_dummy_0 = (int)outline_fadeEffect;
+					cbPolygonObjData->pobj_dummy_0 = (outline_fadeEffect ? 0x1 : 0) | (outline_inner ? 0x2 : 0);
 					cbPolygonObjData->pobj_dummy_1 = outline_thickness;
+					cbPolygonObjData->depth_thres = FLT_MAX;
+					if (outline_inner) {
+						// inner-contour depth jump threshold, relative to the actor's world-space size
+						const float kInnerContourRelThres = 0.02f;
+						vmfloat3 pos_min_ws, pos_max_ws;
+						vmmath::fTransformPoint(&pos_min_ws, &vmfloat3(prim_data->aabb_os.pos_min), &actor->matOS2WS);
+						vmmath::fTransformPoint(&pos_max_ws, &vmfloat3(prim_data->aabb_os.pos_max), &actor->matOS2WS);
+						float diag_ws = vmmath::fLengthVector(&(pos_max_ws - pos_min_ws));
+						cbPolygonObjData->depth_thres = diag_ws > 0 ? diag_ws * kInnerContourRelThres : FLT_MAX;
+						// Honor the existing actor depth threshold as a tighter WS limit.
+						// Unset/invalid values retain the size-derived default.
+						if (std::isfinite(outline_depthThres) && outline_depthThres > 0 && outline_depthThres < 10000.f)
+							cbPolygonObjData->depth_thres = min(cbPolygonObjData->depth_thres, outline_depthThres);
+					}
 
 					vmmat44f matQaudWS2CS;
 					vmmath::fMatrixWS2CS(&matQaudWS2CS, &vmfloat3(0, 0, 1), &vmfloat3(0, 1, 0), &vmfloat3(0, 0, -1));
@@ -3952,7 +3967,11 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 		cbCamState.cam_flag |= (storeKBuf << 3);
 		SetCamConstBuf(cbCamState);
 
-		if (general_oit_routine_objs.size() > 0 || particle_layer_objs.size() > 0 || storeKBuf != 0) {
+		// The single-layer (outline) results reach the final image only through the offset-table /
+		// resolve passes below, so those must also run when the scene has NO transparent actor --
+		// otherwise an all-opaque scene silently drops every outline.
+		const bool has_single_layer = single_layer_routine_objs.size() > 0 || single_layer_routine_group_objs.size() > 0;
+		if (general_oit_routine_objs.size() > 0 || particle_layer_objs.size() > 0 || storeKBuf != 0 || has_single_layer) {
 #ifdef DX10_0
 			if (general_oit_routine_objs.size() > 0)
 				assert(0);
@@ -4196,8 +4215,8 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			dx11DeviceImmContext->CSSetShaderResources(0, 2, dx11SRVs_NULL);
 		};
 
-		if (general_oit_routine_objs.size() + single_layer_routine_objs.size() > 0 || particle_layer_objs.size() > 0
-			|| storeKBuf) 
+		if (general_oit_routine_objs.size() > 0 || has_single_layer || particle_layer_objs.size() > 0
+			|| storeKBuf)
 		{
 			psoManager->GpuProfile("Resolve Pass");
 			// ResolvePass calls 
