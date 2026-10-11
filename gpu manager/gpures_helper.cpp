@@ -2599,10 +2599,71 @@ void grd_helper::VxgiDownsampleGridMips(GpuRes& gres)
 	if (prev_cs) prev_cs->Release();
 }
 
+// Test channel (see SetTestFailCustomBuffer). The prefix is replaced at the start of every DoModule call.
+// A forced failure is logged once per name until that name uploads successfully again (which is logged as
+// well), so a re-armed test logs again. Forced names are kept apart from real failures: a real failure of a
+// name that was forced before is still reported.
+static string g_test_fail_custom_buffer_prefix;
+static std::set<std::string> g_forced_failed_names;
+
+void grd_helper::SetTestFailCustomBuffer(const string& resNamePrefix)
+{
+	g_test_fail_custom_buffer_prefix = resNamePrefix;
+}
+
+// Failure path of UpdateCustomBuffer. Whatever is registered under (src id, resName) is released and
+// unregistered, because it may be a dead or partially written buffer whose LAST_UPDATE_TIME is already
+// current (GenerateGpuResource stamps it on creation), and a registered entry with a current time would be
+// returned as valid by the next call without any upload. The caller's copy loses every view, so a caller
+// that binds alloc_res_ptrs[DTYPE_SRV] anyway binds NULL rather than a stale buffer. Logged once per name.
+static void FailCustomBuffer(GpuRes& gres, const string& resName, const char* what, const uint32_t hr = 0, const bool forced = false)
+{
+	static std::set<std::string> reported_names; // renderer-private
+	g_pCGpuManager->ReleaseGpuResource(gres, false); // false: never ClearState mid-frame
+	gres.alloc_res_ptrs.clear();
+	if ((forced ? g_forced_failed_names : reported_names).insert(resName).second)
+	{
+		vzlog_error("UpdateCustomBuffer (%s): %s (hr=0x%08X); no buffer is bound, the pass that reads it is skipped or falls back",
+			resName.c_str(), what, hr);
+	}
+}
+
+static bool HasCustomBufferPtr(const GpuRes& gres, const DesType dtype)
+{
+	auto it = gres.alloc_res_ptrs.find(dtype);
+	return it != gres.alloc_res_ptrs.end() && it->second != NULL;
+}
+
+// Contract:
+//  true  : the buffer is registered, has a resource and an SRV, and holds the content of bufPtr (or is
+//          current for cpu_update_custom_time). gres.alloc_res_ptrs[DTYPE_SRV] is non-NULL.
+//  false : nothing is registered under (srcObj id, resName), gres.alloc_res_ptrs is empty, and
+//          LAST_UPDATE_TIME is not recorded, so the next call retries from scratch. An error is logged once
+//          per resource name. Causes: numElements <= 0, type_bytes <= 0, a total size above 4 GB, buffer or
+//          SRV creation failure, or a failed Map.
 bool grd_helper::UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string& resName, const void* bufPtr, const int numElements, DXGI_FORMAT dxFormat, const int type_bytes, LocalProgress* progress, uint64_t cpu_update_custom_time)
 {
 	gres.vm_src_id = srcObj->GetObjectID();
 	gres.res_name = resName;
+
+	// test channel: fail as if Map had failed. Checked before the freshness test so that a buffer which is already
+	// current is failed (and unregistered) too.
+	if (!g_test_fail_custom_buffer_prefix.empty()
+		&& resName.compare(0, g_test_fail_custom_buffer_prefix.size(), g_test_fail_custom_buffer_prefix) == 0)
+	{
+		g_pCGpuManager->UpdateGpuResource(gres); // lookup only, so a registered entry is released with its own type
+		FailCustomBuffer(gres, resName, "Map failed (forced by the test knob)", 0, true);
+		return false;
+	}
+
+	// a zero-size buffer cannot be created, and a product above 32 bits would wrap ByteWidth and the copy size
+	const uint64_t total_bytes = (numElements > 0 && type_bytes > 0) ? (uint64_t)numElements * (uint64_t)type_bytes : 0;
+	if (total_bytes == 0 || total_bytes > 0xFFFFFFFFull)
+	{
+		g_pCGpuManager->UpdateGpuResource(gres); // lookup only, so a registered entry of an earlier size is released
+		FailCustomBuffer(gres, resName, total_bytes == 0 ? "the element count or stride is not positive" : "the buffer size exceeds 32 bits");
+		return false;
+	}
 
 	bool needRegen = true;
 	if (g_pCGpuManager->UpdateGpuResource(gres)) {
@@ -2610,12 +2671,13 @@ bool grd_helper::UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string
 		uint32_t nemElementPrev = gres.res_values.GetParam("NUM_ELEMENTS", (uint32_t)0);
 		uint32_t typeBytesPrev = gres.res_values.GetParam("STRIDE_BYTES", (uint32_t)0);
 
-		needRegen = (nemElementPrev * typeBytesPrev) != ((uint32_t)numElements * (uint32_t)type_bytes);
+		// a registered entry without a resource or an SRV is never reused
+		const bool alive = HasCustomBufferPtr(gres, DTYPE_RES) && HasCustomBufferPtr(gres, DTYPE_SRV);
+		needRegen = !alive || ((uint64_t)nemElementPrev * (uint64_t)typeBytesPrev) != total_bytes;
 
 		uint64_t _tp_cpu = cpu_update_custom_time == 0 ? srcObj->GetContentUpdateTime() : cpu_update_custom_time;
 		uint64_t _tp_gpu = gres.res_values.GetParam("LAST_UPDATE_TIME", (uint64_t)0);
-		if (_tp_gpu >= _tp_cpu) {
-			assert(!needRegen);
+		if (_tp_gpu >= _tp_cpu && !needRegen) {
 			return true;
 		}
 	}
@@ -2631,19 +2693,42 @@ bool grd_helper::UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string
 		gres.res_values.SetParam("STRIDE_BYTES", (const uint32_t)type_bytes);
 
 		// including safe-delete to avoid redundant gen
-		g_pCGpuManager->GenerateGpuResource(gres);
+		if (!g_pCGpuManager->GenerateGpuResource(gres))
+		{
+			FailCustomBuffer(gres, resName, "buffer creation failed");
+			return false;
+		}
+		// GenerateGpuResource registers the entry even when the SRV could not be created
+		if (!HasCustomBufferPtr(gres, DTYPE_RES) || !HasCustomBufferPtr(gres, DTYPE_SRV))
+		{
+			FailCustomBuffer(gres, resName, "the buffer or its shader resource view could not be created");
+			return false;
+		}
 	}
 
 	if (bufPtr)
 	{
-		D3D11_MAPPED_SUBRESOURCE d11MappedRes;
-		g_psoManager->dx11DeviceImmContext->Map((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes);
-		memcpy(d11MappedRes.pData, bufPtr, type_bytes * numElements);
-		g_psoManager->dx11DeviceImmContext->Unmap((ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES], 0);
+		ID3D11DeviceContext* ctx = g_psoManager->dx11DeviceImmContext;
+		ID3D11Resource* res = (ID3D11Resource*)gres.alloc_res_ptrs[DTYPE_RES];
+		D3D11_MAPPED_SUBRESOURCE d11MappedRes = {};
+		HRESULT hr = ctx->Map(res, 0, D3D11_MAP_WRITE_DISCARD, 0, &d11MappedRes);
+		if (FAILED(hr) || d11MappedRes.pData == NULL)
+		{
+			if (SUCCEEDED(hr)) ctx->Unmap(res, 0);
+			FailCustomBuffer(gres, resName, "Map failed", (uint32_t)hr);
+			return false;
+		}
+		memcpy(d11MappedRes.pData, bufPtr, (size_t)total_bytes);
+		ctx->Unmap(res, 0);
 	}
 
 	gres.options["Update LAST_UPDATE_TIME"] = 1u;
 	g_pCGpuManager->UpdateGpuResource(gres);
+
+	if (!g_forced_failed_names.empty() && g_forced_failed_names.erase(resName) != 0)
+	{
+		vzlog("UpdateCustomBuffer (%s): uploaded again after a forced failure", resName.c_str());
+	}
 
 	return true;
 }

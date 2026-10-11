@@ -282,3 +282,5 @@ __pycache__/
 CLAUDE.md
 /.claude/settings.local.json
 /secret_recipies
+/shader_compiled_objs/
+/shader_compiled_objs_4_0/

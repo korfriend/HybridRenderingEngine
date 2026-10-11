@@ -216,6 +216,8 @@ struct HxCB_PolygonObject
 	// 8th bit : 0 (normal color map) 1 (for windowing slice)
 	// 10th bit : 0 (No XFlip) 1 (XFlip)
 	// 11th bit : 0 (No XFlip) 1 (YFlip)
+	// 13th bit (index 12) : 0 (slicer uses Kd) 1 (slicer colours rgb from the polyline-parameterised scalar field bound at t32)
+	// 14th bit (index 13) : 0 (planar slicer) 1 (curved slicer; the slice outline pass uses the curve mapping)
 	// 20th bit : 0 (No Dashed Line) 1 (Dashed Line)
 	// 21th bit : 0 (Transparent Dash) 1 (Dash As Color Inverted)
 	// 23th bit : 0 (static alpha) 1 (dynamic alpha using mask t50) ... mode 1
@@ -232,6 +234,10 @@ struct HxCB_PolygonObject
 	uint pobj_dummy_1;
 	
 	float4 pb_shading_factor; // x : Ambient, y : Diffuse, z : Specular, w : specular
+	float4 hoverCylinderStartRadiusWS;
+	float4 hoverCylinderEndEnabledWS;
+	float4 hoverCylinderColor;
+	
 };
 
 struct HxCB_VolumeObject

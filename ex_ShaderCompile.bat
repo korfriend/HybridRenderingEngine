@@ -1,3 +1,4 @@
+if not exist shader_compiled_objs mkdir shader_compiled_objs
 fxc /E VXGI_VoxelizeVolume /T cs_5_0 ./hlsl/vxgi/Voxelize.hlsl /Fo ./shader_compiled_objs/VXGI_VoxelizeVolume_cs_5_0
 fxc /E VXGI_InjectLight /T cs_5_0 ./hlsl/vxgi/InjectLight.hlsl /Fo ./shader_compiled_objs/VXGI_InjectLightMLspot_cs_5_0
 fxc /E VXGI_Gather /T cs_5_0 ./hlsl/vxgi/Gather.hlsl /Fo ./shader_compiled_objs/VXGI_Gather_cs_5_0

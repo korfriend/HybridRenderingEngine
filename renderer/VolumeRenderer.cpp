@@ -3113,14 +3113,16 @@ bool RenderVrDLS(VmFnContainer* _fncontainer,
 			// finds its stored timestamp already current and reuses the buffer (no Map / no re-upload). When unchanged
 			// mask_weights is left untouched above, but it is not read in that case (the size matches and the upload is skipped).
 			const int upload_count = (kcount > 0 ? kcount : 1);
-			grd_helper::UpdateCustomBuffer(gres_xray_filter_mask, iobj, "XRAY_FILTER_MASK",
+			// on failure the composite still runs (it writes the final colour) as a passthrough, which never
+			// reads the mask at t1; the failed call leaves no views, so t1 is bound NULL
+			const bool mask_ok = grd_helper::UpdateCustomBuffer(gres_xray_filter_mask, iobj, "XRAY_FILTER_MASK",
 				mask_weights, upload_count, DXGI_FORMAT_R32_FLOAT, (int)sizeof(float), NULL, filter_time);
 
 			// upload cbSliceFilter (b12)
 			{
 				grd_helper::CB_SliceFilter cb_sf = {};
 				cb_sf.filter_radius = radius;
-				cb_sf.use_filter = use_filter;
+				cb_sf.use_filter = mask_ok ? use_filter : 0;
 				ID3D11Buffer* cbuf_sf = psoManager->get_cbuf("CB_SliceFilter");
 				D3D11_MAPPED_SUBRESOURCE mappedResSf;
 				dx11DeviceImmContext->Map(cbuf_sf, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResSf);

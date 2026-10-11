@@ -3,6 +3,141 @@
 #include "hlsl/ShaderInterop_BVH.h"
 #include <algorithm>
 
+#ifndef DX10_0
+// Slicer colouring by a polyline-parameterised scalar field (shader side: PolylineFieldColor in
+// hlsl/RayProcessing.hlsl, SRV t32, pobj_flag index 12).
+// Buffer layout, DXGI_FORMAT_R32G32B32A32_FLOAT, one float4 per element:
+//   [0]          (N, L, range_min, range_max)
+//   [1 .. N]     (x, y, z, value)  polyline vertex in the mesh's raw position space + per-vertex value
+//   [N+1 .. N+L] (r, g, b, 1)      lookup table
+static const size_t kPolylineFieldMaxPoints = 1024;
+static const size_t kPolylineFieldMaxLut = 4096;
+
+static uint64_t PolylineFieldHashFnv1a64(const void* data, const size_t bytes)
+{
+	const uint8_t* p = (const uint8_t*)data;
+	uint64_t h = 1469598103934665603ull;
+	for (size_t i = 0; i < bytes; i++)
+	{
+		h ^= (uint64_t)p[i];
+		h *= 1099511628211ull;
+	}
+	return h;
+}
+
+// Returns the SRV of the actor's field buffer, or NULL when the actor has no (usable) field; NULL means the
+// slicer keeps its ordinary colour. Never throws: every parameter read, the buffer build and the upload run
+// inside one try block, and a failure is reported once per actor id for the process lifetime.
+static ID3D11ShaderResourceView* PreparePolylineFieldSrv(VmActor* actor, VmVObjectPrimitive* pobj, VmGpuManager* gpu_manager)
+{
+	static std::set<int> warned_actor_ids; // renderer-private
+	bool failed = false;
+	const char* reason = "malformed field parameters";
+	ID3D11ShaderResourceView* srv = NULL;
+	try
+	{
+		// every default below has the exact stored type: a mismatching default type throws on the first
+		// frame on which the key exists
+		if (actor->GetParam("_bool_SlicerPolylineField", false))
+		{
+			const std::vector<float>* pts = actor->GetParamPtr<std::vector<float>>("_vectorfloat_SlicerPolylineFieldPointsOS");
+			const std::vector<float>* vals = actor->GetParamPtr<std::vector<float>>("_vectorfloat_SlicerPolylineFieldValues");
+			const std::vector<float>* lut = actor->GetParamPtr<std::vector<float>>("_vectorfloat_SlicerPolylineFieldLutRgb");
+			const float range_min = actor->GetParam("_float_SlicerPolylineFieldMin", 0.f);
+			const float range_max = actor->GetParam("_float_SlicerPolylineFieldMax", 0.f);
+
+			const size_t N = pts ? pts->size() / 3 : 0;
+			const size_t L = lut ? lut->size() / 3 : 0;
+			if (pts == NULL || vals == NULL || lut == NULL
+				|| pts->size() % 3 != 0 || lut->size() % 3 != 0
+				|| N < 2 || N > kPolylineFieldMaxPoints || L < 2 || L > kPolylineFieldMaxLut
+				|| vals->size() != N || !(range_max > range_min))
+			{
+				failed = true;
+			}
+			else
+			{
+				const uint32_t count = (uint32_t)(1 + N + L);
+				std::vector<float> packed((size_t)count * 4, 0.f);
+				packed[0] = (float)N;
+				packed[1] = (float)L;
+				packed[2] = range_min;
+				packed[3] = range_max;
+				for (size_t i = 0; i < N; i++)
+				{
+					float* e = &packed[(1 + i) * 4];
+					e[0] = (*pts)[i * 3 + 0];
+					e[1] = (*pts)[i * 3 + 1];
+					e[2] = (*pts)[i * 3 + 2];
+					e[3] = (*vals)[i]; // a non-finite value is passed through as "unknown"
+				}
+				for (size_t i = 0; i < L; i++)
+				{
+					float* e = &packed[(1 + N + i) * 4];
+					e[0] = (*lut)[i * 3 + 0];
+					e[1] = (*lut)[i * 3 + 1];
+					e[2] = (*lut)[i * 3 + 2];
+					e[3] = 1.f;
+				}
+				const uint64_t hash = PolylineFieldHashFnv1a64(packed.data(), packed.size() * sizeof(float));
+
+				const std::string res_name = "SlicerPolylineField#" + std::to_string(actor->actorId);
+				GpuRes gres;
+				gres.vm_src_id = pobj->GetObjectID();
+				gres.res_name = res_name;
+				const bool found = gpu_manager->UpdateGpuResource(gres); // lookup only
+
+				// reuse is decided by content hash + resource existence + size, never by time
+				const bool reuse = found
+					&& gres.res_values.GetParam("NUM_ELEMENTS", (uint32_t)0) == count
+					&& actor->GetParam("_ullong_SlicerPolylineFieldGpuHash", (uint64_t)0) == hash;
+				if (!reuse)
+				{
+					// UpdateCustomBuffer skips the upload when the resource's LAST_UPDATE_TIME is >= the time it is
+					// given, and the clock ticks in milliseconds: force a time strictly after the last upload so a
+					// second change within one tick is not dropped
+					const uint64_t last_time = found ? gres.res_values.GetParam("LAST_UPDATE_TIME", (uint64_t)0) : (uint64_t)0;
+					const uint64_t now_time = vmhelpers::GetCurrentTimePack();
+					const uint64_t upload_time = now_time > last_time ? now_time : last_time + 1;
+					// on failure nothing stays registered, gres has no views and the hash is not recorded, so the
+					// next frame retries
+					if (grd_helper::UpdateCustomBuffer(gres, pobj, res_name, packed.data(), (int)count,
+						DXGI_FORMAT_R32G32B32A32_FLOAT, 16, NULL, upload_time))
+						actor->SetParam("_ullong_SlicerPolylineFieldGpuHash", hash);
+				}
+				auto it_srv = gres.alloc_res_ptrs.find(DTYPE_SRV);
+				srv = it_srv != gres.alloc_res_ptrs.end() ? (ID3D11ShaderResourceView*)it_srv->second : NULL;
+				if (srv == NULL)
+				{
+					failed = true;
+					reason = "the field buffer could not be created or uploaded";
+				}
+			}
+		}
+	}
+	catch (...)
+	{
+		// nothing that allocates here: logging and the set insertion happen below, outside the handler
+		failed = true;
+		reason = "a field parameter could not be read";
+	}
+
+	if (failed)
+	{
+		try
+		{
+			if (warned_actor_ids.insert(actor->actorId).second)
+			{
+				vzlog_warning("actor %d: slicer polyline field ignored (%s); the slice uses the actor's ordinary colour", actor->actorId, reason);
+			}
+		}
+		catch (...) {}
+		return NULL;
+	}
+	return srv;
+}
+#endif
+
 bool RenderSrSlicer(VmFnContainer* _fncontainer,
 	VmGpuManager* gpu_manager,
 	grd_helper::PSOManager* psoManager,
@@ -419,8 +554,19 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		int num_curvedPoints = (int)vtrCurveInterpolations.size();
 		if (num_curvedPoints < 1)
 			return false;
-		grd_helper::UpdateCustomBuffer(gres_cpPoints, iobj, "CurvedPlanePoints", &vtrCurveInterpolations[0], num_curvedPoints, DXGI_FORMAT_R32G32B32_FLOAT, 12);
-		grd_helper::UpdateCustomBuffer(gres_cpTangents, iobj, "CurvedPlaneTangents", &vtrCurveTangentVectors[0], num_curvedPoints, DXGI_FORMAT_R32G32B32_FLOAT, 12);
+		if ((int)vtrCurveTangentVectors.size() < num_curvedPoints) {
+			static bool reported = false; // logged once per process
+			if (!reported) {
+				reported = true;
+				vzlog_error("RenderSrSlicer :: the curve tangent list (%d) is shorter than the curve point list (%d); the curved slice is not rendered",
+					(int)vtrCurveTangentVectors.size(), num_curvedPoints);
+			}
+			return false;
+		}
+		// the curved slice cannot be rendered without both curve buffers
+		if (!grd_helper::UpdateCustomBuffer(gres_cpPoints, iobj, "CurvedPlanePoints", &vtrCurveInterpolations[0], num_curvedPoints, DXGI_FORMAT_R32G32B32_FLOAT, 12)
+			|| !grd_helper::UpdateCustomBuffer(gres_cpTangents, iobj, "CurvedPlaneTangents", &vtrCurveTangentVectors[0], num_curvedPoints, DXGI_FORMAT_R32G32B32_FLOAT, 12))
+			return false;
 		void* srv_cplane_points = gres_cpPoints.alloc_res_ptrs[DTYPE_SRV];
 		void* srv_cplane_tangents = gres_cpTangents.alloc_res_ptrs[DTYPE_SRV];
 		SET_SHADER_RES(30, 1, (ID3D11ShaderResourceView**)&srv_cplane_points);
@@ -668,12 +814,44 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 		VmVObjectPrimitive* pobj = (VmVObjectPrimitive*)geo_obj;
 		const PrimitiveData* prim_data = pobj->GetPrimitiveData();
 		if (prim_data->GetVerticeDefinition<float>("POSITION") == NULL || 
-#ifdef DX10_0
-			pobj->GetBVHTree() == NULL ||
-#else
-#endif
 			prim_data->ptype != PrimitiveTypeTRIANGLE)
 			continue;
+#ifdef DX10_0
+		// the DX10_0 slice fill and picking trace the legacy SplitBVH only, so a triangle mesh without one is
+		// skipped; reported once per actor id for as long as this DLL stays loaded (render and picking passes
+		// share the set), and only for an actor that is enabled on slicers. The line names vzm::UpdateBVH only for
+		// a mesh the SplitBVH can be built from (a non-empty, non-strip triangle list with an index buffer and
+		// positions); for any other mesh it says that the DX10.0 slicer cannot show it at all. The legacy_bvh_buildable
+		// predicate below mirrors the conditions under which vzm::UpdateBVH builds the DX10.0 legacy BVH and must be
+		// kept in step with that call
+		if (pobj->GetBVHTree() == NULL)
+		{
+			try
+			{
+				static std::set<int> warned_no_legacy_bvh_actor_ids; // renderer-private
+				if (actor->GetParam("_bool_EnabledOnSlicer", true)
+					&& warned_no_legacy_bvh_actor_ids.insert(actor->actorId).second)
+				{
+					const bool legacy_bvh_buildable = prim_data->ptype == PrimitiveTypeTRIANGLE && !prim_data->is_stripe
+						&& prim_data->num_prims > 0 && prim_data->GetIndexBuffer() != NULL
+						&& (uint64_t)prim_data->num_vidx >= 3ull * prim_data->num_prims
+						&& prim_data->GetVerticeDefinitionConst<vmfloat3>("POSITION") != NULL;
+					if (legacy_bvh_buildable)
+					{
+						vzlog_warning("RenderSrSlicer :: the DX10.0 slicer does not draw or pick actor %d: its mesh (object %d) has no legacy BVH; call vzm::UpdateBVH(%d) for that mesh",
+							actor->actorId, pobj->GetObjectID(), pobj->GetObjectID());
+					}
+					else
+					{
+						vzlog_warning("RenderSrSlicer :: the DX10.0 slicer cannot draw or pick actor %d at all: its mesh (object %d) is not a non-empty indexed triangle list (a strip, for example), the only mesh type the DX10.0 slicer supports",
+							actor->actorId, pobj->GetObjectID());
+					}
+				}
+			}
+			catch (...) {}
+			continue;
+		}
+#endif
 
 		//if (is_picking_routine) {
 		//	if (prim_data->ptype == vmenums::PrimitiveTypeLINE //|| 
@@ -893,6 +1071,23 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 
 				cbPolygonObj.num_letters = prim_data->GetNumVertexDefinitions() * 3;
 			//}
+
+#ifndef DX10_0
+			// polyline-field colouring: must run before the CB_PolygonObject upload below, or the pobj_flag bits
+			// never reach the GPU. The shader replaces only rgb; Kd and alpha above stay as computed.
+			ID3D11ShaderResourceView* srv_polyline_field = NULL;
+			if (!is_picking_routine)
+			{
+				if (curved_slicer)
+					cbPolygonObj.pobj_flag |= (0x1 << 13); // the slice outline pass uses the curve mapping
+				srv_polyline_field = PreparePolylineFieldSrv(actor, pobj, gpu_manager);
+				if (srv_polyline_field != NULL)
+				{
+					SET_SHADER_RES(32, 1, &srv_polyline_field);
+					cbPolygonObj.pobj_flag |= (0x1 << 12);
+				}
+			}
+#endif
 			
 			D3D11_MAPPED_SUBRESOURCE mappedResPobjData;
 			dx11DeviceImmContext->Map(cbuf_pobj, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResPobjData);
@@ -919,37 +1114,51 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 			const bool cutPlane = true && !curved_slicer;
 
 #ifdef DX10_0
+			// DX10_0 uses the legacy SplitBVH by design: the actor filter above admits only actors
+			// that have one (GetBVHTree() != NULL), so this is expected to be true here.
+			// The GPU BVH branch below is the DX11 path.
 			const bool isLegacyBVH = pobj->GetBVHTree() != NULL;
-			assert(!isLegacyBVH);
 #else
 			const bool isLegacyBVH = false;
 #endif
 
 			if (fillInside)
 			{
+				bool fill_resources_ok = true;
 				if (isLegacyBVH)
 				{
-					vmint4* nodePtr;
-					int nodeSize;
-					vmint4* triWoopPtr;
-					int triWoopSize;
-					vmint4* triDebugPtr;
-					int triDebugSize;
-					int* cpuTriIndicesPtr;
-					int triIndicesSize;
-					pobj->GetBVHTreeBuffers(&nodePtr, &nodeSize, &triWoopPtr, &triWoopSize,
-						&triDebugPtr, &triDebugSize, &cpuTriIndicesPtr, &triIndicesSize);
+					vmint4* nodePtr = NULL;
+					int nodeSize = 0;
+					vmint4* triWoopPtr = NULL;
+					int triWoopSize = 0;
+					vmint4* triDebugPtr = NULL;
+					int triDebugSize = 0;
+					int* cpuTriIndicesPtr = NULL;
+					int triIndicesSize = 0;
 
+					// the fill is skipped for this actor unless all four BVH buffers are created and uploaded
 					GpuRes bvhNode, bvhTriWoop, bvhTriDebug, bvhIndice;
-					grd_helper::UpdateCustomBuffer(bvhNode, pobj, "BvhNode", nodePtr, nodeSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4));
-					grd_helper::UpdateCustomBuffer(bvhTriWoop, pobj, "BvhTriWoop", triWoopPtr, triWoopSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4));
-					grd_helper::UpdateCustomBuffer(bvhTriDebug, pobj, "BvhTriDebug", triDebugPtr, triDebugSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4));
-					grd_helper::UpdateCustomBuffer(bvhIndice, pobj, "BvhIndice", cpuTriIndicesPtr, triIndicesSize, DXGI_FORMAT_R32_SINT, sizeof(int));
+					fill_resources_ok = pobj->GetBVHTreeBuffers(&nodePtr, &nodeSize, &triWoopPtr, &triWoopSize,
+							&triDebugPtr, &triDebugSize, &cpuTriIndicesPtr, &triIndicesSize);
+					if (!fill_resources_ok) {
+						static bool reported = false; // logged once per process
+						if (!reported) {
+							reported = true;
+							vzlog_error("RenderSrSlicer :: the mesh BVH buffers are not available; the slice fill and picking are skipped for this actor");
+						}
+					}
+					fill_resources_ok = fill_resources_ok
+						&& grd_helper::UpdateCustomBuffer(bvhNode, pobj, "BvhNode", nodePtr, nodeSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4))
+						&& grd_helper::UpdateCustomBuffer(bvhTriWoop, pobj, "BvhTriWoop", triWoopPtr, triWoopSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4))
+						&& grd_helper::UpdateCustomBuffer(bvhTriDebug, pobj, "BvhTriDebug", triDebugPtr, triDebugSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4))
+						&& grd_helper::UpdateCustomBuffer(bvhIndice, pobj, "BvhIndice", cpuTriIndicesPtr, triIndicesSize, DXGI_FORMAT_R32_SINT, sizeof(int));
 
-					SET_SHADER_RES(0, 1, (ID3D11ShaderResourceView**)&bvhNode.alloc_res_ptrs[DTYPE_SRV]);
-					SET_SHADER_RES(1, 1, (ID3D11ShaderResourceView**)&bvhTriWoop.alloc_res_ptrs[DTYPE_SRV]);
-					SET_SHADER_RES(2, 1, (ID3D11ShaderResourceView**)&bvhTriDebug.alloc_res_ptrs[DTYPE_SRV]);
-					SET_SHADER_RES(3, 1, (ID3D11ShaderResourceView**)&bvhIndice.alloc_res_ptrs[DTYPE_SRV]);
+					if (fill_resources_ok) {
+						SET_SHADER_RES(0, 1, (ID3D11ShaderResourceView**)&bvhNode.alloc_res_ptrs[DTYPE_SRV]);
+						SET_SHADER_RES(1, 1, (ID3D11ShaderResourceView**)&bvhTriWoop.alloc_res_ptrs[DTYPE_SRV]);
+						SET_SHADER_RES(2, 1, (ID3D11ShaderResourceView**)&bvhTriDebug.alloc_res_ptrs[DTYPE_SRV]);
+						SET_SHADER_RES(3, 1, (ID3D11ShaderResourceView**)&bvhIndice.alloc_res_ptrs[DTYPE_SRV]);
+					}
 				}
 				else
 				{
@@ -1018,7 +1227,14 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 					(ID3D11UnorderedAccessView*)gres_fb_rgba.alloc_res_ptrs[DTYPE_UAV],
 					(ID3D11UnorderedAccessView*)gres_fb_depthcs.alloc_res_ptrs[DTYPE_UAV] };
 #endif
-				if (is_picking_routine) {
+				if (!fill_resources_ok) {
+					// no dispatch: the BVH buffers it would read are not valid
+#ifndef DX10_0
+					if (srv_polyline_field != NULL)
+						SET_SHADER_RES(32, 1, dx11SRVs_NULL); // no stale field buffer for the next actor
+#endif
+				}
+				else if (is_picking_routine) {
 #ifdef DX10_0
 					ID3D11Buffer* dx11BufferTargetPrim = (ID3D11Buffer*)gres_quad.alloc_res_ptrs[DTYPE_RES];
 					ID3D11Buffer* dx11IndiceTargetPrim = NULL;
@@ -1136,6 +1352,8 @@ bool RenderSrSlicer(VmFnContainer* _fncontainer,
 					//else assert(0);
 					
 					dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs, dx11UAVs_NULL, NULL);
+					if (srv_polyline_field != NULL)
+						SET_SHADER_RES(32, 1, dx11SRVs_NULL); // no stale field buffer for the next actor
 #endif
 				}
 				//dx11DeviceImmContext->CSSetUnorderedAccessViews(0, NUM_UAVs, dx11UAVs_NULL, (UINT*)(&dx11UAVs_NULL));

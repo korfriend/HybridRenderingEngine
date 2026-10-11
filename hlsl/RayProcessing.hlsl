@@ -210,6 +210,199 @@ RWTexture2D<float4> fragment_vis : register(u3);
 RWTexture2D<float> fragment_zdepth : register(u4);
 #endif
 
+// Slicer colouring by a polyline-parameterised scalar field (per actor, opt-in through pobj_flag index 12).
+// Compiled only into the GPU-BVH compute variants that write colour: the DX10.0 pixel shaders, the legacy-BVH
+// compute shaders, the picking variants and the undercut pixel shaders keep the plain Kd colour.
+#if (DX10_0 != 1) && !defined(BVH_LEGACY) && (PICKING != 1) && (UNDERCUT_PS != 1)
+#define SLICER_POLYLINE_FIELD 1
+#else
+#define SLICER_POLYLINE_FIELD 0
+#endif
+
+#if SLICER_POLYLINE_FIELD == 1
+// Layout (float4 elements):
+//   [0]            header (N, L, range_min, range_max); N and L are exact integers stored as float
+//   [1 .. N]       polyline vertex (x, y, z) in the mesh's raw position space, w = per-vertex scalar value
+//                  (a non-finite value means "unknown")
+//   [N+1 .. N+L]   lookup table rgb, w unused; entry i sits at t = i / (L - 1)
+Buffer<float4> buf_slicerPolylineField : register(t32);
+
+// exponent-bit test: does not depend on IEEE-strict compilation, unlike isnan/isfinite
+bool IsFiniteBits(float x) { return (asuint(x) & 0x7F800000u) != 0x7F800000u; }
+
+// Colour of the field at pos_os (raw mesh position space). Returns false (the caller keeps Kd) when the
+// buffer is malformed.
+// The value at pos_os is the per-vertex value linearly interpolated at the closest point on the polyline;
+// pixels beyond either end take that end vertex's value. t = (value - min) / (max - min), saturated, then the
+// lookup table is interpolated at x = t * (L - 1). A non-finite contributing value maps to t = 0.5.
+bool PolylineFieldColor(float3 pos_os, out float3 rgb)
+{
+	uint count;
+	buf_slicerPolylineField.GetDimensions(count);
+	float4 hdr = buf_slicerPolylineField[0];
+	uint N = (uint)hdr.x;
+	uint L = (uint)hdr.y;
+	if (N < 2 || L < 2 || N >= count || L >= count || 1 + N + L > count || !(hdr.w > hdr.z))
+	{
+		rgb = 0;
+		return false;
+	}
+
+	float best_d2 = FLT_MAX;
+	uint best_i = 0;
+	float best_s = 0;
+	[loop]
+	for (uint i = 0; i + 1 < N; i++)
+	{
+		float3 a = buf_slicerPolylineField[1 + i].xyz;
+		float3 b = buf_slicerPolylineField[2 + i].xyz;
+		float3 ab = b - a;
+		float len2 = dot(ab, ab);
+		float s = len2 > 0 ? saturate(dot(pos_os - a, ab) / len2) : 0;
+		float3 q = a + s * ab;
+		float d2 = dot(pos_os - q, pos_os - q);
+		if (d2 < best_d2) // strict: the lowest segment index wins a tie
+		{
+			best_d2 = d2;
+			best_i = i;
+			best_s = s;
+		}
+	}
+
+	float v0 = buf_slicerPolylineField[1 + best_i].w;
+	float v1 = buf_slicerPolylineField[2 + best_i].w;
+	float t = 0.5f;
+	// an endpoint whose interpolation weight is zero does not contribute
+	bool ok = (best_s <= 0.f) ? IsFiniteBits(v0) : (best_s >= 1.f) ? IsFiniteBits(v1)
+		: (IsFiniteBits(v0) && IsFiniteBits(v1));
+	if (ok)
+	{
+		// select, do not lerp, at an endpoint: lerp(v0, v1, 0) still evaluates v1 * 0, and NaN * 0 is NaN
+		float v = (best_s <= 0.f) ? v0 : (best_s >= 1.f) ? v1 : lerp(v0, v1, best_s);
+		if (IsFiniteBits(v))
+			t = saturate((v - hdr.z) / (hdr.w - hdr.z));
+	}
+
+	float x = t * (float)(L - 1);
+	uint i0 = min((uint)x, L - 2);
+	float f = x - (float)i0;
+	rgb = saturate(lerp(buf_slicerPolylineField[1 + N + i0].rgb,
+		buf_slicerPolylineField[2 + N + i0].rgb, f));
+	return true;
+}
+#endif
+
+// Per-pixel slab-front point and ray direction of the planar slicer (WS). Shared by the fill and the outline.
+void SlicePlanarPixelRay(const int2 ss_xy, out float3 pos_ws, out float3 dir_ws)
+{
+	float3 pos_ip_ss = float3(ss_xy, 0.0f);
+	pos_ws = TransformPoint(pos_ip_ss, g_cbCamState.mat_ss2ws);
+	dir_ws = g_cbCamState.dir_view_ws;
+	if (g_cbCamState.cam_flag & 0x1)
+		dir_ws = pos_ws - g_cbCamState.pos_cam_ws;
+	dir_ws = normalize(dir_ws);
+}
+
+// Curved slicer pixel mapping (WS), split into two stages so that neither has an early return: the fill
+// pass calls both and exits after each, the outline pass goes through SliceCurvedPixelRay below. Keeping the
+// stages return-free keeps the fill's generated code identical to the original inline version.
+//
+// Stage 1: horizontal position of the pixel column on the curve.
+// Returns false when the column is off the curve.
+bool SliceCurvedPixelColumn(const int2 ss_xy, out float2 f2PosInterTopCOS, out float fRatio0, out float fRatio1)
+{
+	int2 i2SizeBuffer = int2(g_cbCamState.rt_width, g_cbCamState.rt_height);
+	int iPlaneSizeX = g_cbCurvedSlicer.numCurvePoints;
+	float3 f3PosTopLeftCOS = g_cbCurvedSlicer.posTopLeftCOS;
+	float3 f3PosTopRightCOS = g_cbCurvedSlicer.posTopRightCOS;
+
+	int2 cip_xy = ss_xy;
+	// i ==> cip_xy.x
+	fRatio0 = (float)((i2SizeBuffer.x - 1) - cip_xy.x) / (float)(i2SizeBuffer.x - 1);
+	fRatio1 = (float)(cip_xy.x) / (float)(i2SizeBuffer.x - 1);
+
+	f2PosInterTopCOS.x = fRatio0 * f3PosTopLeftCOS.x + fRatio1 * f3PosTopRightCOS.x;
+	f2PosInterTopCOS.y = fRatio0 * f3PosTopLeftCOS.y + fRatio1 * f3PosTopRightCOS.y;
+
+	return !(f2PosInterTopCOS.x < 0 || f2PosInterTopCOS.x >= (float)(iPlaneSizeX - 1));
+}
+
+// Stage 2: the ray of the pixel, given its column from stage 1. Always writes every output.
+// Returns false when the pixel is above or below the curved sheet.
+//   pos_front_ws : the slab-front point of the pixel (curve point moved back by half the thickness, plus the
+//                  vertical offset along the sheet's up vector)
+//   view_ws      : unit view direction across the slab
+//   tangent_ws   : unit curve tangent at the pixel column
+//   center_ws    : the interpolated curve point itself (no thickness or vertical offset)
+// The curve indices are clamped, so running this stage for a column that stage 1 rejected is safe.
+bool SliceCurvedPixelRayOnColumn(const int2 ss_xy, const float2 f2PosInterTopCOS, const float fRatio0, const float fRatio1,
+	out float3 pos_front_ws, out float3 view_ws, out float3 tangent_ws, out float3 center_ws)
+{
+	int2 i2SizeBuffer = int2(g_cbCamState.rt_width, g_cbCamState.rt_height);
+	int iPlaneSizeX = g_cbCurvedSlicer.numCurvePoints;
+	float3 f3VecSampleUpWS = g_cbCurvedSlicer.planeUp;
+	//float fPlanePitch = length(f3VecSampleUpWS);
+	bool bIsRightSide = BitCheck(g_cbCurvedSlicer.flag, 0);
+	float3 f3PosBottomLeftCOS = g_cbCurvedSlicer.posBottomLeftCOS;
+	float3 f3PosBottomRightCOS = g_cbCurvedSlicer.posBottomRightCOS;
+	float fPlaneThickness = g_cbCurvedSlicer.thicknessPlane;
+	float fPlaneSizeY = g_cbCurvedSlicer.planeHeight;
+	float fPlaneCenterY = fPlaneSizeY * 0.5f;
+	const float fThicknessPosition = 0;
+
+	int2 cip_xy = ss_xy;
+
+	int iPosSampleCOS = (int)floor(f2PosInterTopCOS.x);
+	float fInterpolateRatio = f2PosInterTopCOS.x - iPosSampleCOS;
+
+	int iMinMaxAddrX = min(max(iPosSampleCOS, 0), iPlaneSizeX - 1);
+	int iMinMaxAddrNextX = min(max(iPosSampleCOS + 1, 0), iPlaneSizeX - 1);
+
+	float3 f3PosSampleWS_C0 = buf_curvePoints[iMinMaxAddrX];
+	float3 f3PosSampleWS_C1 = buf_curvePoints[iMinMaxAddrNextX];
+	float3 f3PosSampleWS_C_ = f3PosSampleWS_C0 * (1.f - fInterpolateRatio) + f3PosSampleWS_C1 * fInterpolateRatio;
+
+	float3 f3VecSampleTangentWS_0 = buf_curveTangents[iMinMaxAddrX];
+	float3 f3VecSampleTangentWS_1 = buf_curveTangents[iMinMaxAddrNextX];
+	float3 f3VecSampleTangentWS = normalize(f3VecSampleTangentWS_0 * (1.f - fInterpolateRatio) + f3VecSampleTangentWS_1 * fInterpolateRatio);
+	float3 f3VecSampleViewWS = normalize(cross(f3VecSampleUpWS, f3VecSampleTangentWS));
+
+	if (bIsRightSide)
+		f3VecSampleViewWS *= -1.f;
+	float3 f3PosSampleWS_C = f3PosSampleWS_C_ + f3VecSampleViewWS * (fThicknessPosition - fPlaneThickness * 0.5f);
+	//f3VecSampleUpWS *= fPlanePitch; // already multiplied
+
+	float2 f2PosInterBottomCOS, f2PosSampleCOS;
+	f2PosInterBottomCOS.x = fRatio0 * f3PosBottomLeftCOS.x + fRatio1 * f3PosBottomRightCOS.x;
+	f2PosInterBottomCOS.y = fRatio0 * f3PosBottomLeftCOS.y + fRatio1 * f3PosBottomRightCOS.y;
+
+	// j ==> cip_xy.y
+	float fRatio0Y = (float)((i2SizeBuffer.y - 1) - cip_xy.y) / (float)(i2SizeBuffer.y - 1);
+	float fRatio1Y = (float)(cip_xy.y) / (float)(i2SizeBuffer.y - 1);
+
+	f2PosSampleCOS.x = fRatio0Y * f2PosInterTopCOS.x + fRatio1Y * f2PosInterBottomCOS.x;
+	f2PosSampleCOS.y = fRatio0Y * f2PosInterTopCOS.y + fRatio1Y * f2PosInterBottomCOS.y;
+
+	// start position //
+	pos_front_ws = f3PosSampleWS_C + f3VecSampleUpWS * (f2PosSampleCOS.y - fPlaneCenterY);
+	view_ws = f3VecSampleViewWS; // already normalized
+	tangent_ws = f3VecSampleTangentWS;
+	center_ws = f3PosSampleWS_C_;
+	return !(f2PosSampleCOS.y < 0 || f2PosSampleCOS.y > fPlaneSizeY);
+}
+
+// Per-pixel ray of the curved slicer (WS), both stages in one call, for callers that do not need the fill's
+// exit structure (the outline pass). Returns false when the pixel is off the curved sheet; the outputs are
+// written either way. Outputs as in SliceCurvedPixelRayOnColumn.
+bool SliceCurvedPixelRay(const int2 ss_xy, out float3 pos_front_ws, out float3 view_ws, out float3 tangent_ws, out float3 center_ws)
+{
+	float2 f2PosInterTopCOS;
+	float fRatio0, fRatio1;
+	bool on_column = SliceCurvedPixelColumn(ss_xy, f2PosInterTopCOS, fRatio0, fRatio1);
+	bool on_sheet = SliceCurvedPixelRayOnColumn(ss_xy, f2PosInterTopCOS, fRatio0, fRatio1, pos_front_ws, view_ws, tangent_ws, center_ws);
+	return on_column && on_sheet;
+}
+
 // modified intersection routine (uses regular instead of woopified triangles) for debugging purposes
 
 #ifdef BVH_LEGACY
@@ -1029,79 +1222,27 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 
 	// Image Plane's Position and Camera State //
 #if CURVEDPLANE == 0
-	float3 pos_ip_ss = float3(ss_xy, 0.0f);
-	float3 pos_ip_ws = TransformPoint(pos_ip_ss, g_cbCamState.mat_ss2ws);
-	float3 ray_dir_unit_ws = g_cbCamState.dir_view_ws;
-	if (g_cbCamState.cam_flag & 0x1)
-		ray_dir_unit_ws = pos_ip_ws - g_cbCamState.pos_cam_ws;
-	ray_dir_unit_ws = normalize(ray_dir_unit_ws);
+	float3 pos_ip_ws, ray_dir_unit_ws;
+	SlicePlanarPixelRay(ss_xy, pos_ip_ws, ray_dir_unit_ws);
 
 #else
+	// the curved-sheet mapping lives in SliceCurvedPixelColumn / SliceCurvedPixelRayOnColumn (shared with the
+	// outline pass); the locals below are the ones the rest of this shader still reads
 	int2 i2SizeBuffer = int2(g_cbCamState.rt_width, g_cbCamState.rt_height);
 	int iPlaneSizeX = g_cbCurvedSlicer.numCurvePoints;
 	float3 f3VecSampleUpWS = g_cbCurvedSlicer.planeUp;
-	//float fPlanePitch = length(f3VecSampleUpWS);
-	bool bIsRightSide = BitCheck(g_cbCurvedSlicer.flag, 0);
 	float3 f3PosTopLeftCOS = g_cbCurvedSlicer.posTopLeftCOS;
 	float3 f3PosTopRightCOS = g_cbCurvedSlicer.posTopRightCOS;
-	float3 f3PosBottomLeftCOS = g_cbCurvedSlicer.posBottomLeftCOS;
-	float3 f3PosBottomRightCOS = g_cbCurvedSlicer.posBottomRightCOS;
 	float fPlaneThickness = g_cbCurvedSlicer.thicknessPlane;
-	float fPlaneSizeY = g_cbCurvedSlicer.planeHeight;
-	float fPlaneCenterY = fPlaneSizeY * 0.5f;
-	const float fThicknessPosition = 0;
-	const float merging_beta = 1.0;
-
 	int2 cip_xy = ss_xy;
-	// i ==> cip_xy.x
-	float fRatio0 = (float)((i2SizeBuffer.x - 1) - cip_xy.x) / (float)(i2SizeBuffer.x - 1);
-	float fRatio1 = (float)(cip_xy.x) / (float)(i2SizeBuffer.x - 1);
 
-	float2 f2PosInterTopCOS, f2PosInterBottomCOS, f2PosSampleCOS;
-	f2PosInterTopCOS.x = fRatio0 * f3PosTopLeftCOS.x + fRatio1 * f3PosTopRightCOS.x;
-	f2PosInterTopCOS.y = fRatio0 * f3PosTopLeftCOS.y + fRatio1 * f3PosTopRightCOS.y;
-
-	if (f2PosInterTopCOS.x < 0 || f2PosInterTopCOS.x >= (float)(iPlaneSizeX - 1))
+	float2 f2PosInterTopCOS;
+	float fRatio0, fRatio1;
+	if (!SliceCurvedPixelColumn(ss_xy, f2PosInterTopCOS, fRatio0, fRatio1))
 		__EXIT;
-
-	int iPosSampleCOS = (int)floor(f2PosInterTopCOS.x);
-	float fInterpolateRatio = f2PosInterTopCOS.x - iPosSampleCOS;
-
-	int iMinMaxAddrX = min(max(iPosSampleCOS, 0), iPlaneSizeX - 1);
-	int iMinMaxAddrNextX = min(max(iPosSampleCOS + 1, 0), iPlaneSizeX - 1);
-
-	float3 f3PosSampleWS_C0 = buf_curvePoints[iMinMaxAddrX];
-	float3 f3PosSampleWS_C1 = buf_curvePoints[iMinMaxAddrNextX];
-	float3 f3PosSampleWS_C_ = f3PosSampleWS_C0 * (1.f - fInterpolateRatio) + f3PosSampleWS_C1 * fInterpolateRatio;
-
-	float3 f3VecSampleTangentWS_0 = buf_curveTangents[iMinMaxAddrX];
-	float3 f3VecSampleTangentWS_1 = buf_curveTangents[iMinMaxAddrNextX];
-	float3 f3VecSampleTangentWS = normalize(f3VecSampleTangentWS_0 * (1.f - fInterpolateRatio) + f3VecSampleTangentWS_1 * fInterpolateRatio);
-	float3 f3VecSampleViewWS = normalize(cross(f3VecSampleUpWS, f3VecSampleTangentWS));
-
-	if (bIsRightSide)
-		f3VecSampleViewWS *= -1.f;
-	float3 f3PosSampleWS_C = f3PosSampleWS_C_ + f3VecSampleViewWS * (fThicknessPosition - fPlaneThickness * 0.5f);
-	//f3VecSampleUpWS *= fPlanePitch; // already multiplied
-
-	f2PosInterBottomCOS.x = fRatio0 * f3PosBottomLeftCOS.x + fRatio1 * f3PosBottomRightCOS.x;
-	f2PosInterBottomCOS.y = fRatio0 * f3PosBottomLeftCOS.y + fRatio1 * f3PosBottomRightCOS.y;
-
-	// j ==> cip_xy.y
-	float fRatio0Y = (float)((i2SizeBuffer.y - 1) - cip_xy.y) / (float)(i2SizeBuffer.y - 1);
-	float fRatio1Y = (float)(cip_xy.y) / (float)(i2SizeBuffer.y - 1);
-
-	f2PosSampleCOS.x = fRatio0Y * f2PosInterTopCOS.x + fRatio1Y * f2PosInterBottomCOS.x;
-	f2PosSampleCOS.y = fRatio0Y * f2PosInterTopCOS.y + fRatio1Y * f2PosInterBottomCOS.y;
-
-	if (f2PosSampleCOS.y < 0 || f2PosSampleCOS.y > fPlaneSizeY)
+	float3 pos_ip_ws, ray_dir_unit_ws, f3VecSampleTangentWS, f3PosSampleWS_C_;
+	if (!SliceCurvedPixelRayOnColumn(ss_xy, f2PosInterTopCOS, fRatio0, fRatio1, pos_ip_ws, ray_dir_unit_ws, f3VecSampleTangentWS, f3PosSampleWS_C_))
 		__EXIT;
-
-	// start position //
-	//vmfloat3 f3PosSampleWS = f3PosSampleWS_C + f3VecSampleUpWS * (f2PosSampleCOS.y - fPlaneCenterY)
-	//	+ f3VecSampleViewWS * fStepLength * (float)m;
-	float3 pos_ip_ws = f3PosSampleWS_C + f3VecSampleUpWS * (f2PosSampleCOS.y - fPlaneCenterY);
-	float3 ray_dir_unit_ws = f3VecSampleViewWS; // already normalized
 #endif
 	////////////////////////////
 	int hitTriIdx = -1;
@@ -1816,6 +1957,15 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 				v_rgba = float4(0, 0, 0, 0.01);
 				zthickness = 0.f;
 			}
+#if SLICER_POLYLINE_FIELD == 1
+			else if (BitCheck(g_cbPobj.pobj_flag, 12))
+			{
+				// thin slice: the field is sampled at the pixel's point on the plane
+				float3 field_rgb;
+				if (PolylineFieldColor(ray_orig_os, field_rgb))
+					v_rgba.rgb = field_rgb;
+			}
+#endif
 
 			v_rgba.rgb *= v_rgba.a;
 
@@ -1873,6 +2023,17 @@ void ThickSlicePathTracer(uint3 DTid : SV_DispatchThreadID, uint groupIndex_ : S
 		
 			if (v_rgba_layer.a < 0.001)
 				return;
+#if SLICER_POLYLINE_FIELD == 1
+			if (BitCheck(g_cbPobj.pobj_flag, 12))
+			{
+				// thick slab: the field is sampled where the pixel ray first enters the mesh inside the slab,
+				// or at the slab front when that point already lies inside the mesh (the d_first point)
+				float3 field_pos_os = isInsideOnPlane ? ray_orig_os : ray_orig_os + ray_dir_unit_os * forward_hit_depth;
+				float3 field_rgb;
+				if (PolylineFieldColor(field_pos_os, field_rgb))
+					v_rgba_layer.rgb = field_rgb;
+			}
+#endif
 		
 			// Emit TWO thin boundary fragments — front (zdepth0) and back (zdepth1) of the interior
 			// span — each with the CONFIGURED z-thickness (GetVZThickness), NOT the full span (z1-z0).
@@ -2121,6 +2282,36 @@ void Outline2D(uint3 DTid : SV_DispatchThreadID)
 #endif
 
 	float4 outline_color = float4(g_cbPobj.Kd, 1);
+#if SLICER_POLYLINE_FIELD == 1
+	if (BitCheck(g_cbPobj.pobj_flag, 12))
+	{
+		// Outline pixels mostly lie outside the cut, where the fill pass computed no colour, so the field is
+		// evaluated here at the pixel's own plane point, through the same pixel-ray functions the fill uses.
+		float3 field_pos_ws, field_dir_ws;
+		float field_thickness;
+		bool field_on_sheet = true;
+		if (BitCheck(g_cbPobj.pobj_flag, 13)) // curved slicer
+		{
+			float3 field_tangent_ws, field_center_ws;
+			field_on_sheet = SliceCurvedPixelRay(ss_xy, field_pos_ws, field_dir_ws, field_tangent_ws, field_center_ws);
+			field_thickness = g_cbCurvedSlicer.thicknessPlane;
+		}
+		else
+		{
+			SlicePlanarPixelRay(ss_xy, field_pos_ws, field_dir_ws);
+			field_thickness = g_cbCamState.far_plane;
+		}
+		if (field_on_sheet)
+		{
+			// same predicate as the fill: an unfilled thick slab is drawn as its mid-slab thin slice
+			if (BitCheck(g_cbPobj.pobj_flag, 6) && field_thickness > 0)
+				field_pos_ws = field_pos_ws + field_dir_ws * field_thickness * 0.5f;
+			float3 field_rgb;
+			if (PolylineFieldColor(TransformPoint(field_pos_ws, g_cbPobj.mat_ws2os), field_rgb))
+				outline_color.rgb = field_rgb;
+		}
+	}
+#endif
 	//float4 outline_color = float4(g_cbPobj.Kd, g_cbPobj.alpha);
 	outline_color.a *= a;// *a; // heuristic aliasing 
 	outline_color.rgb *= outline_color.a;

@@ -467,8 +467,19 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 	int num_curvedPoints = (int)vtrCurveInterpolations.size();
 	if (num_curvedPoints < 1)
 		return false;
-	grd_helper::UpdateCustomBuffer(gres_cpPoints, iobj, "CurvedPlanePoints", &vtrCurveInterpolations[0], num_curvedPoints, DXGI_FORMAT_R32G32B32_FLOAT, 12);
-	grd_helper::UpdateCustomBuffer(gres_cpTangents, iobj, "CurvedPlaneTangents", &vtrCurveTangentVectors[0], num_curvedPoints, DXGI_FORMAT_R32G32B32_FLOAT, 12);
+	if ((int)vtrCurveTangentVectors.size() < num_curvedPoints) {
+		static bool reported = false; // logged once per process
+		if (!reported) {
+			reported = true;
+			vzlog_error("RenderVrCurvedSlicer :: the curve tangent list (%d) is shorter than the curve point list (%d); the curved slice is not rendered",
+				(int)vtrCurveTangentVectors.size(), num_curvedPoints);
+		}
+		return false;
+	}
+	// the curved slice cannot be rendered without both curve buffers
+	if (!grd_helper::UpdateCustomBuffer(gres_cpPoints, iobj, "CurvedPlanePoints", &vtrCurveInterpolations[0], num_curvedPoints, DXGI_FORMAT_R32G32B32_FLOAT, 12)
+		|| !grd_helper::UpdateCustomBuffer(gres_cpTangents, iobj, "CurvedPlaneTangents", &vtrCurveTangentVectors[0], num_curvedPoints, DXGI_FORMAT_R32G32B32_FLOAT, 12))
+		return false;
 	SET_SHADER_RES(30, 1, (__SRV_PTR*)&gres_cpPoints.alloc_res_ptrs[DTYPE_SRV]);
 	SET_SHADER_RES(31, 1, (__SRV_PTR*)&gres_cpTangents.alloc_res_ptrs[DTYPE_SRV]);
 
@@ -1037,14 +1048,16 @@ bool RenderVrCurvedSlicer(VmFnContainer* _fncontainer,
 			}
 
 			const int upload_count = (kcount > 0 ? kcount : 1);
-			grd_helper::UpdateCustomBuffer(gres_xray_filter_mask, iobj, "XRAY_FILTER_MASK",
+			// on failure the composite still runs (it writes the final colour) as a passthrough, which never
+			// reads the mask at t1; the failed call leaves no views, so t1 is bound NULL
+			const bool mask_ok = grd_helper::UpdateCustomBuffer(gres_xray_filter_mask, iobj, "XRAY_FILTER_MASK",
 				mask_weights, upload_count, DXGI_FORMAT_R32_FLOAT, (int)sizeof(float), NULL, filter_time);
 
 			// upload cbSliceFilter (b12)
 			{
 				grd_helper::CB_SliceFilter cb_sf = {};
 				cb_sf.filter_radius = radius;
-				cb_sf.use_filter = use_filter;
+				cb_sf.use_filter = mask_ok ? use_filter : 0;
 				ID3D11Buffer* cbuf_sf = psoManager->get_cbuf("CB_SliceFilter");
 				D3D11_MAPPED_SUBRESOURCE mappedResSf;
 				dx11DeviceImmContext->Map(cbuf_sf, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResSf);

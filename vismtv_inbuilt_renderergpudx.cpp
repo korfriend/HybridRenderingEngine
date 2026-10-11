@@ -290,6 +290,21 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 	float maxTextureResoulution = _fncontainer.fnParams.GetParam("_float_MaxTextureResoulution", 2048.f);
 	float maxVolumeSizeKB = _fncontainer.fnParams.GetParam("_float_MaxVolumeSizeKB", 1024.f * 1024.f);
 	grd_helper::SetUserCapacity(maxVolumeSizeKB, maxTextureResoulution);
+	// test channel (vzm::SetRenderTestParam): a non-empty "_string_TestFailCustomBuffer" makes UpdateCustomBuffer fail
+	// every buffer whose resource name starts with it. Read without throwing; absent, empty or not a std::string = off.
+	{
+		string test_fail_prefix;
+		for (auto it = _fncontainer.fnParams.begin(); it != _fncontainer.fnParams.end(); it++)
+		{
+			if (it->first == "_string_TestFailCustomBuffer")
+			{
+				const string* v = std::any_cast<string>(&it->second);
+				if (v) test_fail_prefix = *v;
+				break;
+			}
+		}
+		grd_helper::SetTestFailCustomBuffer(test_fail_prefix);
+	}
 	bool is_shadow = _fncontainer.fnParams.GetParam("_bool_IsShadow", false);
 	bool curved_slicer = _fncontainer.fnParams.GetParam("_bool_IsNonlinear", false);
 	string strRendererSource = _fncontainer.fnParams.GetParam("_string_RenderingSourceType", string("MESH"));

@@ -1153,6 +1153,10 @@ bool __ReleaseGpuResource(GpuRes& gres, const bool call_clearstate)
 	std::map<DesType, void*>& alloc_res_ptrs = itrResDX11->second.alloc_res_ptrs;
 	for (auto it = alloc_res_ptrs.begin(); it != alloc_res_ptrs.end(); it++)
 	{
+		// __GenerateGpuResource registers an entry even when a view (or a texture) could not be created, so a
+		// slot may hold NULL
+		if (it->second == NULL)
+			continue;
 		switch (it->first)
 		{
 		case DTYPE_RES:

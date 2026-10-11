@@ -2053,6 +2053,12 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 			cbPolygonObj.tex_map_enum = tex_map_enum;
 			cbPolygonObj.pobj_dummy_0 = actor->actorId;// pobj->GetObjectID(); // used for picking
 			grd_helper::SetCb_PolygonObj(cbPolygonObj, pobj, actor, matWS2SS, matWS2PS, is_annotation_obj, use_vertex_color);
+			if (actor->GetParam("_int_HoverCylinderContract", 0) == 1)
+			{
+				cbPolygonObj.hoverCylinderStartRadiusWS = actor->GetParam("_float4_HoverCylinderStartRadiusWS", vmfloat4(0));
+				cbPolygonObj.hoverCylinderEndEnabledWS = actor->GetParam("_float4_HoverCylinderEndEnabledWS", vmfloat4(0));
+				cbPolygonObj.hoverCylinderColor = actor->GetParam("_float4_HoverCylinderColor", vmfloat4(1));
+			}
 			cbPolygonObj.pobj_flag |= (int)cmap_windowing << 7;
 			// _int_ForcedMaterialColorMode == 2 asks for the TEXCOORD to be shown as colour. Bit 24 is
 			// free (used: 1,2,3,5,6,7,9,10,19,20,22,23,30,31) and the shader reads it in the same
@@ -2510,9 +2516,12 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 					{
 						GpuRes face_color_res;
 						uint64_t facecolor_update = pobj->GetObjParam("_ullong_Latest_FACECOLOR", (uint64_t)0);
-						grd_helper::UpdateCustomBuffer(face_color_res, pobj, "FaceColorBuffer", face_color_buffer,
-							prim_data->num_prims, DXGI_FORMAT_R8G8B8A8_UNORM, sizeof(int), NULL, facecolor_update);
-						dx11DeviceImmContext->GSSetShaderResources(30, 1, (ID3D11ShaderResourceView**)&face_color_res.alloc_res_ptrs[DTYPE_SRV]);
+						// on failure bind NULL (the face colours read as zero), never an earlier object's buffer
+						ID3D11ShaderResourceView* srv_face_color = NULL;
+						if (grd_helper::UpdateCustomBuffer(face_color_res, pobj, "FaceColorBuffer", face_color_buffer,
+							prim_data->num_prims, DXGI_FORMAT_R8G8B8A8_UNORM, sizeof(int), NULL, facecolor_update))
+							srv_face_color = (ID3D11ShaderResourceView*)face_color_res.alloc_res_ptrs[DTYPE_SRV];
+						dx11DeviceImmContext->GSSetShaderResources(30, 1, &srv_face_color);
 					}
 
 #ifdef DX10_0
@@ -2553,20 +2562,53 @@ bool RenderPrimitives(VmFnContainer* _fncontainer,
 							&triDebugPtr, &triDebugSize, &cpuTriIndicesPtr, &triIndicesSize)) {
 
 							GpuRes bvhNode, bvhTriWoop, bvhTriDebug, bvhIndice;
-							grd_helper::UpdateCustomBuffer(bvhNode, pobj, "BvhNode", nodePtr, nodeSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4));
-							grd_helper::UpdateCustomBuffer(bvhTriWoop, pobj, "BvhTriWoop", triWoopPtr, triWoopSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4));
-							grd_helper::UpdateCustomBuffer(bvhTriDebug, pobj, "BvhTriDebug", triDebugPtr, triDebugSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4));
-							grd_helper::UpdateCustomBuffer(bvhIndice, pobj, "BvhIndice", cpuTriIndicesPtr, triIndicesSize, DXGI_FORMAT_R32_SINT, sizeof(int));
+							// the undercut shader is selected only when all four BVH buffers are valid
+							const bool bvh_ok =
+								grd_helper::UpdateCustomBuffer(bvhNode, pobj, "BvhNode", nodePtr, nodeSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4))
+								&& grd_helper::UpdateCustomBuffer(bvhTriWoop, pobj, "BvhTriWoop", triWoopPtr, triWoopSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4))
+								&& grd_helper::UpdateCustomBuffer(bvhTriDebug, pobj, "BvhTriDebug", triDebugPtr, triDebugSize, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(vmint4))
+								&& grd_helper::UpdateCustomBuffer(bvhIndice, pobj, "BvhIndice", cpuTriIndicesPtr, triIndicesSize, DXGI_FORMAT_R32_SINT, sizeof(int));
 
-							dx11DeviceImmContext->PSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&bvhNode.alloc_res_ptrs[DTYPE_SRV]);
-							dx11DeviceImmContext->PSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&bvhTriWoop.alloc_res_ptrs[DTYPE_SRV]);
-							dx11DeviceImmContext->PSSetShaderResources(2, 1, (ID3D11ShaderResourceView**)&bvhTriDebug.alloc_res_ptrs[DTYPE_SRV]);
-							dx11DeviceImmContext->PSSetShaderResources(3, 1, (ID3D11ShaderResourceView**)&bvhIndice.alloc_res_ptrs[DTYPE_SRV]);
+							if (bvh_ok)
+							{
+								dx11DeviceImmContext->PSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&bvhNode.alloc_res_ptrs[DTYPE_SRV]);
+								dx11DeviceImmContext->PSSetShaderResources(1, 1, (ID3D11ShaderResourceView**)&bvhTriWoop.alloc_res_ptrs[DTYPE_SRV]);
+								dx11DeviceImmContext->PSSetShaderResources(2, 1, (ID3D11ShaderResourceView**)&bvhTriDebug.alloc_res_ptrs[DTYPE_SRV]);
+								dx11DeviceImmContext->PSSetShaderResources(3, 1, (ID3D11ShaderResourceView**)&bvhIndice.alloc_res_ptrs[DTYPE_SRV]);
 
-							dx11PS_Target = render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES ? GETPS(SR_UNDERCUT_ps_5_0) : GETPS(SR_OIT_ABUFFER_UNDERCUT_ps_5_0);
+								dx11PS_Target = render_pass == RENDER_GEOPASS::PASS_OPAQUESURFACES ? GETPS(SR_UNDERCUT_ps_5_0) : GETPS(SR_OIT_ABUFFER_UNDERCUT_ps_5_0);
+							}
 						}
 						else {
-							vmlog::LogErr("Undercut using raycaster requires BVH!! (" + actor->name + ")");
+							// the DX10_0 undercut ray mode traces the legacy SplitBVH only, and this renderer never
+							// builds one; the actor is drawn without undercut colouring. Reported once per actor id
+							// for as long as this DLL stays loaded. The line names vzm::UpdateBVH only for a mesh the SplitBVH
+							// can be built from (a non-empty, non-strip triangle list with an index buffer and positions); for
+							// any other mesh it says that the DX10.0 ray mode cannot trace it at all. The legacy_bvh_buildable
+							// predicate below mirrors the conditions under which vzm::UpdateBVH builds the DX10.0 legacy BVH and
+							// must be kept in step with that call.
+							try
+							{
+								static std::set<int> warned_no_legacy_bvh_undercut_actor_ids; // renderer-private
+								if (warned_no_legacy_bvh_undercut_actor_ids.insert(actor->actorId).second)
+								{
+									const bool legacy_bvh_buildable = prim_data->ptype == PrimitiveTypeTRIANGLE && !prim_data->is_stripe
+										&& prim_data->num_prims > 0 && prim_data->GetIndexBuffer() != NULL
+										&& (uint64_t)prim_data->num_vidx >= 3ull * prim_data->num_prims
+										&& prim_data->GetVerticeDefinitionConst<vmfloat3>("POSITION") != NULL;
+									if (legacy_bvh_buildable)
+									{
+										vzlog_warning("RenderPrimitives :: the DX10.0 undercut ray mode does not work for actor %d: its mesh (object %d) has no legacy BVH; call vzm::UpdateBVH(%d) for that mesh",
+											actor->actorId, pobj->GetObjectID(), pobj->GetObjectID());
+									}
+									else
+									{
+										vzlog_warning("RenderPrimitives :: the DX10.0 undercut ray mode cannot trace actor %d at all: its mesh (object %d) is not a non-empty indexed triangle list (a strip, point or line mesh, for example), the only mesh type the DX10.0 ray mode supports",
+											actor->actorId, pobj->GetObjectID());
+									}
+								}
+							}
+							catch (...) {}
 						}
 #else
 						GpuRes gres_primitiveCounterBuffer;

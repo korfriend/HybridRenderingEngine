@@ -860,6 +860,26 @@ void BasicShader(__VS_OUT input, out float4 v_rgba_out, out float z_depth_out)
 #endif
     
 #if __RENDERING_MODE != 2
+    // Finite world-space cylinder hover, evaluated per fragment. The source
+    // mesh and its face/vertex colours remain untouched.
+    if (g_cbPobj.hoverCylinderEndEnabledWS.w > 0.5 && g_cbPobj.hoverCylinderStartRadiusWS.w > 0)
+    {
+        float3 axis = g_cbPobj.hoverCylinderEndEnabledWS.xyz - g_cbPobj.hoverCylinderStartRadiusWS.xyz;
+        float len = length(axis);
+        if (len > 1e-5)
+        {
+            axis /= len;
+            float3 delta = input.f3PosWS - g_cbPobj.hoverCylinderStartRadiusWS.xyz;
+            float t = dot(delta, axis);
+            float sd = max(length(delta - axis * t) - g_cbPobj.hoverCylinderStartRadiusWS.w, max(-t, t - len));
+            float aa = max(fwidth(sd), 1e-5);
+            float mask = (1 - smoothstep(-aa, aa, sd)) * saturate(g_cbPobj.hoverCylinderColor.a);
+            float3 ink = g_cbPobj.hoverCylinderColor.rgb;
+            Ka_pobj = lerp(Ka_pobj, ink * max(g_cbPobj.pb_shading_factor.x, .6), mask);
+            Kd_pobj = lerp(Kd_pobj, ink * g_cbPobj.pb_shading_factor.y, mask);
+            Ks_pobj *= 1 - mask;
+        }
+    }
 	if (g_cbPobj.tex_map_enum & (0x1 << 18))
 	{
 		float d = input.fDist;

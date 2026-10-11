@@ -536,7 +536,17 @@ namespace grd_helper
 		const int num_frags_perpixel = 1,
 		const int structured_stride = 0);
 
+	// Upload a CPU buffer as a DYNAMIC typed buffer with an SRV, keyed on srcObj + resName. The upload is skipped
+	// when the registered buffer has the same byte size and its LAST_UPDATE_TIME is >= cpu_update_custom_time
+	// (or srcObj's content time when that is 0). Returns false when numElements or type_bytes is not positive,
+	// the size exceeds 32 bits, creation of the buffer or its SRV fails, or Map fails; then nothing is left
+	// registered under the key, gres.alloc_res_ptrs is empty, an error is logged once per resName, and the next
+	// call retries. A caller must not bind the SRV of a failed call as if it were valid.
 	bool UpdateCustomBuffer(GpuRes& gres, VmObject* srcObj, const string& resName, const void* bufPtr, const int numElements, DXGI_FORMAT dxFormat, const int type_bytes, LocalProgress* progress = NULL, uint64_t cpu_update_custom_time = 0);
+	// Test channel only: while resNamePrefix is non-empty, every UpdateCustomBuffer call whose resName starts with it
+	// takes the failure path above (logged as forced), also for a buffer that is already current. DoModule sets it
+	// at the start of every call from fnParams "_string_TestFailCustomBuffer"; absent, empty or not a string = off.
+	void SetTestFailCustomBuffer(const string& resNamePrefix);
 
 	// Allocate (or reuse) a GPU-writable cubic Texture3D for VXGI (voxel radiance/opacity): USAGE_DEFAULT with
 	// UNORDERED_ACCESS | SHADER_RESOURCE. Keyed on srcObj + res_name so it persists across frames. with_mips
@@ -916,6 +926,8 @@ namespace grd_helper
 		// 8th bit : 0 (normal color map) 1 (for windowing slice)
 		// 10th bit : 0 (No XFlip) 1 (XFlip)
 		// 11th bit : 0 (No XFlip) 1 (YFlip)
+		// 13th bit (index 12) : 0 (slicer uses Kd) 1 (slicer colours rgb from the polyline-parameterised scalar field bound at t32)
+		// 14th bit (index 13) : 0 (planar slicer) 1 (curved slicer; the slice outline pass uses the curve mapping)
 		// 20th bit : 0 (No Dashed Line) 1 (Dashed Line)
 		// 21th bit : 0 (Transparent Dash) 1 (Dash As Color Inverted)
 		// 23th bit : 0 (static alpha) 1 (dynamic alpha using mask t50) ... mode 1
@@ -933,7 +945,11 @@ namespace grd_helper
 
 		vmfloat4 pb_shading_factor; // x : Ambient, y : Diffuse, z : Specular, w : specular
 
-		ZERO_SET(CB_PolygonObject)
+
+		vmfloat4 hoverCylinderStartRadiusWS;
+		vmfloat4 hoverCylinderEndEnabledWS;
+		vmfloat4 hoverCylinderColor;
+				ZERO_SET(CB_PolygonObject)
 	};
 
 	struct CB_VolumeObject
