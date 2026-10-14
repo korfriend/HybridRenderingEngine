@@ -1385,10 +1385,58 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 	// first-hit depth, which is quantised to a step boundary -- the true surface lies in [hit - d, hit], so
 	// retreating covers exactly that uncertainty interval. Advancing would march INTO the surface instead and
 	// make it recede by up to one step. This is why the original VR_SURFACE dither used "depth_hit -= ...".
+	//
+	// BUT NEVER LET THE FIRST SLAB REACH IN FRONT OF THE CLIPPED-VOLUME ENTRY. The entry -- a clip plane, the
+	// clip box or the volume box face -- is exact, not step-quantised, so there is no uncertainty interval in
+	// front of it. A slab reaching past it (a) samples material the clip removed and (b) puts the slab's
+	// Z-thickness interval [depth - thickness, depth] IN FRONT of the boundary. INTERMIX then MERGES that slab
+	// with any surface fragment lying closer to the boundary than sample_dist instead of ordering it behind, so
+	// volume colour bleeds into an opaque mesh placed on (or just in front of) a clip plane, and the TAA mean
+	// converges to that blend. Hence: retreat at most front_room; when the drawn retreat exceeds it, wrap the
+	// phase forward by one step instead. The phase stays uniform over one step either way.
+	//   room_to_entry: distance from the undithered start back to the entry along the ray. VR_SURFACE tags a
+	//     first hit closer than sample_dist to the entry as __VRHIT_ON_CLIPPLANE, so any other start has
+	//     room_to_entry >= sample_dist and needs it only for the dither.
+	//   front_room: how far the start may retreat before the first slab's front crosses the entry. The
+	//     __VRHIT_ON_CLIPPLANE block below (VR_MODE 0/2) places its slab at [start, start + sample_dist]; the
+	//     march's first slab (every other start) is [start - sample_dist, start]. A start with
+	//     room_to_entry >= 2 * sample_dist therefore never wraps, i.e. interior first hits are unchanged.
+	// The partial step a wrap skips at a boundary start is deliberately NOT added back. The
+	// __VRHIT_ON_CLIPPLANE block below always contributes one full step of (unshaded) face opacity at the march
+	// start, and behind it the shaded march continues through the same material; once the ray saturates, as it
+	// does within a few steps on a dense cut face, that composite does not depend on where the shaded part
+	// begins. An extra partial-slab term inside that block would only lengthen the unshaded face layer, which
+	// lightens the face systematically. The wrap's residual is limited to a non-saturated face, where the
+	// shaded material right behind it is on average half a step thinner.
+#if RAYMODE == 0 // DVR // RAYMODE 0: the start is the VR_SURFACE first hit, measured from pos_ip_ws
+	float room_to_entry = FLT_MAX;
+	if (vr_hit_enc == __VRHIT_ON_CLIPPLANE || BitCheck(g_cbCamState.cam_flag, 12))
+	{
+		float t_entry_ip = ComputeVBoxHits(pos_ip_ws, dir_sample_unit_ws, g_cbVobj.mat_alignedvbox_tr_ws2bs, g_cbClipInfo).x;
+		room_to_entry = max(depth_out + hits_t.x - t_entry_ip, 0.f);
+	}
+	float front_room = room_to_entry;
+	if (vr_hit_enc != __VRHIT_ON_CLIPPLANE)
+		front_room = room_to_entry - g_cbVobj.sample_dist;
+	float start_room = room_to_entry; // distance from the (possibly dithered) march start back to the entry
+#else
+	const float front_room = 0.f; // RAYMODE != 0: vbos_hit_start_pos is pos_ip_ws, so the start IS the entry
+#endif // RAYMODE 0: DVR
 	if (BitCheck(g_cbCamState.cam_flag, 12) && num_ray_samples > 1)
 	{
 		float rand = _random(float4(pos_ray_start_ws, g_cbCamState.taa_jitter_px_x - g_cbCamState.taa_jitter_px_y));
-		pos_ray_start_ws -= dir_sample_unit_ws * (rand * g_cbVobj.sample_dist);
+		float retreat = rand * g_cbVobj.sample_dist;
+		if (retreat > front_room)
+		{
+			// advance by (sample_dist - retreat) in (0, sample_dist), and drop the samples that would now run
+			// past the exit (hits_t.y - hits_t.x > sample_dist here, so at least one remains)
+			retreat -= g_cbVobj.sample_dist;
+			num_ray_samples = (int)ceil((hits_t.y - hits_t.x + retreat) / g_cbVobj.sample_dist);
+		}
+		pos_ray_start_ws -= dir_sample_unit_ws * retreat;
+#if RAYMODE == 0 // DVR // RAYMODE 0: DVR
+		start_room = room_to_entry - retreat;
+#endif // RAYMODE 0: DVR
 	}
     // recompute the vis result
 
@@ -1448,7 +1496,11 @@ void RayCasting(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 
 
 #if VR_MODE != 3 // VR_MODE != 3: intensity / DVR modes
 	// note that raycasters except vismask mode (or x-ray) use SLAB sample
-	float sample_prev = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_ray_start_ts - dir_sample_ts, 0).r;
+	// The first slab's previous sample sits one step before the start, but never in front of the clipped-volume
+	// entry: the clip removed that material, so a pre-integrated slab (or a gradient) must not see it. For any
+	// start at least one step past the entry the factor is exactly 1 and this is the plain one-step-back read.
+	// (min(x, d) / d rather than saturate(x / d): start_room is FLT_MAX where it was not needed.)
+	float sample_prev = tex3D_volume.SampleLevel(g_samplerLinear_clamp, pos_ray_start_ts - dir_sample_ts * (min(start_room, sample_dist) / sample_dist), 0).r;
 #endif // VR_MODE != 3: intensity / DVR modes
 #if CUT_EDGE_ACTIVE == 1
 	// remaining visible samples that take the cut-edge treatment (see CUT_EDGE_SHADING)
@@ -2456,7 +2508,13 @@ PS_FILL_OUTPUT CurvedSlicer(VS_OUTPUT input)
 	// never an inherited dither here to consolidate away -- this has always been the only site for this path.
 			// Backward (-) for the same reason as the RayCasting site: _random is [0,1) so the sign is the
 			// direction, and retreating covers the step-quantisation interval instead of eating into the slab's
-			// front face. Kept identical to that site on purpose -- one rule, one direction, both march starts.
+			// front face.
+			// NOT identical to the RayCasting site any more: that site no longer retreats past the clipped-volume
+			// entry (it wraps the phase forward instead), because a retreat across an exact boundary merges the
+			// first slab with a surface fragment lying within one sample_dist in front of that boundary. Here the
+			// start is ALWAYS such a boundary (the curve sheet or the clip/box entry), so the same hazard applies
+			// to a mesh drawn on the sheet; it is left as is because depthHit, isOnPlane and num_new_ray_samples
+			// below are all measured from this dithered start and must be revisited together with it.
 			if (BitCheck(g_cbCamState.cam_flag, 12) && num_ray_samples > 1)
 			{
 				float rand = _random(float4(pos_ray_start_ws, g_cbCamState.taa_jitter_px_x - g_cbCamState.taa_jitter_px_y));
