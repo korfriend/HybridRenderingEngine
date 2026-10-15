@@ -53,6 +53,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="gpu manager\BVHUpdate.h" />
+    <ClInclude Include="renderer\AsyncFrameReadback.inl" />
     <ClInclude Include="gpu manager\gpulib.h" />
     <ClInclude Include="gpu manager\gpures_helper.h" />
     <ClInclude Include="gpu manager\gpures_interface.h" />

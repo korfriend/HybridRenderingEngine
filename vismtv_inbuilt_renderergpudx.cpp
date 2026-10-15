@@ -98,6 +98,7 @@ auto checkRefCount = [](IUnknown* obj, const char* name) {
 
 static CRITICAL_SECTION cs;
 static bool g_moduleInitialized = false; // (idempotent DeInit) teardown-ownership marker: set once the first resource DeInit frees is acquired -> DeInit no-ops before that (pre-init), tears down owned stages after (partial/full)
+#include "renderer/AsyncFrameReadback.inl"
 
 // The plugin half of the load handshake (core side: VmModuleArbiter::RegisterModule). One definition
 // for every module lives in VimCommon.h -- see the comment there for why this is not written out by
@@ -122,6 +123,7 @@ bool InitModule(fncontainer::VmFnContainer& _fncontainer)
 	// __ReleaseGpuResourcesBySrcID(iobjId) fires.
 	ClearPerSrcIdReleaseHooks();
 	RegisterPerSrcIdReleaseHook([](int iobjId) {
+		async_readback::Release(iobjId);
 		auto it = g_d2dResMap.find(iobjId);
 		if (it != g_d2dResMap.end()) {
 			it->second.ReleaseD2DRes();
@@ -1137,14 +1139,18 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 
 		auto s2ws = [](const std::string& s)
 		{
-			int len;
-			int slength = (int)s.length() + 1;
-			len = MultiByteToWideChar(CP_ACP, 0, s.c_str(), slength, 0, 0);
-			wchar_t* buf = new wchar_t[len];
-			MultiByteToWideChar(CP_ACP, 0, s.c_str(), slength, buf, len);
-			std::wstring r(buf);
-			delete[] buf;
-			return r;
+			if (s.empty()) return std::wstring{};
+			// Application text is UTF-8. Preserve legacy local-codepage labels
+			// only when their bytes are not a valid UTF-8 sequence.
+			UINT page = CP_UTF8; DWORD flags = MB_ERR_INVALID_CHARS;
+			int len = MultiByteToWideChar(page, flags, s.data(), (int)s.size(), nullptr, 0);
+			if (!len) {
+				page = CP_ACP; flags = 0;
+				len = MultiByteToWideChar(page, flags, s.data(), (int)s.size(), nullptr, 0);
+			}
+			std::wstring result(len, L'\0');
+			if (len) MultiByteToWideChar(page, flags, s.data(), (int)s.size(), result.data(), len);
+			return result;
 		};
 
 		vector<TextItem>* textItems = (vector<TextItem>*)_fncontainer.fnParams.GetParam("_vector<TextItem>*_TextItems", (void*)NULL);
@@ -1217,6 +1223,9 @@ bool DoModule(fncontainer::VmFnContainer& _fncontainer)
 
 		if (res2d->pRenderTarget->EndDraw() != S_OK)
 			vmlog::LogErr("D2D Draw Error!");
+		if (is_last_renderer)
+			async_readback::Finalize(iobj, (ID3D11Texture2D*)gres_fb_rgba.alloc_res_ptrs[DTYPE_RES],
+				iobj->GetObjParam("_int_NumCallRenders", 0) == 0);
 
 #ifdef DX11_3
 		// ---- Cross-device write-after-read fix: rotate the finalized frame through 3 shared PRESENT buffers ----
@@ -1420,6 +1429,7 @@ void DeInitModule(fncontainer::VmFnContainer& _fncontainer)
 	// Drop the release hook before tearing down the maps it references.
 	ClearPerSrcIdReleaseHooks();
 
+	async_readback::Clear();
 	for (auto it = g_d2dResMap.begin(); it != g_d2dResMap.end(); it++) {
 		it->second.ReleaseD2DRes();
 	}
@@ -1495,10 +1505,12 @@ bool GetSharedShaderResView(const int iobjId, const void* dx11devPtr, void** sha
 	// fully written. On an idle frame nothing is pending, so the event resolves almost immediately.
 	if (g_psoManager.dx11qr_fenceQuery)
 	{
+		const auto wait_start=std::chrono::steady_clock::now();uint64_t wait_polls=0;
 		g_psoManager.dx11DeviceImmContext->End(g_psoManager.dx11qr_fenceQuery);
 		g_psoManager.dx11DeviceImmContext->Flush(); // required: submit the event so GetData cannot spin forever
 		while (g_psoManager.dx11DeviceImmContext->GetData(g_psoManager.dx11qr_fenceQuery, NULL, 0, 0) == S_FALSE)
-			;
+			++wait_polls;
+		presentation_telemetry::Record(wait_start,wait_polls);
 	}
 
 	D2DRes* res2d = NULL;
